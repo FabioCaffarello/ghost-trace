@@ -47,3 +47,18 @@ Open an RFC in [`docs/rfcs/draft/`](./docs/rfcs/draft/) using the [template](./d
 This project is not a place to demonstrate technical sophistication for its own sake. The Charter rejects, by construction, contributions whose primary value is impressive complexity. A contribution must constrain or enable specific behavior in a way that survives the falsifiability test.
 
 If you find yourself writing prose that sounds important but cannot be falsified, rewrite it or do not include it.
+
+## Working with Claude Code (optional)
+
+This repository carries optional Claude Code operational support under [`.claude/`](./.claude/). See [`WORKFLOW.md`](./WORKFLOW.md) for the operator-facing details — the skill layer, the slash commands, the subagents, the three-tier hook architecture, and the CI workflow.
+
+What Claude Code is expected to enforce in this repository:
+
+- **Vocabulary discipline.** The canonical vocabulary in [`docs/glossary.md`](./docs/glossary.md) is binding; forbidden synonyms are flagged at commit time.
+- **Falsifiability.** Every constitutional claim is tested against the four-question criterion in `falsifiability-check`.
+- **Subordination.** Claims in lower-ranked documents are checked against the higher-ranked documents they depend on.
+- **Amendment process.** Edits to FROZEN Charter sections are blocked unless accompanied by the artifacts the amendment process requires (RFC, `amendments.md` entry, version bump).
+
+Contributions are evaluated on their alignment with the Charter, not on whether they were produced with or without Claude Code. The tooling is convenience; the constitutional review is the same in either case. A contributor working in vim with no Claude Code involvement produces equally valid contributions as a contributor working with Claude Code.
+
+**When this section and `WORKFLOW.md` conflict, this section wins.** `CONTRIBUTING.md` is the authoritative process document; `WORKFLOW.md` is tooling. The precedence rule is established in [`.claude/CLAUDE.md` §2](./.claude/CLAUDE.md) and §5.5.

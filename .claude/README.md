@@ -77,4 +77,16 @@ This directory must remain compressible. Per `CLAUDE.md` §7, every new skill, c
 
 ## Step-by-step procedures
 
-For operator-facing step-by-step procedures (how to propose an amendment, how to redact an invariant, how to log a decision, what to do when a skill vetoes a change), see `WORKFLOW.md` at the repository root, authored in Phase 7.
+For operator-facing step-by-step procedures (how to propose an amendment, how to redact an invariant, how to log a decision, what to do when a skill vetoes a change), see [`WORKFLOW.md`](../WORKFLOW.md) at the repository root.
+
+## CI workflow
+
+The constitutional-check workflow ([`.github/workflows/constitutional-check.yml`](../.github/workflows/constitutional-check.yml)) runs on pull requests touching `*.md` files. Three jobs, all mechanical:
+
+- **`doc-check`** — invokes `hooks/pre-commit-doc-check.sh --self-test` then the same script as a diff check (via `git reset --soft origin/<base>` to restage PR changes). Findings are posted as a PR comment regardless of pass/fail.
+- **`subordination-check`** — for each changed file under `docs/ontology/`, `docs/architecture/`, `docs/rfcs/`, `schemas/`, `services/`, verifies that every reference to `docs/charter/constitutional-charter.md#<anchor>` resolves to an actual heading in the Charter. Mechanical anchor extraction; the semantic conflict check belongs to `skills/constitutional/subordination-checker/` and the human reviewer.
+- **`glossary-coverage`** — for each canonical term in `CLAUDE.md` §3, verifies an entry exists in `docs/glossary.md` with the four provenance fields (definition, introduction, stabilization, last amendment). Fields may be `pending` but must be present.
+
+The CI runs the same script the local git pre-commit hook runs, plus the two cross-file checks (subordination cross-references, glossary coverage) that require traversal across multiple files and are not amenable to per-file grep.
+
+Scope is bounded per `CLAUDE.md` §5.6. RFC template compliance, link-health checks, and mechanized falsifiability are out of scope.
