@@ -8,7 +8,7 @@ This file is loaded into every Claude Code session in this repository. Read it b
 >
 > — [Charter §1](../docs/charter/constitutional-charter.md#1-thesis)
 
-The repository is in pre-implementation constitutional drafting. The Charter is `v0.1`: §1 Thesis, §2.1 Observational Integrity, and §2.2 Epistemic Separation are frozen; §2.3–§2.6, §3 Non-Goals, and §4 Constitutional Design Rule are pending committee redaction. Implementation work is gated on Ontology stabilization. The gate criteria are operationalized in the `implementation-readiness-evaluator` skill (to be created in Phase 5).
+The repository is in pre-implementation constitutional drafting. The Charter is `v0.2`: §1 Thesis, §2 Invariant qualification criteria, §2.1 Observational Integrity, §2.2 Epistemic Separation, and §4 Constitutional Design Rule are frozen; §2.3–§2.6 and §3 Non-Goals are pending committee redaction. Implementation work is gated on Ontology stabilization. The gate criteria are operationalized in the `implementation-readiness-evaluator` skill (to be created in Phase 5).
 
 ## 2. Document hierarchy
 
@@ -42,7 +42,7 @@ These terms are constitutional. Substituting a synonym for any of them introduce
 - **pending** — Charter section status: in committee, working text non-binding ([Charter §2.3–§2.6 status](../docs/charter/constitutional-charter.md)).
 - **amendment** — formal modification of the Charter, recorded in `amendments.md` and version-bumped ([`amendments.md` §Amendment Discipline](../docs/charter/amendments.md)).
 - **subordination** — hierarchical relation: lower-ranked documents must not conflict with higher-ranked documents ([`README.md` §Document Hierarchy](../README.md)).
-- **falsifiability** — constitutional claims must be structurally falsifiable; non-falsifiable claims are rejected on procedural grounds ([Charter §4 pending](../docs/charter/constitutional-charter.md#4-constitutional-design-rule); [`CONTRIBUTING.md` §Style](../CONTRIBUTING.md)).
+- **falsifiability** — constitutional claims must be structurally falsifiable; non-falsifiable claims are rejected on procedural grounds ([Charter §4](../docs/charter/constitutional-charter.md#4-constitutional-design-rule); [`CONTRIBUTING.md` §Style](../CONTRIBUTING.md)).
 - **evidential independence** — second dimension of an inferential assertion, distinct from confidence; defends against recursive belief inflation ([Charter §2.6 pending](../docs/charter/constitutional-charter.md#26-evidential-independence-integrity); [`entity-model.md` Category III](../docs/ontology/entity-model.md)).
 - **phase 1/2/3/4 replay** — the four replay contracts: deterministic (Phases 1–2), reconstructive (Phase 3), retrospective analytical (Phase 4) ([`replay-model.md`](../docs/architecture/replay-model.md)).
 
@@ -59,9 +59,9 @@ These terms are constitutional. Substituting a synonym for any of them introduce
 | §2.5 Hypothesis Lifecycle Explicitness | pending |
 | §2.6 Evidential Independence Integrity | pending |
 | §3 Non-Goals | pending |
-| §4 Constitutional Design Rule | pending |
+| §4 Constitutional Design Rule | frozen |
 
-This table is the source of truth for which sections are protected against edit. The `charter-guardian` skill and the pre-commit hook both read it. Update it only when the Charter actually changes. Keeping this table in sync with `constitutional-charter.md` is the canonical inconsistency mode of this infrastructure; the Phase 8 SELF-AUDIT checks for it. Amendment v0.1.1 added the §2 qualification criteria row, resolving SELF-AUDIT §7 Finding 7.1.
+This table is the source of truth for which sections are protected against edit. The `charter-guardian` skill and the pre-commit hook both read it. Update it only when the Charter actually changes. Keeping this table in sync with `constitutional-charter.md` is the canonical inconsistency mode of this infrastructure; the Phase 8 SELF-AUDIT checks for it. Amendment v0.1.1 added the §2 qualification criteria row, resolving SELF-AUDIT §7 Finding 7.1. Amendment v0.2 moved §4 from `pending` to `frozen` (Gate 1 pilot redaction).
 
 ## 5. Governance decisions binding this infrastructure
 
