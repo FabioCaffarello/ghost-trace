@@ -102,15 +102,31 @@ def parse_forbidden(skill_path):
 
 
 def parse_marketing(skill_path):
+    """Extract marketing tells from §1 of anti-marketing/SKILL.md.
+
+    Per the Phase 8 SELF-AUDIT Fix 8.1: only the first paragraph after each
+    `### <category>` heading is treated as the tells paragraph (terminated
+    by the first `> ` example block). Explanation paragraphs after the
+    example are excluded — they routinely mention watchlist terms or
+    skill names as data, which the previous parser captured as spurious
+    tells.
+    """
     text = read(skill_path)
     s = section(text, r'^## 1\. Marketing tells', r'^## 2\.')
     if s is None:
         fail(f"anti-marketing §1 not found in {skill_path}")
     tells = []
     seen = set()
+    in_tells_paragraph = False
     for line in s.splitlines():
         stripped = line.lstrip()
-        if stripped.startswith('`'):
+        if stripped.startswith('### '):
+            in_tells_paragraph = True
+            continue
+        if stripped.startswith('> '):
+            in_tells_paragraph = False
+            continue
+        if in_tells_paragraph and stripped.startswith('`'):
             for m in re.finditer(r'`([^`]+)`', stripped):
                 t = m.group(1)
                 if t not in seen:
