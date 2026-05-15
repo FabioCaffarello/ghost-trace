@@ -1,7 +1,7 @@
 # Ghost Trace Constitutional Charter
 
-**Version:** v0.1 (draft, sections in committee mode)
-**Status:** Thesis frozen. Invariants 1–2 frozen. Invariants 3–6 pending committee redaction. Non-Goals and Constitutional Design Rule pending.
+**Version:** v0.1.1 (draft, sections in committee mode)
+**Status:** Thesis frozen. Invariant qualification criteria (§2 header) frozen. Invariants 2.1–2.2 frozen. Invariants 2.3–2.6 pending committee redaction. Non-Goals and Constitutional Design Rule pending.
 
 > This document is the constitutional surface of the Ghost Trace project. All other documents in this repository — Ontology, Architecture, RFCs — are subordinate to it. Changes to this document require formal amendment recorded in [`amendments.md`](./amendments.md). Changes to subordinate documents that conflict with this Charter are invalid by construction.
 

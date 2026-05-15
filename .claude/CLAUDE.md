@@ -51,6 +51,7 @@ These terms are constitutional. Substituting a synonym for any of them introduce
 | Element | Status |
 |---|---|
 | §1 Thesis | frozen |
+| §2 Invariant qualification criteria | frozen |
 | §2.1 Observational Integrity | frozen |
 | §2.2 Epistemic Separation | frozen |
 | §2.3 Provenance Integrity | pending |
@@ -60,7 +61,7 @@ These terms are constitutional. Substituting a synonym for any of them introduce
 | §3 Non-Goals | pending |
 | §4 Constitutional Design Rule | pending |
 
-This table is the source of truth for which sections are protected against edit. The `charter-guardian` skill and the pre-commit hook both read it. Update it only when the Charter actually changes. Keeping this table in sync with `constitutional-charter.md` is the canonical inconsistency mode of this infrastructure; the Phase 8 SELF-AUDIT checks for it.
+This table is the source of truth for which sections are protected against edit. The `charter-guardian` skill and the pre-commit hook both read it. Update it only when the Charter actually changes. Keeping this table in sync with `constitutional-charter.md` is the canonical inconsistency mode of this infrastructure; the Phase 8 SELF-AUDIT checks for it. Amendment v0.1.1 added the §2 qualification criteria row, resolving SELF-AUDIT §7 Finding 7.1.
 
 ## 5. Governance decisions binding this infrastructure
 
@@ -76,7 +77,7 @@ Resolutions to the seven open questions from `PLAN.md` §5. Binding for all subs
 
 3. **Hook enforcement is graded by violation class.**
    - **Blocking** (exit non-zero): edits to lines within a FROZEN Charter section without accompanying amendment; vocabulary drift (use of forbidden synonym for a canonical term); marketing language (terms on the `anti-marketing` watchlist).
-   - **Advisory** (printed, exit zero): use of ambiguous terms on the `ambiguity-reducer` watchlist. The flag is informational; the author decides.
+   - **Advisory** (printed, exit zero): use of ambiguous terms on the `ambiguity-reducer` watchlist. The advisory is informational; the author decides.
    - `--no-verify` bypasses git enforcement; this is technical reality. The script always prints a notice stating that bypass is a registrable event and must be recorded in `decision-log.md` with justification. Silent bypass is a discipline failure; recorded bypass is not.
 
 4. **Write permissions are gated via `ask`, not `deny`.** Edits to `docs/charter/constitutional-charter.md`, `docs/charter/amendments.md`, and anything under `docs/ontology/` pause for human confirmation in a Claude Code session. `docs/charter/in-committee/` (when it exists) is not gated — committee redaction is the expected work product. `docs/charter/decision-log.md` is not gated either: appends are legitimate and frequent. See `settings.json` for matcher syntax and the documented fallback if the matcher syntax is unavailable in the active Claude Code version.
