@@ -68,6 +68,18 @@ Decisions are recorded once and never edited except for status changes. A decisi
 
 ---
 
+## `0005` — Charter quotation by attributed blockquote — mechanical exemption rule
+
+- **Status:** accepted
+- **Date:** 2026-05-15
+- **Context:** SELF-AUDIT.md Finding 5.2 surfaced that `.claude/CLAUDE.md` §1 line 7 quotes the Charter Thesis verbatim, but the hook's marketing-tell check flagged Charter watchlist terms because the parenthetical attribution at line end was not recognizable as a quotation by mechanical means. The `anti-marketing` skill §4 already declared a Charter-quotation exemption at the prose level; the gap was mechanical.
+- **Decision:** Charter and Ontology quotations are recognized mechanically when expressed as markdown blockquotes (lines beginning with `>`) attributed by a line matching `>\s*—\s*\[(Charter|Ontology)`. The hook's marketing check skips watchlist hits on lines within such attributed blockquote blocks. The exemption is scoped to marketing-tell detection only; vocabulary-drift and ambiguity advisories continue to apply.
+- **Constitutional review:** No invariant amended. The exemption operationalizes a rule already declared in `anti-marketing` §4 (prose-level). It does not weaken enforcement; it makes the existing exemption mechanically detectable. The vocabulary-drift check is not exempted, because the Charter itself uses canonical phrases — a quotation containing a forbidden synonym would indicate either a stale Charter or a misquoted source.
+- **Consequences:** Faithful blockquote quotation of Charter or Ontology text in any document is no longer flagged by the marketing check. Paraphrase of Charter prose without blockquote form remains flagged. New convention: when `CLAUDE.md`, `WORKFLOW.md`, `README.md`, or any skill needs to invoke Charter prose, use blockquote + attribution rather than parenthetical reference.
+- **Supersession:** none.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

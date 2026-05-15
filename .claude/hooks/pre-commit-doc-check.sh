@@ -34,13 +34,20 @@
 # the script exits non-zero. Silent degradation is the failure mode
 # this script exists to prevent.
 #
-# Two design discoveries documented inline (see match_term and the
-# vocabulary-drift check loop):
+# Three design discoveries documented inline (see match_term, the
+# eligible_blockquote_lines helper, and the vocabulary-drift check loop):
 #   - Word boundary treats hyphen as word-like, so `log` is not flagged
 #     inside `decision-log.md` or `event-log` identifiers.
 #   - docs/glossary.md is the source of the forbidden-synonym list; it
 #     is exempted from the vocabulary-drift check (circular otherwise).
 #     Marketing and ambiguity checks still apply to the glossary.
+#   - Charter and Ontology quotations expressed as attributed markdown
+#     blockquotes (a block containing a line matching
+#     `^\s*>\s*—\s*\[(Charter|Ontology)`) are exempt from the marketing
+#     check on a per-line basis. Vocabulary-drift and ambiguity checks
+#     are not exempted — the Charter itself uses canonical phrases, so
+#     a quotation containing a forbidden synonym is still drift. See
+#     docs/charter/decision-log.md §0005 and anti-marketing §4.
 #
 # Known tradeoff (tripwire by design):
 #   The grep is literal. A forbidden term inside a canonical phrase
@@ -124,6 +131,38 @@ match_term() {
   printf '%s\n' "$content" | grep -nE "$pat" 2>/dev/null || true
 }
 
+# Compute line numbers in $content that belong to attributed blockquote
+# blocks. A block is "attributed" if any of its lines matches
+# ^[[:space:]]*>[[:space:]]*—[[:space:]]*\[(Charter|Ontology). All
+# consecutive lines starting with optional whitespace then `>` form one
+# block (a blank or non-blockquote line breaks the block). Per
+# decision-log §0005 and anti-marketing §4, the marketing check skips
+# watchlist hits on these lines. Per-line scope. Line numbers are 1-based
+# and refer to positions within $content (added-lines view or full file
+# fallback) — the same base match_term reports against.
+eligible_blockquote_lines() {
+  local content="$1"
+  printf '%s\n' "$content" | awk '
+    BEGIN { block_start = 0 }
+    {
+      if ($0 ~ /^[[:space:]]*>/) {
+        if (block_start == 0) block_start = NR
+        block[NR] = block_start
+        if ($0 ~ /^[[:space:]]*>[[:space:]]*—[[:space:]]*\[(Charter|Ontology)/) {
+          attributed[block_start] = 1
+        }
+      } else {
+        block_start = 0
+      }
+    }
+    END {
+      for (n in block) {
+        if (attributed[block[n]]) print n
+      }
+    }
+  ' | sort -n
+}
+
 # Check that any diff hunk touching the charter file intersects no
 # FROZEN range. Returns 0 if clean, 1 if a violation is found.
 check_frozen_charter() {
@@ -182,12 +221,22 @@ for file in $STAGED; do
   fi
 
   if [ "$file" != "$CHARTER" ]; then
+    eligible_lines=$(eligible_blockquote_lines "$added")
     while IFS= read -r tell; do
       [ -z "$tell" ] && continue
-      hits=$(match_term "$tell" "$added")
-      if [ -n "$hits" ]; then
+      raw_hits=$(match_term "$tell" "$added")
+      [ -z "$raw_hits" ] && continue
+      filtered_hits=$(printf '%s\n' "$raw_hits" | while IFS= read -r hit; do
+        [ -z "$hit" ] && continue
+        ln=${hit%%:*}
+        if [ -n "$eligible_lines" ] && printf '%s\n' "$eligible_lines" | grep -qx -- "$ln"; then
+          continue
+        fi
+        printf '%s\n' "$hit"
+      done)
+      if [ -n "$filtered_hits" ]; then
         echo "BLOCK [marketing] $file: marketing tell '$tell'"
-        printf '%s\n' "$hits" | sed 's/^/    /'
+        printf '%s\n' "$filtered_hits" | sed 's/^/    /'
         echo "  → see anti-marketing §3 for rewrite paths."
         EXIT_CODE=1
       fi
