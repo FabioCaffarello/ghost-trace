@@ -1,0 +1,48 @@
+# Editor and IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Go (anticipated; not yet decided)
+*.exe
+*.test
+*.out
+/vendor/
+/bin/
+
+# Node (anticipated for simulator/frontend)
+node_modules/
+npm-debug.log
+yarn-error.log
+.next/
+dist/
+
+# Python (anticipated for experiments)
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+
+# Build artifacts
+/build/
+/out/
+/target/
+
+# Logs and local state
+*.log
+.local/
+tmp/
+
+# Secrets and local config
+.env
+.env.local
+*.pem
+*.key
+
+# Generated docs
+/site/
