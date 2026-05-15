@@ -1,7 +1,7 @@
 # Ghost Trace Constitutional Charter
 
-**Version:** v0.1.1 (draft, sections in committee mode)
-**Status:** Thesis frozen. Invariant qualification criteria (§2 header) frozen. Invariants 2.1–2.2 frozen. Invariants 2.3–2.6 pending committee redaction. Non-Goals and Constitutional Design Rule pending.
+**Version:** v0.2 (draft, sections in committee mode)
+**Status:** Thesis frozen. Invariant qualification criteria (§2 header) frozen. Invariants 2.1–2.2 frozen. Invariants 2.3–2.6 pending committee redaction. Non-Goals (§3) pending. Constitutional Design Rule (§4) frozen — minor amendment v0.2.
 
 > This document is the constitutional surface of the Ghost Trace project. All other documents in this repository — Ontology, Architecture, RFCs — are subordinate to it. Changes to this document require formal amendment recorded in [`amendments.md`](./amendments.md). Changes to subordinate documents that conflict with this Charter are invalid by construction.
 
@@ -164,14 +164,43 @@ The three categories share infrastructure — storage, transport, indexing, obse
 
 ## 4. Constitutional Design Rule
 
-> **Status:** Pending committee redaction.
+### Definition
+
+This section governs two disciplines applied to every candidate constitutional invariant of Ghost Trace.
+
+**Qualification.** A claim qualifies as a constitutional invariant if and only if it satisfies the four criteria stated in [Section 2 — Constitutional Invariants](#2-constitutional-invariants), reproduced here for anchor purposes (canonical statement remains in §2):
+
+> 1. **Structurally enforceable** — verifiable in schemas, types, or permitted operations, not merely in code review.
+> 2. **Constraining of future implementation decisions** — capable of rejecting proposals that violate it.
+> 3. **Identity-defining** — its absence changes what the system fundamentally is, not merely what it does.
+> 4. **Independent of operator interpretation** — violation is detectable without subjective judgment.
 >
-> This section formalizes the meta-rule that governs the Charter's own evolution. It declares:
->
-> - The four qualification criteria for constitutional invariants (already enumerated in [Section 2](#2-constitutional-invariants)).
-> - The amendment philosophy: changes to the Charter require formal amendment recorded in [`amendments.md`](./amendments.md), not silent edits.
-> - The precedence rule: when subordinate documents conflict with the Charter, the Charter prevails. Subordinate documents are revised; the Charter is not.
-> - The falsifiability discipline: any constitutional claim must be structurally falsifiable. If a property cannot, in principle, be violated, observed, or audited, it is not a constitutional property — it is an aspiration, an aesthetic preference, or a research direction, and belongs elsewhere.
+> — [Charter §2](#2-constitutional-invariants)
+
+**Falsifiability.** A constitutional claim is admissible if and only if it is structurally falsifiable. A property that cannot, in principle, be violated, observed, or audited is not a constitutional property; it is an aspiration, an aesthetic preference, or a research direction, and belongs elsewhere.
+
+### Structural Requirement
+
+The two disciplines are applied at amendment time. The [`amendments.md` §Amendment Process](./amendments.md) procedure requires falsifiability review (Step 2) before any proposal advances to redaction (Step 3). The four qualification criteria are tested at the redaction stage and again at the final-merge checklist of the [`invariant-redactor`](../../.claude/skills/constitutional/invariant-redactor/SKILL.md) skill. The four-question falsifiability test — violation, observation, operationalization, non-circularity — is operationalized in the [`falsifiability-check`](../../.claude/skills/epistemic/falsifiability-check/SKILL.md) skill.
+
+### Rationale
+
+The Charter constrains the system; this section constrains the Charter. Without qualification and falsifiability disciplines, any prose declared "constitutional" would carry the same weight as the structurally-enforceable invariants of §2.1 and §2.2, and the meaning of "constitutional" would collapse into the meaning of "important to someone."
+
+The falsifiability discipline applies to all constitutional claims, including the claims of this section. The recursion is not vicious: the test procedure is defined externally to §4, in `falsifiability-check` §1, and §4's claims reduce to procedural artifacts (qualification testing at amendment time; falsifiability review at amendment time). The chain bottoms out in procedure, not in self-reference. This is the fixed-point reading.
+
+### Forbidden Anti-Patterns
+
+- **Adopting an invariant whose violation requires subjective judgment.** Fails criterion 4. Detected by the observation test of [`falsifiability-check` §1.2](../../.claude/skills/epistemic/falsifiability-check/SKILL.md).
+- **Adopting an invariant not structurally enforceable in schemas, types, or permitted operations.** Fails criterion 1. Detected by the operationalization test of [`falsifiability-check` §1.3](../../.claude/skills/epistemic/falsifiability-check/SKILL.md).
+- **Adopting an invariant that does not constrain future implementation decisions.** Fails criterion 2. Surfaced at the `invariant-redactor` final-merge checklist; no per-claim mechanical check.
+- **Adopting an invariant whose absence would not change what the system is.** Fails criterion 3. Surfaced at the `invariant-redactor` final-merge checklist; no per-claim mechanical check.
+
+### Boundary Conditions
+
+- §4 does not govern internal project practice outside Charter governance. Commit message conventions, branch naming, code style, and README phrasing are operational and belong to [`CONTRIBUTING.md`](../../CONTRIBUTING.md) (process) and [`WORKFLOW.md`](../../WORKFLOW.md) (tooling).
+- §4 governs the form of invariants, not their content. The committee chooses which invariants the project adopts; §4 filters candidate invariants into qualified versus non-qualified.
+- §4 does not govern the infrastructure that supports Charter governance. Skills, hooks, CI workflows, agents, slash-commands, and per-project settings can be modified, replaced, or extended without Charter amendment, subject to RFC and decision-log discipline.
 
 ---
 

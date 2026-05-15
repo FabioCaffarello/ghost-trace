@@ -47,6 +47,17 @@ No amendments have yet been recorded against `v0.1`. Future entries follow.
 
 ---
 
+### `v0.2` — §4 Constitutional Design Rule (committee-mode redaction)
+
+**Date:** 2026-05-15
+**Originating RFC:** [`charter-amendment-v0-2-section-4-redaction`](../rfcs/draft/charter-amendment-v0-2-section-4-redaction.md)
+**Sections affected:** Banner (version line: v0.1.1 → v0.2; status line: §4 frozen). §4 (status pending → frozen; stub body replaced with binding text in five subsections paralleling §2.1 / §2.2).
+**Summary:** Pilot redaction of §4 produces binding text codifying the two surviving bullets from the working stub: the qualification criteria (Bullet 1, fulfilling §2 L41's frozen promise that the criteria "are themselves recorded formally" in §4) and the falsifiability discipline (Bullet 4, anchoring five structural infrastructure citations in `falsifiability-check`, `amendments.md`, `CLAUDE.md`, and the glossary). Bullets 2 (amendment philosophy) and 3 (precedence rule) of the prior working stub are removed as substantive duplicates of infrastructure-enforced disciplines without anchor obligations. The Charter advances to v0.2 (minor — substantive new binding text without identity change).
+**Rationale:** Gate 1 of post-setup constitutional work applied the `invariant-redactor` committee-mode procedure (Steps 1.1–1.4) to the §4 stub. Step 1.2 falsifiability testing found Bullet 3 fails on observation and operationalization (its operative term "conflict" is undefined). Step 1.4 non-duplication analysis found Bullets 2 and 3 substantively duplicate infrastructure-enforced disciplines and are not cited as anchors by any infrastructure, while Bullet 1 fulfills §2 L41's frozen forward-citation and Bullet 4 anchors five structural citations. Removal of Bullets 2 and 3 does not orphan any citation; retention of Bullets 1 and 4 fulfills constitutional promises and preserves infrastructure dependencies. The full evidentiary record is preserved in [`docs/charter/in-committee/§4-constitutional-design-rule.md`](./in-committee/§4-constitutional-design-rule.md).
+**Falsifiability review outcome:** Pass. Phase B of the redaction recorded an eleven-claim self-test against `falsifiability-check` §1's four-question test (V / O / Op / NC); all eleven substantive claims passed all four tests. The self-reference of §4's falsifiability claim is handled via the explicit fixed-point reading recorded in the Rationale subsection: the test procedure is defined externally to §4 (in `falsifiability-check` §1), and §4's claims reduce to procedural artifacts, so the chain bottoms out in procedure rather than in self-reference.
+
+---
+
 <!-- AMENDMENT TEMPLATE — copy below this line when recording an amendment -->
 
 <!--

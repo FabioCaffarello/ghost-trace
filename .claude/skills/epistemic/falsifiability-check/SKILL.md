@@ -5,9 +5,9 @@ description: Apply the Charter's falsifiability discipline to any claim that pur
 
 # falsifiability-check
 
-The project's falsifiability discipline is recorded in [Charter §4 — Constitutional Design Rule (pending working text)](../../../../docs/charter/constitutional-charter.md#4-constitutional-design-rule):
+The project's falsifiability discipline is recorded in [Charter §4 — Constitutional Design Rule](../../../../docs/charter/constitutional-charter.md#4-constitutional-design-rule):
 
-> any constitutional claim must be structurally falsifiable. If a property cannot, in principle, be violated, observed, or audited, it is not a constitutional property — it is an aspiration, an aesthetic preference, or a research direction, and belongs elsewhere.
+> A constitutional claim is admissible if and only if it is structurally falsifiable. A property that cannot, in principle, be violated, observed, or audited is not a constitutional property; it is an aspiration, an aesthetic preference, or a research direction, and belongs elsewhere.
 
 The same discipline is restated procedurally in [`CONTRIBUTING.md` §What This Project Is Not](../../../../CONTRIBUTING.md): "If you find yourself writing prose that sounds important but cannot be falsified, rewrite it or do not include it."
 
@@ -115,7 +115,7 @@ The four-test result is recorded in the RFC or amendment proposal as part of pro
 
 - [`docs/charter/constitutional-charter.md` §2 Constitutional Invariants (qualification criteria)](../../../../docs/charter/constitutional-charter.md#2-constitutional-invariants)
 - [`docs/charter/constitutional-charter.md` §2.2 Epistemic Separation](../../../../docs/charter/constitutional-charter.md#22-epistemic-separation)
-- [`docs/charter/constitutional-charter.md` §4 Constitutional Design Rule (pending)](../../../../docs/charter/constitutional-charter.md#4-constitutional-design-rule)
+- [`docs/charter/constitutional-charter.md` §4 Constitutional Design Rule](../../../../docs/charter/constitutional-charter.md#4-constitutional-design-rule)
 - [`docs/charter/amendments.md` §Amendment Process](../../../../docs/charter/amendments.md)
 - [`CONTRIBUTING.md` §What This Project Is Not](../../../../CONTRIBUTING.md)
 - [`.claude/CLAUDE.md` §3 Canonical vocabulary](../../../CLAUDE.md)

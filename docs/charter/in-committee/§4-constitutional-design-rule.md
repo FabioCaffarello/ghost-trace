@@ -1,6 +1,6 @@
 # §4 Constitutional Design Rule — committee draft
 
-**Status:** in-committee draft. Not binding. Do not cite as authoritative.
+**Status:** merged. Binding form is now Charter §4 v0.2. This scratch is preserved as historical record of the committee-mode pilot. See [decision-log entry §0007](../decision-log.md).
 
 ## Anchor (verbatim from Charter §4 stub)
 
@@ -280,3 +280,96 @@ After four redactor steps, the four §4 bullets stand as follows. Bullet 1 (qual
 #### Redactor's recommendation
 
 **Path (c), narrow-but-not-minimal form: §4 binding text retains Bullets 1 and 4 only — Bullet 1 because §2 L41 cites §4 as the formal locus of the four criteria (removing Bullet 1 would orphan a frozen citation), and Bullet 4 because it is the load-bearing anchor for the falsifiability discipline (five structural citations). Bullets 2 and 3 are removed as substantive duplicates without anchor obligations.**
+
+### Step 1.5 — Candidate binding §4 text
+
+Per Phase A resolutions of the six open questions (Q1 hybrid verbatim+role, Q2 fixed-point in Rationale, Q3 include four anti-patterns, Q4 α three boundaries, Q5 glossary subordination editorial fix, Q6 no amendments.md edit), the following candidate replaces the current §4 stub body in [`constitutional-charter.md`](../constitutional-charter.md#4-constitutional-design-rule) at amendment v0.2. The `## 4. Constitutional Design Rule` heading and its anchor `#4-constitutional-design-rule` are preserved unchanged; only the section body is replaced.
+
+---
+
+**[BEGIN CANDIDATE — text below this divider is the proposed §4 binding text. Subsection headings shown here at `####` for scratch hygiene; in `constitutional-charter.md` they become `###` (the level used inside §2.1 / §2.2).]**
+
+#### Definition
+
+This section governs two disciplines applied to every candidate constitutional invariant of Ghost Trace.
+
+**Qualification.** A claim qualifies as a constitutional invariant if and only if it satisfies the four criteria stated in [Section 2 — Constitutional Invariants](#2-constitutional-invariants), reproduced here for anchor purposes (canonical statement remains in §2):
+
+> 1. **Structurally enforceable** — verifiable in schemas, types, or permitted operations, not merely in code review.
+> 2. **Constraining of future implementation decisions** — capable of rejecting proposals that violate it.
+> 3. **Identity-defining** — its absence changes what the system fundamentally is, not merely what it does.
+> 4. **Independent of operator interpretation** — violation is detectable without subjective judgment.
+>
+> — [Charter §2](#2-constitutional-invariants)
+
+**Falsifiability.** A constitutional claim is admissible if and only if it is structurally falsifiable. A property that cannot, in principle, be violated, observed, or audited is not a constitutional property; it is an aspiration, an aesthetic preference, or a research direction, and belongs elsewhere.
+
+#### Structural Requirement
+
+The two disciplines are applied at amendment time. The [`amendments.md` §Amendment Process](./amendments.md) procedure requires falsifiability review (Step 2) before any proposal advances to redaction (Step 3). The four qualification criteria are tested at the redaction stage and again at the final-merge checklist of the [`invariant-redactor`](../../.claude/skills/constitutional/invariant-redactor/SKILL.md) skill. The four-question falsifiability test — violation, observation, operationalization, non-circularity — is operationalized in the [`falsifiability-check`](../../.claude/skills/epistemic/falsifiability-check/SKILL.md) skill.
+
+#### Rationale
+
+The Charter constrains the system; this section constrains the Charter. Without qualification and falsifiability disciplines, any prose declared "constitutional" would carry the same weight as the structurally-enforceable invariants of §2.1 and §2.2, and the meaning of "constitutional" would collapse into the meaning of "important to someone."
+
+The falsifiability discipline applies to all constitutional claims, including the claims of this section. The recursion is not vicious: the test procedure is defined externally to §4, in `falsifiability-check` §1, and §4's claims reduce to procedural artifacts (qualification testing at amendment time; falsifiability review at amendment time). The chain bottoms out in procedure, not in self-reference. This is the fixed-point reading.
+
+#### Forbidden Anti-Patterns
+
+- **Adopting an invariant whose violation requires subjective judgment.** Fails criterion 4. Detected by the observation test of [`falsifiability-check` §1.2](../../.claude/skills/epistemic/falsifiability-check/SKILL.md).
+- **Adopting an invariant not structurally enforceable in schemas, types, or permitted operations.** Fails criterion 1. Detected by the operationalization test of [`falsifiability-check` §1.3](../../.claude/skills/epistemic/falsifiability-check/SKILL.md).
+- **Adopting an invariant that does not constrain future implementation decisions.** Fails criterion 2. Surfaced at the `invariant-redactor` final-merge checklist; no per-claim mechanical check.
+- **Adopting an invariant whose absence would not change what the system is.** Fails criterion 3. Surfaced at the `invariant-redactor` final-merge checklist; no per-claim mechanical check.
+
+#### Boundary Conditions
+
+- §4 does not govern internal project practice outside Charter governance. Commit message conventions, branch naming, code style, and README phrasing are operational and belong to [`CONTRIBUTING.md`](../../CONTRIBUTING.md) (process) and [`WORKFLOW.md`](../../WORKFLOW.md) (tooling).
+- §4 governs the form of invariants, not their content. The committee chooses which invariants the project adopts; §4 filters candidate invariants into qualified versus non-qualified.
+- §4 does not govern the infrastructure that supports Charter governance. Skills, hooks, CI workflows, agents, slash-commands, and per-project settings can be modified, replaced, or extended without Charter amendment, subject to RFC and decision-log discipline.
+
+**[END CANDIDATE]**
+
+---
+
+#### Per-claim self-test (`falsifiability-check` §1: V = violation, O = observation, Op = operationalization, NC = non-circularity)
+
+| # | Claim | V | O | Op | NC |
+|---|---|---|---|---|---|
+| 1 | Def-Q: A claim qualifies as a constitutional invariant iff it satisfies the four §2 criteria. | ✓ | ✓ | ✓ | ✓ |
+| 2 | Def-F: A constitutional claim is admissible iff it is structurally falsifiable. | ✓ | ✓ | ✓ | ✓ |
+| 3 | SR: The disciplines are applied at amendment time per `amendments.md`. | ✓ | ✓ | ✓ | ✓ |
+| 4 | R-fix: §4 satisfies its own discipline; the recursion bottoms out in procedure. | ✓ | ✓ | ✓ | ✓ |
+| 5 | AP1: Adopting an invariant whose violation requires subjective judgment fails criterion 4. | ✓ | ✓ | ✓ | ✓ |
+| 6 | AP2: Adopting an invariant not structurally enforceable fails criterion 1. | ✓ | ✓ | ✓ | ✓ |
+| 7 | AP3: Adopting an invariant that does not constrain future implementation decisions fails criterion 2. | ✓ | ✓ | ✓ | ✓ |
+| 8 | AP4: Adopting an invariant whose absence would not change what the system is fails criterion 3. | ✓ | ✓ | ✓ | ✓ |
+| 9 | BC1: §4 does not govern internal project practice. | ✓ | ✓ | ✓ | ✓ |
+| 10 | BC2: §4 governs the form of invariants, not their content. | ✓ | ✓ | ✓ | ✓ |
+| 11 | BC3: §4 does not govern the infrastructure that supports Charter governance. | ✓ | ✓ | ✓ | ✓ |
+
+All eleven substantive claims pass all four tests. Note: claims 2 and 4 hinge on the fixed-point reading of §4's self-reference (Q2 resolution); the chain bottoms out in `falsifiability-check` §1's procedure, not in §4 itself. The criteria reproduced in the Definition blockquote (§2's four criteria, frozen) are inherited; they passed falsifiability at §2 v0.1 inception.
+
+#### Hook-tripwire note (surface for Checkpoint 1.5.B)
+
+Strict verbatim of §2's four criteria (per Q1 resolution) triggers two known-tradeoff false-positives in the binding text:
+
+- **The importance-by-assertion adverb in §2 criterion 3** (the adverb between "what the system" and "is") — marketing tell. This is **exempted** by Gate 0a's blockquote-attribution mechanism: the criteria sit inside an attributed blockquote, which the hook's `eligible_blockquote_lines` helper marks as eligible. No bypass needed for this trip.
+- **The singular data-definition noun in §2 criterion 1** (the noun preceding "types, or permitted operations") — vocabulary-drift forbidden synonym. This is **not** exempted: Gate 0a covers marketing only, not vocabulary-drift. Gate 0b's canonical-phrase whitelist does not include any phrase matching the §2 wording. §2's use of the noun is the legitimate case (the formal-definition sense, not the type sense) that `vocabulary-discipline` §4 reserves as canonical — but the hook does literal grep and cannot disambiguate. This is the canonical tripwire false-positive the hook's top comment names.
+
+Two paths for Phase F commit (and likewise for the current scratch commit — both blockquote occurrences are scanned):
+
+- **Path (a) — bypass with `--no-verify` and decision-log note.** Strict verbatim of §2 preserved; the bypass is registered in decision-log entry 0007 per CLAUDE.md §5.3, with justification that the hit is on a §2 verbatim quotation (a documented tripwire false-positive). Preferred under a strict reading of Q1 ("verbatim").
+- **Path (b) — pluralize the data-definition noun in the blockquote.** The criterion then reads as "verifiable in [plural form], types, or permitted operations" — semantically identical, lexically one letter different. A reader comparing §4 to §2 sees one minor normalization; no bypass needed. An honest-but-not-strict reading of Q1.
+
+I drafted Path (a) — strict verbatim — above. The committee picks at Checkpoint 1.5.B. Either path keeps §2 L41's promise fulfilled (the criteria are recorded formally in §4); they differ only on whether one letter of one criterion is normalized for hook hygiene.
+
+#### Citation chain pre-verification (will be re-verified in Phase C.3)
+
+| Citation | Current location | After v0.2 | Status |
+|---|---|---|---|
+| `falsifiability-check` SKILL.md L8 (quote of working text) | Charter §4 "pending working text" | Binding §4 Definition / Falsifiability paragraph | Quote text may need editorial fix in Phase D.3 — the L8 quote currently says "(pending working text)"; the qualifier becomes wrong. Otherwise pointer is correct. |
+| `falsifiability-check` SKILL.md L118 (Source citations) | "Charter §4 Constitutional Design Rule (pending)" | Binding §4 | "(pending)" qualifier removed in Phase D.3. |
+| `CLAUDE.md` L45 (`falsifiability` canonical vocabulary) | "Charter §4 pending" | Binding §4 | "pending" qualifier removed (not required immediately — CLAUDE.md is updated in Phase D.5 for the status table; this canonical-vocabulary line may be left or edited.) |
+| `amendments.md` L22 (cites §4 for falsifiability review authority) | "Section 4 of the Charter" | Same. Now binding instead of pending. | No textual change required; citation now resolves to stronger source. |
+| Glossary `falsifiability` Introduction L146 | "Charter §4 Constitutional Design Rule (pending working text)" | Binding §4 | "(pending working text)" qualifier removed in Phase D.2. |
+| §2 L41 (FROZEN promise) | "recorded formally in §4 (pending)" | Promise fulfilled by binding §4 | "(pending)" qualifier in §2 L41 would become wrong, but §2 is FROZEN — no edit possible without re-amending §2. **Surface in Phase C.3:** is the "(pending)" qualifier on the §2 L41 phrase itself ("Section 4 — Constitutional Design Rule (pending)") considered Charter text whose semantic content has drifted, or is the parenthetical "(pending)" an editorial marker tied to §4's status that updates implicitly? Likely the latter — but worth explicit verification at Phase C.3. |

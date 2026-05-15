@@ -137,15 +137,15 @@ Missing fields are marked `pending`, never omitted.
 - **Canonical definition.** Hierarchical relation in which lower-ranked documents must not conflict with higher-ranked documents; conflicts resolve upward and the lower document is revised.
 - **Introduction.** [`README.md` §Document Hierarchy](../README.md); [`decision-log.md` §0004](./charter/decision-log.md).
 - **Stabilization.** [`decision-log.md` §0004 — Charter is authoritative; subordinate documents may evolve under implementation pressure](./charter/decision-log.md).
-- **Last amendment.** pending (full formalization is in pending §4 Constitutional Design Rule).
+- **Last amendment.** Not amended; the precedence rule was considered for Charter §4 in the Gate 1 redaction (amendment v0.2) and excluded as a substantive duplicate of CLAUDE.md §2 and `subordination-checker`. The rule remains operationally enforced (`subordination-checker` + CLAUDE.md §2 + CI `subordination-check` job). See [`decision-log.md` §0007](./charter/decision-log.md).
 - **Forbidden synonyms.** `precedence` (acceptable in informal use; `subordination` is canonical for the relation); `hierarchy` (names the structure; `subordination` names the relation between layers).
 
 ### `falsifiability`
 
 - **Canonical definition.** The requirement that constitutional claims be structurally falsifiable; non-falsifiable claims are rejected on procedural grounds.
-- **Introduction.** [Charter §4 Constitutional Design Rule (pending working text)](./charter/constitutional-charter.md#4-constitutional-design-rule); [`CONTRIBUTING.md` §Style](../CONTRIBUTING.md).
-- **Stabilization.** pending (§4 not yet redacted).
-- **Last amendment.** pending (§4 pending).
+- **Introduction.** [Charter §4 Constitutional Design Rule](./charter/constitutional-charter.md#4-constitutional-design-rule); [`CONTRIBUTING.md` §Style](../CONTRIBUTING.md).
+- **Stabilization.** Charter §4 v0.2 (this redaction).
+- **Last amendment.** v0.2.
 - **Forbidden synonyms.** `testability` (overloaded with engineering tests); `verifiability` (acceptable in some contexts but not as a constitutional term).
 
 ### `evidential independence`
