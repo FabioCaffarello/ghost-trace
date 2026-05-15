@@ -181,3 +181,70 @@ After applying Fix 8.1 (marketing parser refinement):
 - Re-scan of infrastructure files: **41 → 17 hits**. All 17 remaining hits are either (a) skills that discuss watchlist terms as data — `falsifiability-check` examples of non-falsifiable terms, `ambiguity-reducer` watchlist entries for `intelligence` and `trust`, `vocabulary-discipline` example of `trust` as informal use — or (b) the previously-recorded Findings 5.2 (CLAUDE.md §1 line 7 Charter quote) and 5.3 (`.claude/README.md` line 31 "Charter integrity"). One additional minor occurrence (`epistemic-separator/SKILL.md` line 64 uses `transforms` in explanatory prose "a pipeline stage that transforms its input") is a tripwire false-positive consistent with the documented tradeoff in `pre-commit-doc-check.sh` top comment — informational only, no action.
 
 Setup is complete. Future infrastructure changes follow the RFC process, recorded in `docs/charter/decision-log.md`, and reflected in updates to `CLAUDE.md` and the relevant skills.
+---
+
+## Post-Gate-0 resolution
+
+Findings 5.2, 5.3, and 7.1 — originally deferred at Phase 8 as judgment-required — were resolved during Gate 0 of post-setup constitutional work. The resolutions are recorded here for traceability; the original findings above are not edited.
+
+### Finding 5.2 — resolved by Gate 0a
+
+`.claude/CLAUDE.md` §1 line 7 reformatted as a markdown blockquote with explicit attribution (`> — [Charter §1](...)`). The `anti-marketing` skill §4 prose-level Charter-quotation exemption gained a mechanical counterpart: the hook now skips marketing-tell hits on lines within attributed blockquote blocks.
+
+- **Recorded in:** [`docs/charter/decision-log.md` §0005](../../docs/charter/decision-log.md).
+- **Commit:** Gate 0a — `fix(claude): mechanical Charter-quotation exemption + readme phrasing`.
+- **Resolution category:** mechanical (exemption signal added) + editorial (blockquote reformat).
+- **Status:** closed.
+
+### Finding 5.3 — resolved by Gate 0a
+
+`.claude/README.md` line 31 rewritten from "Protect Charter integrity" to "Protect the Charter from drift". The phrase "from drift" is more specific (it names the mechanism the three constitutional skills defend against) and removes the watchlist term.
+
+- **Recorded in:** [`docs/charter/decision-log.md` §0005](../../docs/charter/decision-log.md).
+- **Commit:** Gate 0a.
+- **Resolution category:** editorial.
+- **Status:** closed.
+
+### Finding 7.1 — resolved by Gate 0b (amendment v0.1.1)
+
+The §2 (Constitutional Invariants header — four qualification criteria) status was explicitly declared FROZEN. The Charter banner was clarified from "Invariants 1–2 frozen" to a wording that distinguishes the §2 header from the invariants it governs. The CLAUDE.md §4 status table gained a new row recording this explicitly. The hook's FROZEN-section check now reports 4 ranges (was 3).
+
+In the same amendment, the hook's `in_scope` predicate was extended to include `.claude/CLAUDE.md` and `.claude/README.md`. The distinction between in-scope and out-of-scope `.claude/` documents was codified: documents that *assert* rules are in scope; documents that *register* discussions are not.
+
+- **Recorded in:** [`docs/charter/amendments.md`](../../docs/charter/amendments.md) (v0.1.1) and [`docs/charter/decision-log.md` §0006](../../docs/charter/decision-log.md).
+- **Originating RFC:** [`docs/rfcs/draft/charter-amendment-v0-1-1-clarify-protected-surface.md`](../../docs/rfcs/draft/charter-amendment-v0-1-1-clarify-protected-surface.md).
+- **Commit:** Gate 0b — `feat(charter): amendment v0.1.1 — clarify protected surface`.
+- **Resolution category:** governance (formal amendment, patch-level).
+- **Status:** closed.
+
+### Findings status after Gate 0
+
+All three judgment-required findings deferred at Phase 8 are now resolved. The remaining items from §8 — Coverage gaps 1–8, Finding 1.1 (hook line count) — remain open as candidate future RFC work, unchanged by this gate.
+
+---
+
+## Audit incompleteness rectification
+
+Gate 0b empirical work surfaced two factual issues that the Phase 8 audit either underreported or misreported. Recording them here per the audit's own discipline ("Audit incompleteness is itself a finding"). The originals above are not edited.
+
+### Rectification 1 — Gate 0a commit message overstated the regression test
+
+The Gate 0a commit message (`760c90b`) states, in its body, that the exemption was verified by reverting the blockquote in `.claude/CLAUDE.md` §1 to the parenthetical form and confirming that the hook flagged the marketing tells `intelligence` and `integrity` in that file.
+
+This claim was, at the time of the Gate 0a commit, mechanically impossible: the hook's `in_scope` predicate did not include `.claude/CLAUDE.md`. Any regression test performed against the file itself would have produced no output regardless of the exemption's correctness. The regression test that did happen — whatever its actual form — necessarily ran against a file inside the then-existing scope (plausibly a temporary file under `docs/charter/` or similar), not against `.claude/CLAUDE.md`.
+
+The Gate 0a *implementation* is structurally correct. The exemption mechanism (blockquote + attribution → exempt) works as intended; this was confirmed during Gate 0b regression testing (Verification §4a–§4b) against the now-in-scope file. The rectification is to the historical record, not to the code.
+
+The commit message is not edited (commits are append-only by Git convention; force-rewriting history is rejected here for the same reason `decision-log.md` entries are never edited). This rectification serves the same role for the commit log that supersession serves for the decision log.
+
+### Rectification 2 — §8 "Audit incompleteness" item 2 underspecified the scope gap
+
+The Phase 8 audit's "Audit incompleteness" §item 2 ("Forbidden-synonym and ambiguity-term scans against infrastructure") reported that "a scan was run informally" and characterized the results as "the documented tradeoff of the tripwire-grep approach". The characterization was correct as far as it went, but missed a sharper finding that Gate 0b surfaced:
+
+The Phase 8 audit treated `.claude/CLAUDE.md` and `.claude/README.md` as if they were within the hook's enforcement scope (running the watchlists against them, reporting findings, deferring resolution). The hook's `in_scope` predicate had never included those files. The audit's behavior assumed coverage the infrastructure did not provide.
+
+This was not a bug in the hook (which behaved as defined) and not strictly a bug in the audit (which did surface the watchlist hits correctly), but a gap between the audit's mental model and the infrastructure's actual scope. Gate 0b closed the gap in the infrastructure direction (extended the scope). The retrospective finding stays open here as a note: audit work that assumes a protected surface should verify the predicate that defines the surface, not just run the watchlists.
+
+### Findings introduced by this rectification
+
+None of the above introduces a new bug. Rectification 1 is a record correction. Rectification 2 is a methodological note for future audits. Both are closed by their own statement.
