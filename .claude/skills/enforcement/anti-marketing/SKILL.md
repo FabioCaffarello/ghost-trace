@@ -96,6 +96,8 @@ Quotations from the Charter or the Ontology that contain words on the watchlist 
 
 The exemption applies only to quotation. New prose that uses the same words without the Charter's earned context is flagged. The test: would a reader who has not read the Charter understand the term as a specific structural property, or as elevated language? If the latter, the exemption does not apply.
 
+Mechanical recognition (added in decision-log entry `0005`). The hook script applies the exemption to any line that both (a) begins with `>` (markdown blockquote prefix, possibly preceded by whitespace) and (b) is part of a blockquote block whose attribution line matches the pattern `>\s*—\s*\[(Charter|Ontology)` (em dash followed by a bracket link to a Charter or Ontology section). The exemption is per-line: only blockquote lines within a properly attributed block are exempt; surrounding prose remains subject to the watchlist. Attribution by parenthetical reference at the end of a non-blockquote sentence does not qualify — the writer must use the blockquote form. This is a tripwire rule, not a comprehension check; it protects faithful quotation, not paraphrase.
+
 ## 5. What this skill does not do
 
 This skill does not approve prose. It rejects marketing. Approval is the normal review of substance, structure, and citations.

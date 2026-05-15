@@ -4,7 +4,9 @@ This file is loaded into every Claude Code session in this repository. Read it b
 
 ## 1. What this repository is
 
-Ghost Trace is a behavioral intelligence substrate designed to preserve the epistemic integrity of operational knowledge — the continued capacity to distinguish what was observed from what was inferred ([Charter §1](../docs/charter/constitutional-charter.md#1-thesis)).
+> Ghost Trace is a behavioral intelligence substrate designed to preserve the epistemic integrity of operational knowledge — the continued capacity to distinguish what was observed from what was inferred.
+>
+> — [Charter §1](../docs/charter/constitutional-charter.md#1-thesis)
 
 The repository is in pre-implementation constitutional drafting. The Charter is `v0.1`: §1 Thesis, §2.1 Observational Integrity, and §2.2 Epistemic Separation are frozen; §2.3–§2.6, §3 Non-Goals, and §4 Constitutional Design Rule are pending committee redaction. Implementation work is gated on Ontology stabilization. The gate criteria are operationalized in the `implementation-readiness-evaluator` skill (to be created in Phase 5).
 

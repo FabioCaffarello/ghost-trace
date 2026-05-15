@@ -28,7 +28,7 @@ Deviations from the Phase 2 prompt example are documented at the top of `setting
 
 Skills are directories containing `SKILL.md` and optional `references/` material (per `CLAUDE.md` §5.1). They are grouped into five domains:
 
-- **`constitutional/`** — `charter-guardian`, `subordination-checker`, `invariant-redactor`. Protect Charter integrity.
+- **`constitutional/`** — `charter-guardian`, `subordination-checker`, `invariant-redactor`. Protect the Charter from drift.
 - **`epistemic/`** — `epistemic-separator`, `falsifiability-check`, `ambiguity-reducer`. Preserve clarity of language.
 - **`ontology/`** — `ontology-keeper`, `vocabulary-discipline`. Keep modeling work aligned with the Charter.
 - **`workflow/`** — `rfc-author`, `decision-logger`, `implementation-readiness-evaluator`. Structure recurring procedural work.
