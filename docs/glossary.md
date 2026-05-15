@@ -92,6 +92,22 @@ Missing fields are marked `pending`, never omitted.
 - **Last amendment.** [`decision-log.md` §0010](./charter/decision-log.md).
 - **Forbidden synonyms.** `coordination group` (description rather than hypothesis); `network` (overloaded — used elsewhere for graph structure, not the inferential entity).
 
+### `demotion`
+
+- **Canonical definition.** Category III hypothesis lifecycle operation: the transition of a previously promoted hypothesis out of operational use as enrichment context. Demotion is recorded as an immutable event in the primary event log per Invariant 2.5 (pending). A demoted hypothesis remains in the substrate; demotion does not delete.
+- **Introduction.** [`decision-log.md` §0011 — Q4 resolution](./charter/decision-log.md); [`ontology/lifecycle-semantics.md` §Category III, post-Q4](./ontology/lifecycle-semantics.md).
+- **Stabilization.** Ontology v(post-Q4) — Drafted.
+- **Last amendment.** [`decision-log.md` §0011](./charter/decision-log.md).
+- **Forbidden synonyms.** `demote` (verb form is acceptable in informal use; the canonical noun is `demotion`); `unpromotion` (the lifecycle event is `demotion`, not its negation); `retraction` (this term may be used in a different sense for assertions; `demotion` is for hypotheses); `decommission` (engineering-systems vocabulary, not Ontology).
+
+### `promotion`
+
+- **Canonical definition.** Category III hypothesis lifecycle operation: the transition of a hypothesis from active inference to operational use as enrichment context. Promotion is recorded as an immutable event in the primary event log per Invariant 2.5 (pending). The promotion event carries the structural parameters governing the hypothesis's subsequent demotion-candidacy timing (Layer A of the staged-combination criterion per [`decision-log.md` §0011](./charter/decision-log.md)).
+- **Introduction.** [`decision-log.md` §0011 — Q4 resolution](./charter/decision-log.md); [`ontology/lifecycle-semantics.md` §The Promotion Mechanism, post-Q4](./ontology/lifecycle-semantics.md).
+- **Stabilization.** Ontology v(post-Q4) — Drafted.
+- **Last amendment.** [`decision-log.md` §0011](./charter/decision-log.md).
+- **Forbidden synonyms.** `promote` (verb form is acceptable in informal use; the canonical noun is `promotion`); `activation` (engineering-systems vocabulary); `enrichment promotion` (the bare term `promotion` is canonical; `enrichment` describes the use the promoted hypothesis is admitted to, not the operation).
+
 ### `assertion`
 
 - **Canonical definition.** Any non-observation record the system produces — Category II or Category III.
