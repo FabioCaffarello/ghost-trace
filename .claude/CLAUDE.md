@@ -68,7 +68,7 @@ These terms are constitutional. Substituting a synonym for any of them introduce
 | §3 Non-Goals | pending |
 | §4 Constitutional Design Rule | frozen |
 
-This table is the source of truth for which sections are protected against edit. The `charter-guardian` skill and the pre-commit hook both read it. Update it only when the Charter actually changes. Keeping this table in sync with `constitutional-charter.md` is the canonical inconsistency mode of this infrastructure; the Phase 8 SELF-AUDIT checks for it. Amendment v0.1.1 added the §2 qualification criteria row, resolving SELF-AUDIT §7 Finding 7.1. Amendment v0.2 moved §4 from `pending` to `frozen` (Gate 1 pilot redaction).
+This table is the source of truth for which sections are protected against edit. The `charter-guardian` skill and the pre-commit hook both read it. Update it only when the Charter actually changes. Keeping this table in sync with `constitutional-charter.md` is the canonical inconsistency mode of this infrastructure; the Phase 8 SELF-AUDIT checks for it. Amendment v0.1.1 added the §2 qualification criteria row, resolving SELF-AUDIT §7 Finding 7.1. Amendment v0.2 moved §4 from `pending` to `frozen` (Gate 1 pilot redaction). Amendment v0.2.1 extended the mechanical Charter-blockquote exemption from marketing-tell detection to vocabulary-drift detection, addressing the stale-stub-vocabulary tripwire surfaced during Gate §2.5 Step 1.1 (see [`decision-log.md` §0012](../docs/charter/decision-log.md)).
 
 ## 5. Governance decisions binding this infrastructure
 

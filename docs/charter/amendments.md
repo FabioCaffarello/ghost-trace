@@ -58,6 +58,17 @@ No amendments have yet been recorded against `v0.1`. Future entries follow.
 
 ---
 
+### `v0.2.1` — Extend Charter-blockquote exemption to vocabulary-drift
+
+**Date:** 2026-05-15
+**Originating RFC:** [`charter-amendment-v0-2-1-extend-blockquote-exemption-to-vocab-drift`](../rfcs/draft/charter-amendment-v0-2-1-extend-blockquote-exemption-to-vocab-drift.md)
+**Sections affected:** Banner (version line `v0.2` → `v0.2.1`; status-line clause appended noting the patch). No Charter prose amended.
+**Summary:** The mechanical exemption rule established in [`decision-log.md` §0005](./decision-log.md) (Gate 0a) for attributed Charter/Ontology blockquotes is extended from marketing-tell detection only to vocabulary-drift detection as well. The hook's vocabulary-drift loop gains the same `eligible_blockquote_lines` filter the marketing-tell loop has had since v0.1.1. The ambiguity advisory remains non-exempt (informational, not blocking).
+**Rationale:** The original §0005 scope decision treated mis-quotation as the failure mode — a quotation containing a forbidden synonym would indicate stale Charter or misquotation. The scope was defensible when the only blockquotes in scope quoted frozen Charter text. Gate §2.5 Step 1.1 surfaced systematic stale-stub-vocabulary tripwires: the §2.5 stub uses, in ordinary-English sense, a noun that the [`glossary`](../glossary.md) records (entry for `operational construct`) as a forbidden synonym. The stub was authored in setup Phases 2–3; the glossary entry was added in Phase 4. The stub is genuinely stale relative to current canonical vocabulary, not in error. The empirical mode for committee-mode redaction pilots — including §2.3, §2.4, §2.6, §3 in future — is stale-quotation by construction. Committee review during redaction phases assumes the responsibility §0005's narrower scope assigned to the hook (catching genuine mis-quotation of frozen Charter prose with non-canonical vocabulary). The fix is mechanical replication of the marketing-tell exemption pattern in the vocabulary-drift loop; no new exemption mechanism is introduced.
+**Falsifiability review outcome:** Pass. The change clarifies a mechanical predicate (the hook's vocabulary-drift filter) without introducing non-falsifiable language. The exemption is structurally falsifiable: a quotation in an attributed blockquote (regex match on a specific line: `^[[:space:]]*>[[:space:]]*—[[:space:]]*\[(Charter|Ontology)`) is the predicate that fires the exemption; the predicate is detectable mechanically without subjective judgment.
+
+---
+
 <!-- AMENDMENT TEMPLATE — copy below this line when recording an amendment -->
 
 <!--

@@ -34,10 +34,11 @@
 # the script exits non-zero. Silent degradation is the failure mode
 # this script exists to prevent.
 #
-# Six design discoveries documented inline (see match_term, the
+# Seven design discoveries documented inline (see match_term, the
 # eligible_blockquote_lines helper, the canonical_phrase_exemptions
 # helper, the vocabulary-drift check loop, the per-file added=
-# assignment, and the STAGED= assignment):
+# assignment, the STAGED= assignment, and the vocab-drift blockquote
+# exemption added in v0.2.1):
 #   - Word boundary treats hyphen as word-like, so `log` is not reported
 #     inside `decision-log.md` or `event-log` identifiers.
 #   - docs/glossary.md is the source of the forbidden-synonym list; it
@@ -46,10 +47,12 @@
 #   - Charter and Ontology quotations expressed as attributed markdown
 #     blockquotes (a block containing a line matching
 #     `^\s*>\s*—\s*\[(Charter|Ontology)`) are exempt from the marketing
-#     check on a per-line basis. Vocabulary-drift and ambiguity checks
-#     are not exempted — the Charter itself uses canonical phrases, so
-#     a quotation containing a forbidden synonym is still drift. See
-#     docs/charter/decision-log.md §0005 and anti-marketing §4.
+#     check on a per-line basis. The original §0005 scope was
+#     marketing-only; §0012 (v0.2.1) extended the exemption to the
+#     vocabulary-drift check — see the seventh discovery below. The
+#     ambiguity advisory remains non-exempt (informational, not
+#     blocking). See docs/charter/decision-log.md §0005, §0012;
+#     anti-marketing §4.
 #   - Canonical-phrase exemption: `primary event log`, `decision log`,
 #     `event log`, and `historical fact` contain forbidden-synonym
 #     substrings but are themselves canonical vocabulary. The exemption
@@ -70,6 +73,20 @@
 #     during Gate 1 Step 1.2 when the scratch file
 #     `docs/charter/in-committee/§4-constitutional-design-rule.md` was
 #     skipped by the hook without warning.
+#   - Vocabulary-drift exemption for attributed Charter/Ontology
+#     blockquotes, parallel to the marketing-tell exemption per
+#     decision-log §0012 (v0.2.1). The §0005 mechanism (the regex,
+#     the eligible_blockquote_lines helper) was originally scoped to
+#     marketing only on the rationale that a forbidden synonym in a
+#     quotation indicates stale Charter or misquotation. Empirical
+#     pilot of committee-mode redaction at Gate §2.5 surfaced
+#     systematic stale-stub-vocabulary tripwires: pending Charter
+#     stubs predate the canonical-vocabulary expansion and contain
+#     forbidden synonyms by construction (e.g. `result` in the §2.5
+#     stub's verbatim "never the result of direct mutation"). The
+#     exemption now covers vocab-drift on the same per-line
+#     attribution predicate; committee review during redaction phases
+#     is the responsible layer for catching genuine mis-quotation.
 #
 # Known tradeoff (tripwire by design):
 #   The grep is literal. A forbidden term inside a canonical phrase
@@ -290,8 +307,21 @@ for file in $STAGED; do
   # the glossary against itself is circular — every entry would trip. The
   # marketing and ambiguity checks still apply to the glossary; only
   # vocabulary-drift is exempted here.
+  #
+  # Two non-blocking exemptions are applied per-hit, in order:
+  #   1. Attributed Charter/Ontology blockquote lines, per decision-log
+  #      §0012 (v0.2.1, parallel to the marketing-tell exemption of
+  #      §0005). The mechanism is `eligible_blockquote_lines` — same
+  #      helper used by the marketing loop below.
+  #   2. Canonical phrases that legitimately contain forbidden-synonym
+  #      substrings, per decision-log §0006. The mechanism is
+  #      `canonical_phrase_exemptions`.
+  # A line that is BOTH in an attributed blockquote AND matches a
+  # canonical phrase exits with the first applicable exemption
+  # (blockquote check first; either suffices).
   if [ "$file" != "docs/glossary.md" ]; then
     canonical_exempt=$(canonical_phrase_exemptions "$added")
+    eligible_lines=$(eligible_blockquote_lines "$added")
     while IFS= read -r term; do
       [ -z "$term" ] && continue
       bareterm=$(printf '%s' "$term" | sed -E 's/[[:space:]]*\([^)]*\).*$//')
@@ -300,6 +330,9 @@ for file in $STAGED; do
       filtered_hits=$(printf '%s\n' "$raw_hits" | while IFS= read -r hit; do
         [ -z "$hit" ] && continue
         ln=${hit%%:*}
+        if [ -n "$eligible_lines" ] && printf '%s\n' "$eligible_lines" | grep -qx -- "$ln"; then
+          continue
+        fi
         if [ -n "$canonical_exempt" ] && printf '%s\n' "$canonical_exempt" | grep -qFx -- "$ln	$bareterm"; then
           continue
         fi
