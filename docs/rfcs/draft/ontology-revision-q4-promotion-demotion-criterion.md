@@ -1,6 +1,6 @@
 # RFC — Ontology Open Question 4: Promotion → Demotion Criterion
 
-- **Status:** discussion
+- **Status:** accepted
 - **Authors:** Ghost Trace committee
 - **Date:** 2026-05-15
 - **Type:** ontology-revision
@@ -189,4 +189,4 @@ The [Phase 3 / Phase 4 replay contracts](../../architecture/replay-model.md) req
 
 ## Decision Record
 
-Pending. A decision-log entry will be assigned when this RFC is resolved. Current status is `discussion`.
+Resolved by [`docs/charter/decision-log.md` §0011 — Q4 resolution: staged-combination demotion criterion (Layer A + deferred Layer B)](../../charter/decision-log.md). The committee adopted the **staged-combination form** (Phase 4 sequencing option (iii) — split form-and-parameters): Layer A (Candidate A — time-based cadence gate, operational on substrate timestamps today) **AND** Layer B (deep criterion on `evidential independence` per §2.6 pending or declared `influence` per §2.4 pending; specific shape deferred to a follow-on RFC tied to §2.4 / §2.6 redactions). The AND composition was the committee's deliberation parameter beyond the discussion phase's form-level recommendation; OR composition is documented in the [`q4-evidence.md` Phase 5](../discussion/q4-evidence.md) reversal-conditions record as the path forward if Layer A's gate proves too restrictive in practice. Discussion-phase evidence is preserved in [`docs/rfcs/discussion/q4-evidence.md`](../discussion/q4-evidence.md); five phases produced nine findings, a sequencing finding (option (iii)), a composition finding, and a recommendation. The Layer B follow-on RFC is opened as a placeholder at [`ontology-revision-layer-b-deep-criterion.md`](./ontology-revision-layer-b-deep-criterion.md) (`Status: discussion`, on hold pending §2.4 and §2.6).
