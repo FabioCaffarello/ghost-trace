@@ -1,6 +1,6 @@
 # RFC — Ontology Open Question 2: Hypothesis Subtypes
 
-- **Status:** discussion
+- **Status:** accepted
 - **Authors:** Ghost Trace committee
 - **Date:** 2026-05-15
 - **Type:** ontology-revision
@@ -151,4 +151,4 @@ The Charter's [Phase 3 / Phase 4 replay contracts](../../architecture/replay-mod
 
 ## Decision Record
 
-Pending. A decision-log entry will be assigned when this RFC is resolved. Current status is `discussion`.
+Resolved by [`docs/charter/decision-log.md` §0010 — Q2 resolution: Hypothesis subtypes as distinct types under abstract Hypothesis](../../charter/decision-log.md). The committee adopted **Candidate A — Distinct types within Category III** with **sub-resolution A.2** (abstract type `Hypothesis` carrying shared structure; four concrete sibling subtypes `BehavioralCluster`, `CoordinationRing`, `CampaignHypothesis`, `AutomationGroup` extending `Hypothesis` and carrying subtype-specific fields). Discussion-phase evidence is preserved in [`docs/rfcs/discussion/q2-evidence.md`](../discussion/q2-evidence.md). Concrete type-definition technology is deferred to the pending substrate-technology RFC ([`decision-log §0003`](../../charter/decision-log.md)).

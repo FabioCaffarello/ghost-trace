@@ -60,6 +60,38 @@ Missing fields are marked `pending`, never omitted.
 - **Last amendment.** [`amendments.md` `v0.1` — Charter Inception](./charter/amendments.md).
 - **Forbidden synonyms.** `inference` (the act, not the record); `cluster` (acceptable only for a specific subtype, and the subtype is itself an open modeling question — see [`ontology/entity-model.md` §Open Modeling Questions](./ontology/entity-model.md)).
 
+### `automation group`
+
+- **Canonical definition.** Category III hypothesis subtype: a set of actors whose behavioral patterns match a signature of automated (non-human) operation. The hypothesis asserts that the set is operated automatically; membership and signature evolve through hypothesis lifecycle operations.
+- **Introduction.** [`decision-log.md` §0010 — Q2 resolution](./charter/decision-log.md); [`ontology/entity-model.md` §Category III, post-Q2](./ontology/entity-model.md).
+- **Stabilization.** Ontology v(post-Q2) — Drafted.
+- **Last amendment.** [`decision-log.md` §0010](./charter/decision-log.md).
+- **Forbidden synonyms.** `bot cluster` (informal; ambiguous with classification rather than inference); `automated actors` (description, not the inferential entity).
+
+### `behavioral cluster`
+
+- **Canonical definition.** Category III hypothesis subtype: a set of actors whose behavioral patterns suggest operation by a common underlying entity. The hypothesis is about shared operatorship, not shared activity. Membership evolves through hypothesis lifecycle operations.
+- **Introduction.** [`decision-log.md` §0010 — Q2 resolution](./charter/decision-log.md); [`ontology/entity-model.md` §Category III, post-Q2](./ontology/entity-model.md).
+- **Stabilization.** Ontology v(post-Q2) — Drafted.
+- **Last amendment.** [`decision-log.md` §0010](./charter/decision-log.md).
+- **Forbidden synonyms.** `actor group` (does not specify the inferential character — an actor group is a description; `behavioral cluster` is a hypothesis); `account cluster` (collapses identity tier — `behavioral cluster` operates over actors, not accounts).
+
+### `campaign hypothesis`
+
+- **Canonical definition.** Category III hypothesis subtype: a set of events whose patterns suggest membership in a unified operation with thematic, temporal, or actor-level coherence. The hypothesis asserts that the events are part of one operation, not several coincident ones.
+- **Introduction.** [`decision-log.md` §0010 — Q2 resolution](./charter/decision-log.md); [`ontology/entity-model.md` §Category III, post-Q2](./ontology/entity-model.md).
+- **Stabilization.** Ontology v(post-Q2) — Drafted.
+- **Last amendment.** [`decision-log.md` §0010](./charter/decision-log.md).
+- **Forbidden synonyms.** `campaign` (the bare word denotes the operation itself; `campaign hypothesis` is the inferential entity about it); `event cluster` (collapses with `behavioral cluster` — `behavioral cluster` is over actors, `campaign hypothesis` is over events).
+
+### `coordination ring`
+
+- **Canonical definition.** Category III hypothesis subtype: a set of actors whose patterns of interaction with one another suggest coordinated action. The hypothesis is about relational structure among actors, not shared operatorship. Distinguished from `behavioral cluster`: cluster is about same-operator inference; ring is about coordinated-action inference among different operators.
+- **Introduction.** [`decision-log.md` §0010 — Q2 resolution](./charter/decision-log.md); [`ontology/entity-model.md` §Category III, post-Q2](./ontology/entity-model.md).
+- **Stabilization.** Ontology v(post-Q2) — Drafted.
+- **Last amendment.** [`decision-log.md` §0010](./charter/decision-log.md).
+- **Forbidden synonyms.** `coordination group` (description rather than hypothesis); `network` (overloaded — used elsewhere for graph structure, not the inferential entity).
+
 ### `assertion`
 
 - **Canonical definition.** Any non-observation record the system produces — Category II or Category III.
