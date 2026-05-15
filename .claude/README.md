@@ -55,7 +55,7 @@ Specialized review roles invokable as Claude Code subagents:
 - `charter-reviewer` — reads proposed changes and reports interaction with each Charter invariant.
 - `epistemic-auditor` — reads documents for falsifiability, ambiguity, and inferential discipline.
 
-Neither agent has authority to amend the Charter, the Ontology, or the decision log. They recommend RFCs or flag drift. Authored in a later phase.
+Neither agent has authority to amend the Charter, the Ontology, or the decision log. They recommend RFCs or surface drift. Authored in a later phase.
 
 ### `hooks/`
 
@@ -77,7 +77,7 @@ This directory must remain compressible. Per `CLAUDE.md` §7, every new skill, c
 
 ## Step-by-step procedures
 
-For operator-facing step-by-step procedures (how to propose an amendment, how to redact an invariant, how to log a decision, what to do when a skill vetoes a change), see [`WORKFLOW.md`](../WORKFLOW.md) at the repository root.
+For operator-facing step-by-step procedures (how to propose an amendment, how to redact an invariant, how to record a decision, what to do when a skill vetoes a change), see [`WORKFLOW.md`](../WORKFLOW.md) at the repository root.
 
 ## CI workflow
 

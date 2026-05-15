@@ -80,6 +80,18 @@ Decisions are recorded once and never edited except for status changes. A decisi
 
 ---
 
+## `0006` — Clarify constitutional surface protected by the infrastructure (v0.1.1)
+
+- **Status:** accepted
+- **Date:** 2026-05-15
+- **Context:** Two ambiguities surfaced during Gate 0 of post-setup work. Phase 8 SELF-AUDIT Finding 7.1 noted that the Charter banner's wording ("Invariants 1–2 frozen") is ambiguous about the status of the §2 header — the four invariant qualification criteria, which `invariant-redactor` already treats as operative. Empirical pre-scan during Gate 0b further showed that the hook's `in_scope` predicate never included `.claude/CLAUDE.md` or `.claude/README.md`, despite the SELF-AUDIT having treated their cleanliness as a finding. Both ambiguities were governance-adjacent.
+- **Decision:** Charter amendment v0.1.1, recorded in [`amendments.md`](./amendments.md) and originated as RFC [`charter-amendment-v0-1-1-clarify-protected-surface`](../rfcs/draft/charter-amendment-v0-1-1-clarify-protected-surface.md). Explicitly declares the §2 header FROZEN (`.claude/CLAUDE.md` §4 status table updated). Extends the hook `in_scope` predicate to include `.claude/CLAUDE.md` and `.claude/README.md`. Three editorial rewrites bring previously out-of-scope text into compliance. New canonical-phrase exemption mechanism — registered phrases "primary event log", "decision log", "event log", and "historical fact" — prevents legitimate canonical vocabulary from being reported as drift. Hook fallback fix (no-added-lines case) prevents whitespace-only commits from scanning pre-existing content.
+- **Constitutional review:** §2 header (status change, FROZEN). §2.1, §2.2 unchanged. No new invariant introduced. No glossary term redefined. No open Ontology question resolved. No ceremony without behavioral consequence: each clause of the amendment changes hook behavior or eliminates a documented latent bug.
+- **Consequences:** Future edits to lines 32–42 of `constitutional-charter.md` (the §2 header) require formal amendment. Future edits to `.claude/CLAUDE.md` and `.claude/README.md` are subject to vocabulary, marketing, and ambiguity discipline. The canonical-phrase whitelist does not grow by inference; each addition requires a new decision-log entry. Whitespace-only commits to in-scope files no longer trigger scans of pre-existing content. `.claude/SELF-AUDIT.md` and `.claude/PLAN.md` remain explicitly out of scope; this exclusion is documented in the `in_scope` function.
+- **Supersession:** none. Successor amendments may further clarify the protected surface; this decision establishes the canonical pattern for such clarifications (explicit, amendment-backed, decision-log-recorded).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

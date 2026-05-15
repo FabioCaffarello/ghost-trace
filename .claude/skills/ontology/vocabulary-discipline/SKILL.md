@@ -75,6 +75,19 @@ This table is one view of the same data carried per-term in [`docs/glossary.md`]
 | `update` (applied to an observation or hypothesis state) | `supersede` (typed transformation) | Observations cannot be updated ([Invariant 2.1](../../../../docs/charter/constitutional-charter.md#21-observational-integrity)); hypothesis state is a projection over an event history (pending [§2.5](../../../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness)), not mutable. |
 | `signal` (used informally) | `operational construct` or `intermediate value` | See [`ambiguity-reducer`](../../epistemic/ambiguity-reducer/SKILL.md) for the disambiguation procedure. |
 
+### Canonical-phrase exemptions
+
+Certain multi-word canonical phrases legitimately contain forbidden-synonym substrings. The hook does not report a forbidden term when it appears within a registered canonical phrase. The whitelist is small, explicit, and grows only via decision-log entry.
+
+Currently registered (per [`decision-log.md` §0006](../../../../docs/charter/decision-log.md)):
+
+- **`primary event log`** — contains `log`; canonical name for the substrate per [Charter §2.1](../../../../docs/charter/constitutional-charter.md#21-observational-integrity) and [`storage-model.md`](../../../../docs/architecture/storage-model.md).
+- **`decision log`** — contains `log`; canonical name for the ADR record per [`decision-log.md`](../../../../docs/charter/decision-log.md).
+- **`event log`** — contains `log`; alternate canonical reference to the substrate primary tier.
+- **`historical fact`** — contains `fact`; verbatim §2.2 definition of Category I.
+
+This list does not include other multi-word phrases by pattern matching. New canonical phrases require an explicit decision-log entry referencing this section.
+
 The table grows as new forbidden synonyms surface. Additions follow the procedure in [`ambiguity-reducer` §3](../../epistemic/ambiguity-reducer/SKILL.md) and are reflected in both this skill and `docs/glossary.md`.
 
 ## 5. Relationship to `ambiguity-reducer`

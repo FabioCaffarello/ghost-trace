@@ -34,9 +34,11 @@
 # the script exits non-zero. Silent degradation is the failure mode
 # this script exists to prevent.
 #
-# Three design discoveries documented inline (see match_term, the
-# eligible_blockquote_lines helper, and the vocabulary-drift check loop):
-#   - Word boundary treats hyphen as word-like, so `log` is not flagged
+# Five design discoveries documented inline (see match_term, the
+# eligible_blockquote_lines helper, the canonical_phrase_exemptions
+# helper, the vocabulary-drift check loop, and the per-file added=
+# assignment):
+#   - Word boundary treats hyphen as word-like, so `log` is not reported
 #     inside `decision-log.md` or `event-log` identifiers.
 #   - docs/glossary.md is the source of the forbidden-synonym list; it
 #     is exempted from the vocabulary-drift check (circular otherwise).
@@ -48,6 +50,17 @@
 #     are not exempted — the Charter itself uses canonical phrases, so
 #     a quotation containing a forbidden synonym is still drift. See
 #     docs/charter/decision-log.md §0005 and anti-marketing §4.
+#   - Canonical-phrase exemption: `primary event log`, `decision log`,
+#     `event log`, and `historical fact` contain forbidden-synonym
+#     substrings but are themselves canonical vocabulary. The exemption
+#     is whitelist-based (not pattern-based) and grows only via
+#     decision-log entry. See decision-log §0006.
+#   - No-added-lines skip: when `git diff --cached` produces no added
+#     text lines for a file (whitespace-only or mode-only changes), the
+#     loop continues past the file rather than scanning its entire
+#     content. The earlier fallback-to-cat behavior caused false
+#     positives on pre-existing legitimate content. See decision-log
+#     §0006.
 #
 # Known tradeoff (tripwire by design):
 #   The grep is literal. A forbidden term inside a canonical phrase
@@ -92,6 +105,15 @@ FORBIDDEN=$(python3 "$PARSER" --forbidden "$VOCAB_SKILL")                 || { f
 MARKETING=$(python3 "$PARSER" --marketing "$MARKETING_SKILL")             || { fail_closed "marketing parser failed";    exit "$EXIT_CODE"; }
 AMBIGUITY=$(python3 "$PARSER" --ambiguity "$AMBIGUITY_SKILL")             || { fail_closed "ambiguity parser failed";    exit "$EXIT_CODE"; }
 
+# Canonical phrases that legitimately contain forbidden-synonym
+# substrings. Registered per decision-log entry (currently §0006).
+# Adding a new phrase requires a new decision-log entry; the list
+# does not grow by inference. Mirror in vocabulary-discipline §4.
+CANONICAL_PHRASES="primary event log
+decision log
+event log
+historical fact"
+
 if [ "${1:-}" = "--self-test" ]; then
   echo "self-test: all watchlist parsers OK"
   echo "  frozen ranges:  $(printf '%s\n' "$FROZEN_RANGES" | grep -c .) range(s)"
@@ -101,11 +123,23 @@ if [ "${1:-}" = "--self-test" ]; then
   exit 0
 fi
 
+# In-scope: documents that ASSERT constitutional or operational rules.
+# Out-of-scope: documents that REGISTER discussions about the
+# infrastructure (which legitimately cite watchlist terms as content).
+# See decision-log §0006 and Amendment v0.1.1 for the rationale.
+#
+# .claude/SELF-AUDIT.md and .claude/PLAN.md are deliberately EXCLUDED:
+# they discuss findings about watchlist terms; protecting them would
+# prevent honest observability of the infrastructure.
+#
+# .claude/skills/**, .claude/agents/**, .claude/commands/** are
+# EXCLUDED: they define watchlists and procedures as content.
 in_scope() {
   case "$1" in
     docs/charter/*|docs/ontology/*|docs/architecture/*|docs/rfcs/*)
       [ "${1##*.}" = "md" ] && return 0 ;;
     docs/glossary.md|CONTRIBUTING.md|README.md|WORKFLOW.md) return 0 ;;
+    .claude/CLAUDE.md|.claude/README.md) return 0 ;;
   esac
   return 1
 }
@@ -163,6 +197,34 @@ eligible_blockquote_lines() {
   ' | sort -n
 }
 
+# Compute (line_number, forbidden_term) pairs in $content that should
+# be exempted from the vocabulary-drift report because the line
+# contains a registered canonical phrase that itself contains the
+# forbidden term. Output: tab-separated pairs, one per line.
+# Matching is plain-text substring, case-insensitive. Per-line scope.
+# See decision-log §0006 and vocabulary-discipline §4.
+canonical_phrase_exemptions() {
+  local content="$1" phrase term bare contained_terms ln rest t
+  while IFS= read -r phrase; do
+    [ -z "$phrase" ] && continue
+    contained_terms=""
+    while IFS= read -r term; do
+      [ -z "$term" ] && continue
+      bare=$(printf '%s' "$term" | sed -E 's/[[:space:]]*\([^)]*\).*$//')
+      if printf '%s' "$phrase" | grep -qiF -- "$bare"; then
+        contained_terms="$contained_terms $bare"
+      fi
+    done <<< "$FORBIDDEN"
+    [ -z "$contained_terms" ] && continue
+    while IFS=: read -r ln rest; do
+      [ -z "$ln" ] && continue
+      for t in $contained_terms; do
+        printf '%s\t%s\n' "$ln" "$t"
+      done
+    done < <(printf '%s\n' "$content" | grep -niF -- "$phrase" 2>/dev/null || true)
+  done <<< "$CANONICAL_PHRASES"
+}
+
 # Check that any diff hunk touching the charter file intersects no
 # FROZEN range. Returns 0 if clean, 1 if a violation is found.
 check_frozen_charter() {
@@ -195,7 +257,13 @@ for file in $STAGED; do
   in_scope "$file" || continue
 
   added=$(git diff --cached -- "$file" 2>/dev/null | grep -E '^\+[^+]' | sed 's/^+//')
-  [ -z "$added" ] && added=$(cat "$file" 2>/dev/null || true)
+  # When no added text lines exist (whitespace-only commits, file-mode-
+  # only changes, etc.), there is nothing new to validate. Skip this
+  # file rather than fall back to scanning the entire file, which would
+  # report pre-existing legitimate content. See decision-log §0006.
+  if [ -z "$added" ]; then
+    continue
+  fi
 
   if [ "$file" = "$CHARTER" ]; then
     check_frozen_charter "$file" || EXIT_CODE=1
@@ -207,13 +275,23 @@ for file in $STAGED; do
   # marketing and ambiguity checks still apply to the glossary; only
   # vocabulary-drift is exempted here.
   if [ "$file" != "docs/glossary.md" ]; then
+    canonical_exempt=$(canonical_phrase_exemptions "$added")
     while IFS= read -r term; do
       [ -z "$term" ] && continue
       bareterm=$(printf '%s' "$term" | sed -E 's/[[:space:]]*\([^)]*\).*$//')
-      hits=$(match_term "$bareterm" "$added")
-      if [ -n "$hits" ]; then
+      raw_hits=$(match_term "$bareterm" "$added")
+      [ -z "$raw_hits" ] && continue
+      filtered_hits=$(printf '%s\n' "$raw_hits" | while IFS= read -r hit; do
+        [ -z "$hit" ] && continue
+        ln=${hit%%:*}
+        if [ -n "$canonical_exempt" ] && printf '%s\n' "$canonical_exempt" | grep -qFx -- "$ln	$bareterm"; then
+          continue
+        fi
+        printf '%s\n' "$hit"
+      done)
+      if [ -n "$filtered_hits" ]; then
         echo "BLOCK [vocabulary-drift] $file: forbidden synonym '$bareterm'"
-        printf '%s\n' "$hits" | sed 's/^/    /'
+        printf '%s\n' "$filtered_hits" | sed 's/^/    /'
         echo "  → see docs/glossary.md and vocabulary-discipline §4 for canonical replacement."
         EXIT_CODE=1
       fi

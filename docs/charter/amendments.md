@@ -36,6 +36,17 @@ No amendments have yet been recorded against `v0.1`. Future entries follow.
 
 ---
 
+### `v0.1.1` — Clarify protected surface (§2 header frozen; hook scope explicit)
+
+**Date:** 2026-05-15
+**Originating RFC:** [`charter-amendment-v0-1-1-clarify-protected-surface`](../rfcs/draft/charter-amendment-v0-1-1-clarify-protected-surface.md)
+**Sections affected:** Banner (version line; status line); §2 header (status change, explicit FROZEN).
+**Summary:** The §2 (Constitutional Invariants) header — the four invariant qualification criteria — is explicitly declared FROZEN, removing ambiguity from the previous "Invariants 1–2 frozen" wording. The hook's protected file set is enumerated and extended to include `.claude/CLAUDE.md` and `.claude/README.md`. Three editorial rewrites apply the existing vocabulary discipline to formerly out-of-scope text; a new canonical-phrase exemption ("primary event log", "decision log", "event log", "historical fact") prevents legitimate canonical-vocabulary use from being reported as drift.
+**Rationale:** Phase 8 SELF-AUDIT Finding 7.1 plus the empirical pre-scan during Gate 0b made two assumptions explicit that the infrastructure had previously left implicit. The Charter's substantive content is unchanged.
+**Falsifiability review outcome:** Pass. The change clarifies a status table and a hook predicate, both of which are mechanically falsifiable. No non-falsifiable language introduced.
+
+---
+
 <!-- AMENDMENT TEMPLATE — copy below this line when recording an amendment -->
 
 <!--
