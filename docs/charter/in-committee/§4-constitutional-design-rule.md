@@ -144,3 +144,139 @@ Three items, in order of how they affect downstream redactions:
 - **Watchlist-extension candidate `conflict`.** Step 1.2 above surfaced `conflict` as bullet 3's unoperationalized operative term. Step 1.3 propagates this from a Step 1.2 finding to a Step 1.3 active item: `conflict` is a watchlist-extension candidate per [`ambiguity-reducer` §3](../../../.claude/skills/epistemic/ambiguity-reducer/SKILL.md). Whether to add it is committee work; this step does not extend the watchlist.
 - **(a) vs. (b) — meta-prose discipline.** The choice between "§4 warrants a meta-prose-specific discipline" and "the existing skills are correctly object-level scoped; meta-prose is handled elsewhere" is operative for §2.3–§2.6 too, since those four pending invariants are object-level and will trigger the three epistemic skills strongly. If the committee picks (a), §4 introduces an exception that must be named in §4 itself. If (b), §4 sits outside the skills' purview without contradiction, and the silence of `epistemic-separator` / `ambiguity-reducer` on §4 is by design.
 - **Adjacent finding (not a §4 item).** Step 1.2 above noted "constitutional invariants" is not in [`CLAUDE.md` §3 canonical vocabulary](../../../.claude/CLAUDE.md). This is a `vocabulary-discipline` concern, not an `ambiguity-reducer` one; it is mentioned here for record but tracked as a backlog item independent of §4's redaction (candidate for a future mini-RFC), not absorbed as a §4 redaction question.
+
+### Step 1.4a — Forbidden Anti-Patterns analysis
+
+Per the redactor's Step 6 (`Forbidden Anti-Patterns` identification). Anti-patterns must be concrete, falsifiable, and drawn from real failure modes — not speculative.
+
+#### Bullet 1 — qualification criteria
+
+Bullet 1 is a forward-pointer to [Charter §2 header (L32–42, FROZEN)](../constitutional-charter.md#2-constitutional-invariants), which enumerates the four criteria but has no `Forbidden Anti-Patterns` subsection of its own. The anti-patterns of *failing* the criteria therefore have no Charter-level home today; if Bullet 1 is retained in binding §4 (see Step 1.4c verdict), these anti-patterns become its substantive content.
+
+1. **Adopting an invariant whose violation requires subjective judgment to detect** — fails criterion 4 ("independent of operator interpretation"). Caught by [`falsifiability-check` §1.2](../../../.claude/skills/epistemic/falsifiability-check/SKILL.md). **Enforcement: Yes** (mechanical via the four-question test).
+2. **Adopting an invariant not structurally enforceable in schemas, types, or permitted operations** — fails criterion 1. Caught by [`falsifiability-check` §1.3](../../../.claude/skills/epistemic/falsifiability-check/SKILL.md) (operationalization test). **Enforcement: Yes**.
+3. **Adopting an invariant that does not constrain future implementation decisions** — fails criterion 2; the invariant is decorative. Checked procedurally by [`invariant-redactor` §3 Final merge checklist item 1](../../../.claude/skills/constitutional/invariant-redactor/SKILL.md). **Enforcement: Partial** (no mechanical per-claim check).
+4. **Adopting an invariant whose absence would not change what the system is** — fails criterion 3 ("identity-defining"). Same redactor merge checklist; the criterion is itself a judgment call. **Enforcement: No** (no skill operationalizes "identity-defining").
+
+#### Bullet 2 — amendment philosophy
+
+1. **Silent edits to FROZEN Charter sections.** Editing `constitutional-charter.md` without a corresponding `amendments.md` entry. Caught by [`charter-guardian` §3](../../../.claude/skills/constitutional/charter-guardian/SKILL.md) (explicitly names this as "the most common silent-amendment failure mode") and mechanically by [`pre-commit-doc-check.sh` `check_frozen_charter`](../../../.claude/hooks/pre-commit-doc-check.sh). **Enforcement: Yes** (mechanically blocking).
+2. **Amendment adopted without falsifiability review.** [`amendments.md` §Amendment Process Step 2](../amendments.md) mandates it; `charter-guardian` §2 Step 3 lists it as a required artifact. **Enforcement: Yes** (procedurally required; no check that the review *was performed*, only that artifacts exist).
+3. **Editorial change treated as substantive (or vice versa).** Using "editorial fix" as cover for meaning change, or burdening typo fixes with full ceremony. [`charter-guardian` §2 Step 3](../../../.claude/skills/constitutional/charter-guardian/SKILL.md); [`amendments.md` §Amendment Discipline](../amendments.md). **Enforcement: No** (relies on meaning judgment).
+4. **Charter edited to match a subordinate document on conflict** — reverse-direction failure of Bullet 3. [`subordination-checker` §2 Step 4](../../../.claude/skills/constitutional/subordination-checker/SKILL.md). **Enforcement: Partial**.
+
+#### Bullet 3 — precedence rule
+
+1. **Lower-rank document edits a higher-rank document on conflict.** [`subordination-checker` §4](../../../.claude/skills/constitutional/subordination-checker/SKILL.md). **Enforcement: Partial** — FROZEN-section edits are blocked regardless of motivation; pending and subordinate-direction-reversal not mechanically blocked.
+2. **Conflicting claim persists unresolved between subordinate and Charter.** The Step 1.2 finding: requires subjective conflict detection. **Enforcement: No**.
+3. **Cross-reference to a deleted or moved Charter section.** [`.github/workflows/constitutional-check.yml` `subordination-check` job](../../../.github/workflows/constitutional-check.yml) validates anchors mechanically. **Enforcement: Yes** (CI-blocking).
+
+#### Bullet 4 — falsifiability discipline
+
+The skill [`falsifiability-check` §2](../../../.claude/skills/epistemic/falsifiability-check/SKILL.md) already enumerates four failure modes with examples (non-violable, non-observable, non-operationalizable, circular). Restating them in §4 binding text would be literal duplication. **Bullet 4 does not need its own anti-patterns subsection; it delegates to the skill.** Enforcement of the four failure modes: Yes, mechanically via the four-question test at every committee redaction and every RFC Constitutional Review.
+
+#### Enforcement-coverage summary
+
+| Verdict | Count |
+|---|---|
+| Yes (mechanical / required-by-procedure) | 6 |
+| Partial | 3 |
+| No | 2 |
+
+Of the 10 anti-patterns across Bullets 1–3, 6 are already mechanically enforced. The Bullet 4 cluster (4 skill-level failure modes) is fully covered by `falsifiability-check`. Two anti-patterns are unenforced: Bullet 1 criterion 3 (identity-defining), Bullet 2 anti-pattern 3 (editorial vs substantive); plus Bullet 3 anti-pattern 2 (conflict-detection, already failed Step 1.2 falsifiability).
+
+### Step 1.4b — Boundary Conditions analysis
+
+Per the redactor's Step 7. The §2.x substrate-vs-projection pattern does not translate to meta-prose; §4's boundaries are governance-domain.
+
+#### Candidate 1 — Internal project practice outside Charter governance
+
+Commit conventions, branch naming, code style, README phrasing: not Charter content. **Applies.** Already implicitly drawn by [`CLAUDE.md` §2](../../../.claude/CLAUDE.md) (operational hierarchy) and the Charter's opening blockquote (L6); not stated as a Charter §-boundary today.
+
+#### Candidate 2 — The content of invariants, only their form
+
+§4 disciplines what *qualifies* as an invariant; it does not dictate *which* invariants the project adopts. **Applies.** Implicit in the §2-header / §2.x split; not stated explicitly anywhere.
+
+#### Candidate 3 — Infrastructure supporting governance but not the Charter
+
+Skills, hooks, CI, agents, settings. Modifiable without Charter amendment. **Applies.** Concrete evidence: Gates 0a, 0b, hook-fix all modified `pre-commit-doc-check.sh` without Charter amendment. Partially stated in [`.claude/README.md`](../../../.claude/README.md); not at Charter level.
+
+#### Additional boundaries surfaced
+
+None at the level of structural relevance. Two near-candidates rejected: "§4 does not govern pending-section redaction pace" (too obvious; not a real boundary) and "§4 does not govern external documents" (outside the project entirely). Honest finding: the three candidates are the natural boundaries.
+
+#### Overall verdict on Boundary Conditions
+
+Two options for the committee at Step 9:
+
+- **Option α — include Boundary Conditions in binding §4.** All three boundaries are real, none currently stated at Charter level. Cost: ~3 short paragraphs. Path of self-contained reading.
+- **Option β — omit Boundary Conditions.** Meta-prose has self-evident boundaries: §4 governs the Charter; what is not the Charter is outside §4. Path of constitutional minimalism ([`CLAUDE.md` §7](../../../.claude/CLAUDE.md)). The §2.x Boundary Conditions pattern does not translate to meta, and declaring this is itself a methodological finding.
+
+Both defensible. Not a Step 1.4 decision.
+
+### Step 1.4c — Non-duplication check (Step 8)
+
+Per the redactor's Step 8. Both readings applied: strong (does §4 add new enforcement?) and weak (does the infrastructure cite §4 as anchor?).
+
+**Citation evidence summary.** Most §4 references across infrastructure point to *other things* (CLAUDE.md §4 status table; or "this-skill's-own-§4"). Four structural places cite **Charter §4** specifically as authority, all concerning the falsifiability discipline:
+
+1. [`falsifiability-check` SKILL.md L8](../../../.claude/skills/epistemic/falsifiability-check/SKILL.md) — quotes §4 working text verbatim.
+2. [`falsifiability-check` SKILL.md L118](../../../.claude/skills/epistemic/falsifiability-check/SKILL.md) — Source citations.
+3. [`CLAUDE.md` L45](../../../.claude/CLAUDE.md) — canonical-vocabulary entry for `falsifiability` defers to §4 pending.
+4. [`amendments.md` L22](../amendments.md) — §Amendment Process Step 2 cites "Section 4 of the Charter" as authority for falsifiability review.
+
+#### 8-cell analysis
+
+| Bullet | Strong reading (does §4 add new enforcement?) | Anchor reading (is §4 cited as authority?) |
+|---|---|---|
+| 1 — qualification criteria | **No new enforcement.** Criteria are in [§2 header](../constitutional-charter.md#2-constitutional-invariants). Failure-mode detection: 3 of 4 criteria caught by `falsifiability-check`; the fourth (identity-defining) has only the redactor procedure. | **Substantive duplication; but see Additional citations below — §2 L41 (FROZEN) cites §4 as the formal locus where the criteria "are themselves recorded."** Initial assessment of "no anchor role" is revised by the §2 L41 finding below. |
+| 2 — amendment philosophy | **No new enforcement.** `check_frozen_charter` + `charter-guardian` + `amendments.md` together fully cover the discipline. Step 1.2 found Bullet 2 passes all four falsifiability tests cleanly — as a restatement of infrastructure. | **No direct anchor role.** `charter-guardian` cites `amendments.md` and CLAUDE.md §4 (status table), not Charter §4. `amendments.md` self-justifies in its opening; if §4 had Bullet 2 verbatim, `amendments.md` would point to it, but the citation does not currently exist. (See structural note below on `amendments.md`'s implicit dependency on Bullet 2's principle.) |
+| 3 — precedence rule | **No new enforcement.** Hierarchy declared in [`CLAUDE.md` §2](../../../.claude/CLAUDE.md) and [`README.md` §Document Hierarchy](../../../README.md); direction-reversal policed by `subordination-checker`; anchor validity by CI. Step 1.2 *failed* Bullet 3 on observation and operationalization. | **No direct anchor role.** `subordination-checker` cites CLAUDE.md §2 (hierarchy) and Charter §2.1/§2.2 (anti-patterns), not §4. [`decision-log.md` §0004](../decision-log.md) is the source-of-record for the precedence rule; §4 only "pre-figures" it. |
+| 4 — falsifiability discipline | **No new enforcement.** The four-question test is in [`falsifiability-check` §1](../../../.claude/skills/epistemic/falsifiability-check/SKILL.md); the procedural mandate is in [`amendments.md` Step 2](../amendments.md); restated in [`CONTRIBUTING.md`](../../../CONTRIBUTING.md). | **Strong anchor role.** Bullet 4 is the source-of-record cited in five structural places (four above + glossary `falsifiability` Introduction). Removing it would orphan all five. |
+
+**Additional citations surfaced after CHECKPOINT 1.4.C:**
+
+A second-pass grep with wider criteria (`charter.*#4`, `Charter Section 4`, `#4-constitutional-design-rule`) surfaced three citations the initial analysis missed. The first is the most consequent because it is in FROZEN text:
+
+- **[Charter §2 L41 (FROZEN per v0.1.1)](../constitutional-charter.md#2-constitutional-invariants):** *"The criteria above are themselves recorded formally in [Section 4 — Constitutional Design Rule](#4-constitutional-design-rule) (pending). They are applied as meta-rule to all invariants in this section."* This is the strongest citation in the repository: §2 (frozen) commits §4 to be the formal locus of the criteria. If Bullet 1 is removed, §2's L41 claim becomes unfulfilled — §2 references a §4 that does not deliver. Editing §2 L41 to remove the reference would itself require amendment (§2 is FROZEN per v0.1.1). The amendment would be "remove §2's reference to §4 because §4 was emptied of the criteria reference" — circular.
+- **[Glossary `falsifiability` entry L146](../../glossary.md):** *"Introduction. [Charter §4 Constitutional Design Rule (pending working text)]; CONTRIBUTING.md §Style."* Fifth anchor citation for Bullet 4; reinforces Bullet 4's verdict.
+- **[Glossary `subordination` entry L140](../../glossary.md):** *"Last amendment. pending (full formalization is in pending §4 Constitutional Design Rule)."* Forward-looking — glossary expects §4 to formalize subordination. If Bullet 3 does not survive in binding §4, this entry needs an editorial fix (not citation orphanage; the entry stays valid, but the prediction becomes false).
+
+**Structural note on Bullet 2 (amendments.md dependency).** `amendments.md` opens with *"Changes to it [the Charter] are not made through ordinary commits"* and derives the entire Amendment Process from that principle. This is the substance of Bullet 2 in operational form. The dependency is not a direct citation (`amendments.md` does not say "per Charter §4 Bullet 2"), but it is structural: if §4 had Bullet 2 verbatim, the file would have an explicit anchor; without §4, `amendments.md` self-justifies by convention. Less fatal than the §2 L41 citation (no FROZEN claim is unfulfilled), but worth recording.
+
+#### Per-bullet verdicts (adjusted after Additional citations)
+
+- **Bullet 1 — Substantively duplicates §2, but §2 L41 (FROZEN) cites §4 as the locus where the criteria "are recorded formally." Bullet 1 fulfills this promise. Removing Bullet 1 leaves §2's L41 claim unfulfilled, creating a constitutional gap unresolvable without amending §2 (which is frozen).**
+- **Bullet 2 — Duplicates substantively, no direct anchor citation.** Note: `amendments.md` is the operational expression of Bullet 2's principle; the relationship is structural, not citational.
+- **Bullet 3 — Duplicates substantively, no anchor.** Failed Step 1.2 falsifiability. Glossary `subordination` entry L140 expects §4 to formalize this; if Bullet 3 does not survive, that glossary entry needs editorial fix.
+- **Bullet 4 — Both: substantively duplicates skill content, AND is the load-bearing anchor across five structural citations.** Removing Bullet 4 would orphan all five.
+
+#### Overall verdict for §4 as a section
+
+Two bullets are load-bearing — Bullet 1 (fulfills §2 L41's frozen promise) and Bullet 4 (anchors five citations). Two bullets are not — Bullet 2 (substantive duplicate, no direct citation) and Bullet 3 (substantive duplicate, failed Step 1.2 falsifiability, no anchor). The evidence points to **path (c) — partial redaction**, specifically a **narrow-but-not-minimal** form in which Bullets 1 and 4 survive and Bullets 2 and 3 are removed. The narrow-minimal form (Bullet 4 only) was the pre-additional-citations recommendation; the §2 L41 finding revises it.
+
+### Step 1.4 — Synthesis for Step 9 (Surface for review)
+
+#### Where §4 stands after Steps 1.1–1.4
+
+After four redactor steps, the four §4 bullets stand as follows. Bullet 1 (qualification criteria) is substantively a forward-pointer to §2 — it adds nothing on its own — but [§2 L41 (FROZEN)](../constitutional-charter.md#2-constitutional-invariants) cites §4 as the locus where the criteria "are themselves recorded formally," making Bullet 1 the fulfillment of a frozen promise rather than redundant text. Bullet 2 (amendment philosophy) passes all four falsifiability tests cleanly but adds no new enforcement and is not cited as anchor by any infrastructure; the amendment process operationalized in `amendments.md` derives from the principle without citing it. Bullet 3 (precedence rule) failed Step 1.2 falsifiability on observation and operationalization because "conflict" is undefined; it adds no enforcement and is not cited as anchor by `subordination-checker` (which cites CLAUDE.md §2 and decision-log §0004 instead). Bullet 4 (falsifiability discipline) passes falsifiability with the self-reference caveat and is the load-bearing anchor for the discipline across five structural citations (`falsifiability-check` L8 + L118, CLAUDE.md L45, `amendments.md` L22, glossary `falsifiability` L146).
+
+#### Candidate paths
+
+- **(a) Full successful redaction** — bind all four bullets as §4 text. Requires operationalizing "conflict" in Bullet 3 (Step 1.2 fail) and addressing Bullet 4's self-reference. Evidence support: weak — Bullet 3 has an unresolved falsifiability failure that the committee would need to repair.
+- **(b) Complete removal** — emptied §4. Evidence support: not supported — would orphan five Bullet 4 citations and leave §2 L41's frozen promise unfulfilled.
+- **(c) Partial redaction** — some bullets survive, others do not. Evidence support: strong, in the **narrow-but-not-minimal form** (Bullets 1 and 4 survive; Bullets 2 and 3 are removed). The narrow-minimal form (Bullet 4 only) was the pre-Additional-citations recommendation; it is contraindicated by the §2 L41 finding.
+- **(d) Method inadequate** — committee-mode redaction declared an unfit instrument for §4. Evidence support: weak — Steps 1.1–1.4 produced usable evidence and surfaced the §2 L41 dependency without method failure.
+
+#### Open questions for Step 9
+
+1. **Bullet 1 binding form.** If retained to fulfill §2 L41's promise, does its binding text restate the four criteria verbatim from §2 (creating intentional duplication for anchor purposes), or reformulate them at a higher level of abstraction (preserving the spirit, risking drift)? The §2 L41 phrase "recorded formally" admits both readings.
+2. **Bullet 4 binding form.** How is the self-reference (Step 1.2 caveat) handled? Three options: explicit fixed-point statement, explicit exception for §4 from its own discipline, or implicit/silent. Each has different downstream consequences for future invariant review.
+3. **Anti-patterns under Bullet 1.** Step 1.4a found four anti-patterns for Bullet 1 (one per criterion); three are mechanically enforced by `falsifiability-check`, one (identity-defining) is unenforced. Does binding §4 include these as `Forbidden Anti-Patterns` content under Bullet 1, or rely on the skill?
+4. **Boundary Conditions.** Option α (include explicitly) vs Option β (omit on minimalism grounds). Not constrained by other evidence; pure committee choice.
+5. **Glossary `subordination` entry editorial fix.** If Bullet 3 is removed, glossary L140's "Last amendment. pending (full formalization is in pending §4 Constitutional Design Rule)" becomes a false prediction. Editorial fix required (not citation orphanage; entry stays valid).
+6. **Amendments.md dependency.** Does the implicit Bullet-2-as-principle dependency in `amendments.md`'s opening warrant any clarifying edit, or remain operational-by-convention?
+
+#### Redactor's recommendation
+
+**Path (c), narrow-but-not-minimal form: §4 binding text retains Bullets 1 and 4 only — Bullet 1 because §2 L41 cites §4 as the formal locus of the four criteria (removing Bullet 1 would orphan a frozen citation), and Bullet 4 because it is the load-bearing anchor for the falsifiability discipline (five structural citations). Bullets 2 and 3 are removed as substantive duplicates without anchor obligations.**
