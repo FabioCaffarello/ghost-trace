@@ -34,10 +34,10 @@
 # the script exits non-zero. Silent degradation is the failure mode
 # this script exists to prevent.
 #
-# Five design discoveries documented inline (see match_term, the
+# Six design discoveries documented inline (see match_term, the
 # eligible_blockquote_lines helper, the canonical_phrase_exemptions
-# helper, the vocabulary-drift check loop, and the per-file added=
-# assignment):
+# helper, the vocabulary-drift check loop, the per-file added=
+# assignment, and the STAGED= assignment):
 #   - Word boundary treats hyphen as word-like, so `log` is not reported
 #     inside `decision-log.md` or `event-log` identifiers.
 #   - docs/glossary.md is the source of the forbidden-synonym list; it
@@ -61,6 +61,15 @@
 #     content. The earlier fallback-to-cat behavior caused false
 #     positives on pre-existing legitimate content. See decision-log
 #     §0006.
+#   - Non-ASCII filenames: git's default `core.quotepath=true` escapes
+#     non-ASCII bytes and surrounds the filename with quotes when
+#     printing names back to the caller. This silently breaks the
+#     `grep '\.md$'` filter that computes STAGED. Both
+#     `git diff --name-only` invocations explicitly pass
+#     `-c core.quotepath=false` to disable the escaping. Surfaced
+#     during Gate 1 Step 1.2 when the scratch file
+#     `docs/charter/in-committee/§4-constitutional-design-rule.md` was
+#     skipped by the hook without warning.
 #
 # Known tradeoff (tripwire by design):
 #   The grep is literal. A forbidden term inside a canonical phrase
@@ -144,8 +153,15 @@ in_scope() {
   return 1
 }
 
-STAGED=$(git diff --cached --name-only --diff-filter=AM 2>/dev/null | grep '\.md$' || true)
-[ -z "$STAGED" ] && STAGED=$(git diff --name-only --diff-filter=AM 2>/dev/null | grep '\.md$' || true)
+# `-c core.quotepath=false` is required because git's default behavior
+# escapes non-ASCII bytes in filenames and wraps the result in quotes
+# (e.g. `§` becomes `\302\247` inside `"..."`), which makes the line
+# end with `.md"` rather than `.md` and silently excludes the file
+# from `grep '\.md$'`. Discovered during Gate 1 Step 1.2 when the
+# scratch file `docs/charter/in-committee/§4-constitutional-design-rule.md`
+# was skipped by the hook without warning.
+STAGED=$(git -c core.quotepath=false diff --cached --name-only --diff-filter=AM 2>/dev/null | grep '\.md$' || true)
+[ -z "$STAGED" ] && STAGED=$(git -c core.quotepath=false diff --name-only --diff-filter=AM 2>/dev/null | grep '\.md$' || true)
 if [ -z "$STAGED" ]; then
   echo "doc-check: no .md changes in scope"
   exit 0
