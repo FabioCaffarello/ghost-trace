@@ -89,6 +89,14 @@ For each term: why it is risky in this project, and what specific operationaliza
 
 **On flag:** specify whether the writer means an individual `assertion`, a sequence of assertions, or a non-system actor's action.
 
+### `conflict`
+
+**Risk:** Semantic incompatibility between two documents or claims. Undefined in the Charter, glossary, or skills as of Gate 1; surfaced in §4 Step 1.2 falsifiability analysis of the precedence rule (the "conflict" condition in the working stub's Bullet 3 lacked operationalization, contributing to Bullet 3's removal from binding §4).
+
+**On flag:** require the writer to (a) operationalize locally (state which artifact's contradiction with which other artifact constitutes the conflict, by what detection procedure), (b) replace with a more specific term (e.g., `cross-reference broken`, `claim contradiction`, `version mismatch`), or (c) raise as an open modeling question.
+
+Watchlist addition authorized by [`decision-log.md` §0008](../../../../docs/charter/decision-log.md) (Gate 2 carry-forward from §0007).
+
 ## 2. Response patterns
 
 When the skill flags a term, the writer chooses one of three responses. Doing nothing is not a response.

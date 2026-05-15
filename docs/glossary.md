@@ -132,6 +132,14 @@ Missing fields are marked `pending`, never omitted.
 - **Last amendment.** [`amendments.md` `v0.1` — Charter Inception](./charter/amendments.md) (the amendment process is itself recorded in that entry).
 - **Forbidden synonyms.** `edit` (an edit to a frozen section is an amendment by definition; collapsing the two is the failure mode `charter-guardian` prevents); `revision` (acceptable for subordinate documents, not for the Charter).
 
+### `constitutional invariant`
+
+- **Canonical definition.** A structural rule of Ghost Trace that satisfies all four qualification criteria stated in [Charter §2 header](./charter/constitutional-charter.md#2-constitutional-invariants) and the falsifiability discipline of [Charter §4](./charter/constitutional-charter.md#4-constitutional-design-rule): structurally enforceable; constraining of implementation; identity-defining; independent of operator interpretation; and structurally falsifiable.
+- **Introduction.** [Charter §2 — Constitutional Invariants](./charter/constitutional-charter.md#2-constitutional-invariants); [Charter §4 — Constitutional Design Rule](./charter/constitutional-charter.md#4-constitutional-design-rule).
+- **Stabilization.** Charter v0.1 (§2 header + §2.1 + §2.2 frozen); refined in v0.1.1 (§2 header explicitly frozen) and v0.2 (§4 redacted as formal locus).
+- **Last amendment.** v0.2.
+- **Forbidden synonyms.** `principle` (broader; not necessarily structurally enforceable); `rule` (acceptable in informal use; `invariant` is canonical for structural rules); `axiom` (acceptable in mathematical contexts; not Ghost Trace's term).
+
 ### `subordination`
 
 - **Canonical definition.** Hierarchical relation in which lower-ranked documents must not conflict with higher-ranked documents; conflicts resolve upward and the lower document is revised.

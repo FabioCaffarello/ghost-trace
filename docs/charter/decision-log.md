@@ -116,6 +116,24 @@ The five methodological observations and the two carried-forward items are the p
 
 ---
 
+## `0008` — Redaction order for pending invariants (§2.5 → §2.3 → §2.4 → §2.6); Gate 1 carry-forwards enacted
+
+- **Status:** accepted
+- **Date:** 2026-05-15
+- **Context:** Gate 1 closed with §4 frozen as v0.2. Four invariants remain pending: §2.3 (Provenance Integrity), §2.4 (Inferential Influence Disclosure), §2.5 (Hypothesis Lifecycle Explicitness), §2.6 (Evidential Independence Integrity). The order in which they are redacted matters: each invariant references concepts the others define, and redaction without dependency respect would either produce binding text with forward references to pending material or force later redactions to revise earlier ones. Gate 1's decision-log entry §0007 carried forward two items requiring enactment (`conflict` watchlist candidate; "constitutional invariant" glossary entry) and one acknowledged drift (§2 L41 parenthetical). This entry binds the redaction order, enacts the two watchlist/glossary carry-forwards, and formally queues the parenthetical correction.
+- **Decision:** Redaction order is **§2.5 → §2.3 → §2.4 → §2.6**. The justification is dependency-driven: §2.5 has the broadest dependency surface (defines Category III operations — formation, merge, split, promotion, demotion, dissolution — that §2.3, §2.4, and §2.6 all reference); §2.3 depends on §2.5 (provenance records reference Category III operations); §2.4 depends on §2.3 (inferential influence is a structural attribute of provenance records); §2.6 depends on §2.4 (independence presupposes declared influence, and §2.6 also depends on [Ontology Open Question 3](../ontology/entity-model.md) which may require an experiment-type RFC). Each invariant follows the same committee-mode procedure piloted on §4 in Gate 1 (`invariant-redactor` Steps 1.1–1.5). Adjacent ontology work may proceed in parallel where the supporting Ontology Open Question requires empirical or experimental resolution.
+- **Constitutional review:** No invariant amended. This entry establishes calendar discipline and enacts two non-substantive carry-forward registrations (a watchlist addition and a glossary entry). The precedent for committee-mode redaction is §4 v0.2 (decision-log §0007). No new vocabulary introduced at the Charter level; the glossary entry for "constitutional invariant" formalizes vocabulary already in operational use across the Charter and skills.
+- **Consequences:**
+  - **Future redactions begin with §2.5.** Subsequent gates apply `invariant-redactor` Steps 1.1–1.5 to §2.5, then §2.3, then §2.4, then §2.6.
+  - **§3 Non-Goals is not in this ordering.** Its dependencies are not within §2.x; it can be redacted in parallel or after §2.6 at committee discretion. A separate decision-log entry will register §3's redaction timing when it is scheduled.
+  - **Departures from this order require a new decision-log entry justifying the departure.** Silent reordering is not permitted; the redaction calendar is itself a constitutional artifact.
+  - **`conflict` added to `ambiguity-reducer` watchlist** (Subject B of Gate 2). The skill's §1 now lists 13 terms (was 12). Watchlist extension follows `ambiguity-reducer` §3 procedure. Carry-forward from §0007 enacted.
+  - **`constitutional invariant` added to `docs/glossary.md` and `.claude/CLAUDE.md` §3 canonical vocabulary** (Subject C of Gate 2). The five-field glossary entry follows the template established by `subordination` and `falsifiability` entries. Carry-forward from §0007 enacted.
+  - **§2 L41 parenthetical correction queued.** The phrase "(pending)" qualifying §2 L41's forward-reference to §4 is inaccurate after v0.2 (§4 is frozen). Editorial correction is deferred until a §2-touching amendment occurs, at which point this fix is bundled. Until then, the inaccuracy is acknowledged. This formalizes the §0007 acknowledgment.
+- **Supersession:** none.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
