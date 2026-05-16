@@ -69,6 +69,17 @@ No amendments have yet been recorded against `v0.1`. Future entries follow.
 
 ---
 
+### `v0.3` — §2.5 Hypothesis Lifecycle Explicitness (committee-mode redaction)
+
+**Date:** 2026-05-15
+**Originating RFC:** [`charter-amendment-v0-3-section-2-5-redaction`](../rfcs/draft/charter-amendment-v0-3-section-2-5-redaction.md)
+**Sections affected:** Banner (version line `v0.2.1` → `v0.3`; status line: §2.5 frozen clause added). §2.5 (status `pending` → `frozen`; stub body replaced with binding text in five subsections paralleling §2.1 / §2.2). §2 L41 (editorial — "(pending)" parenthetical removed per [`decision-log.md` §0008](./decision-log.md) queue).
+**Summary:** Pilot redaction of §2.5 produces binding text codifying the six Category III lifecycle operations (formation, merge, split, promotion, demotion, dissolution) under Q2-A.2 type structure (abstract `Hypothesis` + four sibling subtypes per [`decision-log.md` §0010](./decision-log.md)) and Q4 staged-combination AND demotion criterion (Layer A operational; Layer B forward-referenced to §2.4 / §2.6 pending per [`decision-log.md` §0011](./decision-log.md)). Seven anti-patterns enumerated structurally; five boundary conditions including the lifecycle-event-as-Category-I-record vs event-content-referent distinction. §2 L41 editorial bundling enacts the queued correction from [`decision-log.md` §0008](./decision-log.md). Charter advances to v0.3 (minor — new binding text in a previously pending section).
+**Rationale:** Gate §2.5 applied the `invariant-redactor` committee-mode procedure (Steps 1.1–1.5) to the §2.5 stub. Step 1.2 falsifiability testing produced 22 substantive claims passing all four tests, with one structural deferral (Layer B's structural form per Pass-by-forward-reference precedent from [§2 L41](./constitutional-charter.md#2-constitutional-invariants)). Step 1.3 epistemic-skill findings converted 6 vocabulary carry-forwards to formal Path decisions and surfaced the lifecycle-event-as-Category-I-record methodological observation (promoted to Boundary Condition 5). Step 1.4 non-duplication analysis found 6 of 8 elements both add constitutional commitment AND anchor Ontology Drafted specifications; 1 element (anti-patterns) is purely Charter-original; 1 element (type structure) inherits — no pure duplicates, path (a) full redaction supported by evidence. The full evidentiary record is preserved in [`docs/charter/in-committee/§2.5-hypothesis-lifecycle-explicitness.md`](./in-committee/§2.5-hypothesis-lifecycle-explicitness.md).
+**Falsifiability review outcome:** Pass. Phase B of the redaction recorded a 22-claim self-test against [`falsifiability-check` §1](../../.claude/skills/epistemic/falsifiability-check/SKILL.md) four-question test (V/O/Op/NC). All 22 substantive claims pass all four tests, with one structural exception: SR-6 (Layer B) passes 1.4 by forward-reference to glossary-canonical terms (`evidential independence`, `influence`) and defers 1.1/1.2/1.3 per Step 1.2 Phase 2 Reading 2 (Pass-by-forward-reference precedent — committee-resolved). The forward-reference contract follows §2 L41 precedent.
+
+---
+
 <!-- AMENDMENT TEMPLATE — copy below this line when recording an amendment -->
 
 <!--

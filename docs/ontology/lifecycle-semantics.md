@@ -2,7 +2,7 @@
 
 **Status:** Drafted — Category III, §The Promotion Mechanism, and §Open Modeling Questions revised per [`decision-log.md` §0011](../charter/decision-log.md) (Q4 resolution, staged-combination form). The document advances from Scaffold to Drafted on the redaction strength of these sections; other sections (Category I, Category II) remain at scaffold strength pending future redaction.
 
-> This document formalizes how entities in each ontological category are created, evolved, superseded, and (where applicable) dissolved. The Charter establishes hard rules about mutation ([Invariant 2.1](../charter/constitutional-charter.md#21-observational-integrity), [Invariant 2.2](../charter/constitutional-charter.md#22-epistemic-separation), and Invariant 2.5 — pending). This document specifies the lifecycle each category supports under those rules.
+> This document formalizes how entities in each ontological category are created, evolved, superseded, and (where applicable) dissolved. The Charter establishes hard rules about mutation ([Invariant 2.1](../charter/constitutional-charter.md#21-observational-integrity), [Invariant 2.2](../charter/constitutional-charter.md#22-epistemic-separation), and [Invariant 2.5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness)). This document specifies the lifecycle each category supports under those rules.
 
 ## Lifecycle by Category
 
@@ -24,7 +24,7 @@
 
 Per [`entity-model.md` §Category III](./entity-model.md) (revised per [`decision-log.md` §0010](../charter/decision-log.md)): Category III is structured as the abstract type `Hypothesis` with four concrete subtypes (`BehavioralCluster`, `CoordinationRing`, `CampaignHypothesis`, `AutomationGroup`). The lifecycle described in this section applies at the abstract-type level; subtype-specific parameters appear where called out.
 
-- **Formation.** A hypothesis (one of the four concrete subtypes) is created when an inference process recognizes accumulated observation records crossing a structural threshold. Formation is recorded as an immutable event in the primary event log per [Invariant 2.5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) (pending).
+- **Formation.** A hypothesis (one of the four concrete subtypes) is created when an inference process recognizes accumulated observation records crossing a structural threshold. Formation is recorded as an immutable lifecycle event in the primary event log per [Invariant 2.5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness).
 - **Merge.** Two hypotheses (same subtype or, per Q2-A.2 cross-subtype resolution deferred to a follow-on revision of [`entity-model.md`](./entity-model.md), different subtypes) are recognized as describing the same underlying phenomenon and combined. Merge is recorded as an immutable event referencing both antecedents and the produced hypothesis.
 - **Split.** A hypothesis is recognized as containing multiple distinct phenomena and is divided into multiple successor hypotheses. Recorded as an immutable event referencing the antecedent and each successor.
 - **Promotion.** A hypothesis is admitted to operational use as enrichment context. Recorded as an immutable event carrying the parameters that govern the hypothesis's subsequent demotion-candidacy (per §The Promotion Mechanism below).
@@ -35,7 +35,7 @@ Per [`entity-model.md` §Category III](./entity-model.md) (revised per [`decisio
   Demotion itself, once a candidate is confirmed, is recorded as an immutable event referencing the prior promotion event. A demoted hypothesis remains in the substrate; its promotion and demotion events compose its history.
 - **Dissolution.** A hypothesis is recognized as no longer corresponding to any underlying phenomenon and is marked as no longer active. Recorded as an immutable event. Distinguished from demotion: demotion withdraws operational use; dissolution recognizes non-existence of the underlying phenomenon. The two operations are not interchangeable.
 
-All such operations are recorded as immutable events in the primary event log per [Invariant 2.5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) (pending). The current state of a hypothesis is a projection over its history, never produced by direct mutation.
+All such operations are recorded as immutable lifecycle events in the primary event log per [Invariant 2.5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness). The current state of a hypothesis is a projection over its history, never produced by direct mutation.
 
 ## The Promotion Mechanism
 

@@ -72,7 +72,7 @@ This table is one view of the same data carried per-term in [`docs/glossary.md`]
 | `data` (about the substrate) | `observation` (Category I); `assertion` (II/III); or `record` only with the specific class noun | The substrate is composed of named categories, not undifferentiated `data`. |
 | `store` (about the substrate) | `primary event log`, `archive`, or specific tier | The substrate is the event log and its archive ([`storage-model.md`](../../../../docs/architecture/storage-model.md)); call it that. |
 | `metadata` (used about provenance) | `provenance` | Provenance is structure, not metadata ([Charter §1](../../../../docs/charter/constitutional-charter.md#1-thesis)). |
-| `update` (applied to an observation or hypothesis state) | `supersede` (typed transformation) | Observations cannot be updated ([Invariant 2.1](../../../../docs/charter/constitutional-charter.md#21-observational-integrity)); hypothesis state is a projection over an event history (pending [§2.5](../../../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness)), not mutable. |
+| `update` (applied to an observation or hypothesis state) | `supersede` (typed transformation) | Observations cannot be updated ([Invariant 2.1](../../../../docs/charter/constitutional-charter.md#21-observational-integrity)); hypothesis state is a projection over a lifecycle event history per [§2.5](../../../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness), not mutable. |
 | `signal` (used informally) | `operational construct` or `intermediate value` | See [`ambiguity-reducer`](../../epistemic/ambiguity-reducer/SKILL.md) for the disambiguation procedure. |
 
 ### Canonical-phrase exemptions

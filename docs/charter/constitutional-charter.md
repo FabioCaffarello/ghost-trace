@@ -1,7 +1,7 @@
 # Ghost Trace Constitutional Charter
 
-**Version:** v0.2.1 (draft, sections in committee mode)
-**Status:** Thesis frozen. Invariant qualification criteria (§2 header) frozen. Invariants 2.1–2.2 frozen. Invariants 2.3–2.6 pending committee redaction. Non-Goals (§3) pending. Constitutional Design Rule (§4) frozen — minor amendment v0.2. Patch amendment v0.2.1 extends mechanical Charter-blockquote exemption to vocabulary-drift (no Charter prose amended; see [`decision-log.md` §0012](./decision-log.md)).
+**Version:** v0.3 (draft, sections in committee mode)
+**Status:** Thesis frozen. Invariant qualification criteria (§2 header) frozen. Invariants 2.1–2.2 frozen. Invariant 2.5 frozen — minor amendment v0.3. Invariants 2.3, 2.4, 2.6 pending committee redaction. Non-Goals (§3) pending. Constitutional Design Rule (§4) frozen — minor amendment v0.2. Patch amendment v0.2.1 extends mechanical Charter-blockquote exemption to vocabulary-drift (no Charter prose amended; see [`decision-log.md` §0012](./decision-log.md)).
 
 > This document is the constitutional surface of the Ghost Trace project. All other documents in this repository — Ontology, Architecture, RFCs — are subordinate to it. Changes to this document require formal amendment recorded in [`amendments.md`](./amendments.md). Changes to subordinate documents that conflict with this Charter are invalid by construction.
 
@@ -38,7 +38,7 @@ The following invariants define the structural identity of Ghost Trace. Each is 
 3. **Identity-defining** — its absence changes what the system fundamentally is, not merely what it does.
 4. **Independent of operator interpretation** — violation is detectable without subjective judgment.
 
-The criteria above are themselves recorded formally in [Section 4 — Constitutional Design Rule](#4-constitutional-design-rule) (pending). They are applied as meta-rule to all invariants in this section.
+The criteria above are themselves recorded formally in [Section 4 — Constitutional Design Rule](#4-constitutional-design-rule). They are applied as meta-rule to all invariants in this section.
 
 The invariants appear in order of conceptual dependency: each rests on the ones preceding it.
 
@@ -128,11 +128,44 @@ The three categories share infrastructure — storage, transport, indexing, obse
 
 ### 2.5 Hypothesis Lifecycle Explicitness
 
-> **Status:** Pending committee redaction.
->
-> **Working definition (non-binding):** Operations on hypotheses — formation, merge, split, dissolution, promotion, demotion — are recorded as immutable events in the primary event log. The current state of any hypothesis is a projection over the history of operations applied to it, never the result of direct mutation.
->
-> **Anti-pattern this invariant will forbid:** direct mutation of hypothesis state in graph or document stores; loss of evolution history; cluster merges without recorded antecedents.
+#### Definition
+
+Operations on hypothesis records — recorded as immutable lifecycle events in the primary event log — constitute the operation history from which the current state of any hypothesis is reconstructed. The hypothesis type system is structured per [Charter §2.2](#22-epistemic-separation) and the Q2-A.2 resolution ([decision-log §0010](./decision-log.md)) as an abstract type `Hypothesis` with four concrete sibling subtypes (`BehavioralCluster`, `CoordinationRing`, `CampaignHypothesis`, `AutomationGroup`); the six lifecycle operations — formation, merge, split, promotion, demotion, dissolution — are defined at the abstract-type level. The current state of any hypothesis is a projection over the operation history applied to it; no record exists whose declared type is "current hypothesis state" outside of this projection.
+
+#### Structural Requirement
+
+Every operation on a hypothesis — formation, merge, split, promotion, demotion, dissolution — is recorded as an immutable lifecycle event in the primary event log under the substrate-immutability guarantee of [§2.1](#21-observational-integrity). Merge events reference all antecedent hypotheses; cross-subtype merge produces a typed output record (specific produced-type semantics deferred to [`lifecycle-semantics.md`](../ontology/lifecycle-semantics.md) per [decision-log §0011](./decision-log.md)). Promotion events carry the structural parameters governing the promoted hypothesis's subsequent demotion-candidacy.
+
+A promoted hypothesis becomes a demotion candidate when both of the following hold (staged-combination AND form per [decision-log §0011](./decision-log.md)):
+
+1. **Layer A.** The elapsed time since the promotion event exceeds a parameter recorded on the promotion event or on the hypothesis's concrete subtype.
+2. **Layer B.** A designated structural test on `evidential independence` (per [Charter §2.6](#26-evidential-independence-integrity) (pending)) or on declared `influence` (per [Charter §2.4](#24-inferential-influence-disclosure) (pending)) fires.
+
+The structural form of Layer B is deferred to the follow-on RFC tied to §2.4 and §2.6 redactions; the falsifiability obligation becomes binding when those siblings are redacted. Demotion itself, once a candidate is confirmed, is recorded as an immutable lifecycle event referencing the prior promotion event.
+
+#### Rationale
+
+Without explicit recording of each lifecycle event in immutable form, the system cannot answer the question of what it concluded — or had grounds to conclude — at any prior moment. The substrate-immutability guarantee of [§2.1](#21-observational-integrity) ensures the operation history, once recorded, remains reconstructible; §2.5 inherits this guarantee for the Category I subclass of records that lifecycle events constitute.
+
+Hypothesis-state-as-projection rather than as a mutable record is the structural mechanism by which the operation history retains its primacy. A current-state record stored as if it were primary would invert the substrate-projection relation, degrading lifecycle events to audit trail. The invariant prevents this inversion by construction.
+
+#### Forbidden Anti-Patterns
+
+- **Direct mutation of hypothesis state outside append-only commit semantics per [§2.1](#21-observational-integrity).** A projection write to a hypothesis record's state field with no corresponding substrate lifecycle event. Detectable by comparison of projection output against substrate replay.
+- **Loss of any lifecycle event from a hypothesis's operation history.** A hypothesis present in projections whose substrate operation-event chain is incomplete. Compaction policies that lose individual lifecycle events violate this anti-pattern; physical reorganization that preserves reconstructibility does not.
+- **Hypothesis-merge events without recorded antecedents.** A merge event whose antecedent reference is empty or fails to resolve to existing Hypothesis records.
+- **Modification or annotation of a committed lifecycle event with revised content.** Lifecycle events are Category I substrate records under [§2.1](#21-observational-integrity); the substrate write-once guarantee applies. Detectable by content-addressable identifier recomputation.
+- **Cross-subtype Hypothesis-merge committed without recording the typed-output rule.** A merge event whose antecedent subtypes differ AND whose produced-type derivation is unspecified or unresolvable.
+- **Demotion candidacy recorded as satisfied while either Layer A or Layer B alone holds (not both).** The staged-combination AND form structurally rejects single-layer satisfaction.
+- **Storing current hypothesis state as a primary substrate record rather than as a projection over the operation event history.** The substrate-projection relation is inverted by such direct commit; the operation event chain ceases to be the source-of-record.
+
+#### Boundary Conditions
+
+- **Categories I and II are not governed by §2.5.** Category I observation lifecycle is governed by [§2.1](#21-observational-integrity); Category II construct supersession is governed by [§2.2](#22-epistemic-separation). §2.5 governs Category III hypothesis lifecycle specifically.
+- **Parameter values are not governed by §2.5.** Cadence parameter values for Layer A and the eventual Layer B parameters live in promotion event payloads or in concrete subtype declarations. §2.5 governs the form of the staged-combination criterion (AND of Layer A and Layer B); it does not codify specific numerical values.
+- **Layer B operationalization is not governed by §2.5.** The structural form of Layer B's deep criterion is deferred to the follow-on RFC tied to [§2.4](#24-inferential-influence-disclosure) (pending) and [§2.6](#26-evidential-independence-integrity) (pending) redactions. §2.5 carries the forward-reference contract; the operationalization is the follow-on RFC's territory.
+- **Cross-subtype merge produced-type semantics are not governed by §2.5.** §2.5 codifies the typed-transformation requirement. Whether the produced record is a third concrete subtype or an abstract record with subtype-elision is deferred to [`lifecycle-semantics.md`](../ontology/lifecycle-semantics.md) post-Q4 follow-on.
+- **The referenced Category III entity's own structural commitments are not governed by §2.5.** A lifecycle event is a Category I record carrying a reference-and-parameters payload about a Category III hypothesis. §2.5 governs (a) the lifecycle event's category — Category I commit semantics inherited from §2.1 — and (b) the event's content-as-reference (specific hypothesis, operation, antecedents, parameters). The referenced hypothesis's own structural commitments — provenance, confidence, evidential independence, declared influence — are [§2.3](#23-provenance-integrity), [§2.6](#26-evidential-independence-integrity), [§2.4](#24-inferential-influence-disclosure) territory respectively.
 
 ---
 

@@ -25,7 +25,7 @@ Valid operations: parametric re-derivation under a new definition (produces a ne
 
 Probabilistic inference whose boundaries, membership, and continued existence are matters of degree, not of fact ([Charter §1](../../../../docs/charter/constitutional-charter.md#1-thesis); [`entity-model.md` Category III](../../../../docs/ontology/entity-model.md)).
 
-Valid operations: formation, merge, split, promotion, demotion, dissolution — each recorded as an immutable event ([`lifecycle-semantics.md` §Category III](../../../../docs/ontology/lifecycle-semantics.md); [Charter §2.5 pending](../../../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness)). Not valid: direct mutation of hypothesis state.
+Valid operations: formation, merge, split, promotion, demotion, dissolution — each recorded as an immutable lifecycle event ([`lifecycle-semantics.md` §Category III](../../../../docs/ontology/lifecycle-semantics.md); [Charter §2.5](../../../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness)). Not valid: direct mutation of hypothesis state.
 
 ## 2. Adjacent concepts
 
@@ -55,7 +55,7 @@ A paragraph that fails any of these is rewritten, not patched.
 
 ### "We update the cluster when new evidence arrives."
 
-**Violation.** Direct mutation of hypothesis state. Forbidden by [Charter §2.5 (pending)](../../../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) and inconsistent with the structural commitment in the Thesis.
+**Violation.** Direct mutation of hypothesis state. Forbidden by [Charter §2.5](../../../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) and inconsistent with the structural commitment in the Thesis.
 
 **Rewrite.** "When new observations enter the substrate, the assertion engine emits a hypothesis-evolution event that supersedes the prior state. The current state of the hypothesis is a projection over its history of events."
 
@@ -73,7 +73,7 @@ A paragraph that fails any of these is rewritten, not patched.
 
 ### "The detector reads from the event log and writes the cluster back."
 
-**Violation.** "Writes back" implies mutation of substrate (Invariant 2.1) and implicit reclassification — a hypothesis cannot be "written to the event log" in the same sense as an observation; it must be committed as a hypothesis-lifecycle event with its own provenance ([Charter §2.5 pending](../../../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness)).
+**Violation.** "Writes back" implies mutation of substrate (Invariant 2.1) and implicit reclassification — a hypothesis cannot be "written to the event log" in the same sense as an observation; it must be committed as a hypothesis-lifecycle event with its own provenance ([Charter §2.5](../../../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness)).
 
 **Rewrite.** "The assertion engine reads observations from the primary event log, derives a hypothesis with observational provenance, and commits a hypothesis-formation event back to the log."
 
@@ -93,7 +93,7 @@ Failure to apply this test before commit is itself a form of drift — the disci
 - [`docs/charter/constitutional-charter.md` §1 Thesis](../../../../docs/charter/constitutional-charter.md#1-thesis)
 - [`docs/charter/constitutional-charter.md` §2.1 Observational Integrity (Forbidden Anti-Patterns)](../../../../docs/charter/constitutional-charter.md#21-observational-integrity)
 - [`docs/charter/constitutional-charter.md` §2.2 Epistemic Separation](../../../../docs/charter/constitutional-charter.md#22-epistemic-separation)
-- [`docs/charter/constitutional-charter.md` §2.5 Hypothesis Lifecycle Explicitness (pending)](../../../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness)
+- [`docs/charter/constitutional-charter.md` §2.5 Hypothesis Lifecycle Explicitness](../../../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness)
 - [`docs/ontology/entity-model.md` Categories I, II, III](../../../../docs/ontology/entity-model.md)
 - [`docs/ontology/lifecycle-semantics.md` §Hypothesis (Category III)](../../../../docs/ontology/lifecycle-semantics.md)
 - [`docs/architecture/event-flow.md` Phase 2 — Enrichment](../../../../docs/architecture/event-flow.md)

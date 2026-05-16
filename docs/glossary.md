@@ -94,18 +94,50 @@ Missing fields are marked `pending`, never omitted.
 
 ### `demotion`
 
-- **Canonical definition.** Category III hypothesis lifecycle operation: the transition of a previously promoted hypothesis out of operational use as enrichment context. Demotion is recorded as an immutable event in the primary event log per Invariant 2.5 (pending). A demoted hypothesis remains in the substrate; demotion does not delete.
+- **Canonical definition.** Category III hypothesis lifecycle operation: the transition of a previously promoted hypothesis out of operational use as enrichment context. Demotion is recorded as an immutable lifecycle event in the primary event log per Invariant 2.5 (frozen v0.3). A demoted hypothesis remains in the substrate; demotion does not delete.
 - **Introduction.** [`decision-log.md` §0011 — Q4 resolution](./charter/decision-log.md); [`ontology/lifecycle-semantics.md` §Category III, post-Q4](./ontology/lifecycle-semantics.md).
-- **Stabilization.** Ontology v(post-Q4) — Drafted.
-- **Last amendment.** [`decision-log.md` §0011](./charter/decision-log.md).
+- **Stabilization.** Charter §2.5 v0.3.
+- **Last amendment.** v0.3.
 - **Forbidden synonyms.** `demote` (verb form is acceptable in informal use; the canonical noun is `demotion`); `unpromotion` (the lifecycle event is `demotion`, not its negation); `retraction` (this term may be used in a different sense for assertions; `demotion` is for hypotheses); `decommission` (engineering-systems vocabulary, not Ontology).
+
+### `dissolution`
+
+- **Canonical definition.** Category III hypothesis lifecycle operation: the recognition that a hypothesis no longer corresponds to any underlying phenomenon, recorded as an immutable lifecycle event in the primary event log per Invariant 2.5 (frozen v0.3). Distinguished from `demotion`: demotion withdraws operational use; dissolution recognizes non-existence of the underlying phenomenon. The two operations are not interchangeable.
+- **Introduction.** [`decision-log.md` §0013 — Gate §2.5 redaction](./charter/decision-log.md); [`ontology/lifecycle-semantics.md` §Hypothesis (Category III)](./ontology/lifecycle-semantics.md).
+- **Stabilization.** Charter §2.5 v0.3.
+- **Last amendment.** v0.3.
+- **Forbidden synonyms.** `dissolve` (verb form is acceptable in informal use; the canonical noun is `dissolution`); `removal` (substrate immutability per [Invariant 2.1](./charter/constitutional-charter.md#21-observational-integrity) prevents removal; dissolution is a lifecycle event, not a record deletion); `archival` (operational concept; dissolution is the constitutional lifecycle event).
+
+### `formation`
+
+- **Canonical definition.** Category III hypothesis lifecycle operation: the creation of a hypothesis (one of the four concrete subtypes per Q2-A.2) when an inference process recognizes accumulated observations crossing a structural threshold, recorded as an immutable lifecycle event in the primary event log per Invariant 2.5 (frozen v0.3).
+- **Introduction.** [`decision-log.md` §0013 — Gate §2.5 redaction](./charter/decision-log.md); [`ontology/lifecycle-semantics.md` §Hypothesis (Category III)](./ontology/lifecycle-semantics.md).
+- **Stabilization.** Charter §2.5 v0.3.
+- **Last amendment.** v0.3.
+- **Forbidden synonyms.** `creation` (informal; `formation` is canonical for the structural lifecycle event); `instantiation` (engineering vocabulary); `emergence` (philosophical import the project has not made; use `formation`).
+
+### `merge`
+
+- **Canonical definition.** Category III hypothesis lifecycle operation: the combination of two hypotheses recognized as describing the same underlying phenomenon, recorded as an immutable lifecycle event referencing both antecedents and the produced hypothesis per Invariant 2.5 (frozen v0.3). Cross-subtype merge produces a typed output record per [`ontology/entity-model.md` §Cross-subtype operations](./ontology/entity-model.md).
+- **Introduction.** [`decision-log.md` §0013 — Gate §2.5 redaction](./charter/decision-log.md); [`ontology/lifecycle-semantics.md` §Hypothesis (Category III)](./ontology/lifecycle-semantics.md).
+- **Stabilization.** Charter §2.5 v0.3.
+- **Last amendment.** v0.3.
+- **Forbidden synonyms.** `combine` (informal); `unify` (overloaded; `merge` is the canonical operation name); `consolidate` (engineering vocabulary).
+
+### `split`
+
+- **Canonical definition.** Category III hypothesis lifecycle operation: the division of a hypothesis recognized as containing multiple distinct phenomena into multiple successor hypotheses, recorded as an immutable lifecycle event referencing the antecedent and each successor per Invariant 2.5 (frozen v0.3).
+- **Introduction.** [`decision-log.md` §0013 — Gate §2.5 redaction](./charter/decision-log.md); [`ontology/lifecycle-semantics.md` §Hypothesis (Category III)](./ontology/lifecycle-semantics.md).
+- **Stabilization.** Charter §2.5 v0.3.
+- **Last amendment.** v0.3.
+- **Forbidden synonyms.** `divide` (informal); `partition` (mathematical import; `split` is the canonical operation name); `fork` (engineering vocabulary).
 
 ### `promotion`
 
-- **Canonical definition.** Category III hypothesis lifecycle operation: the transition of a hypothesis from active inference to operational use as enrichment context. Promotion is recorded as an immutable event in the primary event log per Invariant 2.5 (pending). The promotion event carries the structural parameters governing the hypothesis's subsequent demotion-candidacy timing (Layer A of the staged-combination criterion per [`decision-log.md` §0011](./charter/decision-log.md)).
+- **Canonical definition.** Category III hypothesis lifecycle operation: the transition of a hypothesis from active inference to operational use as enrichment context. Promotion is recorded as an immutable lifecycle event in the primary event log per Invariant 2.5 (frozen v0.3). The promotion event carries the structural parameters governing the hypothesis's subsequent demotion-candidacy timing (Layer A of the staged-combination criterion per [`decision-log.md` §0011](./charter/decision-log.md)).
 - **Introduction.** [`decision-log.md` §0011 — Q4 resolution](./charter/decision-log.md); [`ontology/lifecycle-semantics.md` §The Promotion Mechanism, post-Q4](./ontology/lifecycle-semantics.md).
-- **Stabilization.** Ontology v(post-Q4) — Drafted.
-- **Last amendment.** [`decision-log.md` §0011](./charter/decision-log.md).
+- **Stabilization.** Charter §2.5 v0.3.
+- **Last amendment.** v0.3.
 - **Forbidden synonyms.** `promote` (verb form is acceptable in informal use; the canonical noun is `promotion`); `activation` (engineering-systems vocabulary); `enrichment promotion` (the bare term `promotion` is canonical; `enrichment` describes the use the promoted hypothesis is admitted to, not the operation).
 
 ### `assertion`

@@ -48,7 +48,7 @@ Entities whose very existence is an inference. Hypotheses are probabilistic cons
 The abstract type carries the structure shared by all hypothesis subtypes. It is not itself a concrete record type — no record exists whose declared type is `Hypothesis`. The abstract type captures shared structure that the four concrete subtypes inherit:
 
 - Stable identifier under provenance discipline ([Charter §2.3](../charter/constitutional-charter.md#23-provenance-integrity) pending; reference shape stabilizes when §2.3 is redacted).
-- Lifecycle position under [Charter §2.5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) (pending). The six lifecycle operations (formation, merge, split, promotion, demotion, dissolution) are defined at the abstract-type level; subtype-specific composition rules surface in the subtype sections below.
+- Lifecycle position under [Charter §2.5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness). The six lifecycle operations (formation, merge, split, promotion, demotion, dissolution) are defined at the abstract-type level; subtype-specific composition rules surface in the subtype sections below.
 - Confidence and evidential independence ([Charter §2.6](../charter/constitutional-charter.md#26-evidential-independence-integrity) pending) — paired dimensions; see §2.6's redaction.
 - Inferential influence ([Charter §2.4](../charter/constitutional-charter.md#24-inferential-influence-disclosure) pending) — every assertion formed under a hypothesis's influence carries a structural declaration of that influence.
 
