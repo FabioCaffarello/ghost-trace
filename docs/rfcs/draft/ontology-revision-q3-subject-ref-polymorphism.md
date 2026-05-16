@@ -1,6 +1,6 @@
 # RFC — Ontology Open Question 3: Subject Reference Polymorphism
 
-- **Status:** discussion
+- **Status:** accepted
 - **Authors:** Ghost Trace committee (Q3 pre-Gate; §0014 cascade enactment)
 - **Date:** 2026-05-16
 - **Type:** ontology-revision
@@ -141,4 +141,12 @@ No historical content; forward-looking. Two asymmetries noted:
 
 ## Decision Record
 
-Status: `discussion`. Resolution pending. When resolved, this RFC will be cross-referenced from the decision-log entry that records the resolution.
+Resolved by [`docs/charter/decision-log.md` §0016 — Q3 resolution](../../charter/decision-log.md). The committee adopted **Candidate B — distinct per-Category `subject_ref` fields on the Assertion entity**, with three committee extensions:
+
+1. **Granularity: per-Category coarse (3 fields).** `subject_ref_observation` (Cat I), `subject_ref_construct` (Cat II), `subject_ref_hypothesis` (Cat III). Rationale: [§2.2](../../charter/constitutional-charter.md#22-epistemic-separation) separation is at Category level, not subtype level; sub-Category granularity is not warranted at the Assertion entity layer. Encoded structurally in `entity-model.md` Assertion entity section.
+2. **Exclusivity enforcement: schemas-level oneOf/union with mandatory population.** Exactly one `subject_ref_X` field per Assertion; schemas validation rejects zero or more-than-one populated. Structural commitment encoded in `entity-model.md`.
+3. **No per-field glossary entries.** The three fields are structural mechanism, not canonical entities. Contrast §0015 (Q1 resolution) which added `declared session` and `operational session` as canonical entities.
+
+The §0014 lazy pre-Gate cascade fully discharges with this resolution: Q1 (§0015) triggered Q3; Q3 (§0016) resolves; no further cascades anticipated before §2.3 redaction. §2.3 redaction begins Step 1.1 onward.
+
+Discussion-phase evidence is preserved in [`docs/rfcs/discussion/q3-evidence.md`](../discussion/q3-evidence.md).

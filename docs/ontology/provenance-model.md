@@ -21,6 +21,8 @@ To be formalized:
 
 Per [`decision-log.md` §0015](../charter/decision-log.md) (Q1 resolution), `DeclaredSession` is a canonical Category I primary observation type; `OperationalSession` is a Category II operational construct derived from it. Provenance chains anchored to `DeclaredSession` are observational (back to substrate at commit time). Provenance chains anchored to `OperationalSession` are observational *through* the typed transformation that derives `OperationalSession` from its Category I inputs — chain shape: `assertion → OperationalSession → DeclaredSession + other Cat I primaries`. The branching is structural and visible at the type level.
 
+Per [`decision-log.md` §0016](../charter/decision-log.md) (Q3 resolution), the Assertion entity carries one of three typed reference fields (`subject_ref_observation`, `subject_ref_construct`, `subject_ref_hypothesis`). Observational provenance chains traverse `subject_ref_observation` edges to Category I primaries; the chain shape is type-uniform at the reference level (one field type, one target Category). Chains crossing into Category II (operational constructs) traverse `subject_ref_construct` edges; chains crossing into Category III (hypotheses) traverse `subject_ref_hypothesis` edges. The graph of provenance edges is typed-by-category, mirroring the [§2.2](../charter/constitutional-charter.md#22-epistemic-separation) structural separation at the reference level.
+
 ### Inferential Provenance
 
 Answers the question: **"Which prior assertions influenced the formation of this one?"**
@@ -31,6 +33,8 @@ To be formalized:
 - The representation of influence references.
 - The propagation rules: how influence transitively accumulates through chains of derivation.
 - The relationship to evidential independence (Invariant 2.6 — pending): inferential provenance is the structural input to independence computation.
+
+Per [`decision-log.md` §0016](../charter/decision-log.md) (Q3 resolution), inferential influence references via Assertion's `subject_ref_construct` (Cat II) or `subject_ref_hypothesis` (Cat III) fields are typed-by-category; the typed-edge structure carries through the inferential provenance graph as well. Substantive §Inferential Provenance content remains pending §2.4 binding text.
 
 ## The Provenance Graph
 

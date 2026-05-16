@@ -1,6 +1,6 @@
 # Entity Model
 
-**Status:** Drafted — Category III revised post-Q2 ([`decision-log.md` §0010](../charter/decision-log.md)); Category I and Category II revised post-Q1 ([`decision-log.md` §0015](../charter/decision-log.md)); other sections remain Scaffold.
+**Status:** Drafted — Category III revised post-Q2 ([`decision-log.md` §0010](../charter/decision-log.md)); Category I and Category II revised post-Q1 ([`decision-log.md` §0015](../charter/decision-log.md)); Assertion entity introduced post-Q3 ([`decision-log.md` §0016](../charter/decision-log.md)); other sections remain Scaffold.
 
 > This document formalizes the three categories of knowledge introduced in [Charter §1](../charter/constitutional-charter.md#1-thesis) and structurally separated by [Invariant 2.2](../charter/constitutional-charter.md#22-epistemic-separation). It does not specify schemas; concrete schema definitions live in [`../../schemas/`](../../schemas/).
 
@@ -75,6 +75,30 @@ The subtype distinction is structurally recorded: a hypothesis record's concrete
 
 Cross-subtype merge (e.g., a `BehavioralCluster` and a `CoordinationRing` recognized as the same underlying phenomenon) is structurally permitted but requires a typed transformation: the merge operation produces a typed output record. Whether the produced record is a third concrete subtype or an abstract record with subtype-elision is a question whose resolution is deferred to [`lifecycle-semantics.md`](./lifecycle-semantics.md) post-Q4 redaction.
 
+## The Assertion Type and Cross-Category References
+
+An Assertion is a claim about a referenced entity in one of the three categories. The reference is structural: each Assertion carries exactly one of three typed reference fields, mutually exclusive, per [`decision-log.md` §0016](../charter/decision-log.md) (Q3 resolution — Candidate B with per-Category granularity and oneOf/union exclusivity):
+
+- **`subject_ref_observation`** — references a Category I primary observation. Used when the Assertion's subject is an observation (e.g., a `DeclaredSession`, a network event, a fingerprint snapshot).
+- **`subject_ref_construct`** — references a Category II operational construct. Used when the Assertion's subject is a deterministic derivation of observations under a versioned operational definition (e.g., an `OperationalSession`, an aggregation outcome, a reclassification output).
+- **`subject_ref_hypothesis`** — references a Category III hypothesis. Used when the Assertion's subject is an abstract `Hypothesis` or one of its four concrete subtypes (`BehavioralCluster`, `CoordinationRing`, `CampaignHypothesis`, `AutomationGroup`).
+
+### Exclusivity invariant
+
+Exactly one `subject_ref_X` field is populated per Assertion. Schemas-level validation rejects Assertions with zero populated or more-than-one populated `subject_ref_X` fields. The oneOf/union constraint is enforced at the schemas layer, not at runtime; the validation is structurally falsifiable per [Charter §4](../charter/constitutional-charter.md#4-constitutional-design-rule) (frozen v0.2).
+
+This structural form encodes the [§2.2](../charter/constitutional-charter.md#22-epistemic-separation) (frozen — Epistemic Separation) boundary between Categories I/II/III at the reference level: a cross-category reference cannot be constructed by accident, and a reader of an Assertion knows from the populated field which category its subject occupies.
+
+### Granularity rationale — per-Category, not per-subtype
+
+Per [`decision-log.md` §0016](../charter/decision-log.md) (Q3 resolution): granularity is per-Category coarse, not per-subtype. The §2.2 separation is at Category level; sub-Category granularity (per-concrete-subtype reference fields) is not warranted at the Assertion entity layer because §2.2 does not separate at that level. Sub-Category distinctions are encoded via the referenced entity's own typed identity:
+
+- A `subject_ref_observation` may point to a `DeclaredSession`, a network event record, a fingerprint snapshot, or any other Category I primary type; the reference's payload carries the typed identity of its target.
+- A `subject_ref_construct` may point to an `OperationalSession`, a rate-limit bucket, a daily-actor projection, or any other Category II construct.
+- A `subject_ref_hypothesis` may point to one of the four concrete subtypes (per Q2-A.2 resolution per [§0010](../charter/decision-log.md)); the reference's payload carries the typed subtype identity.
+
+Per-Category granularity preserves §2.2's structural separation at the reference field level while keeping sub-Category type discrimination at the entity-payload level (where the referenced entity's own type system carries the distinction).
+
 ## The Distinction Between Substrate and Projection
 
 The categories above describe records in the **substrate**. Projections — analytical stores, graph indexes, dashboards — are not bound by the same rules. The substrate is governed by Charter invariants; projections are rebuildable from the substrate and may be discarded or recomputed.
@@ -86,7 +110,6 @@ This distinction is constitutional, not merely architectural. See [Charter Invar
 The following questions are recorded as open and intentionally not resolved here:
 
 1. **Identity tiers.** The conversation introduced `ActorRef`, `Identity`, and `Cluster` as three tiers of identity. Their formalization is pending.
-2. **Subject reference polymorphism.** Assertions carry a `subject_ref` that may point to entities of any category. Whether this is a single polymorphic field or distinct fields per category is a type-level question with ontological consequences. Resolution opened as RFC [`ontology-revision-q3-subject-ref-polymorphism`](../rfcs/draft/ontology-revision-q3-subject-ref-polymorphism.md) (`discussion` status) per [`decision-log.md` §0015](../charter/decision-log.md) cascade trigger.
 
 These questions will be answered in committee redaction. They are not resolved here.
 
@@ -95,7 +118,8 @@ These questions will be answered in committee redaction. They are not resolved h
 The following questions were recorded as open and have since been resolved by committee. Each entry preserves the question and links to the decision-log entry that records the resolution.
 
 - **Subtypes of hypothesis** (formerly Open Modeling Question 3). Whether `BehavioralCluster`, `CoordinationRing`, `CampaignHypothesis`, and `AutomationGroup` are distinct types within Category III or are values of a single discriminator. **Resolved** by [`decision-log.md` §0010 — Q2 resolution](../charter/decision-log.md): Candidate A.2 (abstract type `Hypothesis` with four concrete sibling subtypes). The Category III section above reflects the resolution.
-- **Session duality** (formerly Open Modeling Question 1). Whether a session is a single entity with reconciliation, or two entities (`DeclaredSession` as Category I, `OperationalSession` as Category II). **Resolved** by [`decision-log.md` §0015 — Q1 resolution](../charter/decision-log.md): Candidate B (distinct entities). The Category I and Category II sections above reflect the resolution; subject_ref polymorphism implications are addressed in the cascade Q3 RFC (`ontology-revision-q3-subject-ref-polymorphism`, `discussion` status per §0015).
+- **Session duality** (formerly Open Modeling Question 1). Whether a session is a single entity with reconciliation, or two entities (`DeclaredSession` as Category I, `OperationalSession` as Category II). **Resolved** by [`decision-log.md` §0015 — Q1 resolution](../charter/decision-log.md): Candidate B (distinct entities). The Category I and Category II sections above reflect the resolution; subject_ref polymorphism implications are addressed in the cascade Q3 RFC, resolved by [`decision-log.md` §0016](../charter/decision-log.md).
+- **Subject reference polymorphism** (formerly Open Modeling Question 2 post-Q1-renumbering). Whether assertions carry a single polymorphic `subject_ref` field with discriminator or distinct per-category fields. **Resolved** by [`decision-log.md` §0016 — Q3 resolution](../charter/decision-log.md): Candidate B (distinct per-Category coarse fields with oneOf/union exclusivity). The Assertion entity section above reflects the resolution.
 
 <!-- TODO: After Invariant 2.3 (Provenance Integrity) is redacted, expand the section on identifier semantics to specify how provenance references compose across categories. -->
 
