@@ -52,6 +52,14 @@ Missing fields are marked `pending`, never omitted.
 - **Last amendment.** [`amendments.md` `v0.1` — Charter Inception](./charter/amendments.md).
 - **Forbidden synonyms.** `result` (when the construct is meant; use `operational construct`); `derivation` (the act of derivation, not the record it produces); `aggregate` (acceptable only when the term is fully reduced to a specific operational construct).
 
+### `operational session`
+
+- **Canonical definition.** Category II operational construct: the system's reading of where a session operationally was, derived deterministically from `declared session` plus other Category I inputs under a versioned operational definition. The derivation is required to be deterministic per [Charter §2.2](./charter/constitutional-charter.md#22-epistemic-separation) (frozen Category II requirement); non-deterministic derivation would constitute a Category III misclassification.
+- **Introduction.** [`decision-log.md` §0015 — Q1 resolution](./charter/decision-log.md); [`ontology/entity-model.md` §Category II post-Q1](./ontology/entity-model.md).
+- **Stabilization.** Ontology v(post-Q1) — Drafted (Category II revision).
+- **Last amendment.** [`decision-log.md` §0015](./charter/decision-log.md).
+- **Forbidden synonyms.** `session` as a bare reference to the operational form (use `operational session`); `inferred session` (description rather than canonical term); `reconstructed session` (engineering vocabulary, not Ontology); `derived session` (acceptable in informal context; `operational session` is canonical).
+
 ### `hypothesis`
 
 - **Canonical definition.** A Category III record; probabilistic inference whose boundaries, membership, and continued existence are matters of degree.
@@ -91,6 +99,22 @@ Missing fields are marked `pending`, never omitted.
 - **Stabilization.** Ontology v(post-Q2) — Drafted.
 - **Last amendment.** [`decision-log.md` §0010](./charter/decision-log.md).
 - **Forbidden synonyms.** `coordination group` (description rather than hypothesis); `network` (overloaded — used elsewhere for graph structure, not the inferential entity).
+
+### `session`
+
+- **Canonical definition.** Domain concept distinguishing two typed entity-model forms: `declared session` (Category I primary observation) and `operational session` (Category II operational construct derived from declared inputs). Per [`decision-log.md` §0015](./charter/decision-log.md) (Q1 resolution), the typed duality is structural; bare `session` references in informal context should resolve to one of the two typed forms in canonical prose.
+- **Introduction.** [`decision-log.md` §0015 — Q1 resolution](./charter/decision-log.md); [`ontology/entity-model.md` §Category I + §Category II post-Q1](./ontology/entity-model.md).
+- **Stabilization.** Ontology v(post-Q1) — Drafted (Categories I + II revisions).
+- **Last amendment.** [`decision-log.md` §0015](./charter/decision-log.md).
+- **Forbidden synonyms.** None at the umbrella level; specific typed forms have their own forbidden-synonym entries. The bare `session` reference is acceptable as a domain-concept umbrella but in structural prose should resolve to `declared session` or `operational session`.
+
+### `declared session`
+
+- **Canonical definition.** Category I primary observation: the session as reported by a client SDK, network-level infrastructure collector, or other authoritative source. Carries source attribution and timing metadata. Immutable after commit per [Charter §2.1](./charter/constitutional-charter.md#21-observational-integrity) (frozen).
+- **Introduction.** [`decision-log.md` §0015 — Q1 resolution](./charter/decision-log.md); [`ontology/entity-model.md` §Category I post-Q1](./ontology/entity-model.md).
+- **Stabilization.** Ontology v(post-Q1) — Drafted (Category I revision).
+- **Last amendment.** [`decision-log.md` §0015](./charter/decision-log.md).
+- **Forbidden synonyms.** `session` as a bare reference to the declared form (use `declared session` for precision); `client-reported session` (description, not canonical term); `raw session` (suggests partial or processed; not canonical).
 
 ### `demotion`
 

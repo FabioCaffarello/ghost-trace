@@ -1,6 +1,6 @@
 # RFC — Ontology Open Question 1: Session Duality
 
-- **Status:** discussion
+- **Status:** accepted
 - **Authors:** Ghost Trace committee
 - **Date:** 2026-05-15
 - **Type:** ontology-revision
@@ -164,4 +164,11 @@ The Charter's [Phase 3 / Phase 4 replay contracts](../../architecture/replay-mod
 
 ## Decision Record
 
-Status: `discussion`. Resolution pending. When resolved, this RFC will be cross-referenced from the decision-log entry that records the resolution.
+Resolved by [`docs/charter/decision-log.md` §0015 — Q1 resolution](../../charter/decision-log.md). The committee adopted **Candidate B — `DeclaredSession` (Category I) + `OperationalSession` (Category II) as distinct entities**, with two committee extensions:
+
+1. **Determinism commitment.** `OperationalSession` is deterministically derived from `DeclaredSession` plus other Category I inputs under a versioned operational definition per [§2.2 Category II](../../charter/constitutional-charter.md#22-epistemic-separation) requirement. Encoded structurally in `entity-model.md` Category II's `OperationalSession` paragraph.
+2. **Identity-tier consistency default.** `DeclaredSession` and `OperationalSession` share identity-tier references by default unless the operational definition explicitly overrides them. Procedural default until Identity tiers is formally resolved.
+
+The §0014 lazy pre-Gate cascade trigger fires with this resolution: Q3 (subject_ref polymorphism) is now blocking for §2.3 redaction Step 1.2 under Candidate B's selection. Q3 RFC opened at `discussion` status as cascade enactment ([`ontology-revision-q3-subject-ref-polymorphism`](./ontology-revision-q3-subject-ref-polymorphism.md)).
+
+Discussion-phase evidence is preserved in [`docs/rfcs/discussion/q1-evidence.md`](../discussion/q1-evidence.md).

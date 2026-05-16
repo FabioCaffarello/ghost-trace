@@ -1,6 +1,6 @@
 # Entity Model
 
-**Status:** Drafted — Category III revised post-Q2 ([`decision-log.md` §0010](../charter/decision-log.md)); other sections remain Scaffold.
+**Status:** Drafted — Category III revised post-Q2 ([`decision-log.md` §0010](../charter/decision-log.md)); Category I and Category II revised post-Q1 ([`decision-log.md` §0015](../charter/decision-log.md)); other sections remain Scaffold.
 
 > This document formalizes the three categories of knowledge introduced in [Charter §1](../charter/constitutional-charter.md#1-thesis) and structurally separated by [Invariant 2.2](../charter/constitutional-charter.md#22-epistemic-separation). It does not specify schemas; concrete schema definitions live in [`../../schemas/`](../../schemas/).
 
@@ -13,10 +13,12 @@ The Charter establishes three structurally distinct categories. The Ontology nam
 Records of fact, recorded as immutable historical events. Observations are not interpreted; they are committed. An observation answers the question *what happened*, not *what does it mean*.
 
 Examples (illustrative, not exhaustive):
-- Session events reported by client SDKs.
+- **`DeclaredSession`**: session boundaries as reported by client SDKs (primary observation at the moment of session-end reporting). Canonical Category I type for the declared form of a session per [`decision-log.md` §0015](../charter/decision-log.md) (Q1 resolution).
 - Network-level events recorded by infrastructure collectors.
 - Transactions or state changes recorded by external authoritative systems.
 - Fingerprint snapshots collected at well-defined moments.
+
+Per [`decision-log.md` §0015](../charter/decision-log.md) (Q1 resolution), `Session` as a domain concept resolves to two distinct entity-model types: `DeclaredSession` (Category I, defined here) and `OperationalSession` (Category II, defined below). The two diverge in the cases where investigation matters most; the type-level visibility of the divergence is intentional and structural.
 
 Structural properties (to be formalized):
 - Immutable after commit (Charter Invariant 2.1).
@@ -29,8 +31,12 @@ Structural properties (to be formalized):
 
 Entities derived from explicit operational definitions over observations. Operational constructs are deterministic with respect to their input observations and their definitional parameters, but their *boundaries* are operational conventions, not facts about the world.
 
+**`OperationalSession`** is a canonical Category II operational construct per [`decision-log.md` §0015](../charter/decision-log.md) (Q1 resolution): the system's reading of where a session operationally was, derived from `DeclaredSession` (Category I) + other Category I inputs (typically network-level events and fingerprint snapshots) under a versioned operational definition. The derivation is deterministic per §2.2's Category II requirement; non-deterministic derivation would constitute a Category III misclassification and would be rejected at validation. `OperationalSession` may diverge from its source `DeclaredSession` in boundary timing, in attributed identity (subject to identity-tier consistency rules per [`decision-log.md` §0015](../charter/decision-log.md)), or in scope; the divergences are themselves first-class structural signals.
+
+Identity-tier references on `DeclaredSession` and `OperationalSession` default to the same `ActorRef` / `Identity` / `Cluster` references (per Q1 of §Open Modeling Questions below — Identity tiers, pending); the operational definition may explicitly override identity-tier attribution where the operational reading differs from the declared. The default is procedural until Identity tiers is formally resolved.
+
 Examples (illustrative):
-- A session reconstructed by an operational definition (e.g., "events from one actor within a 30-minute inactivity window").
+- **`OperationalSession`**: per the canonical definition above (e.g., operational definition "events from one actor within a 30-minute inactivity window").
 - A rate-limit bucket defined over a window and a key.
 - A daily-actor projection defined over a time slice and an identity reference.
 
@@ -79,9 +85,8 @@ This distinction is constitutional, not merely architectural. See [Charter Invar
 
 The following questions are recorded as open and intentionally not resolved here:
 
-1. **Session duality.** Is a session a single entity with reconciliation, or two entities (`DeclaredSession` as Category I, `OperationalSession` as Category II)? The conversation that produced this Ontology recognized that the two diverge in exactly the cases where investigation matters most.
-2. **Identity tiers.** The conversation introduced `ActorRef`, `Identity`, and `Cluster` as three tiers of identity. Their formalization is pending.
-3. **Subject reference polymorphism.** Assertions carry a `subject_ref` that may point to entities of any category. Whether this is a single polymorphic field or distinct fields per category is a type-level question with ontological consequences.
+1. **Identity tiers.** The conversation introduced `ActorRef`, `Identity`, and `Cluster` as three tiers of identity. Their formalization is pending.
+2. **Subject reference polymorphism.** Assertions carry a `subject_ref` that may point to entities of any category. Whether this is a single polymorphic field or distinct fields per category is a type-level question with ontological consequences. Resolution opened as RFC [`ontology-revision-q3-subject-ref-polymorphism`](../rfcs/draft/ontology-revision-q3-subject-ref-polymorphism.md) (`discussion` status) per [`decision-log.md` §0015](../charter/decision-log.md) cascade trigger.
 
 These questions will be answered in committee redaction. They are not resolved here.
 
@@ -90,6 +95,7 @@ These questions will be answered in committee redaction. They are not resolved h
 The following questions were recorded as open and have since been resolved by committee. Each entry preserves the question and links to the decision-log entry that records the resolution.
 
 - **Subtypes of hypothesis** (formerly Open Modeling Question 3). Whether `BehavioralCluster`, `CoordinationRing`, `CampaignHypothesis`, and `AutomationGroup` are distinct types within Category III or are values of a single discriminator. **Resolved** by [`decision-log.md` §0010 — Q2 resolution](../charter/decision-log.md): Candidate A.2 (abstract type `Hypothesis` with four concrete sibling subtypes). The Category III section above reflects the resolution.
+- **Session duality** (formerly Open Modeling Question 1). Whether a session is a single entity with reconciliation, or two entities (`DeclaredSession` as Category I, `OperationalSession` as Category II). **Resolved** by [`decision-log.md` §0015 — Q1 resolution](../charter/decision-log.md): Candidate B (distinct entities). The Category I and Category II sections above reflect the resolution; subject_ref polymorphism implications are addressed in the cascade Q3 RFC (`ontology-revision-q3-subject-ref-polymorphism`, `discussion` status per §0015).
 
 <!-- TODO: After Invariant 2.3 (Provenance Integrity) is redacted, expand the section on identifier semantics to specify how provenance references compose across categories. -->
 

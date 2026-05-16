@@ -19,6 +19,8 @@ To be formalized:
 - The transitivity rules: when assertion A is derived from assertion B, and B is derived from observations O₁ and O₂, A's observational provenance includes O₁ and O₂.
 - The reconstructibility guarantee: given an assertion and the immutability of the event log, the path back to observations is reconstructible.
 
+Per [`decision-log.md` §0015](../charter/decision-log.md) (Q1 resolution), `DeclaredSession` is a canonical Category I primary observation type; `OperationalSession` is a Category II operational construct derived from it. Provenance chains anchored to `DeclaredSession` are observational (back to substrate at commit time). Provenance chains anchored to `OperationalSession` are observational *through* the typed transformation that derives `OperationalSession` from its Category I inputs — chain shape: `assertion → OperationalSession → DeclaredSession + other Cat I primaries`. The branching is structural and visible at the type level.
+
 ### Inferential Provenance
 
 Answers the question: **"Which prior assertions influenced the formation of this one?"**
