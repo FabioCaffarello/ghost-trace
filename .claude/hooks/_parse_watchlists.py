@@ -51,7 +51,11 @@ def parse_frozen_sections(claude_md):
     if s is None:
         fail("CLAUDE.md §4 (Charter status) section not found")
     markers = []
-    for m in re.finditer(r'^\|\s*(§[0-9.]+)[^|]*\|\s*frozen\s*\|', s, re.MULTILINE):
+    # Status cell must begin with "frozen"; allows trailing qualifier such as
+    # "frozen — minor amendment v0.3" introduced at amendment v0.3 onward.
+    # Fixed at v0.4.1 (decision-log §0018) — prior regex required exact "frozen"
+    # cell, silently dropping §2.3 + §2.5 from the recognized-frozen set.
+    for m in re.finditer(r'^\|\s*(§[0-9.]+)[^|]*\|\s*frozen[^|]*\|', s, re.MULTILINE):
         markers.append(m.group(1))
     if not markers:
         fail("no frozen sections in CLAUDE.md §4")
