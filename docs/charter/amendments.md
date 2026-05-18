@@ -91,6 +91,17 @@ No amendments have yet been recorded against `v0.1`. Future entries follow.
 
 ---
 
+### `v0.4.1` — Fix frozen-section parser to accept amendment-qualified status cells
+
+**Date:** 2026-05-18
+**Originating RFC:** [`charter-amendment-v0-4-1-frozen-parser-fix`](../rfcs/draft/charter-amendment-v0-4-1-frozen-parser-fix.md)
+**Sections affected:** Banner (version line `v0.4` → `v0.4.1`; status-line clause appended noting the patch). Hook parser (`.claude/hooks/_parse_watchlists.py:54` — regex change). CLAUDE.md §4 narrative (extension noting v0.4.1). No Charter prose amended.
+**Summary:** The frozen-section parser at `_parse_watchlists.py:54` uses the regex `\|\s*frozen\s*\|` to detect frozen rows in CLAUDE.md §4 status table. The strict cell match silently drops sections whose status cell carries the `frozen — minor amendment vN.Y` qualifier introduced at amendment v0.3 (per [`decision-log §0013`](./decision-log.md)). Result: §2.5 (frozen v0.3) and §2.3 (frozen v0.4) were not recognized by the parser despite their table rows correctly marking them frozen. Hook self-test reported 5 frozen ranges instead of 7. Fix: regex `\|\s*frozen\s*\|` → `\|\s*frozen[^|]*\|` (allows arbitrary non-pipe content after `frozen`). Post-fix self-test reports `7 / 12 / 36 / 13`. Charter advances to v0.4.1.
+**Rationale:** Discrepancy surfaced during [`decision-log §0017`](./decision-log.md) Gate §2.3 closure Phase F.4 final summary. Investigation traced the gap to the v0.3-introduced "minor amendment vN.Y" qualifier convention which the parser never accommodated. Functional protection was incidentally preserved by the §2 outer range (which wraps all §2.x sub-sections including §2.3 and §2.5), so the gap was cosmetic and audit-trail-relevant rather than enforcement-relevant. The fix nonetheless restores parser fidelity to the table's actual claims and removes latent fragility (future Charter structure changes could create configurations where the §2 outer range no longer wraps every frozen §2.x). Patch-level amendment per [`amendments.md` Step 5](#amendment-process); precedent is v0.2.1 (`decision-log §0012`) hook-correctness fix.
+**Falsifiability review outcome:** Pass. The fix clarifies a mechanical predicate (the cell-match regex). The new predicate is structurally falsifiable: a status cell beginning with `frozen` and containing arbitrary non-pipe trailing content matches; cells with `pending` or other words do not match. Detection is mechanical, no subjective judgment. The fix passes [§4 frozen v0.2](./constitutional-charter.md#4-constitutional-design-rule) falsifiability discipline.
+
+---
+
 <!-- AMENDMENT TEMPLATE — copy below this line when recording an amendment -->
 
 <!--

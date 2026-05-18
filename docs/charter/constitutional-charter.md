@@ -1,7 +1,7 @@
 # Ghost Trace Constitutional Charter
 
-**Version:** v0.4 (draft, sections in committee mode)
-**Status:** Thesis frozen. Invariant qualification criteria (§2 header) frozen. Invariants 2.1–2.2 frozen. Invariant 2.3 frozen — minor amendment v0.4. Invariant 2.5 frozen — minor amendment v0.3. Invariants 2.4, 2.6 pending committee redaction. Non-Goals (§3) pending. Constitutional Design Rule (§4) frozen — minor amendment v0.2. Patch amendment v0.2.1 extends mechanical Charter-blockquote exemption to vocabulary-drift (no Charter prose amended; see [`decision-log.md` §0012](./decision-log.md)).
+**Version:** v0.4.1 (draft, sections in committee mode)
+**Status:** Thesis frozen. Invariant qualification criteria (§2 header) frozen. Invariants 2.1–2.2 frozen. Invariant 2.3 frozen — minor amendment v0.4. Invariant 2.5 frozen — minor amendment v0.3. Invariants 2.4, 2.6 pending committee redaction. Non-Goals (§3) pending. Constitutional Design Rule (§4) frozen — minor amendment v0.2. Patch amendment v0.2.1 extends mechanical Charter-blockquote exemption to vocabulary-drift (no Charter prose amended; see [`decision-log.md` §0012](./decision-log.md)). Patch amendment v0.4.1 fixes the hook frozen-section parser to accept the `frozen — minor amendment vN.Y` qualifier introduced at v0.3 (no Charter prose amended; see [`decision-log.md` §0018](./decision-log.md)).
 
 > This document is the constitutional surface of the Ghost Trace project. All other documents in this repository — Ontology, Architecture, RFCs — are subordinate to it. Changes to this document require formal amendment recorded in [`amendments.md`](./amendments.md). Changes to subordinate documents that conflict with this Charter are invalid by construction.
 
