@@ -40,7 +40,7 @@ The Ontology must, at minimum, satisfy the following Charter requirements:
 |---|---|
 | [Invariant 2.1 — Observational Integrity](../charter/constitutional-charter.md#21-observational-integrity) | The observation category must be modeled as immutable. |
 | [Invariant 2.2 — Epistemic Separation](../charter/constitutional-charter.md#22-epistemic-separation) | The three categories must occupy distinct types with distinct operations. |
-| Invariant 2.3 — Provenance Integrity (pending) | Every non-observation entity must carry observational-provenance references. |
+| [Invariant 2.3 — Provenance Integrity](../charter/constitutional-charter.md#23-provenance-integrity) | Every Assertion declares observational provenance via the typed `subject_ref_*` field; the reference chain terminates at Category I primary observations. |
 | Invariant 2.4 — Inferential Influence Disclosure (pending) | Entities formed under influence of promoted hypotheses must declare that influence. |
 | [Invariant 2.5 — Hypothesis Lifecycle Explicitness](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) | Hypothesis-state changes must be modeled as lifecycle events, not mutations. |
 | Invariant 2.6 — Evidential Independence Integrity (pending) | Inferential assertions must carry separate confidence and independence dimensions. |

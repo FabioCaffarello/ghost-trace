@@ -19,17 +19,17 @@ These elements may not be edited except through the formal amendment process:
 - §2 Constitutional Invariants (header and the four qualification criteria)
 - §2.1 Observational Integrity
 - §2.2 Epistemic Separation
+- §2.3 Provenance Integrity (frozen v0.4 — `decision-log.md` §0017)
+- §2.5 Hypothesis Lifecycle Explicitness (frozen v0.3 — `decision-log.md` §0013)
+- §4 Constitutional Design Rule (frozen v0.2 — `decision-log.md` §0007)
 
 ### In-committee (PENDING)
 
 These elements are under committee redaction. Edits to them are managed by `invariant-redactor`, not by direct write:
 
-- §2.3 Provenance Integrity
 - §2.4 Inferential Influence Disclosure
-- §2.5 Hypothesis Lifecycle Explicitness
 - §2.6 Evidential Independence Integrity
 - §3 Non-Goals
-- §4 Constitutional Design Rule
 
 ## 2. Procedure for any proposed edit to constitutional-charter.md
 

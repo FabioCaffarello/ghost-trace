@@ -77,6 +77,12 @@ A paragraph that fails any of these is rewritten, not patched.
 
 **Rewrite.** "The assertion engine reads observations from the primary event log, derives a hypothesis with observational provenance, and commits a hypothesis-formation event back to the log."
 
+### "The assertion's source is contextually clear from the surrounding text."
+
+**Violation.** Orphan-typed-reference failure mode. Forbidden by [Charter §2.3](../../../../docs/charter/constitutional-charter.md#23-provenance-integrity) (Provenance Integrity, frozen v0.4): every Assertion declares its observational provenance *structurally* via a populated typed reference field (`subject_ref_observation`, `subject_ref_construct`, or `subject_ref_hypothesis`) per the Q3 schemas commitment ([`decision-log §0016`](../../../../docs/charter/decision-log.md)). "Contextually clear", "implicit", "inferable at query time", and "obvious from the surrounding text" all describe an Assertion whose typed reference is unpopulated or unresolvable — schemas-level oneOf-exclusivity rejects this at validation time.
+
+**Rewrite.** "The Assertion declares its subject via a populated `subject_ref_observation` (Category I primary), `subject_ref_construct` (Category II construct), or `subject_ref_hypothesis` (Category III hypothesis) field; the reference chain is structurally reconstructible back to Category I substrate per [Charter §2.3](../../../../docs/charter/constitutional-charter.md#23-provenance-integrity)."
+
 ## 5. Self-application test
 
 At the end of writing a paragraph that touches any category:
@@ -93,6 +99,7 @@ Failure to apply this test before commit is itself a form of drift — the disci
 - [`docs/charter/constitutional-charter.md` §1 Thesis](../../../../docs/charter/constitutional-charter.md#1-thesis)
 - [`docs/charter/constitutional-charter.md` §2.1 Observational Integrity (Forbidden Anti-Patterns)](../../../../docs/charter/constitutional-charter.md#21-observational-integrity)
 - [`docs/charter/constitutional-charter.md` §2.2 Epistemic Separation](../../../../docs/charter/constitutional-charter.md#22-epistemic-separation)
+- [`docs/charter/constitutional-charter.md` §2.3 Provenance Integrity](../../../../docs/charter/constitutional-charter.md#23-provenance-integrity)
 - [`docs/charter/constitutional-charter.md` §2.5 Hypothesis Lifecycle Explicitness](../../../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness)
 - [`docs/ontology/entity-model.md` Categories I, II, III](../../../../docs/ontology/entity-model.md)
 - [`docs/ontology/lifecycle-semantics.md` §Hypothesis (Category III)](../../../../docs/ontology/lifecycle-semantics.md)

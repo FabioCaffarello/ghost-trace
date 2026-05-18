@@ -1,13 +1,13 @@
 ---
 name: invariant-redactor
-description: Support committee-mode redaction of pending Charter invariants. Use this skill ALWAYS when work begins on §2.3 Provenance Integrity, §2.4 Inferential Influence Disclosure, §2.5 Hypothesis Lifecycle Explicitness, §2.6 Evidential Independence Integrity, §3 Non-Goals, or §4 Constitutional Design Rule. This skill is the only legitimate path to text that will become a frozen invariant — direct edits to those sections of constitutional-charter.md are blocked by charter-guardian.
+description: Support committee-mode redaction of pending Charter invariants. Use this skill ALWAYS when work begins on §2.4 Inferential Influence Disclosure, §2.6 Evidential Independence Integrity, or §3 Non-Goals. This skill is the only legitimate path to text that will become a frozen invariant — direct edits to those sections of constitutional-charter.md are blocked by charter-guardian.
 ---
 
 # invariant-redactor
 
 Pending Charter elements are redacted in committee mode ([`amendments.md` §Amendment Process](../../../../docs/charter/amendments.md)). Redaction proceeds one section at a time, with explicit defense of each word choice. A redacted section is not merged into the Charter until it passes falsifiability review. This skill structures the work.
 
-The currently pending elements are listed in [`.claude/CLAUDE.md` §4](../../../CLAUDE.md): §2.3, §2.4, §2.5, §2.6, §3, §4. The qualification criteria a candidate invariant must satisfy are stated in [Charter §2](../../../../docs/charter/constitutional-charter.md#2-constitutional-invariants).
+The currently pending elements are listed in [`.claude/CLAUDE.md` §4](../../../CLAUDE.md): §2.4, §2.6, §3. The qualification criteria a candidate invariant must satisfy are stated in [Charter §2](../../../../docs/charter/constitutional-charter.md#2-constitutional-invariants). Three prior committee-mode redactions have completed and serve as procedural precedent: §4 (Gate 1, [`decision-log §0007`](../../../../docs/charter/decision-log.md)), §2.5 (Gate §2.5, [`§0013`](../../../../docs/charter/decision-log.md)), and §2.3 (Gate §2.3, [`§0017`](../../../../docs/charter/decision-log.md) — second object-level invariant, first with inheritance-dominant non-duplication shape per §0017 Methodological Observation 1).
 
 ## 1. Committee-mode discipline
 
@@ -56,6 +56,8 @@ Each frozen invariant carries a `Boundary Conditions` section that names what th
 ### Step 8 — Identify non-duplication
 
 Before merge, the candidate explicitly identifies which existing invariants it does *not* duplicate. If the candidate is redundant with an existing invariant, redaction stops and the candidate is withdrawn — the constitutional-minimalism rule ([`.claude/CLAUDE.md` §7](../../../CLAUDE.md)) rejects redundant invariants.
+
+Non-duplication is not binary. Per [`decision-log §0017`](../../../../docs/charter/decision-log.md) Methodological Observation 1 (Gate §2.3 closure), Step 8 verdicts classify each element as **Adds** (introduces new constitutional commitment), **Anchors** (is source-of-record for what subordinate documents defer to it), **Both** (does both), or **Inherits** (references a frozen mechanism's enforcement without originating or anchoring). Inheritance is not duplication — a candidate that inherits substantially from prior frozen Charter sections (e.g., §2.3 inheriting from §2.1 + §2.5 + Ontology Q1/Q3 resolutions) still warrants Charter-level codification when the inheritance chain has no constitutional anchor connecting its priors into a single invariant. Later §2.x invariants (§2.4, §2.6) are expected to exhibit inheritance-dominant non-duplication shapes as priors accumulate; the verdict-mix is a function of priors, not procedure.
 
 ### Step 9 — Surface for human review
 

@@ -53,7 +53,7 @@ Entities whose very existence is an inference. Hypotheses are probabilistic cons
 
 The abstract type carries the structure shared by all hypothesis subtypes. It is not itself a concrete record type — no record exists whose declared type is `Hypothesis`. The abstract type captures shared structure that the four concrete subtypes inherit:
 
-- Stable identifier under provenance discipline ([Charter §2.3](../charter/constitutional-charter.md#23-provenance-integrity) pending; reference shape stabilizes when §2.3 is redacted).
+- Stable identifier under provenance discipline ([Charter §2.3](../charter/constitutional-charter.md#23-provenance-integrity), frozen v0.4 per [`decision-log §0017`](../charter/decision-log.md)).
 - Lifecycle position under [Charter §2.5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness). The six lifecycle operations (formation, merge, split, promotion, demotion, dissolution) are defined at the abstract-type level; subtype-specific composition rules surface in the subtype sections below.
 - Confidence and evidential independence ([Charter §2.6](../charter/constitutional-charter.md#26-evidential-independence-integrity) pending) — paired dimensions; see §2.6's redaction.
 - Inferential influence ([Charter §2.4](../charter/constitutional-charter.md#24-inferential-influence-disclosure) pending) — every assertion formed under a hypothesis's influence carries a structural declaration of that influence.
@@ -121,7 +121,7 @@ The following questions were recorded as open and have since been resolved by co
 - **Session duality** (formerly Open Modeling Question 1). Whether a session is a single entity with reconciliation, or two entities (`DeclaredSession` as Category I, `OperationalSession` as Category II). **Resolved** by [`decision-log.md` §0015 — Q1 resolution](../charter/decision-log.md): Candidate B (distinct entities). The Category I and Category II sections above reflect the resolution; subject_ref polymorphism implications are addressed in the cascade Q3 RFC, resolved by [`decision-log.md` §0016](../charter/decision-log.md).
 - **Subject reference polymorphism** (formerly Open Modeling Question 2 post-Q1-renumbering). Whether assertions carry a single polymorphic `subject_ref` field with discriminator or distinct per-category fields. **Resolved** by [`decision-log.md` §0016 — Q3 resolution](../charter/decision-log.md): Candidate B (distinct per-Category coarse fields with oneOf/union exclusivity). The Assertion entity section above reflects the resolution.
 
-<!-- TODO: After Invariant 2.3 (Provenance Integrity) is redacted, expand the section on identifier semantics to specify how provenance references compose across categories. -->
+<!-- Invariant 2.3 (Provenance Integrity) frozen v0.4 per `decision-log.md` §0017. The Assertion entity section above (post-Q3) carries the typed `subject_ref_*` reference structure that composes across categories. Identifier-semantics expansion is captured in the Assertion section + Charter §2.3 Structural Requirement subsection; no further Ontology revision required by §2.3 itself. -->
 
 <!-- TODO: After Invariant 2.5 (Hypothesis Lifecycle Explicitness) is redacted, expand the Category III section with the formal lifecycle state machine. -->
 
