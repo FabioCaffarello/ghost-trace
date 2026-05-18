@@ -1,6 +1,6 @@
 # Provenance Model
 
-**Status:** Scaffold. Pending committee redaction after Invariants 2.3 and 2.4 are redacted.
+**Status:** §Observational Provenance — Drafted post-Q3 ([`decision-log §0016`](../charter/decision-log.md)); anchored by Charter §2.3 frozen v0.4 ([`decision-log §0017`](../charter/decision-log.md)). §Inferential Provenance — Scaffold, pending Invariant 2.4 redaction.
 
 > This document formalizes the structure of provenance in Ghost Trace. The Charter establishes provenance as structure, not metadata ([Charter §1](../charter/constitutional-charter.md#1-thesis)). This document specifies what that structure is.
 
@@ -57,7 +57,7 @@ The graph itself is, like everything else in the substrate, derivable from the p
 3. **Influence at projection vs. substrate.** When a projection is rebuilt from the substrate, does its computation introduce influence edges? Or are influence edges only generated when influence is *operationally consequential*?
 4. **Cross-domain provenance.** When Ghost Trace is applied to a domain other than its first (e.g., market integrity surveillance), do provenance edges cross domains, or is each domain a separate provenance subgraph?
 
-<!-- TODO: After Invariant 2.3 is redacted, formalize the observational-provenance section with the structural requirement language used in the invariant. -->
+<!-- Invariant 2.3 frozen v0.4 per `decision-log.md` §0017. The §Observational Provenance section above carries the structural requirement language (typed-by-category edges; chain termination at Cat I primaries; transit through Cat II constructs and Cat III hypotheses); §2.3 binding text anchors it constitutionally. -->
 
 <!-- TODO: After Invariant 2.4 is redacted, formalize the inferential-provenance section in the same way. -->
 

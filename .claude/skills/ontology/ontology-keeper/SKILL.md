@@ -31,8 +31,8 @@ Apply in order. Do not skip steps.
 
 Identify which invariants the edit interacts with — frozen and pending. Use [`.claude/CLAUDE.md` §4](../../../CLAUDE.md) as the source of truth for frozen-vs-pending status.
 
-- For frozen invariants (§1, §2.1, §2.2): the edit must be consistent. Inconsistency with a frozen invariant is grounds for rejection, or for opening a charter-amendment RFC under [`amendments.md`](../../../../docs/charter/amendments.md).
-- For pending invariants (§2.3–§2.6, §3, §4): the edit must be consistent with the working text and must not commit to a position the working text leaves open.
+- For frozen invariants (§1, §2.1, §2.2, §2.3, §2.5, §4): the edit must be consistent. Inconsistency with a frozen invariant is grounds for rejection, or for opening a charter-amendment RFC under [`amendments.md`](../../../../docs/charter/amendments.md).
+- For pending invariants (§2.4, §2.6, §3): the edit must be consistent with the working text and must not commit to a position the working text leaves open.
 
 ### Step 2 — List open Ontology questions the edit touches
 
