@@ -1,6 +1,6 @@
 # RFC — Architecture: Schemas technology selection
 
-- **Status:** discussion
+- **Status:** accepted
 - **Authors:** committee
 - **Date:** 2026-05-19
 - **Type:** architecture
@@ -30,7 +30,7 @@ The schemas-technology selection is gating for any concrete schema-level work un
 
 - **[§2.4 Inferential Influence Disclosure](../../charter/constitutional-charter.md#24-inferential-influence-disclosure) + [§2.6 Evidential Independence Integrity](../../charter/constitutional-charter.md#26-evidential-independence-integrity) (pending — empirical pressure phase per [`§0022`](../../charter/decision-log.md))**: Protobuf is extensible via field-number reservation and optional fields, allowing forward-compatible additions for `influenced_by` edges (§2.4) and confidence / independence pairing (§2.6) when those invariants redact.
 
-The cost of not making this selection: no `.proto` (or `.avsc`, `.fbs`) files can exist; ingestion service work halts; the empirical-evidence-from-implementation feedback loop §2.4 / §2.6 redaction depends on cannot begin.
+The cost of not making this selection (technology dimension): no `.proto` (or `.avsc`, `.fbs`) files can exist, and ingestion service work halts. The procedural cost (Charter-governance dimension): the empirical-evidence-from-implementation feedback loop that §2.4 + §2.6 redaction depends on per [`§0022`](../../charter/decision-log.md) cannot begin.
 
 ## Constitutional Review
 
@@ -73,30 +73,31 @@ No. Selection is gating for all concrete schema-level work. Falsifiable by delet
 3. **`oneof`** used for [`§0016`](../../charter/decision-log.md) (Q3 resolution) `subject_ref_*` exclusivity on the Assertion entity.
 4. **Code generation:** `protoc-gen-go` for Go bindings (subject to the implementation-language RFC); other languages added via standard `protoc` plugins as the topology grows.
 5. **Evolution discipline:** Protobuf field-number reservation enforced; never reuse retired field numbers; never change field types in incompatible ways. Evolution policy detail deferred to a follow-on schemas-evolution-discipline RFC.
+6. **Time-typed fields.** Canonical-form-load-bearing time fields use `int64` Unix nanoseconds, not `google.protobuf.Timestamp`. Rationale: `int64` is bit-stable across all language bindings (no parsing layer between wire bytes and value); `Timestamp` carries nominal-type ergonomics at the cost of cross-binding parsing variability that can affect content-hash stability. `Timestamp` is reserved for non-canonical-form / projection-only fields.
+7. **Toolchain.** Adopt `buf` (the Buf CLI) for linting, breaking-change detection, and formatting. AP3 (field-number reuse forbidden) becomes a CI gate via `buf breaking` against a baseline ref, converting AP3 from a discipline obligation to mechanically enforced. Code-generation invocation (`protoc` directly vs `buf generate`) is deferred to the implementation-language RFC's toolchain decision.
 
 ## Alternatives Considered
 
-**Draft positions (to be tested in discussion phase):**
+Four alternatives evaluated. Three rejected as admissible-but-deferred (revisit conditions registered in Decision Record below as R-tech-1 through R-tech-4); one rejected on canonical-serialization-fragility grounds. Discussion-phase re-test recorded in [`schemas-technology-selection-evidence.md`](../discussion/schemas-technology-selection-evidence.md) Phase 2.
 
-- **Apache Avro.** Rejected at inception. Schemas-registry coupling adds an operational dependency at inception phase. Union types support §2.3 oneOf semantics but require runtime descriptor lookup, weakening the static categorical separation §2.2 codifies. Avro's strength is dynamic schemas evolution under registry mediation, which is exactly what §2.1 substrate-immutability does not benefit from.
+- **Apache Avro.** Rejected. The single-object encoding mode (Avro spec, c. 2014) allows registry-free use, weakening the original "registry coupling" framing the draft asserted. The structural objection that holds: Avro's typed-union mechanism (`union { Foo, Bar }`) requires descriptor consultation at decode time to identify which type a given payload carries, where Protobuf's `oneof` encodes the discriminator in the wire format. For §2.3 oneOf exclusivity, Protobuf's coupling between wire format and discriminator aligns more directly with §2.2's nominally-distinct-types principle. Revisit conditions: R-tech-2 (categorical type Protobuf cannot express) or R-tech-4 (schemas-evolution pattern field-number-reservation cannot accommodate).
 
-- **JSON-Schema-validated JSON serialization.** Rejected. JSON has no canonical serialization at the text layer; key ordering, whitespace, and number representation are implementation-defined. Content-addressing via JSON serialization is fragile across implementations and library versions. Workarounds (canonical-JSON specifications such as RFC 8785 JCS) reintroduce the canonical-form discipline Protobuf provides natively, plus the schemas-validation layer is structurally separate from the serialization layer — two tools where Protobuf is one.
+- **JSON-Schema-validated JSON serialization.** Rejected on canonical-serialization-fragility grounds (not deferred). JSON has no canonical serialization at the text layer per RFC 8259; key ordering, whitespace, and number representation are implementation-defined. RFC 8785 (JSON Canonicalization Scheme, 2020) defines a deterministic canonical form but adoption requires both producer and consumer to implement JCS faithfully and JCS does not cover all JSON-Schema-validated payloads cleanly (number-format edge cases). The schemas-validation layer is structurally separate from the serialization layer (validators run on parsed JSON; coupling is by convention). Protobuf collapses both layers into one canonical-by-construction tool. Revisit condition: R-tech-3 (canonical-serialization fragility under pinned-library-version + canonical-serialization-contract mitigation per AP5 — two empirically observed hash-divergence incidents required).
 
-- **Cap'n Proto.** Rejected at inception. Arena allocation and zero-copy semantics are operational complexity not warranted pre-load characterization. Multi-language ecosystem less mature than Protobuf's. May be revisited under a future RFC if throughput evidence demands zero-copy semantics.
+- **Cap'n Proto.** Rejected as admissible-but-deferred. Cap'n Proto's wire format is deterministic and its packed encoding is canonical; its `union` mechanism is structurally analogous to Protobuf's `oneof`. The arena-allocation and zero-copy properties are not required by any frozen invariant; inception-phase operational dependencies are minimized in favor of mature toolchain ecosystem. Revisit condition: R-tech-1 (throughput characterization at production-relevant scale demonstrates serialize+deserialize cost dominates ingestion path beyond a threshold).
 
-- **FlatBuffers.** Rejected at inception. Optimized for read-heavy workloads; §2.1 immutability + content-addressing characterizes write-once-read-many access, but the actual access patterns are not yet characterized empirically. Premature optimization for a workload not yet observed.
+- **FlatBuffers.** Rejected as admissible-but-deferred (same rejection-shape as Cap'n Proto). FlatBuffers' read-zero-copy design is real and well-documented; canonical serialization is deterministic modulo offset-table alignment choices. The read-zero-copy properties are not required by any frozen invariant; inception-phase work prioritizes operational simplicity over speculative read-path optimization for access patterns not yet characterized. Revisit condition: R-tech-1 (throughput characterization demands zero-copy reads).
 
-If only Protobuf had been considered, that itself would be a failure mode of the analysis. The four alternatives above are surfaced so the discussion phase can test the comparison rather than ratify a foregone conclusion.
+The admissible-but-deferred registrations (Cap'n Proto + FlatBuffers) follow the OMQ #2-2 B-substrate pattern per [`§0020`](../../charter/decision-log.md) — admissibility-preserved-with-revisit-threshold rather than structural rejection.
 
 ## Open Questions
 
 The RFC explicitly defers:
 
-- **Specific Protobuf version pin.** proto3 latest stable vs a pinned release. Discussion-phase choice.
-- **Code-generation toolchain.** `protoc` directly vs `buf` (the Buf CLI provides linting, breaking-change detection, formatting). Recommend exploration during discussion.
-- **Schemas-evolution policy beyond "never reuse field numbers."** A dedicated schemas-evolution-discipline RFC is likely follow-on work; not bundled here.
-- **Build-time vs commit-time code generation.** Standard practice is build-time; verify against the implementation-language RFC's toolchain decision before pinning.
-- **`google.protobuf.Timestamp` vs `int64` Unix nanoseconds for time-typed fields.** Both are common; tradeoffs (cross-language compatibility, content-hash stability under tooling changes) need testing in discussion.
+- **Specific Protobuf library-version pin.** The library version that produces canonical bytes is pinned per the implementation-language RFC's toolchain commitment; the exact version is decided there, not here.
+- **Schemas-evolution policy beyond "never reuse field numbers."** A dedicated schemas-evolution-discipline RFC is follow-on work; not bundled here. The follow-on RFC will codify (a) breaking-change classification, (b) deprecation procedure, (c) the canonical-serialization contract maintenance (per AP5 mitigation).
+- **Build-time vs commit-time code generation.** Standard practice is build-time; the final pinning is in the implementation-language RFC's toolchain decision.
+- **Cross-RFC coupling with implementation-language RFC.** Protobuf's mature code-generation ecosystem covers many languages but not all; the implementation-language RFC (second of three technology RFCs per [`§0022`](../../charter/decision-log.md)) inherits Protobuf as a constraint — the chosen language must have a maintained `protoc` plugin AND a faithful proto3 wire-format implementation (per AP5 — canonical-serialization bit-stability requirement). The implementation-language RFC's option space is constrained by this selection without itself being an explicit Charter commitment. Surface explicitly to the implementation-language RFC's discussion phase.
 
 ## Anti-Patterns to Avoid
 
@@ -110,11 +111,15 @@ By analogy to Charter [§2.1](../../charter/constitutional-charter.md#21-observa
 
 - **Generating code into the substrate.** Generated code (e.g. `*.pb.go` files from `protoc-gen-go`) is build output, not source. Commit the `.proto` source; generate the language-specific bindings at build time. Generated code in version control creates synchronization risk between the schemas layer and the bindings. Detectable: `.gitignore` covers generated artifacts; CI check that no generated bindings are committed.
 
-- **Hash-instability via tooling-version drift.** Content-hash computation depends on canonical serialization; canonical serialization depends on the Protobuf library implementation. Pin the implementation version per the implementation-language RFC; document the canonical-serialization contract; treat library upgrades as schemas-evolution events requiring explicit consideration.
+- **Hash-instability via tooling-version drift.** Content-hash computation depends on canonical serialization; canonical serialization depends on the Protobuf library implementation. A library version bump that changes default field-ordering behavior, unknown-fields handling, or default-value serialization rules silently invalidates historical content-hashes and violates §2.1 reconstructibility. Mitigation procedure: (a) pin the Protobuf library version per the implementation-language RFC's toolchain commitment; (b) document the canonical-serialization contract in a separate architecture document specifying the proto3 spec version + the library version that produces the canonical bytes; (c) treat library upgrades as schemas-evolution events governed by the follow-on schemas-evolution-discipline RFC; (d) CI gate on canonical-serialization regression — golden-file test comparing serialized bytes for a representative message set across versions. Detectable: golden-file test diverges; content-hash recomputation on read fails for historical records.
+
+- **Use of `map<K, V>` in canonical-form-load-bearing message types.** proto3's `map<K, V>` field type does not have canonical iteration order across all language bindings; serialization of a map field can produce different byte sequences for the same logical content across implementations or even across runs of the same implementation. Use of `map<K, V>` in canonical-form-load-bearing message types breaks content-hash stability and violates §2.1 reconstructibility. Mitigation: encode key-value collections as `repeated SubMessage { key, value }` with explicit sort-order convention (ascending by key field, ties broken by value). Detectable: grep `.proto` files for `map<` declarations in categorical-message-type definitions; reject in CI gate.
 
 ## Migration and Backward Compatibility
 
-No historical schemas exist. Forward-looking decision. Subsequent commits (separate from this RFC; gated on this RFC's acceptance) will create the initial `.proto` files for Cat I / Cat II / Cat III + Assertion + provenance edges per [`§0022`](../../charter/decision-log.md) Consequences. No replay-model migration applies because no prior substrate state exists.
+**Inception phase.** No historical schemas exist. Forward-looking decision. Subsequent commits (separate from this RFC; gated on this RFC's acceptance) will create the initial `.proto` files for Cat I / Cat II / Cat III + Assertion + provenance edges per [`§0022`](../../charter/decision-log.md) Consequences. No replay-model migration applies because no prior substrate state exists.
+
+**Schemas-technology reversal cost (forward-looking).** Forward-compatibility properties (Protobuf field-number reservation) protect against intra-technology evolution but do not protect against inter-technology migration. Switching from Protobuf to a different schemas technology (Cap'n Proto, FlatBuffers, Avro, JSON-Schema-validated JSON) post-substrate-commit requires re-serialization of all historical Cat I records, which is a §2.1-load-bearing operation: historical bytes must be regenerable under the new technology, which conflicts with content-addressing if hashes are part of substrate references. Practical implication: the inception-phase selection has more weight than the "admissible-but-deferred" framing in Alternatives suggests. The reversal conditions R-tech-1 through R-tech-4 in the Decision Record characterize the threshold for accepting the migration cost.
 
 ## References
 
@@ -127,4 +132,21 @@ No historical schemas exist. Forward-looking decision. Subsequent commits (separ
 
 ## Decision Record
 
-Empty. Populated at status `accepted` after discussion phase completes and the resolution-phase commit records the final commitment. Per [`§0022`](../../charter/decision-log.md) Consequences, the acceptance commit advances `status: draft` → `status: discussion` → `status: accepted` via the [`§0011`](../../charter/decision-log.md)–[`§0021`](../../charter/decision-log.md) pattern; discussion phase is NOT bypassed.
+Resolved at [`decision-log §0024`](../../charter/decision-log.md): **Protocol Buffers (proto3)** adopted as schemas technology for the [`schemas/`](../../../schemas/) subtree. The committee adopted the discussion-phase recommendation with the eight resolution-phase modifications enacted in this commit (Alternatives FC5/FC6/FC7 operationalized; ES5 Motivation split; AP5 expanded with concrete mitigation procedure; AP6 added — `map<K, V>` ban; F1 added to Open Questions — implementation-language RFC coupling; F4 resolved in Proposal — `int64` Unix nanoseconds for canonical time fields; F5 resolved in Proposal — `buf` adopted as toolchain; F6 added to Migration — schemas-technology reversal cost) plus two committee extensions.
+
+### Committee extensions
+
+1. **Cap'n Proto + FlatBuffers admissible-but-deferred registration.** Per [`§0020`](../../charter/decision-log.md) OMQ #2-2 B-substrate precedent and [`§0021`](../../charter/decision-log.md) OMQ #3-2 β precedent. Both alternatives are structurally admissible (deterministic canonical serialization; union mechanisms structurally analogous to Protobuf's `oneof`); dominated at inception phase by Protobuf on mature-toolchain ecosystem, operational-simplicity, and §2.3 oneOf-as-wire-format-primitive alignment. Pattern: third + fourth instance of admissible-but-deferred registration after OMQ #2-2 / OMQ #3-2; the pattern is now established for non-ontology RFCs (technology selection) in addition to ontology resolutions. Methodologically distinct from JSON-Schema-validated-JSON rejection (rejected on canonical-serialization-fragility — structural concern, not deferred).
+
+2. **RFC procedural-divergence finding (informational, not gated on this RFC's acceptance).** Discussion-phase work surfaced two divergences between [`docs/rfcs/README.md`](../README.md) + [`rfc-author` skill §4](../../../.claude/skills/workflow/rfc-author/SKILL.md) and actual practice: (a) README claims "No RFCs have yet been accepted" which is stale ([`§0007`](../../charter/decision-log.md), [`§0010`](../../charter/decision-log.md), [`§0015`](../../charter/decision-log.md), [`§0016`](../../charter/decision-log.md), [`§0020`](../../charter/decision-log.md), [`§0021`](../../charter/decision-log.md) reference accepted RFCs); (b) rfc-author §4 specifies that accepted RFCs are renumbered and moved out of `docs/rfcs/draft/`, but actual practice leaves accepted RFCs in `draft/` with only the `Status:` field updated. This RFC follows actual practice (status `discussion` → `accepted`; file remains in `docs/rfcs/draft/`; no renumbering applied). The README + rfc-author §4 divergences are surfaced for committee resolution as separate follow-on work; not bundled with this RFC's acceptance.
+
+### Reversal conditions
+
+The selection stands subject to four named reversal conditions per [`schemas-technology-selection-evidence.md`](../discussion/schemas-technology-selection-evidence.md) Phase 5. Any single condition firing triggers a follow-on RFC reconsidering the selection.
+
+- **R-tech-1 — Throughput pressure.** Characterization at production-relevant scale demonstrates that proto3 serialize+deserialize cost dominates the ingest path. Threshold: serialize+deserialize >40% of single-message ingestion CPU at characterized load. (Reconsider Cap'n Proto, FlatBuffers.)
+- **R-tech-2 — Inexpressible categorical type.** A categorical type emerges (e.g. sum-types with structural subtyping) that Protobuf cannot encode cleanly. Threshold: explicit RFC proposing the type and demonstrating Protobuf cannot encode it cleanly. (Reconsider Avro union types.)
+- **R-tech-3 — Canonical-serialization fragility.** Pinned-library-version + canonical-serialization-contract (per AP5 mitigation) prove insufficient — two empirically observed hash-divergence incidents across library versions. (Reconsider JSON-Schema-validated JSON with JCS.)
+- **R-tech-4 — Schemas-evolution pattern.** A breaking-change pattern emerges that Protobuf's field-number-reservation discipline cannot accommodate. Threshold: explicit RFC documenting the pattern and the field-number-reservation failure mode. (Reconsider Avro registry-mediated evolution.)
+
+No reversal condition fires at acceptance.
