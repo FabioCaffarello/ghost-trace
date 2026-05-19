@@ -1,8 +1,8 @@
 # RFC — Ontology Open Question (provenance-model OMQ #2): Decay of influence
 
-- **Status:** discussion
-- **Authors:** Ghost Trace committee (§2.4 pre-Gate)
-- **Date:** 2026-05-18
+- **Status:** accepted
+- **Authors:** Ghost Trace committee (§2.4 pre-Gate; resolution at [`decision-log §0020`](../../charter/decision-log.md))
+- **Date:** 2026-05-18 (opened); 2026-05-19 (resolved)
 - **Type:** ontology-revision
 - **Affects:** [`docs/ontology/provenance-model.md`](../../ontology/provenance-model.md) (§Inferential Provenance — influence propagation rules; §Open Modeling Questions OMQ #2 closed by resolution); [Charter §2.4](../../charter/constitutional-charter.md#24-inferential-influence-disclosure) (pending — binding text depends on this resolution); [Charter §2.5](../../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) (frozen v0.3 — Cat III hypothesis lifecycle events are influencers; their demotion semantics intersect with OMQ #2 candidate C); [`ontology-revision-layer-b-deep-criterion`](./ontology-revision-layer-b-deep-criterion.md) (on hold per [`§0011`](../../charter/decision-log.md); OMQ #2 resolution feeds Layer B's deep criterion specification per [`§0017`](../../charter/decision-log.md) Methodological Observation 2)
 
@@ -203,4 +203,10 @@ No prior committed records to migrate; forward-looking. Asymmetry in lock-in:
 
 ## Decision Record
 
-This RFC is `discussion`. Resolution is two further prompts (OMQ #2 discussion synthesis → OMQ #2 resolution commit). At resolution, a decision-log entry records the candidate selected; `provenance-model.md` §Inferential Provenance is updated to encode the resolution; OMQ #2 row in §Open Modeling Questions is closed with a link to the resolution entry. Status moves `discussion` → `accepted` at that time.
+Resolved at [`decision-log §0020`](../../charter/decision-log.md): **Candidate C — decay via §2.5 lifecycle event supersession**. The committee adopted Candidate C with three committee extensions:
+
+1. **B-substrate admissibility acknowledged but dominated.** B-projection collapsed to rejected Candidate D shape per discussion Finding 1; B-substrate registered as admissible-but-dominated (methodologically distinct from D's structural-incoherence rejection). Pattern preserves the "rejected dominated" vs "rejected incoherent" distinction for future RFCs.
+2. **No supersession-encoding glossary entry.** Existing canonical terms (`demotion`, `hypothesis lifecycle event`) suffice; supersession is read from §2.5-committed lifecycle events, not §2.4-original vocabulary. Aligns with Q3-2 (structural mechanism, no new entries); contrasts Q1-2 (entity types added).
+3. **OMQ #3 cascade-triggered.** Per discussion Finding 6 (high cascade probability under Candidate C) + [`§0014`](../../charter/decision-log.md) lazy methodology + [`§0015`](../../charter/decision-log.md)→[`§0016`](../../charter/decision-log.md) cascade precedent, [`ontology-revision-omq3-influence-projection-vs-substrate`](./ontology-revision-omq3-influence-projection-vs-substrate.md) opened at `discussion` status in the §0020 commit. OMQ #3 becomes pre-Gate dependency for §2.4 redaction Step 1.1 alongside Q2 (Identity tiers) forward-reference and Layer B activation reconciliation.
+
+Provenance-model.md §Inferential Provenance updated to encode Candidate C per §0020 Phase 2; OMQ #2 row moved from §Open Modeling Questions to new §Resolved Modeling Questions section; row 3 (OMQ #3) annotated with cascade trigger; Status banner refreshed. CLAUDE.md §4 status table narrative updated. No glossary changes. Layer B follow-on RFC remains on hold per [`§0011`](../../charter/decision-log.md); OMQ #2 partially-discharges its Q5 dependency for the "decaying?" axis (Q5 "transitive?" axis remains open per discussion Finding 7).

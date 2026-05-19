@@ -1,6 +1,6 @@
 # Provenance Model
 
-**Status:** §Observational Provenance — Drafted post-Q3 ([`decision-log §0016`](../charter/decision-log.md)); anchored by Charter §2.3 frozen v0.4 ([`decision-log §0017`](../charter/decision-log.md)). §Inferential Provenance — Scaffold, pending Invariant 2.4 redaction.
+**Status:** §Observational Provenance — Drafted post-Q3 ([`decision-log §0016`](../charter/decision-log.md)); anchored by Charter §2.3 frozen v0.4 ([`decision-log §0017`](../charter/decision-log.md)). §Inferential Provenance — Drafted post-OMQ #2 ([`decision-log §0020`](../charter/decision-log.md) — decay via §2.5 lifecycle event supersession; Candidate C); Charter-level anchor pending §2.4 redaction. §Open Modeling Questions row 3 (OMQ #3 — Influence at projection vs substrate) opened as cascade per §0020.
 
 > This document formalizes the structure of provenance in Ghost Trace. The Charter establishes provenance as structure, not metadata ([Charter §1](../charter/constitutional-charter.md#1-thesis)). This document specifies what that structure is.
 
@@ -29,12 +29,14 @@ Answers the question: **"Which prior assertions influenced the formation of this
 
 This is the form of provenance that conventional systems do not maintain. The Charter requires it because without it, the system cannot distinguish between belief grounded in independent evidence and belief inherited recursively from earlier conclusions.
 
-To be formalized:
-- The representation of influence references.
-- The propagation rules: how influence transitively accumulates through chains of derivation.
-- The relationship to evidential independence (Invariant 2.6 — pending): inferential provenance is the structural input to independence computation.
+Per [`decision-log §0020`](../charter/decision-log.md) (OMQ #2 resolution — decay via §2.5 lifecycle event supersession; Candidate C):
 
-Per [`decision-log.md` §0016](../charter/decision-log.md) (Q3 resolution), inferential influence references via Assertion's `subject_ref_construct` (Cat II) or `subject_ref_hypothesis` (Cat III) fields are typed-by-category; the typed-edge structure carries through the inferential provenance graph as well. Substantive §Inferential Provenance content remains pending §2.4 binding text.
+- **Influence reference structure.** Every Assertion formed under influence carries one or more `influenced_by` edges referencing Category III hypotheses (or Category II constructs whose own provenance reaches Category III). The edge is committed structurally at formation time and immutable per [Charter §2.1 frozen](../charter/constitutional-charter.md#21-observational-integrity).
+- **Propagation rules.** Influence accumulates transitively through chains of derivation: when Assertion A is `influenced_by` Hypothesis H₁, and H₁ was formed using observations and prior hypotheses, A's inferential provenance closure includes H₁'s antecedents to the extent they affected H₁'s formation. (Specific transitive scope per §Open Modeling Question 3 — pending; cascade-triggered per [`§0020`](../charter/decision-log.md).)
+- **Decay via §2.5 lifecycle event supersession.** The current operational state of an `influenced_by` edge is a Category II projection over (a) the substrate-committed edge per §2.1 and (b) the referenced hypothesis's §2.5 lifecycle event chain. When the referenced hypothesis has a committed demotion event per [Charter §2.5 frozen v0.3 Demotion subsection](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness), the edge state is annotated as superseded for projection-time queries. The substrate-committed edge itself is never mutated; supersession is a derived projection state per [§2.5 BC5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) (lifecycle events are Category I records about Category III entities).
+- **Relationship to evidential independence (Invariant 2.6 — pending).** Inferential provenance, post-supersession-filtering, is the structural input to independence computation. The evidence-staleness or influence-saturation computation per Layer B's deep criterion (per [`ontology-revision-layer-b-deep-criterion`](../rfcs/draft/ontology-revision-layer-b-deep-criterion.md), follow-on RFC on hold pending §2.4 + §2.6) consumes the superseded-state-annotated graph directly per §2.5 BC5.
+
+Per [`decision-log.md` §0016](../charter/decision-log.md) (Q3 resolution), inferential influence references via Assertion's `subject_ref_construct` (Cat II) or `subject_ref_hypothesis` (Cat III) fields are typed-by-category; the typed-edge structure carries through the inferential provenance graph as well. Substantive §Inferential Provenance content is now codified above per OMQ #2 Candidate C; further Charter-level constraints will be anchored by [Charter §2.4](../charter/constitutional-charter.md#24-inferential-influence-disclosure) binding text (pending committee redaction).
 
 ## The Provenance Graph
 
@@ -53,9 +55,14 @@ The graph itself is, like everything else in the substrate, derivable from the p
 ## Open Modeling Questions
 
 1. **Granularity of derivation.** When a signal is computed over a window of thousands of events, does its observational provenance enumerate every contributing event, or reference the window definition? The former is precise but storage-heavy; the latter is compact but adds an indirection.
-2. **Decay of influence.** Should inferential influence have a temporal decay, or does an assertion remain "influenced by" a hypothesis indefinitely? Decision pending.
-3. **Influence at projection vs. substrate.** When a projection is rebuilt from the substrate, does its computation introduce influence edges? Or are influence edges only generated when influence is *operationally consequential*?
+3. **Influence at projection vs. substrate.** When a projection is rebuilt from the substrate, does its computation introduce influence edges? Or are influence edges only generated when influence is *operationally consequential*? **Cascade-triggered** by OMQ #2 resolution per [`decision-log §0020`](../charter/decision-log.md); RFC opened at `discussion` status at [`ontology-revision-omq3-influence-projection-vs-substrate`](../rfcs/draft/ontology-revision-omq3-influence-projection-vs-substrate.md).
 4. **Cross-domain provenance.** When Ghost Trace is applied to a domain other than its first (e.g., market integrity surveillance), do provenance edges cross domains, or is each domain a separate provenance subgraph?
+
+## Resolved Modeling Questions
+
+The following questions were recorded as open and have since been resolved by committee. Each entry preserves the question and links to the decision-log entry that records the resolution.
+
+- **Decay of influence** (formerly Open Modeling Question 2). Whether inferential influence has a temporal decay, or an assertion remains "influenced by" a hypothesis indefinitely. **Resolved** by [`decision-log §0020`](../charter/decision-log.md): Candidate C — decay via §2.5 lifecycle event supersession. The §Inferential Provenance subsection above reflects the resolution; the substrate-committed `influenced_by` edge is never mutated, and supersession is a derived Category II projection over §2.5 lifecycle events per §2.5 BC5.
 
 <!-- Invariant 2.3 frozen v0.4 per `decision-log.md` §0017. The §Observational Provenance section above carries the structural requirement language (typed-by-category edges; chain termination at Cat I primaries; transit through Cat II constructs and Cat III hypotheses); §2.3 binding text anchors it constitutionally. -->
 
