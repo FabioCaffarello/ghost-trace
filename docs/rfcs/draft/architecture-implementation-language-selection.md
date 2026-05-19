@@ -1,6 +1,6 @@
 # RFC — Architecture: Implementation language selection
 
-- **Status:** draft
+- **Status:** discussion
 - **Authors:** committee
 - **Date:** 2026-05-19
 - **Type:** architecture
@@ -128,6 +128,7 @@ By analogy to Charter [§2.1](../../charter/constitutional-charter.md#21-observa
 - [`docs/rfcs/draft/architecture-schemas-technology-selection.md`](./architecture-schemas-technology-selection.md) (accepted at [`§0024`](../../charter/decision-log.md); F1 + AP5 inheritance).
 - [`docs/ontology/entity-model.md`](../../ontology/entity-model.md) Cat I / II / III sections (package-per-category discipline maps to these).
 - [`.claude/CLAUDE.md`](../../../.claude/CLAUDE.md) §6.4 (implementation gate, cleared at [`§0022`](../../charter/decision-log.md)).
+- [`docs/rfcs/discussion/implementation-language-selection-evidence.md`](../discussion/implementation-language-selection-evidence.md) — discussion-phase evidence file (six numbered findings, recommendation with six proposed modifications, four reversal conditions).
 
 ## Decision Record
 
