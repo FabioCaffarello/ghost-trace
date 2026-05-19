@@ -1,6 +1,6 @@
 # RFC — Architecture: Schemas technology selection
 
-- **Status:** draft
+- **Status:** discussion
 - **Authors:** committee
 - **Date:** 2026-05-19
 - **Type:** architecture
@@ -123,6 +123,7 @@ No historical schemas exist. Forward-looking decision. Subsequent commits (separ
 - [`docs/ontology/entity-model.md`](../../ontology/entity-model.md) Assertion entity post-§0016; Cat I / II / III sections post-§0015 / §0023.
 - [`docs/ontology/provenance-model.md`](../../ontology/provenance-model.md) post-OMQ #2-C + OMQ #3-α.
 - [`.claude/CLAUDE.md`](../../../.claude/CLAUDE.md) §6.4 (implementation gate, amended at v0.4.2 per [`§0022`](../../charter/decision-log.md)).
+- [`docs/rfcs/discussion/schemas-technology-selection-evidence.md`](../discussion/schemas-technology-selection-evidence.md) — discussion-phase evidence file (six numbered findings, recommendation with eight proposed modifications, four reversal conditions).
 
 ## Decision Record
 
