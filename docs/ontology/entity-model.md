@@ -107,11 +107,7 @@ This distinction is constitutional, not merely architectural. See [Charter Invar
 
 ## Open Modeling Questions
 
-The following questions are recorded as open and intentionally not resolved here:
-
-1. **Identity tiers.** The conversation introduced `ActorRef`, `Identity`, and `Cluster` as three tiers of identity. Their formalization is pending.
-
-These questions will be answered in committee redaction. They are not resolved here.
+(None remaining.) All Open Modeling Questions previously recorded in this section have been resolved; entries are preserved under §Resolved Modeling Questions below with links to the decision-log entries that record each resolution.
 
 ## Resolved Modeling Questions
 
@@ -120,6 +116,7 @@ The following questions were recorded as open and have since been resolved by co
 - **Subtypes of hypothesis** (formerly Open Modeling Question 3). Whether `BehavioralCluster`, `CoordinationRing`, `CampaignHypothesis`, and `AutomationGroup` are distinct types within Category III or are values of a single discriminator. **Resolved** by [`decision-log.md` §0010 — Q2 resolution](../charter/decision-log.md): Candidate A.2 (abstract type `Hypothesis` with four concrete sibling subtypes). The Category III section above reflects the resolution.
 - **Session duality** (formerly Open Modeling Question 1). Whether a session is a single entity with reconciliation, or two entities (`DeclaredSession` as Category I, `OperationalSession` as Category II). **Resolved** by [`decision-log.md` §0015 — Q1 resolution](../charter/decision-log.md): Candidate B (distinct entities). The Category I and Category II sections above reflect the resolution; subject_ref polymorphism implications are addressed in the cascade Q3 RFC, resolved by [`decision-log.md` §0016](../charter/decision-log.md).
 - **Subject reference polymorphism** (formerly Open Modeling Question 2 post-Q1-renumbering). Whether assertions carry a single polymorphic `subject_ref` field with discriminator or distinct per-category fields. **Resolved** by [`decision-log.md` §0016 — Q3 resolution](../charter/decision-log.md): Candidate B (distinct per-Category coarse fields with oneOf/union exclusivity). The Assertion entity section above reflects the resolution.
+- **Identity tiers** (formerly Open Modeling Question 1 post-Q1+Q3-resolution renumbering). Whether the three identity tiers (`ActorRef`, `Identity`, `Cluster`) introduced informally in this document require formal multi-tier specification within Charter scope. **Resolved** by [`decision-log.md` §0023 — Q2 (Identity tiers) resolution](../charter/decision-log.md): inception-phase single-tier `actor_ref` adopted on Cat I primary observations and propagated via the typed `subject_ref_*` chain per [`§0016`](../charter/decision-log.md); multi-tier formalization (`ActorRef` + `Identity` + `Cluster`) deferred to ordinary Ontology RFC discipline as non-Charter Ontology evolution. The Q2 forward-reference contract at [§2.3 frozen v0.4 BC4](../charter/constitutional-charter.md#23-provenance-integrity) + [`§0017`](../charter/decision-log.md) Resolution 4 is satisfied (closed, not superseded).
 
 <!-- Invariant 2.3 (Provenance Integrity) frozen v0.4 per `decision-log.md` §0017. The Assertion entity section above (post-Q3) carries the typed `subject_ref_*` reference structure that composes across categories. Identifier-semantics expansion is captured in the Assertion section + Charter §2.3 Structural Requirement subsection; no further Ontology revision required by §2.3 itself. -->
 
