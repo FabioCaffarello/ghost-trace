@@ -1,8 +1,8 @@
 # RFC — Ontology Open Question (provenance-model OMQ #3): Influence at projection vs substrate
 
-- **Status:** discussion
-- **Authors:** Ghost Trace committee (OMQ #2 cascade enactment; [`decision-log §0020`](../../charter/decision-log.md))
-- **Date:** 2026-05-19
+- **Status:** accepted
+- **Authors:** Ghost Trace committee (OMQ #2 cascade enactment per [`decision-log §0020`](../../charter/decision-log.md); resolution at [`decision-log §0021`](../../charter/decision-log.md))
+- **Date:** 2026-05-19 (opened and resolved same day)
 - **Type:** ontology-revision
 - **Affects:** [`docs/ontology/provenance-model.md`](../../ontology/provenance-model.md) (§Inferential Provenance — influence-edge generation timing; §Open Modeling Questions OMQ #3 closed by resolution); [Charter §2.4](../../charter/constitutional-charter.md#24-inferential-influence-disclosure) (pending — binding text depends on this resolution alongside OMQ #2 outcome); [`ontology-revision-omq2-decay-of-influence`](./ontology-revision-omq2-decay-of-influence.md) (accepted at [`§0020`](../../charter/decision-log.md) — Candidate C; this RFC is its cascade enactment per [`§0015`](../../charter/decision-log.md) precedent).
 
@@ -153,4 +153,11 @@ No prior committed records to migrate; forward-looking. Asymmetry in lock-in:
 
 ## Decision Record
 
-This RFC is `discussion`. Resolution is two further prompts (OMQ #3 discussion synthesis → OMQ #3 resolution commit). At resolution, a decision-log entry records the candidate selected; `provenance-model.md` §Inferential Provenance is updated to encode the resolution alongside OMQ #2-C; OMQ #3 row in §Open Modeling Questions is moved to §Resolved Modeling Questions with a link to the resolution entry. Status moves `discussion` → `accepted` at that time.
+Resolved at [`decision-log §0021`](../../charter/decision-log.md): **Candidate α — substrate-time generation**. The committee adopted Candidate α with two committee extensions:
+
+1. **β admissible-but-dominated registration.** Per OMQ #2-2 B-substrate precedent. β admissible under Q1 determinism explicit commitment but dominated by α on cascade-inherited pressure alignment (OMQ #3-1 Finding 1), §1 Thesis substrate-directness (Finding 2), Layer B specification cost (Finding 4), and §2.1 compliance clarity (α §2.1-clean; β §2.1-inapplicable-by-construction). Methodologically distinct from γ rejection (γ rejected as structurally incoherent; β rejected as dominated). Second instance of admissible-but-dominated registration after OMQ #2-2 B-substrate.
+2. **No revision to §Inferential Provenance substantive prose.** Per F-SCAFFOLD-1: [`§0020`](../../charter/decision-log.md) Candidate C codification at §Inferential Provenance is structurally α-aligned ("Every Assertion formed under influence carries one or more `influenced_by` edges..."). Under α resolution, the four substantive bullets stand. Only a short acknowledgment clause was added at Phase 2.1 ratifying the substrate-side reading under §0021.
+
+[`§0020`](../../charter/decision-log.md) **cascade fully discharges**. OMQ #2 ([`§0020`](../../charter/decision-log.md)) triggered OMQ #3; OMQ #3 (this RFC, [`§0021`](../../charter/decision-log.md)) resolves. No further cascades anticipated before §2.4 redaction. The two-cascade chain (Q1→Q3 per [`§0015`](../../charter/decision-log.md)→[`§0016`](../../charter/decision-log.md); OMQ #2→OMQ #3 per [`§0020`](../../charter/decision-log.md)→[`§0021`](../../charter/decision-log.md)) is empirically complete. Carry-forwards: Q2 (Identity tiers) remains forward-referenced; Layer B follow-on RFC remains on hold (Q5 "decaying?" axis fully discharged; Q5 "transitive?" axis remains open); ontology.md Q5-transitive noted as §2.4 Step 1.1 cascade candidate.
+
+provenance-model.md §Inferential Provenance acknowledgment added per §0021 Phase 2.1; §Open Modeling Questions row 3 moved to §Resolved Modeling Questions; Status banner refreshed. CLAUDE.md §4 status table narrative updated. No glossary changes.

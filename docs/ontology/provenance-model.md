@@ -1,6 +1,6 @@
 # Provenance Model
 
-**Status:** §Observational Provenance — Drafted post-Q3 ([`decision-log §0016`](../charter/decision-log.md)); anchored by Charter §2.3 frozen v0.4 ([`decision-log §0017`](../charter/decision-log.md)). §Inferential Provenance — Drafted post-OMQ #2 ([`decision-log §0020`](../charter/decision-log.md) — decay via §2.5 lifecycle event supersession; Candidate C); Charter-level anchor pending §2.4 redaction. §Open Modeling Questions row 3 (OMQ #3 — Influence at projection vs substrate) opened as cascade per §0020.
+**Status:** §Observational Provenance — Drafted post-Q3 ([`decision-log §0016`](../charter/decision-log.md)); anchored by Charter §2.3 frozen v0.4 ([`decision-log §0017`](../charter/decision-log.md)). §Inferential Provenance — Drafted post-OMQ #2 ([`decision-log §0020`](../charter/decision-log.md) — decay via §2.5 lifecycle event supersession; Candidate C) and post-OMQ #3 ([`decision-log §0021`](../charter/decision-log.md) — substrate-time generation; Candidate α); Charter-level anchor pending §2.4 redaction. §Open Modeling Questions: rows 2 and 3 closed (moved to §Resolved Modeling Questions); row 1 (Granularity of derivation) and row 4 (Cross-domain provenance) remain open. §0020 cascade fully discharged.
 
 > This document formalizes the structure of provenance in Ghost Trace. The Charter establishes provenance as structure, not metadata ([Charter §1](../charter/constitutional-charter.md#1-thesis)). This document specifies what that structure is.
 
@@ -38,6 +38,8 @@ Per [`decision-log §0020`](../charter/decision-log.md) (OMQ #2 resolution — d
 
 Per [`decision-log.md` §0016](../charter/decision-log.md) (Q3 resolution), inferential influence references via Assertion's `subject_ref_construct` (Cat II) or `subject_ref_hypothesis` (Cat III) fields are typed-by-category; the typed-edge structure carries through the inferential provenance graph as well. Substantive §Inferential Provenance content is now codified above per OMQ #2 Candidate C; further Charter-level constraints will be anchored by [Charter §2.4](../charter/constitutional-charter.md#24-inferential-influence-disclosure) binding text (pending committee redaction).
 
+Per [`decision-log §0021`](../charter/decision-log.md) (OMQ #3 resolution — substrate-time generation; Candidate α): the `influenced_by` edge is committed at formation event time as a Category I substrate record (not derived at projection time from formation events). §2.1 immutability applies to the edge directly. This commitment is consistent with the §Inferential Provenance prose above ("Every Assertion formed under influence carries one or more `influenced_by` edges...") which already encodes substrate-side commitment per OMQ #2 Candidate C codification; OMQ #3 resolution ratifies the substrate-side reading explicitly.
+
 ## The Provenance Graph
 
 Provenance in Ghost Trace forms a directed acyclic graph. Nodes are records (observations, operational constructs, hypotheses, assertions). Edges are typed and come in at least two varieties:
@@ -55,7 +57,6 @@ The graph itself is, like everything else in the substrate, derivable from the p
 ## Open Modeling Questions
 
 1. **Granularity of derivation.** When a signal is computed over a window of thousands of events, does its observational provenance enumerate every contributing event, or reference the window definition? The former is precise but storage-heavy; the latter is compact but adds an indirection.
-3. **Influence at projection vs. substrate.** When a projection is rebuilt from the substrate, does its computation introduce influence edges? Or are influence edges only generated when influence is *operationally consequential*? **Cascade-triggered** by OMQ #2 resolution per [`decision-log §0020`](../charter/decision-log.md); RFC opened at `discussion` status at [`ontology-revision-omq3-influence-projection-vs-substrate`](../rfcs/draft/ontology-revision-omq3-influence-projection-vs-substrate.md).
 4. **Cross-domain provenance.** When Ghost Trace is applied to a domain other than its first (e.g., market integrity surveillance), do provenance edges cross domains, or is each domain a separate provenance subgraph?
 
 ## Resolved Modeling Questions
@@ -63,6 +64,7 @@ The graph itself is, like everything else in the substrate, derivable from the p
 The following questions were recorded as open and have since been resolved by committee. Each entry preserves the question and links to the decision-log entry that records the resolution.
 
 - **Decay of influence** (formerly Open Modeling Question 2). Whether inferential influence has a temporal decay, or an assertion remains "influenced by" a hypothesis indefinitely. **Resolved** by [`decision-log §0020`](../charter/decision-log.md): Candidate C — decay via §2.5 lifecycle event supersession. The §Inferential Provenance subsection above reflects the resolution; the substrate-committed `influenced_by` edge is never mutated, and supersession is a derived Category II projection over §2.5 lifecycle events per §2.5 BC5.
+- **Influence at projection vs. substrate** (formerly Open Modeling Question 3, cascade-triggered by OMQ #2 resolution). Whether `influenced_by` edges are generated at substrate event time or computed at projection time from substrate event chain. **Resolved** by [`decision-log §0021`](../charter/decision-log.md): Candidate α — substrate-time generation. `influenced_by` edges are committed at formation event time as Category I substrate facts; projection rebuild reads edges from substrate deterministically. Candidate β (projection-time generation) is admissible under Q1 determinism explicit commitment but dominated by α on cascade-inherited pressure alignment (OMQ #3-1 Finding 1), §1 Thesis substrate-directness (Finding 2), Layer B specification cost (Finding 4), and §2.1 compliance clarity. The §Inferential Provenance subsection above reflects the resolution.
 
 <!-- Invariant 2.3 frozen v0.4 per `decision-log.md` §0017. The §Observational Provenance section above carries the structural requirement language (typed-by-category edges; chain termination at Cat I primaries; transit through Cat II constructs and Cat III hypotheses); §2.3 binding text anchors it constitutionally. -->
 
