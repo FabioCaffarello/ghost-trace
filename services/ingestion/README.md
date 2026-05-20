@@ -306,6 +306,28 @@ Exit codes: **0** success (including empty results); **2** tool/configuration er
 
 **Scope at this layer (per §0052):** Limit/Offset paging is sufficient for inception-phase substrate sizes. Cursor-based paging (resumable across substrate growth between calls) is deferred until operational pressure surfaces.
 
+## `summarize-hypotheses` CLI
+
+Third binary in the **read-only** classification (per [`§0053`](../../docs/charter/decision-log.md)). Discharges the §0052 named carry-forward "Aggregate counters / histograms". Returns counts of every `BehavioralClusterFormation` in the substrate grouped by projected state.
+
+```sh
+make summarize-hypotheses-build                                          # builds ./bin/summarize-hypotheses
+
+# Per-state counts of every formation in the substrate
+./bin/summarize-hypotheses -db ./ghost-trace.db -blobs ./blobs
+```
+
+Output is structured JSON: `total` (formation count) + `by_state` (map from state value to count). Every State key is present (even at zero) — the wire shape is predictable so callers do not need to distinguish "missing key" from "zero".
+
+**Equivalence invariant per §0053:** for every State value `s`, `by_state[s]` equals `len(list-hypotheses -state s)`. The equivalence is tested in `internal/projection/counts_test.go` and defends against precedence-rule drift between the count path and the list path. Both paths share `ProjectAll` (per [`§0052`](../../docs/charter/decision-log.md)).
+
+| Option | Default | Notes |
+|---|---|---|
+| `-db` | `./ghost-trace.db` | SQLite primary-event-log path. |
+| `-blobs` | `./blobs` | Content-addressed blob-store directory. |
+
+Exit codes: **0** success (including empty substrate); **2** tool/configuration error.
+
 ## `orphan-cleanup` CLI
 
 Operator-invoked tool to delete orphan blobs (per [`§0041`](../../docs/charter/decision-log.md)). Per [`§0033` Anti-Patterns](../../docs/architecture/operational-ops.md), orphan deletion MUST be operator-invoked with explicit confirmation; this tool implements that discipline.
