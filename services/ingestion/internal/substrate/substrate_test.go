@@ -260,6 +260,79 @@ func TestAppendPairIdempotent(t *testing.T) {
 	}
 }
 
+func TestWalkEventsOrderedByCommittedAt(t *testing.T) {
+	ctx := context.Background()
+	s := newTestSubstrate(t)
+
+	// Insert three events with deliberately-non-sequential CommittedAt
+	// to verify the walk orders them ascending.
+	type seed struct {
+		payload []byte
+		commit  int64
+	}
+	seeds := []seed{
+		{payload: []byte("alpha"), commit: 300},
+		{payload: []byte("beta"), commit: 100},
+		{payload: []byte("gamma"), commit: 200},
+	}
+	for _, s0 := range seeds {
+		hash := canonical.Hash(s0.payload)
+		hex := canonical.HashHex(hash)
+		row := EventRow{EventHash: hash, EventTime: s0.commit, MessageType: "x", PayloadRef: hex[:2] + "/" + hex[2:], CommittedAt: s0.commit}
+		if err := s.Append(ctx, row, s0.payload); err != nil {
+			t.Fatalf("Append %s: %v", string(s0.payload), err)
+		}
+	}
+
+	var commits []int64
+	if err := s.WalkEvents(ctx, func(row EventRow) error {
+		commits = append(commits, row.CommittedAt)
+		return nil
+	}); err != nil {
+		t.Fatalf("WalkEvents: %v", err)
+	}
+
+	want := []int64{100, 200, 300}
+	if len(commits) != len(want) {
+		t.Fatalf("got %d rows, want %d", len(commits), len(want))
+	}
+	for i, c := range commits {
+		if c != want[i] {
+			t.Errorf("row %d: got commit %d, want %d", i, c, want[i])
+		}
+	}
+}
+
+func TestWalkEventsStopsOnError(t *testing.T) {
+	ctx := context.Background()
+	s := newTestSubstrate(t)
+	for i := 0; i < 3; i++ {
+		payload := []byte{byte('a' + i)}
+		hash := canonical.Hash(payload)
+		hex := canonical.HashHex(hash)
+		row := EventRow{EventHash: hash, EventTime: int64(i), MessageType: "x", PayloadRef: hex[:2] + "/" + hex[2:], CommittedAt: int64(i)}
+		if err := s.Append(ctx, row, payload); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	sentinel := errors.New("stop here")
+	var seen int
+	err := s.WalkEvents(ctx, func(row EventRow) error {
+		seen++
+		if seen == 2 {
+			return sentinel
+		}
+		return nil
+	})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("expected sentinel error, got: %v", err)
+	}
+	if seen != 2 {
+		t.Errorf("walked %d rows after stop, want 2", seen)
+	}
+}
+
 func TestAppendPairHashMismatchRejects(t *testing.T) {
 	ctx := context.Background()
 	s := newTestSubstrate(t)

@@ -21,6 +21,17 @@ Four packages under `internal/`, each consuming a published contract:
 
 `main.go` orchestrates up to four goroutines via `errgroup` per [`concurrency-pattern.md`](../../docs/architecture/concurrency-pattern.md): the stdin worker (always), the HTTP server (when `--http` is set), an HTTP-graceful-shutdown coordinator, and a fatal-coordinator that propagates HTTP-side unrecoverable errors back through errgroup. Shutdown coordinated via `signal.NotifyContext`.
 
+## `verify` CLI
+
+Companion binary at [`cmd/verify`](./cmd/verify) that performs an up-front substrate-integrity check. Discharges the `§0033` `verify` follow-on; see [`§0039`](../../docs/charter/decision-log.md).
+
+```sh
+make verify-build                                       # builds ./bin/verify
+./bin/verify -db ./ghost-trace.db -blobs ./blobs        # walks events table; verifies every blob
+```
+
+Walks every events-table row in commit order, recomputes each blob's BLAKE3 hash via `substrate.ReadBlob`, surfaces hash-mismatch + missing-blob failures. Writes structured JSON to stdout + a brief human summary to stderr. Exit code: **0** on pass; **1** on any verification failure; **2** on tool/configuration error (e.g. database open failure). Intended for post-restore verification (per [`§0033` §Restoration Procedure step 3](../../docs/architecture/operational-ops.md)) and periodic substrate-integrity audits.
+
 ## Build Sequence
 
 Generated Protobuf bindings are NOT committed per [`§0024`](../../docs/charter/decision-log.md) AP3 ("Generated code is build output, not source"). First build sequence:

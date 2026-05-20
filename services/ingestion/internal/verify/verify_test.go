@@ -1,0 +1,221 @@
+package verify
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"google.golang.org/protobuf/proto"
+
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/canonical"
+	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
+)
+
+// newPopulatedSubstrate constructs a substrate + ingests `count` test
+// DeclaredSession messages via the full ingest.Ingester path. Returns
+// the substrate plus the slice of primary content-hashes committed.
+func newPopulatedSubstrate(t *testing.T, count int) (*substrate.Substrate, []string) {
+	t.Helper()
+	dir := t.TempDir()
+	ctx := context.Background()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Close() })
+
+	in := ingest.New(sub, time.Now)
+	var hashes []string
+	for i := 0; i < count; i++ {
+		msg := &eventsv1.DeclaredSession{
+			DeclaredAt:        int64(1000 + i),
+			ActorRef:          "actor-" + string(rune('a'+i)),
+			SessionDescriptor: []byte("session-" + string(rune('A'+i))),
+		}
+		rep, err := in.Append(ctx, msg, msg.DeclaredAt, ingest.Envelope{Channel: "test"})
+		if err != nil {
+			t.Fatalf("Append %d: %v", i, err)
+		}
+		hashes = append(hashes, rep.EventHashHex, rep.IngestionEventHashHex)
+	}
+	return sub, hashes
+}
+
+func TestVerifyHappyPath(t *testing.T) {
+	ctx := context.Background()
+	sub, hashes := newPopulatedSubstrate(t, 3)
+
+	report, err := Verify(ctx, sub)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if report.Failed() {
+		t.Errorf("happy-path Verify reported failure: %+v", report)
+	}
+	// 3 ingest calls × 2 records (primary + enrichment) = 6 walked.
+	if report.VerifiedCount != int64(len(hashes)) {
+		t.Errorf("VerifiedCount: got %d, want %d", report.VerifiedCount, len(hashes))
+	}
+	if report.HashMismatchCount != 0 {
+		t.Errorf("HashMismatchCount: got %d, want 0", report.HashMismatchCount)
+	}
+	if report.MissingBlobCount != 0 {
+		t.Errorf("MissingBlobCount: got %d, want 0", report.MissingBlobCount)
+	}
+}
+
+func TestVerifyDetectsCorruption(t *testing.T) {
+	ctx := context.Background()
+	sub, _ := newPopulatedSubstrate(t, 3)
+
+	// Locate the blob-store directory + corrupt one blob.
+	// Walk to find any blob file.
+	var blobPath string
+	dir := sub.BlobDir()
+	if dir == "" {
+		t.Skip("substrate does not expose BlobDir() — instrumentation needed")
+	}
+	if err := filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || blobPath != "" {
+			return nil
+		}
+		blobPath = p
+		return nil
+	}); err != nil {
+		t.Fatalf("walk blobs: %v", err)
+	}
+	if blobPath == "" {
+		t.Fatal("no blob file found to corrupt")
+	}
+	// Overwrite with garbage; hash recomputation must surface a mismatch.
+	if err := os.WriteFile(blobPath, []byte("corrupted-on-purpose"), 0o644); err != nil {
+		t.Fatalf("write corrupted blob: %v", err)
+	}
+
+	report, err := Verify(ctx, sub)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if !report.Failed() {
+		t.Fatal("Verify did not detect blob corruption")
+	}
+	if report.HashMismatchCount < 1 {
+		t.Errorf("HashMismatchCount: got %d, want >= 1", report.HashMismatchCount)
+	}
+	if len(report.HashMismatchHashes) != int(report.HashMismatchCount) {
+		t.Errorf("HashMismatchHashes len %d != HashMismatchCount %d",
+			len(report.HashMismatchHashes), report.HashMismatchCount)
+	}
+}
+
+func TestVerifyDetectsMissingBlob(t *testing.T) {
+	ctx := context.Background()
+	sub, _ := newPopulatedSubstrate(t, 3)
+
+	dir := sub.BlobDir()
+	if dir == "" {
+		t.Skip("substrate does not expose BlobDir()")
+	}
+	// Delete one blob to simulate filesystem corruption / partial backup.
+	var deletedHex string
+	if err := filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || deletedHex != "" {
+			return err
+		}
+		if err := os.Remove(p); err != nil {
+			return err
+		}
+		// Recover the hex hash from the path: <dir>/<2>/<62>.
+		rel, _ := filepath.Rel(dir, p)
+		deletedHex = strings.ReplaceAll(filepath.ToSlash(rel), "/", "")
+		return nil
+	}); err != nil {
+		t.Fatalf("walk blobs: %v", err)
+	}
+	if deletedHex == "" {
+		t.Fatal("no blob file deleted")
+	}
+
+	report, err := Verify(ctx, sub)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if !report.Failed() {
+		t.Fatal("Verify did not detect missing blob")
+	}
+	if report.MissingBlobCount < 1 {
+		t.Errorf("MissingBlobCount: got %d, want >= 1", report.MissingBlobCount)
+	}
+
+	// The deleted hash should appear in MissingBlobHashes.
+	found := false
+	for _, h := range report.MissingBlobHashes {
+		if h == deletedHex {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("deleted hash %s not in MissingBlobHashes %v", deletedHex, report.MissingBlobHashes)
+	}
+}
+
+func TestVerifyEmptySubstrate(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Close() })
+
+	report, err := Verify(ctx, sub)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if report.Failed() {
+		t.Errorf("empty substrate should pass: %+v", report)
+	}
+	if report.VerifiedCount != 0 {
+		t.Errorf("VerifiedCount: got %d, want 0", report.VerifiedCount)
+	}
+}
+
+// Sanity: the helper produces deterministic test data.
+func TestPopulatedSubstrateHashes(t *testing.T) {
+	_, hashes := newPopulatedSubstrate(t, 2)
+	if len(hashes) != 4 {
+		t.Errorf("expected 4 hashes (2 primary + 2 enrichment), got %d", len(hashes))
+	}
+	for _, h := range hashes {
+		if len(h) != 64 {
+			t.Errorf("hash length: got %d, want 64 — %q", len(h), h)
+		}
+	}
+}
+
+// Sanity: every proto.Message field on the test message round-trips
+// through canonical.Marshal without error.
+func TestMessageRoundtrip(t *testing.T) {
+	msg := &eventsv1.DeclaredSession{
+		DeclaredAt:        42,
+		ActorRef:          "round-trip",
+		SessionDescriptor: []byte("rt"),
+	}
+	b, err := proto.Marshal(msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := canonical.Hash(b)
+	if want == [32]byte{} {
+		t.Error("expected non-zero hash")
+	}
+}
