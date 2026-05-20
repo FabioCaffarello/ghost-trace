@@ -1507,6 +1507,78 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0046` — Second Category III lifecycle event (`BehavioralClusterPromotion`) lands; Layer A cadence per §0011 materialized; §2.5 lifecycle now plural-observable
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0045`](#0045--first-category-iii-hypothesis-subtype-behavioralcluster-formation-lands-25-hypothesis-lifecycle-explicitness-structurally-observable) landed the FIRST Cat III lifecycle event (`BehavioralClusterFormation`) and made Charter §2.5 Hypothesis Lifecycle Explicitness structurally observable at a single point: formation. Charter §2.5 (frozen v0.3) names SIX lifecycle operations (formation, merge, split, promotion, demotion, dissolution); a single-point implementation leaves the "lifecycle explicitness" claim unfalsified across the five remaining operations. [`§0011`](#0011--q4-resolution-staged-combination-of-cadence-layer-a--deep-criterion-layer-b-for-demotion-candidacy-layer-b-deferred) (Q4 resolution) bound promotion specifically: "Promotion events carry the structural parameters governing the promoted hypothesis's subsequent demotion-candidacy. Layer A cadence parameter is MANDATORY; Layer B deep criterion remains deferred until §2.6 operationalization." Without a promotion lifecycle event in the substrate, §0011's structural commitment is also unfalsified. This entry lands `BehavioralClusterPromotion`, brings §2.5 to two observable operations, and materializes §0011's Layer A parameter requirement.
+
+- **Decision:** Land `BehavioralClusterPromotion` as the second Cat III lifecycle event, with three structural moves:
+
+  1. **`BehavioralClusterPromotion` Protobuf message** at [`schemas/events/v1/behavioral_cluster_promotion.proto`](../../schemas/events/v1/behavioral_cluster_promotion.proto). Four fields:
+
+     - `formation_event_hash` (bytes) — content-hash of the target `BehavioralClusterFormation`, identifying the hypothesis being promoted per the [`§0045`](#0045--first-category-iii-hypothesis-subtype-behavioralcluster-formation-lands-25-hypothesis-lifecycle-explicitness-structurally-observable) identity-via-content-hash convention.
+     - `promoted_at` (int64 Unix ns) — the timestamp from which Layer A cadence is measured.
+     - `cadence_seconds` (int64) — Layer A parameter per [`§0011`](#0011--q4-resolution-staged-combination-of-cadence-layer-a--deep-criterion-layer-b-for-demotion-candidacy-layer-b-deferred); elapsed time since `promoted_at` that opens demotion-candidacy. MANDATORY per Charter §2.5 Structural Requirement.
+     - `reason` (string) — optional operator-supplied forensic note.
+
+     Per Charter §2.5 BC5 the promotion event is a Category I substrate row under §2.1 immutability.
+
+  2. **`hypothesis.Promote(ctx, sub, opts, now)` entry point** at [`services/ingestion/internal/hypothesis/promotion.go`](../../services/ingestion/internal/hypothesis/promotion.go). Operation shape distinct from `FormAll` (which walks the substrate deriving multiple formations): promotion is point-pick — operator specifies a single `formation_event_hash` and the function records exactly one promotion event. Validation:
+
+     - `cadence_seconds > 0` (rejects zero/negative).
+     - `substrate.LookupRow(formation_event_hash)` MUST succeed (otherwise `ErrTargetNotFound`).
+     - The row's `message_type` MUST be `ghosttrace.events.v1.BehavioralClusterFormation` (otherwise `ErrTargetWrongType`) — preserves §2.5-lifecycle-integrity: promotion references only formations, never observations or constructs.
+
+     Commit path: `substrate.Append` (acquires `writeMu` per concurrency-pattern.md §Substrate-Writer Serialization). Idempotent under identical `(formation_event_hash, promoted_at, cadence_seconds, reason)` via content-hash collision per §0027 AP6.
+
+  3. **`cmd/promote-hypothesis` CLI** at [`services/ingestion/cmd/promote-hypothesis/main.go`](../../services/ingestion/cmd/promote-hypothesis/main.go). Fifth operational binary alongside `verify`, `orphan-cleanup`, `derive-operational-session`, `form-hypothesis`. Command-line options: `-formation-event-hash` (required, 64-char hex), `-cadence-seconds` (default 86400 = 24 h), `-promoted-at-ns` (default 0 = wall-clock now), `-reason` (optional). Structured JSON output + human stderr summary. Exit codes: **0** success, **2** tool/configuration error, **3** target-not-found or target-wrong-type (the two §2.5-integrity errors).
+
+  Wall-clock vs. determinism tradeoff made explicit:
+
+  - With default `promoted_at=0`, each invocation records a wall-clock-time promotion (intentionally non-idempotent at fine granularity — each operator decision is its own event).
+  - With explicit `-promoted-at-ns`, recording is fully deterministic — used for forensic replay + tests where the same operator decision needs to reproduce.
+  - Re-running with identical args (including explicit `promoted_at`) is idempotent via content-hash collision; re-running with a DIFFERENT `cadence_seconds` produces a NEW promotion event alongside the prior one per §2.5 immutability (the operation history records every parameter change).
+
+  Acknowledgments of pending sections:
+
+  - **§2.4 Inferential Influence Disclosure (pending — empirical pressure phase)** — `BehavioralClusterPromotion` does not carry an `influenced_by_refs` field. Promotion is a structural state transition, not a new inferential assertion in the §1 sense; if §2.4 redaction concludes that promotion events ALSO require influence declarations (e.g., declaring which prior hypotheses' promotions influenced this operator decision), the Protobuf message will extend additively.
+  - **§2.6 Evidential Independence Integrity (pending — empirical pressure phase)** — Layer B of the [`§0011`](#0011--q4-resolution-staged-combination-of-cadence-layer-a--deep-criterion-layer-b-for-demotion-candidacy-layer-b-deferred) staged-combination criterion is the structural test on evidential independence that §2.6 will operationalize. Until §2.6 redacts, the promotion event carries Layer A only; Layer B will arrive as an additive Protobuf field (or as parameters on the future `BehavioralClusterDemotion` event) when §2.6 lands.
+
+  Deferred lifecycle operations remaining after this entry: demotion, merge, split, dissolution. Per Charter §2.5 each lands as a separate Cat I lifecycle-event record type; merge MUST reference all antecedent hypotheses, split MUST reference the antecedent + each successor.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. Respects [§2.1](../charter/constitutional-charter.md#21-observational-integrity) — `BehavioralClusterPromotion` committed under content-addressed immutability; no prior record mutated. Respects [§2.2](../charter/constitutional-charter.md#22-epistemic-separation) — promotion is a Cat III lifecycle operation; type-distinct from Cat I observations + Cat II constructs. Respects [§2.5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) Structural Requirement — promotion event carries Layer A cadence parameter per [`§0011`](#0011--q4-resolution-staged-combination-of-cadence-layer-a--deep-criterion-layer-b-for-demotion-candidacy-layer-b-deferred). Respects §2.5 BC3 — no "current-state" hypothesis record committed; only the lifecycle event. Respects §2.5 BC5 — the promotion event IS a Cat I record under §2.1. Respects [`§0011`](#0011--q4-resolution-staged-combination-of-cadence-layer-a--deep-criterion-layer-b-for-demotion-candidacy-layer-b-deferred) — `cadence_seconds` (Layer A) is mandatory per the proto's structural shape and enforced at `Promote` entry. Respects [`§0029`](#0029--concurrency-pattern-architecture-document-introduced-0025-modification-5-discharged) — `Promote` acquires `writeMu` via `substrate.Append`. Respects [`§0045`](#0045--first-category-iii-hypothesis-subtype-behavioralcluster-formation-lands-25-hypothesis-lifecycle-explicitness-structurally-observable) — promotion references the formation event's content-hash as the hypothesis identifier (no separate UUID generation; identity remains content-derived). Canonical vocabulary used as written: promotion, demotion, lifecycle event, hypothesis, substrate, provenance.
+
+- **Consequences:**
+  - [`schemas/events/v1/behavioral_cluster_promotion.proto`](../../schemas/events/v1/behavioral_cluster_promotion.proto) — new Cat III lifecycle event. Four fields; constitutional anchors in the file header.
+  - [`services/ingestion/Makefile`](../../services/ingestion/Makefile) — generate target extended; new `promote-hypothesis-build` target.
+  - [`services/ingestion/internal/hypothesis/promotion.go`](../../services/ingestion/internal/hypothesis/promotion.go) — new file. `PromoteOptions`, `PromoteReport`, `ErrTargetNotFound`, `ErrTargetWrongType`, `Promote` entry point.
+  - [`services/ingestion/internal/hypothesis/promotion_test.go`](../../services/ingestion/internal/hypothesis/promotion_test.go) — 7 tests covering happy-path, idempotency, versioning under changed cadence, zero-cadence rejection, unknown-target error, wrong-type-target error, default-promoted-at fallback.
+  - [`services/ingestion/cmd/promote-hypothesis/main.go`](../../services/ingestion/cmd/promote-hypothesis/main.go) — new binary; fifth operational CLI.
+  - [`services/ingestion/internal/verify/verify_test.go`](../../services/ingestion/internal/verify/verify_test.go) — **1 new test** (`TestVerifyWithCatIIIPromotion` proves verify reports success over a substrate containing BOTH formation AND promotion lifecycle events; the substrate-integrity audit is type-agnostic across all Cat III lifecycle operations).
+  - [`services/ingestion/internal/canonical/corpus_test.go`](../../services/ingestion/internal/canonical/corpus_test.go) — `messageFactory` extended with `"behavioral-cluster-promotion"`.
+  - [`services/ingestion/internal/canonical/testdata/canonical-corpus/behavioral-cluster-promotion-{minimal,typical}.{json,bin,hash}`](../../services/ingestion/internal/canonical/testdata/canonical-corpus/) — **6 new corpus files**. Mirrors the established Cat III coverage shape.
+  - [`services/ingestion/internal/canonical/testdata/canonical-corpus/README.md`](../../services/ingestion/internal/canonical/testdata/canonical-corpus/README.md) — Status + entries table updated.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — new §`promote-hypothesis` CLI section; §form-hypothesis updated to note promotion is the next operation in the chain.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0046 (this entry).
+  - **Test count grows.** Combined: **154 tests** across the service (up from 142 at [`§0045`](#0045--first-category-iii-hypothesis-subtype-behavioralcluster-formation-lands-25-hypothesis-lifecycle-explicitness-structurally-observable); +12 = 7 promotion + 1 verify-with-promotion + 2 corpus subtests + helpers). All passing under `go test -race ./...`.
+  - **Zero external dependencies added.**
+  - **Fifth operational binary lands.** `cmd/` now contains five binaries.
+  - **§2.5 Hypothesis Lifecycle Explicitness is now PLURAL-observable at runtime.** Before this entry, the substrate carried only formation events for the Cat III chain. After this entry, formation + promotion events coexist; a consumer walking the substrate can reconstruct the partial lifecycle state of any BehavioralCluster (formation present + promotion present + cadence_seconds → demotion-candidacy timing per §0011).
+  - **§0011 Layer A is materialized in the substrate.** Every promotion event carries `cadence_seconds`; the staged-combination criterion's first clause is now structurally checkable by any consumer.
+  - **Smoke test of binary.** Two invocations validated at commit time: (a) `bin/promote-hypothesis` without `-formation-event-hash` exits 2 with the required-argument error; (b) `bin/promote-hypothesis -formation-event-hash 00...00 -db /tmp/empty.db -blobs /tmp/empty-blobs` exits 3 with `ErrTargetNotFound`.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Demotion lifecycle event** (`BehavioralClusterDemotion`) — natural follow-on. The §0011 staged-combination criterion's Layer A is now in the substrate; demotion would consume it. Layer B remains deferred until §2.6 operationalization.
+    - **Merge / split / dissolution lifecycle events** — per Charter §2.5, each lands as a separate Cat I record type. Merge MUST reference all antecedent hypotheses (cross-subtype merge per [`entity-model.md` §Cross-subtype operations](../ontology/entity-model.md) produces a typed output record). Split MUST reference the antecedent + each successor.
+    - **Other Cat III subtypes' lifecycle events** — `CoordinationRing` / `CampaignHypothesis` / `AutomationGroup` per [`§0010`](#0010--q2-resolution-category-iii-hypothesis-decomposes-into-four-concrete-subtypes-behavioralcluster-coordinationring-campaignhypothesis-automationgroup) each carry their own 6-operation lifecycle. Deferred.
+    - **Projection over the lifecycle event chain** — replaying formation + promotion + (future) demotion events to materialize "current hypothesis state" (lifecycle position, promoted-yes/no, cadence params, etc.). Projection layer remains deferred per §2.5 BC3.
+    - **Multi-binary consolidation** — `cmd/hypothesis-lifecycle/` with `form` / `promote` / `demote` / `merge` / `split` / `dissolve` subcommands. Five lifecycle ops × four subtypes = 20 potential binaries under the current pattern; consolidation is a cleanup follow-on if/when the binary count bites.
+
+- **Supersession:** None. This entry extends the [`§0045`](#0045--first-category-iii-hypothesis-subtype-behavioralcluster-formation-lands-25-hypothesis-lifecycle-explicitness-structurally-observable) Cat III pathway with the second lifecycle operation; no prior decision reversed. [`§0022`](#0022--implementation-pivot-22-implementation-against-current-structural-ground-authorized-storage-technology-deferral-reversed-by-authorization) implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

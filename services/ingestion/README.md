@@ -91,7 +91,36 @@ Registered formation patterns:
 
 Adding a new formation pattern registers via [`internal/hypothesis`](./internal/hypothesis): implement `FormationPattern` (Signature, Parameters, Form) and wire it into `cmd/form-hypothesis/main.go`'s `resolvePattern`. Patterns that need additional Cat I observations beyond `DeclaredSession` extend the `FormationContext` interface with new typed accessors (the same incremental-extension procedure that [`§0044`](../../docs/charter/decision-log.md) established for Cat II `DerivationContext`).
 
-**Deferred lifecycle operations** per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness): promotion, demotion, merge, split, dissolution. Each lands as a separate Cat I lifecycle-event record type referencing the originating `BehavioralClusterFormation`'s content-hash; the same `cmd/form-hypothesis` pattern extends to drive them under follow-on landings. Per Charter §2.5 BC3, the substrate stores ONLY lifecycle events — the hypothesis's current state is a projection over the operation event chain (projection layer deferred).
+**Other lifecycle operations** per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness): promotion landed at [`§0046`](../../docs/charter/decision-log.md) via [`cmd/promote-hypothesis`](#promote-hypothesis-cli) below; demotion, merge, split, dissolution remain follow-on landings. Per Charter §2.5 BC3, the substrate stores ONLY lifecycle events — the hypothesis's current state is a projection over the operation event chain (projection layer deferred).
+
+## `promote-hypothesis` CLI
+
+Operator-invoked tool to record the second Cat III lifecycle operation (per [`§0046`](../../docs/charter/decision-log.md) — `BehavioralClusterPromotion`). Promotion transitions a hypothesis from active inference to operational use as enrichment context; per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) + [`decision-log §0011`](../../docs/charter/decision-log.md), the event MUST carry the Layer A cadence parameter governing subsequent demotion-candidacy.
+
+```sh
+make promote-hypothesis-build                                          # builds ./bin/promote-hypothesis
+
+# Promote a specific formation event (formation hash from form-hypothesis output)
+./bin/promote-hypothesis \
+  -formation-event-hash <64-hex-chars> \
+  -cadence-seconds 86400 \
+  -reason "operational pilot"
+
+# Re-promotion under a different cadence_seconds re-records the
+# cadence gate; the prior promotion event is preserved per §2.5 immutability
+./bin/promote-hypothesis -formation-event-hash <hash> -cadence-seconds 3600
+```
+
+Validates the supplied `formation-event-hash` resolves to a `BehavioralClusterFormation` row in the substrate (otherwise exits 3 — preserves §2.5 lifecycle integrity: promotion references only formations, never observations or constructs). Commits the `BehavioralClusterPromotion` event via `substrate.Append` (acquires `writeMu` per [`concurrency-pattern.md`](../../docs/architecture/concurrency-pattern.md) §Substrate-Writer Serialization).
+
+| Option | Default | Notes |
+|---|---|---|
+| `-formation-event-hash` | (required) | Hex-encoded BLAKE3-256 of the target `BehavioralClusterFormation`. |
+| `-cadence-seconds` | 86400 (24 h) | Layer A parameter per [`§0011`](../../docs/charter/decision-log.md): elapsed time since `promoted_at` that opens demotion-candidacy. Layer B (deep criterion) remains deferred until §2.6 redacts. |
+| `-promoted-at-ns` | 0 (= wall-clock now) | Explicit `promoted_at` for forensic replay / deterministic test recording. |
+| `-reason` | empty | Operator-supplied forensic note; recommended at audit time. |
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type (the two §2.5-integrity errors).
 
 ## `orphan-cleanup` CLI
 
