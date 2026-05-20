@@ -614,6 +614,180 @@ func TestVerifyWithCatIIIFullLifecycle(t *testing.T) {
 	}
 }
 
+// TestVerifyWithCatIIIFullLifecyclePlusMerge proves verify passes
+// over a substrate containing FIVE Cat III lifecycle event types —
+// formation, promotion, demotion, dissolution, and merge (per
+// decision-log §0049 landing the fifth lifecycle operation). The
+// substrate-integrity audit is type-agnostic across all Cat III
+// lifecycle operations per Charter §2.5 BC5.
+//
+// The substrate is populated with THREE separate formations (alpha,
+// beta, gamma) so the merge has two distinct antecedents and a
+// distinct produced formation per the §0049 structural choice that
+// preserves §0045 invariant (hypothesis identity IS the formation
+// event's content-hash).
+func TestVerifyWithCatIIIFullLifecyclePlusMerge(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Close() })
+
+	in := ingest.New(sub, time.Now)
+	// Three descriptor groups, each meeting min-cluster-size=2 →
+	// three formations.
+	for _, item := range []struct {
+		actor string
+		desc  []byte
+	}{
+		{"actor-merge-a1", []byte("alpha")},
+		{"actor-merge-a2", []byte("alpha")},
+		{"actor-merge-b1", []byte("beta")},
+		{"actor-merge-b2", []byte("beta")},
+		{"actor-merge-g1", []byte("gamma")},
+		{"actor-merge-g2", []byte("gamma")},
+	} {
+		decl := &eventsv1.DeclaredSession{DeclaredAt: 1000, ActorRef: item.actor, SessionDescriptor: item.desc}
+		if _, err := in.Append(ctx, decl, decl.DeclaredAt, ingest.Envelope{Channel: "test"}); err != nil {
+			t.Fatalf("Append DeclaredSession %s: %v", item.actor, err)
+		}
+	}
+	if _, err := hypothesis.FormAll(ctx, sub, hypothesis.SessionDescriptorSharedV1{MinClusterSize: 2}, time.Now); err != nil {
+		t.Fatalf("FormAll: %v", err)
+	}
+
+	// Identify the three formations by walking their payloads.
+	type fmEntry struct {
+		hash [32]byte
+		desc string
+	}
+	var entries []fmEntry
+	if err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
+		if row.MessageType != "ghosttrace.events.v1.BehavioralClusterFormation" {
+			return nil
+		}
+		payload, err := sub.ReadBlob(ctx, row.EventHash)
+		if err != nil {
+			return err
+		}
+		ev := &eventsv1.BehavioralClusterFormation{}
+		if err := proto.Unmarshal(payload, ev); err != nil {
+			return err
+		}
+		var desc string
+		for _, ar := range ev.ActorRefs {
+			if strings.Contains(ar, "-a") {
+				desc = "alpha"
+				break
+			}
+			if strings.Contains(ar, "-b") {
+				desc = "beta"
+				break
+			}
+			if strings.Contains(ar, "-g") {
+				desc = "gamma"
+				break
+			}
+		}
+		entries = append(entries, fmEntry{hash: row.EventHash, desc: desc})
+		return nil
+	}); err != nil {
+		t.Fatalf("WalkEvents: %v", err)
+	}
+	if len(entries) != 3 {
+		t.Fatalf("expected 3 formations; got %d", len(entries))
+	}
+	var alpha, beta, gamma [32]byte
+	for _, e := range entries {
+		switch e.desc {
+		case "alpha":
+			alpha = e.hash
+		case "beta":
+			beta = e.hash
+		case "gamma":
+			gamma = e.hash
+		}
+	}
+
+	// Promote → demote → dissolve alpha; then merge alpha + beta → gamma.
+	promRep, err := hypothesis.Promote(ctx, sub, hypothesis.PromoteOptions{
+		FormationEventHash: alpha,
+		PromotedAt:         1716120000000000000,
+		CadenceSeconds:     60,
+		Reason:             "integration merge",
+	}, time.Now)
+	if err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+	var promotionHash [32]byte
+	if raw, err := decodeHex(promRep.PromotionEventHashHex); err == nil {
+		copy(promotionHash[:], raw)
+	} else {
+		t.Fatalf("decode promotion hash: %v", err)
+	}
+	if _, err := hypothesis.Demote(ctx, sub, hypothesis.DemoteOptions{
+		PromotionEventHash: promotionHash,
+		DemotedAt:          1716120120000000000,
+		Reason:             "integration merge",
+	}, time.Now); err != nil {
+		t.Fatalf("Demote: %v", err)
+	}
+	if _, err := hypothesis.Dissolve(ctx, sub, hypothesis.DissolveOptions{
+		FormationEventHash: alpha,
+		DissolvedAt:        1716120180000000000,
+		Reason:             "integration merge",
+	}, time.Now); err != nil {
+		t.Fatalf("Dissolve: %v", err)
+	}
+	if _, err := hypothesis.Merge(ctx, sub, hypothesis.MergeOptions{
+		AntecedentAFormationHash: alpha,
+		AntecedentBFormationHash: beta,
+		ProducedFormationHash:    gamma,
+		MergedAt:                 1716120240000000000,
+		Reason:                   "integration merge — recognized as same phenomenon",
+	}, time.Now); err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+
+	report, err := Verify(ctx, sub, Options{})
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if report.Failed() {
+		t.Errorf("full-lifecycle-plus-merge substrate Verify reported failure: %+v", report)
+	}
+	// 6 DeclaredSession + 6 IngestionEvent + 3 Formation + 1 Promotion
+	// + 1 Demotion + 1 Dissolution + 1 Merge = 19.
+	if report.VerifiedCount != 19 {
+		t.Errorf("VerifiedCount: got %d, want 19", report.VerifiedCount)
+	}
+}
+
+func decodeHex(s string) ([]byte, error) {
+	out := make([]byte, len(s)/2)
+	for i := 0; i < len(out); i++ {
+		var hi, lo byte
+		c := s[2*i]
+		switch {
+		case '0' <= c && c <= '9':
+			hi = c - '0'
+		case 'a' <= c && c <= 'f':
+			hi = c - 'a' + 10
+		}
+		c = s[2*i+1]
+		switch {
+		case '0' <= c && c <= '9':
+			lo = c - '0'
+		case 'a' <= c && c <= 'f':
+			lo = c - 'a' + 10
+		}
+		out[i] = (hi << 4) | lo
+	}
+	return out, nil
+}
+
 // Sanity: every proto.Message field on the test message round-trips
 // through canonical.Marshal without error.
 func TestMessageRoundtrip(t *testing.T) {
