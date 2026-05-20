@@ -190,3 +190,100 @@ func TestLookupRowAbsent(t *testing.T) {
 		t.Fatalf("expected sql.ErrNoRows, got: %v", err)
 	}
 }
+
+func TestAppendPairCommitsAtomically(t *testing.T) {
+	ctx := context.Background()
+	s := newTestSubstrate(t)
+
+	primaryPayload, primaryHash := newTestPayload(t)
+	primaryHex := canonical.HashHex(primaryHash)
+	primaryRow := EventRow{
+		EventHash:   primaryHash,
+		EventTime:   1,
+		MessageType: "primary.type",
+		PayloadRef:  primaryHex[:2] + "/" + primaryHex[2:],
+		CommittedAt: 2,
+	}
+
+	enrichmentBytes := []byte("enrichment-payload-distinct")
+	enrichmentHash := canonical.Hash(enrichmentBytes)
+	enrichmentHex := canonical.HashHex(enrichmentHash)
+	enrichmentRow := EventRow{
+		EventHash:   enrichmentHash,
+		EventTime:   1,
+		MessageType: "enrichment.type",
+		PayloadRef:  enrichmentHex[:2] + "/" + enrichmentHex[2:],
+		CommittedAt: 2,
+	}
+
+	if err := s.AppendPair(ctx, primaryRow, primaryPayload, enrichmentRow, enrichmentBytes); err != nil {
+		t.Fatalf("AppendPair: %v", err)
+	}
+	n, err := s.Count(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Errorf("Count: got %d, want 2", n)
+	}
+	if _, err := s.LookupRow(ctx, primaryHash); err != nil {
+		t.Errorf("LookupRow primary: %v", err)
+	}
+	if _, err := s.LookupRow(ctx, enrichmentHash); err != nil {
+		t.Errorf("LookupRow enrichment: %v", err)
+	}
+}
+
+func TestAppendPairIdempotent(t *testing.T) {
+	ctx := context.Background()
+	s := newTestSubstrate(t)
+	primaryPayload, primaryHash := newTestPayload(t)
+	enrichmentBytes := []byte("enrichment")
+	enrichmentHash := canonical.Hash(enrichmentBytes)
+	primaryHex := canonical.HashHex(primaryHash)
+	enrichmentHex := canonical.HashHex(enrichmentHash)
+
+	primaryRow := EventRow{EventHash: primaryHash, EventTime: 1, MessageType: "x", PayloadRef: primaryHex[:2] + "/" + primaryHex[2:], CommittedAt: 1}
+	enrichmentRow := EventRow{EventHash: enrichmentHash, EventTime: 1, MessageType: "y", PayloadRef: enrichmentHex[:2] + "/" + enrichmentHex[2:], CommittedAt: 1}
+
+	for i := 0; i < 3; i++ {
+		if err := s.AppendPair(ctx, primaryRow, primaryPayload, enrichmentRow, enrichmentBytes); err != nil {
+			t.Fatalf("AppendPair iteration %d: %v", i, err)
+		}
+	}
+	n, err := s.Count(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Errorf("Count after 3 idempotent AppendPairs: got %d, want 2", n)
+	}
+}
+
+func TestAppendPairHashMismatchRejects(t *testing.T) {
+	ctx := context.Background()
+	s := newTestSubstrate(t)
+	primaryPayload, primaryHash := newTestPayload(t)
+	primaryRow := EventRow{EventHash: primaryHash, EventTime: 1, MessageType: "x", PayloadRef: "00/00", CommittedAt: 1}
+
+	var bogusHash [32]byte
+	for i := range bogusHash {
+		bogusHash[i] = 0xee
+	}
+	enrichmentRow := EventRow{EventHash: bogusHash, EventTime: 1, MessageType: "y", PayloadRef: "ee/ee", CommittedAt: 1}
+
+	err := s.AppendPair(ctx, primaryRow, primaryPayload, enrichmentRow, []byte("actual-content"))
+	if err == nil {
+		t.Fatal("expected ErrHashMismatch, got nil")
+	}
+	if !errors.Is(err, ErrHashMismatch) {
+		t.Fatalf("expected ErrHashMismatch, got: %v", err)
+	}
+	n, err := s.Count(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("Count after rejected AppendPair: got %d, want 0 (no partial commit)", n)
+	}
+}

@@ -1,0 +1,9 @@
+{
+  "primaryEventHash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+  "receivedAt": "1716120000000000001",
+  "ingestedAt": "1716120000000000002",
+  "channel": "https+mtls",
+  "clientCommonName": "trusted-producer.example.com",
+  "clientSubjectAltNames": ["producer.local", "10.0.0.5"],
+  "clientCertSha256": "deadbeefcafef00ddeadbeefcafef00ddeadbeefcafef00ddeadbeefcafef00d"
+}

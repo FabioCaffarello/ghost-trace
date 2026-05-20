@@ -10,6 +10,8 @@ Skeleton. First commit producing executable code per [`decision-log §0027`](../
 
 ## Architecture
 
+**Provenance**: every primary observation commits paired with an `IngestionEvent` enrichment per [`§0038`](../../docs/charter/decision-log.md). The pair captures **what** the producer reported (the `DeclaredSession`) AND **how** the service received it (channel — `stdin`/`http`/`https`/`https+mtls` — plus, when delivered over mTLS, the verified peer-certificate's Common Name + SANs + SHA-256 fingerprint). The two events commit atomically via `substrate.AppendPair` (single SQL transaction). The pairing is by reference: each `IngestionEvent.primary_event_hash` carries the content-hash of its paired observation.
+
 Four packages under `internal/`, each consuming a published contract:
 
 - [`internal/canonical`](./internal/canonical) — implements [`docs/architecture/canonical-serialization-contract.md`](../../docs/architecture/canonical-serialization-contract.md). Single `Marshal` + `Hash` + `HashHex` entry points; service code MUST NOT call `proto.Marshal` directly.

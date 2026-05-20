@@ -271,14 +271,15 @@ func (f *fatalReporter) ReportFatal(err error) {
 // appendFunc is the readLoop's dependency on the ingestion pipeline.
 // Implemented in production by ingest.Ingester.Append; injectable in
 // tests for unrecoverable-error path coverage.
-type appendFunc func(ctx context.Context, msg proto.Message, eventTime int64) (ingest.AppendReport, error)
+type appendFunc func(ctx context.Context, msg proto.Message, eventTime int64, env ingest.Envelope) (ingest.AppendReport, error)
 
 // confirmation is the structured per-message outcome written to stdout
 // on successful ingest.
 type confirmation struct {
-	EventHash    string `json:"event_hash"`
-	PayloadBytes int    `json:"payload_bytes"`
-	CommittedAt  int64  `json:"committed_at_ns"`
+	EventHash          string `json:"event_hash"`
+	IngestionEventHash string `json:"ingestion_event_hash"`
+	PayloadBytes       int    `json:"payload_bytes"`
+	CommittedAt        int64  `json:"committed_at_ns"`
 }
 
 // ingestError is the structured per-message error written to stdout
@@ -373,7 +374,8 @@ func readLoop(ctx context.Context, doAppend appendFunc, r io.Reader, w io.Writer
 			continue
 		}
 
-		rep, err := doAppend(ctx, msg, msg.DeclaredAt)
+		env := ingest.Envelope{Channel: "stdin", ReceivedAt: time.Now().UnixNano()}
+		rep, err := doAppend(ctx, msg, msg.DeclaredAt, env)
 		if err != nil {
 			if isUnrecoverable(err) {
 				return fmt.Errorf("unrecoverable ingest: %w", err)
@@ -383,9 +385,10 @@ func readLoop(ctx context.Context, doAppend appendFunc, r io.Reader, w io.Writer
 		}
 
 		if err := enc.Encode(confirmation{
-			EventHash:    rep.EventHashHex,
-			PayloadBytes: rep.PayloadBytes,
-			CommittedAt:  time.Now().UnixNano(),
+			EventHash:          rep.EventHashHex,
+			IngestionEventHash: rep.IngestionEventHashHex,
+			PayloadBytes:       rep.PayloadBytes,
+			CommittedAt:        time.Now().UnixNano(),
 		}); err != nil {
 			return fmt.Errorf("write confirmation: %w", err)
 		}

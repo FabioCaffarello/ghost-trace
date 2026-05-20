@@ -69,13 +69,17 @@ func encodeLine(t *testing.T, msg proto.Message) string {
 // stubAppendFunc returns an appendFunc that records every call into
 // calls and returns the configured per-call outcome (sequence index).
 func stubAppendFunc(outcomes []error, calls *int) appendFunc {
-	return func(ctx context.Context, msg proto.Message, eventTime int64) (ingest.AppendReport, error) {
+	return func(ctx context.Context, msg proto.Message, eventTime int64, env ingest.Envelope) (ingest.AppendReport, error) {
 		idx := *calls
 		*calls = idx + 1
 		if idx < len(outcomes) && outcomes[idx] != nil {
 			return ingest.AppendReport{}, outcomes[idx]
 		}
-		return ingest.AppendReport{EventHashHex: "0000000000000000000000000000000000000000000000000000000000000000", PayloadBytes: 1}, nil
+		return ingest.AppendReport{
+			EventHashHex:          "0000000000000000000000000000000000000000000000000000000000000000",
+			IngestionEventHashHex: "1111111111111111111111111111111111111111111111111111111111111111",
+			PayloadBytes:          1,
+		}, nil
 	}
 }
 
