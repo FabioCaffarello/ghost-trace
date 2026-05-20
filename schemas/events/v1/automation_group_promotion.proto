@@ -1,0 +1,50 @@
+// Category III hypothesis lifecycle event per Charter §2.5
+// (Hypothesis Lifecycle Explicitness, frozen v0.3) + decision-log
+// §0011 (Q4 resolution — staged-combination criterion for demotion-
+// candidacy: Layer A cadence mandatory on every promotion) +
+// decision-log §0057 (this entry — second-subtype promotion landing;
+// mirrors §0046 for the AutomationGroup concrete subtype).
+//
+// Constitutional shape per Charter §2.5 Structural Requirement:
+// "Promotion events carry the structural parameters governing the
+// promoted hypothesis's subsequent demotion-candidacy." Same Layer
+// A semantic as §0046; Layer B remains deferred until §2.6.
+//
+// Per Charter §2.5 BC5, AutomationGroupPromotion is a Category I
+// record committed under §2.1 immutability.
+//
+// The promoted hypothesis is identified by formation_event_hash —
+// the content-hash of the originating AutomationGroupFormation
+// event (per decision-log §0045 + §0056 — hypothesis identity IS
+// the formation event's content-hash, invariant transferring
+// cleanly across subtypes).
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// AutomationGroupPromotion records the transition of an
+// AutomationGroup hypothesis from active inference to operational
+// use as enrichment context.
+message AutomationGroupPromotion {
+  // formation_event_hash is the BLAKE3-256 content-hash of the
+  // originating AutomationGroupFormation event. Identifies the
+  // hypothesis being promoted.
+  bytes formation_event_hash = 1;
+
+  // promoted_at is the Unix-nanoseconds time from which the Layer A
+  // cadence gate is measured (per §0011). Typically wall-clock at
+  // the operator's decision; explicit values permitted for forensic
+  // replay + deterministic re-derivation.
+  int64 promoted_at = 2;
+
+  // cadence_seconds is the Layer A parameter (per §0011). MANDATORY
+  // per Charter §2.5 Structural Requirement. Layer B (deep
+  // criterion on evidential independence) remains deferred until
+  // §2.6 operationalization.
+  int64 cadence_seconds = 3;
+
+  // reason is an operator-supplied free-form note. Optional.
+  string reason = 4;
+}

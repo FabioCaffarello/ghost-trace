@@ -25,6 +25,7 @@ help:
 	@echo "  list-hypotheses-build  go build -trimpath -o $(BIN_DIR)/list-hypotheses ./cmd/list-hypotheses"
 	@echo "  summarize-hypotheses-build  go build -trimpath -o $(BIN_DIR)/summarize-hypotheses ./cmd/summarize-hypotheses"
 	@echo "  form-automation-group-build  go build -trimpath -o $(BIN_DIR)/form-automation-group ./cmd/form-automation-group"
+	@echo "  promote-automation-group-build  go build -trimpath -o $(BIN_DIR)/promote-automation-group ./cmd/promote-automation-group"
 	@echo "  test           go test -race ./..."
 	@echo "  golden-corpus  regenerate canonical-corpus golden files (schemas-evolution event)"
 	@echo "  clean          remove $(GEN_OUT) + $(BIN_DIR)"
@@ -53,7 +54,8 @@ generate: $(PROTOC_GEN_GO)
 	  events/v1/behavioral_cluster_dissolution.proto \
 	  events/v1/behavioral_cluster_merge.proto \
 	  events/v1/behavioral_cluster_split.proto \
-	  events/v1/automation_group_formation.proto
+	  events/v1/automation_group_formation.proto \
+	  events/v1/automation_group_promotion.proto
 
 $(PROTOC_GEN_GO):
 	$(MAKE) tools
@@ -127,6 +129,11 @@ summarize-hypotheses-build:
 form-automation-group-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/form-automation-group ./cmd/form-automation-group
+
+.PHONY: promote-automation-group-build
+promote-automation-group-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/promote-automation-group ./cmd/promote-automation-group
 
 .PHONY: test
 test:
