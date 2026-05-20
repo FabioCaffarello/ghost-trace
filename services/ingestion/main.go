@@ -33,13 +33,21 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
 
+// exitCodeUnrecoverable is the process exit code on unrecoverable
+// errors per docs/architecture/concurrency-pattern.md §Error
+// Propagation step 4.
+const exitCodeUnrecoverable = 1
+
 func main() {
 	if err := run(); err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return // graceful shutdown via signal
 		}
-		fmt.Fprintf(os.Stderr, "ingestion: %v\n", err)
-		os.Exit(1)
+		// Unrecoverable-error structured shutdown per concurrency-pattern
+		// §Error Propagation: write a structured-output log entry to
+		// stderr identifying the error class + exit non-zero.
+		emitFatal(os.Stderr, err)
+		os.Exit(exitCodeUnrecoverable)
 	}
 }
 
@@ -63,7 +71,7 @@ func run() error {
 	// Single worker goroutine consuming stdin; structured-concurrency via
 	// errgroup per concurrency-pattern §Goroutine Lifecycle.
 	g, gctx := errgroup.WithContext(ctx)
-	g.Go(func() error { return readLoop(gctx, in, os.Stdin, os.Stdout) })
+	g.Go(func() error { return readLoop(gctx, in.Append, os.Stdin, os.Stdout) })
 
 	if err := g.Wait(); err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -77,31 +85,83 @@ func run() error {
 	return nil
 }
 
-// confirmation is the structured per-message outcome written to stdout.
+// appendFunc is the readLoop's dependency on the ingestion pipeline.
+// Implemented in production by ingest.Ingester.Append; injectable in
+// tests for unrecoverable-error path coverage.
+type appendFunc func(ctx context.Context, msg proto.Message, eventTime int64) (ingest.AppendReport, error)
+
+// confirmation is the structured per-message outcome written to stdout
+// on successful ingest.
 type confirmation struct {
 	EventHash    string `json:"event_hash"`
 	PayloadBytes int    `json:"payload_bytes"`
 	CommittedAt  int64  `json:"committed_at_ns"`
 }
 
-// ingestError is the structured per-message error written to stdout.
+// ingestError is the structured per-message error written to stdout
+// on recoverable failure (bad input). Recoverable errors do not
+// terminate the service.
 type ingestError struct {
 	Error string `json:"error"`
 }
 
-// readLoop reads base64-encoded Protobuf DeclaredSession lines from r,
-// ingests each through in.Append, writes a one-line JSON confirmation
-// (success) or one-line JSON error (failure) per input line to w.
+// fatalLog is the structured shutdown record written to stderr when an
+// unrecoverable error terminates the service per concurrency-pattern
+// §Error Propagation step 3.
+type fatalLog struct {
+	Level string `json:"level"`
+	Error string `json:"error"`
+	Note  string `json:"note"`
+}
+
+// isUnrecoverable classifies an error as unrecoverable per the
+// substrate's typed §2.1-violation errors. Unrecoverable errors trigger
+// service-level shutdown per concurrency-pattern §Error Propagation
+// ("the §2.1-violation case (hash mismatch on read per §0027 AP4 + AP5)
+// is the canonical example: the read path detects the violation,
+// propagates the error up the call chain, and the service exits").
 //
-// Per-message errors are recoverable: a failed line emits an error
-// object and processing continues with the next line. Substrate-level
-// or canonical-serialization-level errors that indicate §2.1 violation
-// (e.g. ErrHashMismatch on read) are unrecoverable and propagated up
-// per concurrency-pattern §Error Propagation; this loop currently
-// surfaces them as per-message errors — the §2.1-violation-shutdown
-// pathway lands when the read path is exercised end-to-end (follow-on
-// commit will add the explicit unrecoverable-error escalation).
-func readLoop(ctx context.Context, in *ingest.Ingester, r io.Reader, w io.Writer) error {
+// Extension policy: a new error joins this set when (a) it indicates a
+// substrate-integrity violation that cannot be reasoned about as
+// recoverable, or (b) it indicates a canonical-serialization-contract
+// violation per §0024 AP5 (hash-instability). Other failure modes
+// (transient I/O, malformed input, schema validation) remain recoverable.
+func isUnrecoverable(err error) bool {
+	if err == nil {
+		return false
+	}
+	return errors.Is(err, substrate.ErrHashMismatch) ||
+		errors.Is(err, substrate.ErrBlobCollision)
+}
+
+// emitFatal writes a structured shutdown record to w. Used by main()
+// before os.Exit(exitCodeUnrecoverable).
+func emitFatal(w io.Writer, err error) {
+	_ = json.NewEncoder(w).Encode(fatalLog{
+		Level: "fatal",
+		Error: err.Error(),
+		Note:  "service exiting non-zero per docs/architecture/concurrency-pattern.md §Error Propagation",
+	})
+}
+
+// readLoop reads base64-encoded Protobuf DeclaredSession lines from r,
+// ingests each via the appendFunc, writes a one-line JSON confirmation
+// (success) or one-line JSON error (recoverable failure) per input line
+// to w.
+//
+// Error classification per concurrency-pattern §Error Propagation:
+//   - **Recoverable** — bad input (base64 decode failure, proto
+//     unmarshal failure) — emits a JSON ingestError entry to w and
+//     continues processing the next line.
+//   - **Unrecoverable** — substrate §2.1-violation errors
+//     (substrate.ErrHashMismatch, substrate.ErrBlobCollision) —
+//     terminates readLoop with the error; errgroup propagates the
+//     cancellation, run() returns the error, main() writes a fatal
+//     structured-output record to stderr and exits non-zero.
+//
+// The classifier is isUnrecoverable; the boundary is documented + tested
+// (main_test.go).
+func readLoop(ctx context.Context, doAppend appendFunc, r io.Reader, w io.Writer) error {
 	enc := json.NewEncoder(w)
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024) // up to 1 MiB per line
@@ -130,8 +190,11 @@ func readLoop(ctx context.Context, in *ingest.Ingester, r io.Reader, w io.Writer
 			continue
 		}
 
-		rep, err := in.Append(ctx, msg, msg.DeclaredAt)
+		rep, err := doAppend(ctx, msg, msg.DeclaredAt)
 		if err != nil {
+			if isUnrecoverable(err) {
+				return fmt.Errorf("unrecoverable ingest: %w", err)
+			}
 			_ = enc.Encode(ingestError{Error: fmt.Sprintf("ingest: %v", err)})
 			continue
 		}

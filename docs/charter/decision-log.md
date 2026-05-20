@@ -798,6 +798,48 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0032` — Unrecoverable-error shutdown escalation added to ingestion service; §2.1-violation → exit non-zero pathway operational
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** The ingestion service skeleton landed at [`§0030`](#0030--ingestion-service-skeleton--first-commit-producing-executable-code-0022-originally-proposed-work-commenced) with all errors handled uniformly — base64 decode failures, proto unmarshal failures, and substrate-level errors all emitted as per-message JSON entries to stdout, then continued processing. The skeleton's Out of Scope explicitly named this gap: "Unrecoverable-error shutdown escalation … the §2.1-violation-triggers-shutdown pathway lands when the read path is exercised end-to-end per [`concurrency-pattern.md`](../architecture/concurrency-pattern.md) §Error Propagation." This entry records the discharge.
+
+- **Decision:** `services/ingestion/main.go` is refactored to classify errors via `isUnrecoverable` + propagate unrecoverable errors to service-level shutdown per [`concurrency-pattern.md`](../architecture/concurrency-pattern.md) §Error Propagation:
+
+  1. **Classifier** `isUnrecoverable(err error) bool` — returns true when `errors.Is(err, substrate.ErrHashMismatch)` or `errors.Is(err, substrate.ErrBlobCollision)`. These are the substrate's typed §2.1-violation indicators per [`§0027`](#0027--inception-phase-storage-technology-selection-sqlite--content-addressed-blob-store-on-local-filesystem-adopted-third-and-final-technology-rfc-per-0022-pivot--0003-fully-discharged) AP4 + AP5 + AP6. Extension policy documented in code: a new error joins the unrecoverable set when (a) it indicates a substrate-integrity violation that cannot be reasoned about as recoverable, or (b) it indicates a canonical-serialization-contract violation per [`§0024`](#0024--schemas-technology-selection-protocol-buffers-proto3-adopted-first-technology-rfc-per-0022-pivot) AP5 (hash-instability).
+
+  2. **`readLoop` signature** changed from accepting `*ingest.Ingester` to accepting `appendFunc` (a closure type matching `(ctx, msg, eventTime) → (AppendReport, error)`). Production code passes `in.Append`; tests inject stubs returning controlled error sequences. The change is API-internal (main package only); no external consumers affected.
+
+  3. **`readLoop` error classification**:
+     - **Recoverable** (bad input — base64 decode, proto unmarshal, or appendFunc returning a non-unrecoverable error) → emit per-message JSON `ingestError` to stdout + continue processing the next line.
+     - **Unrecoverable** (appendFunc returning an error classified by `isUnrecoverable`) → return the error wrapped as `unrecoverable ingest: <err>`. errgroup propagates the cancellation; `run()` returns the wrapped error; `main()` writes a structured fatal record to stderr via `emitFatal` + exits with `exitCodeUnrecoverable` (1).
+
+  4. **Structured fatal record** `emitFatal(w io.Writer, err error)` writes a JSON `fatalLog{Level, Error, Note}` entry to w. The `Note` field cites `docs/architecture/concurrency-pattern.md §Error Propagation` for operator orientation.
+
+  5. **Test coverage** `main_test.go` (new) — 6 tests, 12 subtests:
+     - `TestIsUnrecoverable` — classifier truth table (nil, recoverable plain, recoverable wrapped, ErrHashMismatch direct + wrapped, ErrBlobCollision direct + wrapped).
+     - `TestReadLoopHappyPath` — single valid message → confirmation emitted.
+     - `TestReadLoopRecoverableErrorContinues` — three input lines (invalid base64, invalid Protobuf, valid message); two errors + one confirmation emitted; loop completes.
+     - `TestReadLoopUnrecoverableErrorTerminates` — first Append returns wrapped ErrBlobCollision; loop terminates after first call; stdout empty (no per-message entry); returned error is `errors.Is` compatible with ErrBlobCollision.
+     - `TestReadLoopHashMismatchAlsoUnrecoverable` — symmetric test for ErrHashMismatch.
+     - `TestEmitFatalStructure` — verifies the fatalLog JSON shape (`level: "fatal"`, error contains substrate error text, note references concurrency-pattern.md).
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. The change implements existing commitments ([`concurrency-pattern.md`](../architecture/concurrency-pattern.md) §Error Propagation). Respects [§2.1](../charter/constitutional-charter.md#21-observational-integrity) — the §2.1-violation case (corrupted blob detected on read) now triggers service-level shutdown per the contract, satisfying the concurrency-pattern's "the read path detects the violation, propagates the error up the call chain, and the service exits" requirement. Respects [§4 frozen v0.2](../charter/constitutional-charter.md#4-constitutional-design-rule) — the classifier predicate is mechanically detectable (single-function pure-Go classification with explicit error-identity inputs); the test coverage is exhaustive on the documented inputs. No glossary changes (no new canonical project vocabulary).
+
+- **Consequences:**
+  - [`services/ingestion/main.go`](../../services/ingestion/main.go) refactored: `appendFunc` type, `isUnrecoverable` classifier, `emitFatal` helper, `fatalLog` struct, `exitCodeUnrecoverable` constant; `readLoop` signature change; `main()` updated to call `emitFatal` on unrecoverable exit.
+  - [`services/ingestion/main_test.go`](../../services/ingestion/main_test.go) added — 6 tests as enumerated above; full coverage of classifier + both readLoop paths.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) §Out of Scope: the "Unrecoverable-error shutdown escalation" bullet is struck through with a discharge reference to this entry. The "Canonical-corpus population" bullet (discharged at [`§0031`](#0031--canonical-corpus-populated-ci-golden-file-gate-operationalized-for-declaredsession)) is similarly struck through for consistency.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0032 (this entry) records the discharge.
+  - **Concurrency-pattern §Error Propagation operational.** The contract's step 3 (write the unrecoverable error to structured-output) is satisfied via `emitFatal` writing JSON to stderr; step 4 (exit non-zero) via `os.Exit(exitCodeUnrecoverable)`; steps 1+2 (context cancellation + Wait) are inherited from the existing errgroup pattern.
+  - **Service-tier discipline standard.** Future service-tier code in `services/<service>/main.go` should mirror the classify-then-escalate pattern documented here. The boundary distinction (recoverable JSON-to-stdout vs unrecoverable structured-shutdown-to-stderr-exit-nonzero) is now established by precedent.
+  - **Remaining Out of Scope items.** HTTP/gRPC interface (per [`§0025`](#0025--implementation-language-selection-go-adopted-second-technology-rfc-per-0022-pivot) Open Questions); backup/recovery automation + operational-ops document (per [`§0027`](#0027--inception-phase-storage-technology-selection-sqlite--content-addressed-blob-store-on-local-filesystem-adopted-third-and-final-technology-rfc-per-0022-pivot--0003-fully-discharged) Open Questions); additional Cat I message types beyond `DeclaredSession`. The original [`§0030`](#0030--ingestion-service-skeleton--first-commit-producing-executable-code-0022-originally-proposed-work-commenced) Out of Scope list now has 3 of its 5 items struck through (canonical-corpus population at [`§0031`](#0031--canonical-corpus-populated-ci-golden-file-gate-operationalized-for-declaredsession); unrecoverable-error escalation here at §0032; the other 3 remain pending follow-on work).
+
+- **Supersession:** None. This entry discharges a follow-on commitment from [`§0030`](#0030--ingestion-service-skeleton--first-commit-producing-executable-code-0022-originally-proposed-work-commenced); no prior decision is reversed.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
