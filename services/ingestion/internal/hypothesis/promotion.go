@@ -20,16 +20,18 @@ import (
 // which is a structural error.
 const behavioralClusterFormationMessageType = "ghosttrace.events.v1.BehavioralClusterFormation"
 
-// ErrTargetNotFound is returned by Promote when the formation_event_hash
-// does not resolve to any substrate row.
-var ErrTargetNotFound = errors.New("hypothesis.Promote: formation event hash not found in substrate")
+// ErrTargetNotFound is returned by lifecycle operations (Promote,
+// Demote, ...) when the target event hash does not resolve to any
+// substrate row.
+var ErrTargetNotFound = errors.New("hypothesis: target event hash not found in substrate")
 
-// ErrTargetWrongType is returned by Promote when the target hash
-// resolves to a row whose message_type is NOT
-// BehavioralClusterFormation — preserves §2.5 lifecycle integrity
-// (promotion references only formation events, never observations or
-// constructs).
-var ErrTargetWrongType = errors.New("hypothesis.Promote: target hash is not a BehavioralClusterFormation")
+// ErrTargetWrongType is returned by lifecycle operations when the
+// target hash resolves to a row whose message_type does not match
+// the expected predecessor (Promote expects BehavioralClusterFormation;
+// Demote expects BehavioralClusterPromotion). Preserves
+// §2.5-lifecycle-integrity: lifecycle events reference only the
+// correctly-typed predecessor.
+var ErrTargetWrongType = errors.New("hypothesis: target hash is not the expected lifecycle event type")
 
 // PromoteOptions configures a single promotion. The (FormationEventHash,
 // CadenceSeconds, PromotedAt, Reason) tuple uniquely identifies a
