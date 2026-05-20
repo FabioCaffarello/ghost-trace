@@ -167,6 +167,29 @@ Validates the supplied `promotion-event-hash` resolves to an `AutomationGroupPro
 
 Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
 
+## `dissolve-automation-group` CLI
+
+Operator-invoked tool to record the **AutomationGroup dissolution** lifecycle operation per [`§0059`](../../docs/charter/decision-log.md) — fourth lifecycle operation of the second Cat III subtype arc. Mirrors [`dissolve-hypothesis`](#dissolve-hypothesis-cli). Per glossary, dissolution is DISTINGUISHED from demotion: demotion withdraws OPERATIONAL USE; dissolution recognizes NON-EXISTENCE.
+
+```sh
+make dissolve-automation-group-build                                      # builds ./bin/dissolve-automation-group
+
+# Dissolve an AutomationGroup formation (signature misattributed)
+./bin/dissolve-automation-group \
+  -formation-event-hash <64-hex-chars> \
+  -reason "signature misattributed"
+```
+
+Validates the supplied `formation-event-hash` resolves to an `AutomationGroupFormation` row (otherwise exits 3). May be invoked regardless of whether the hypothesis was ever promoted.
+
+| Option | Default | Notes |
+|---|---|---|
+| `-formation-event-hash` | (required) | Hex-encoded BLAKE3-256 of the target `AutomationGroupFormation`. |
+| `-dissolved-at-ns` | 0 (= wall-clock now) | Explicit `dissolved_at` for forensic replay. |
+| `-reason` | empty | **Strongly recommended** — dissolution is the terminal lifecycle operation. |
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
+
 ## `promote-hypothesis` CLI
 
 Operator-invoked tool to record the second Cat III lifecycle operation (per [`§0046`](../../docs/charter/decision-log.md) — `BehavioralClusterPromotion`). Promotion transitions a hypothesis from active inference to operational use as enrichment context; per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) + [`decision-log §0011`](../../docs/charter/decision-log.md), the event MUST carry the Layer A cadence parameter governing subsequent demotion-candidacy.
