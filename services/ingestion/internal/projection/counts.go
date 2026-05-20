@@ -22,23 +22,30 @@ type StateCounts struct {
 }
 
 // CountByState returns the aggregate StateCounts over every
-// formation in the substrate. Computed by invoking ProjectAll and
-// aggregating the per-formation State values; same substrate-linear
-// walk cost as ProjectAll (the aggregation step is O(N_formations)
-// over the already-materialized projection map).
+// formation in the substrate that passes the supplied ListOptions
+// filters (TimeAfterNs / TimeBeforeNs). Computed by invoking
+// ProjectAll and aggregating the per-formation State values; same
+// substrate-linear walk cost as ProjectAll (the aggregation step
+// is O(N_formations) over the already-materialized projection map).
 //
-// Per the §0053 equivalence invariant (tested in counts_test.go):
-// for every State value, CountByState.ByState[s] equals
-// len(ListHypotheses(ctx, sub, ListOptions{StateFilter: s})). The
-// invariant defends against precedence-rule drift between the
-// count path and the list path.
-func CountByState(ctx context.Context, sub *substrate.Substrate) (StateCounts, error) {
+// CountByState IGNORES opts.StateFilter, opts.Limit, opts.Offset:
+//   - StateFilter would degenerate the output (a single bucket
+//     equal to the filter value; redundant with len(ListHypotheses)).
+//   - Limit / Offset are paging concerns on a sorted slice; counts
+//     reflect the full filtered population by definition.
+//
+// Per the §0053 equivalence invariant (tested in counts_test.go +
+// extended in window_test.go per §0054): for every State value,
+// CountByState.ByState[s] equals
+// len(ListHypotheses(ctx, sub, opts-with-StateFilter=s)). The
+// invariant defends against precedence-rule drift between the count
+// path and the list path.
+func CountByState(ctx context.Context, sub *substrate.Substrate, opts ListOptions) (StateCounts, error) {
 	all, err := ProjectAll(ctx, sub)
 	if err != nil {
 		return StateCounts{}, err
 	}
 	counts := StateCounts{
-		Total: len(all),
 		ByState: map[State]int{
 			StateForming:    0,
 			StatePromoted:   0,
@@ -49,6 +56,10 @@ func CountByState(ctx context.Context, sub *substrate.Substrate) (StateCounts, e
 		},
 	}
 	for _, proj := range all {
+		if !withinTimeWindow(proj, opts) {
+			continue
+		}
+		counts.Total++
 		counts.ByState[proj.State]++
 	}
 	return counts, nil

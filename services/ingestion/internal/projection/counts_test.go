@@ -18,7 +18,7 @@ func TestCountByStateEmptySubstrate(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = sub.Close() })
 
-	got, err := CountByState(ctx, sub)
+	got, err := CountByState(ctx, sub, ListOptions{})
 	if err != nil {
 		t.Fatalf("CountByState: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestCountByStateEmptySubstrate(t *testing.T) {
 func TestCountByStateSingleForming(t *testing.T) {
 	sub := newSubstrate(t)
 	_ = formCluster(t, sub, "alpha", "actor-c1-", 1000)
-	got, err := CountByState(context.Background(), sub)
+	got, err := CountByState(context.Background(), sub, ListOptions{})
 	if err != nil {
 		t.Fatalf("CountByState: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestCountByStateMixed(t *testing.T) {
 		t.Fatalf("Dissolve: %v", err)
 	}
 
-	got, err := CountByState(ctx, sub)
+	got, err := CountByState(ctx, sub, ListOptions{})
 	if err != nil {
 		t.Fatalf("CountByState: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestCountByStateAllSix(t *testing.T) {
 		t.Fatalf("Split: %v", err)
 	}
 
-	got, err := CountByState(ctx, sub)
+	got, err := CountByState(ctx, sub, ListOptions{})
 	if err != nil {
 		t.Fatalf("CountByState: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestCountByStateEquivalentToListFilter(t *testing.T) {
 		t.Fatalf("Promote 2: %v", err)
 	}
 
-	counts, err := CountByState(ctx, sub)
+	counts, err := CountByState(ctx, sub, ListOptions{})
 	if err != nil {
 		t.Fatalf("CountByState: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestCountByStateTotalEqualsSumOfByState(t *testing.T) {
 	for i, desc := range []string{"a", "b", "c"} {
 		_ = formCluster(t, sub, desc, "actor-sum-"+desc+"-", int64(1000*(i+1)))
 	}
-	got, err := CountByState(ctx, sub)
+	got, err := CountByState(ctx, sub, ListOptions{})
 	if err != nil {
 		t.Fatalf("CountByState: %v", err)
 	}

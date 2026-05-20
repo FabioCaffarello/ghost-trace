@@ -49,6 +49,8 @@ func run() error {
 	dbPath := flag.String("db", "./ghost-trace.db", "SQLite primary-event-log path")
 	blobDir := flag.String("blobs", "./blobs", "content-addressed blob-store directory")
 	stateFilter := flag.String("state", "", "filter by projected state: forming|promoted|demoted|dissolved|merged_into|split_into (empty = all)")
+	afterNs := flag.Int64("after-ns", 0, "inclusive lower bound (Unix nanoseconds) on the latest event_time of each projection; 0 disables the lower bound")
+	beforeNs := flag.Int64("before-ns", 0, "inclusive upper bound (Unix nanoseconds) on the latest event_time of each projection; 0 disables the upper bound")
 	limit := flag.Int("limit", 0, "cap the number of projections returned (0 = unbounded)")
 	offset := flag.Int("offset", 0, "skip the first N projections (0 = start at the first)")
 	flag.Parse()
@@ -62,6 +64,15 @@ func run() error {
 	if *offset < 0 {
 		return fmt.Errorf("--offset must be non-negative; got %d", *offset)
 	}
+	if *afterNs < 0 {
+		return fmt.Errorf("--after-ns must be non-negative; got %d", *afterNs)
+	}
+	if *beforeNs < 0 {
+		return fmt.Errorf("--before-ns must be non-negative; got %d", *beforeNs)
+	}
+	if *afterNs != 0 && *beforeNs != 0 && *afterNs > *beforeNs {
+		return fmt.Errorf("--after-ns (%d) must not exceed --before-ns (%d)", *afterNs, *beforeNs)
+	}
 
 	ctx := context.Background()
 	sub, err := substrate.Open(ctx, *dbPath, *blobDir)
@@ -71,9 +82,11 @@ func run() error {
 	defer func() { _ = sub.Close() }()
 
 	results, err := projection.ListHypotheses(ctx, sub, projection.ListOptions{
-		StateFilter: projection.State(*stateFilter),
-		Limit:       *limit,
-		Offset:      *offset,
+		StateFilter:  projection.State(*stateFilter),
+		TimeAfterNs:  *afterNs,
+		TimeBeforeNs: *beforeNs,
+		Limit:        *limit,
+		Offset:       *offset,
 	})
 	if err != nil {
 		return err
@@ -90,8 +103,8 @@ func run() error {
 	}
 
 	fmt.Fprintf(os.Stderr,
-		"list-hypotheses: returned=%d state_filter=%q limit=%d offset=%d\n",
-		len(results), *stateFilter, *limit, *offset)
+		"list-hypotheses: returned=%d state_filter=%q after_ns=%d before_ns=%d limit=%d offset=%d\n",
+		len(results), *stateFilter, *afterNs, *beforeNs, *limit, *offset)
 	return nil
 }
 
