@@ -14,7 +14,8 @@ Architecture documents may evolve more rapidly than the Charter or Ontology, but
 - [`replay-model.md`](./replay-model.md) — replay semantics, including phase-specific replay contracts.
 - [`projection-model.md`](./projection-model.md) — the substrate / projection distinction and its operational consequences.
 - [`storage-model.md`](./storage-model.md) — storage tiers and their constitutional status.
+- [`canonical-serialization-contract.md`](./canonical-serialization-contract.md) — the bit-stable mapping from a Protobuf message to canonical bytes to a BLAKE3 content-addressable identifier. The falsifiability predicate for [Charter §2.1](../charter/constitutional-charter.md#21-observational-integrity) at the substrate.
 
 ## Status
 
-All architecture documents are currently scaffolds. Concrete architectural decisions are deferred until the Ontology stabilizes. Technology selections will be made via RFC, recorded in the [decision log](../charter/decision-log.md), and reflected here.
+The Ontology has stabilized as Drafted, and the three inception-phase technology RFCs are accepted: [`§0024`](../charter/decision-log.md) (schemas — Protocol Buffers proto3), [`§0025`](../charter/decision-log.md) (language — Go), [`§0027`](../charter/decision-log.md) (storage — SQLite + content-addressed blob-store). The implementation-gate per [CLAUDE.md §6.4](../../.claude/CLAUDE.md) is cleared. Architecture documents are transitioning from scaffold to active as concrete decisions consume the technology selections. The first active document is [`canonical-serialization-contract.md`](./canonical-serialization-contract.md) (per [`§0024`](../charter/decision-log.md) AP5 step b + [`§0028`](../charter/decision-log.md)); the four scaffold documents above remain scaffolds pending further concrete work.
