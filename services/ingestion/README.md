@@ -10,13 +10,14 @@ Skeleton. First commit producing executable code per [`decision-log §0027`](../
 
 ## Architecture
 
-Three packages under `internal/`, each consuming a published contract:
+Four packages under `internal/`, each consuming a published contract:
 
 - [`internal/canonical`](./internal/canonical) — implements [`docs/architecture/canonical-serialization-contract.md`](../../docs/architecture/canonical-serialization-contract.md). Single `Marshal` + `Hash` + `HashHex` entry points; service code MUST NOT call `proto.Marshal` directly.
 - [`internal/substrate`](./internal/substrate) — implements the [`§0027`](../../docs/charter/decision-log.md) SQLite + content-addressed blob-store substrate. Single `Append` entry point + `writeMu` mutex per [`docs/architecture/concurrency-pattern.md`](../../docs/architecture/concurrency-pattern.md) §Substrate-Writer Serialization. PRAGMA `journal_mode=WAL` + `synchronous=FULL` per [`§0027`](../../docs/charter/decision-log.md) Proposal item 1. Hash-verification on every blob-read path per [`§0027`](../../docs/charter/decision-log.md) AP5.
 - [`internal/ingest`](./internal/ingest) — composes `canonical` + `substrate` into a typed `Append(ctx, msg, eventTime)` boundary. The single per-process write entry point.
+- [`internal/httpapi`](./internal/httpapi) — minimum-viable HTTP interface (`POST /v1/events` accepting `application/x-protobuf`; `GET /healthz`). Same error classification as the stdin worker: recoverable → 4xx + JSON body; unrecoverable (substrate §2.1 violations) → 500 + JSON body + signal the service-level fatal channel per [`§0032`](../../docs/charter/decision-log.md).
 
-`main.go` reads newline-delimited base64-encoded Protobuf `DeclaredSession` messages from stdin, ingests each, and emits a one-line JSON confirmation per success or one-line JSON error per failure to stdout. Service-level shutdown coordinated via `errgroup` + `signal.NotifyContext` per [`concurrency-pattern.md`](../../docs/architecture/concurrency-pattern.md).
+`main.go` orchestrates up to four goroutines via `errgroup` per [`concurrency-pattern.md`](../../docs/architecture/concurrency-pattern.md): the stdin worker (always), the HTTP server (when `--http` is set), an HTTP-graceful-shutdown coordinator, and a fatal-coordinator that propagates HTTP-side unrecoverable errors back through errgroup. Shutdown coordinated via `signal.NotifyContext`.
 
 ## Build Sequence
 
@@ -33,11 +34,23 @@ Subsequent builds skip `make tools` unless `protoc-gen-go` is missing or out of 
 
 ## Run
 
+**Stdin/stdout (default):**
+
 ```sh
 echo "<base64-encoded-Protobuf-DeclaredSession>" | ./bin/ingestion -db ./ghost-trace.db -blobs ./blobs
 ```
 
-Each input line produces one output line (JSON object). Signals (SIGINT, SIGTERM) trigger graceful shutdown via context cancellation.
+Each input line produces one output line (JSON object).
+
+**HTTP (opt-in via `--http`):**
+
+```sh
+./bin/ingestion -db ./ghost-trace.db -blobs ./blobs -http :8080
+```
+
+Then producers may POST to `http://localhost:8080/v1/events` with `Content-Type: application/x-protobuf` and a Protobuf-marshaled `DeclaredSession` body. The response is `200 OK` + JSON `confirmation` on success, `400 Bad Request` + JSON `ingestError` on recoverable input failures, `500 Internal Server Error` + JSON `ingestError` on unrecoverable substrate violations (which also trigger service shutdown). `GET /healthz` returns `200 OK` + `{"status":"ok"}`. The stdin worker runs simultaneously; both channels share the same single-writer mutex per [`concurrency-pattern.md`](../../docs/architecture/concurrency-pattern.md) §Substrate-Writer Serialization.
+
+Signals (SIGINT, SIGTERM) trigger graceful shutdown via context cancellation; in-flight HTTP requests drain up to a 10-second grace window before the server returns from `Shutdown`.
 
 ## Required Properties
 
@@ -59,7 +72,7 @@ Per the original constitutional placeholder ([decision-log §0022](../../docs/ch
 
 Per skeleton-status discipline, the following are deferred to follow-on commits:
 
-- **HTTP/gRPC interfaces.** Stdin/stdout is the inception-phase I/O. Service-tier IPC is deferred per [`§0025`](../../docs/charter/decision-log.md) Open Questions.
+- ~~HTTP interface~~ **partially discharged at [`decision-log §0034`](../../docs/charter/decision-log.md).** `POST /v1/events` + `GET /healthz` implemented in [`internal/httpapi`](./internal/httpapi); opt-in via `--http :8080`. gRPC remains deferred per [`§0025`](../../docs/charter/decision-log.md) Open Questions; HTTP authentication, rate limiting, and TLS termination are out of scope (reverse-proxy concern at inception).
 - **Backup/recovery automation.** Manual `.backup` + `rsync` per [`§0027`](../../docs/charter/decision-log.md) Proposal item 5; ordering matters (blob-store first, then SQLite).
 - ~~Canonical-corpus population.~~ **Discharged at [`decision-log §0031`](../../docs/charter/decision-log.md).** Two corpus entries cover `DeclaredSession`; discovery-based test + `-update` regeneration via `make golden-corpus`; CI golden-file gate operational.
 - ~~Unrecoverable-error shutdown escalation.~~ **Discharged at [`decision-log §0032`](../../docs/charter/decision-log.md).** `readLoop` classifies errors via `isUnrecoverable`; substrate §2.1-violation errors (`substrate.ErrHashMismatch`, `substrate.ErrBlobCollision`) terminate the worker, propagate through errgroup, and trigger `main()` to write a structured fatal record to stderr + exit non-zero. Recoverable errors (bad input) still emit per-message JSON entries to stdout and continue processing. Tested in `main_test.go` (6 tests; both paths exercised).

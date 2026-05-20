@@ -20,8 +20,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -29,6 +31,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/httpapi"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
@@ -54,6 +57,7 @@ func main() {
 func run() error {
 	dbPath := flag.String("db", "./ghost-trace.db", "SQLite primary-event-log path")
 	blobDir := flag.String("blobs", "./blobs", "content-addressed blob-store directory")
+	httpAddr := flag.String("http", "", "HTTP listen address (e.g. :8080); empty disables the HTTP server")
 	flag.Parse()
 
 	// Root context cancellable on SIGINT / SIGTERM per concurrency-pattern §Context Propagation.
@@ -67,11 +71,50 @@ func run() error {
 	defer func() { _ = sub.Close() }()
 
 	in := ingest.New(sub, time.Now)
+	reporter := &fatalReporter{}
 
-	// Single worker goroutine consuming stdin; structured-concurrency via
-	// errgroup per concurrency-pattern §Goroutine Lifecycle.
+	// errgroup orchestrates per concurrency-pattern §Goroutine Lifecycle.
+	// Three goroutines may run:
+	//   1. Stdin worker — always.
+	//   2. HTTP server — only when --http is set.
+	//   3. Fatal coordinator — propagates unrecoverable errors reported
+	//      by HTTP handlers to the errgroup.
 	g, gctx := errgroup.WithContext(ctx)
+
 	g.Go(func() error { return readLoop(gctx, in.Append, os.Stdin, os.Stdout) })
+
+	g.Go(func() error {
+		select {
+		case err := <-reporter.signal():
+			return err
+		case <-gctx.Done():
+			return nil
+		}
+	})
+
+	if *httpAddr != "" {
+		handler := httpapi.New(in.Append, reporter)
+		srv := &http.Server{
+			Addr:              *httpAddr,
+			Handler:           handler,
+			ReadHeaderTimeout: 10 * time.Second,
+		}
+		g.Go(func() error {
+			if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				return fmt.Errorf("http listen: %w", err)
+			}
+			return nil
+		})
+		g.Go(func() error {
+			<-gctx.Done()
+			// Detached shutdown context with a bounded grace period; never
+			// inherits gctx because gctx is already canceled by the time
+			// this fires.
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			return srv.Shutdown(shutdownCtx)
+		})
+	}
 
 	if err := g.Wait(); err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -83,6 +126,28 @@ func run() error {
 		return fmt.Errorf("worker terminated: %w", err)
 	}
 	return nil
+}
+
+// fatalReporter implements httpapi.FatalReporter. The HTTP handler calls
+// ReportFatal on unrecoverable errors; the service's fatal coordinator
+// goroutine reads from signal() and returns the error, propagating
+// shutdown through errgroup per concurrency-pattern §Error Propagation.
+type fatalReporter struct {
+	once sync.Once
+	ch   chan error
+}
+
+func (f *fatalReporter) signal() <-chan error {
+	f.once.Do(func() { f.ch = make(chan error, 1) })
+	return f.ch
+}
+
+func (f *fatalReporter) ReportFatal(err error) {
+	f.once.Do(func() { f.ch = make(chan error, 1) })
+	select {
+	case f.ch <- err:
+	default: // already signaled; first fatal wins
+	}
 }
 
 // appendFunc is the readLoop's dependency on the ingestion pipeline.

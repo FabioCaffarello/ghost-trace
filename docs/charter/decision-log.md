@@ -875,6 +875,49 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0034` — HTTP interface added to ingestion service (POST /v1/events + GET /healthz); §0030 HTTP/gRPC item partially discharged
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0030`](#0030--ingestion-service-skeleton--first-commit-producing-executable-code-0022-originally-proposed-work-commenced) Out-of-Scope item: "HTTP/gRPC interfaces. Stdin/stdout is the inception-phase I/O. Service-tier IPC is deferred per [`§0025`](#0025--implementation-language-selection-go-adopted-second-technology-rfc-per-0022-pivot) Open Questions." [`§0025`](#0025--implementation-language-selection-go-adopted-second-technology-rfc-per-0022-pivot) Open Questions deferred specifically "Service-to-service RPC technology" to a separate RFC, naming gRPC as the canonical RPC framing. This entry distinguishes two concerns within that broader item: producer-facing HTTP ingestion (separate from RPC framing concern) and service-to-service RPC (still deferred).
+
+- **Decision:** A minimum-viable HTTP interface is added to the ingestion service as a producer-facing ingestion channel alongside the existing stdin/stdout I/O. Service-to-service RPC remains deferred to a separate RFC per [`§0025`](#0025--implementation-language-selection-go-adopted-second-technology-rfc-per-0022-pivot) Open Questions.
+
+  HTTP surface:
+  - `POST /v1/events` — accepts `application/x-protobuf` body containing a Protobuf-marshaled `DeclaredSession`; returns `200 OK` + JSON `confirmation` on success; `400 Bad Request` + JSON `ingestError` on recoverable input failures (empty body, invalid Protobuf, wrong content-type, transient SQL errors); `415 Unsupported Media Type` if content-type is set to a non-Protobuf value; `405 Method Not Allowed` on non-POST; `413 Request Entity Too Large` if body exceeds the 1 MiB ceiling (matches the stdin-worker scanner buffer limit per concurrency-pattern §Bounded Concurrency).
+  - `GET /healthz` — liveness probe; returns `200 OK` + `{"status":"ok"}`.
+  - All other paths → `404 Not Found`.
+
+  Error-classification discipline matches the stdin worker: recoverable errors return 4xx + JSON `ingestError`; unrecoverable errors (substrate §2.1 violations — `ErrHashMismatch`, `ErrBlobCollision`) return 500 + JSON `ingestError` AND notify the service-level fatal channel for shutdown escalation per [`§0032`](#0032--unrecoverable-error-shutdown-escalation-added-to-ingestion-service-21-violation--exit-non-zero-pathway-operational).
+
+  Service-level orchestration: `main.go`'s errgroup now coordinates up to four goroutines (stdin worker; HTTP server; HTTP-graceful-shutdown coordinator; fatal coordinator that converts HTTP-side `ReportFatal` calls into errgroup-propagated errors). HTTP is opt-in via `--http :8080`; empty/unset disables the server entirely.
+
+  Substrate-writer serialization unchanged: both the stdin worker and HTTP handlers funnel through `ingest.Ingester.Append` → `substrate.Substrate.Append` → `writeMu`. Multi-channel concurrency is correct by construction.
+
+  Out of scope at this layer (per the HTTP package's purpose-statement + tests):
+  - TLS termination (operator concern — reverse proxy in front).
+  - Authentication (deferred follow-on; ingestion-service producers are trusted at inception).
+  - Rate limiting (deferred — bounded body size + single-writer-serialization provide back-pressure surfaces).
+  - JSON-wrapped base64 input on HTTP (the stdin worker handles JSON-wrapped base64; HTTP keeps the wire format binary).
+  - gRPC (still deferred per [`§0025`](#0025--implementation-language-selection-go-adopted-second-technology-rfc-per-0022-pivot) Open Questions — separate RFC).
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. Respects [§2.1](../charter/constitutional-charter.md#21-observational-integrity) — HTTP requests funnel through the same canonical-serialization + substrate-Append path the stdin worker uses; content-addressing + hash-verification on read are unchanged. Respects [§2.2](../charter/constitutional-charter.md#22-epistemic-separation) — HTTP handlers operate on the same typed `*eventsv1.DeclaredSession` after `proto.Unmarshal`; no unified-record-with-discriminator pattern introduced. Respects [`§0029`](#0029--concurrency-pattern-architecture-document-introduced-0025-modification-5-discharged) concurrency-pattern — the new orchestration extends the existing errgroup structure; goroutine lifecycle, channel ownership, context propagation all preserved; `http.Server.Shutdown` is the canonical graceful-stop primitive; the fatal-channel + `sync.Once`-guarded sender is bounded-capacity 1 with first-fatal-wins semantics. Respects [`§0032`](#0032--unrecoverable-error-shutdown-escalation-added-to-ingestion-service-21-violation--exit-non-zero-pathway-operational) error-classification — HTTP handlers reuse the same substrate-error-typed unrecoverable test (duplicated in the httpapi package to keep its dependency surface limited to substrate + ingest + genproto + Go stdlib). No glossary changes (HTTP-protocol vocabulary — POST, GET, status codes, content-type — is technology vocabulary).
+
+- **Consequences:**
+  - [`services/ingestion/internal/httpapi/`](../../services/ingestion/internal/httpapi/) — new package (handler.go + handler_test.go).
+  - [`services/ingestion/main.go`](../../services/ingestion/main.go) — `--http` command-line option added; errgroup orchestration extended with HTTP server, graceful-shutdown coordinator, fatal coordinator; `fatalReporter` struct implements `httpapi.FatalReporter` with `sync.Once`-guarded channel-init + first-fatal-wins semantics.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — Architecture section extended to four packages; Run section documents both stdin/stdout and HTTP modes; §Out of Scope "HTTP/gRPC interfaces" item struck through with discharge reference (HTTP discharged here; gRPC still pending).
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0034 (this entry) records the addition.
+  - **Test coverage** — 12 new tests in `internal/httpapi/handler_test.go`: healthz happy + reject-non-GET; unknown path → 404; POST /v1/events happy + reject-wrong-method + reject-wrong-content-type + reject-empty-body + reject-invalid-protobuf + unrecoverable-triggers-fatal (ErrBlobCollision + ErrHashMismatch — symmetric) + recoverable-returns-400 + body-size-limit-enforced. Combined with existing tests, the service now has 30 tests passing under `go test -race ./...`.
+  - **Service-tier discipline standard extended.** Future services adding HTTP interfaces should mirror this shape: same error-classification predicate; same fatal-channel-via-FatalReporter pattern; same content-type discipline (binary wire format on HTTP); same bounded-body-size limit.
+  - **§0030 Out-of-Scope bullet partially discharged.** "HTTP/gRPC interfaces" → HTTP discharged; gRPC remains pending. The README bullet reflects this.
+  - **Cumulative non-stdlib dependency count unchanged.** `net/http` is Go stdlib; the new httpapi package introduces no external dependencies.
+
+- **Supersession:** None. This entry adds an artifact and partially discharges an [`§0030`](#0030--ingestion-service-skeleton--first-commit-producing-executable-code-0022-originally-proposed-work-commenced) Out-of-Scope item; no prior decision reversed.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
