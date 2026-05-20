@@ -4,7 +4,7 @@ Golden-file corpus per [`docs/architecture/canonical-serialization-contract.md`]
 
 ## Status
 
-Active. CI golden-file gate operationalized as of [`decision-log §0031`](../../../../../../docs/charter/decision-log.md). Coverage extended to a second Cat I type ([`NetworkEvent`](../../../../../../schemas/events/v1/network_event.proto)) at [`decision-log §0042`](../../../../../../docs/charter/decision-log.md); the corpus now exercises both registered Cat I primary-observation types plus the `IngestionEvent` enrichment.
+Active. CI golden-file gate operationalized as of [`decision-log §0031`](../../../../../../docs/charter/decision-log.md). Coverage extended to a second Cat I type ([`NetworkEvent`](../../../../../../schemas/events/v1/network_event.proto)) at [`decision-log §0042`](../../../../../../docs/charter/decision-log.md); extended again to the first Category II operational construct ([`OperationalSession`](../../../../../../schemas/events/v1/operational_session.proto)) at [`decision-log §0043`](../../../../../../docs/charter/decision-log.md).
 
 ## Layout
 
@@ -25,6 +25,8 @@ The stem-name prefix selects the Protobuf message type via the `messageFactory` 
 | `ingestion-event-mtls` | mTLS-enriched ingestion event | Exercises the `IngestionEvent` enrichment with verified client identity (CN + SANs + SHA-256). |
 | `network-event-minimal` | all proto3 defaults (`{}`) | Mirrors `declared-session-minimal` for the second Cat I type; canonical bytes are zero-length; hash is the BLAKE3 digest of empty input. |
 | `network-event-typical` | typical collector-shaped values | Exercises all four `NetworkEvent` fields: `observed_at` non-zero int64, `actor_ref` non-empty string, `endpoint_ref` non-empty string, `event_descriptor` non-empty bytes. |
+| `operational-session-minimal` | all proto3 defaults (`{}`) | First Category II entry. Mirrors the all-defaults coverage shape for the Cat II type. |
+| `operational-session-padded-v1` | typical padded-v1 derivation values | Exercises all six `OperationalSession` fields under the canonical `padded-v1` operational definition; `source_event_hash` is a synthetic 32-byte pattern. |
 
 ## Regeneration
 

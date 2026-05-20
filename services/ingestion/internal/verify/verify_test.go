@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/canonical"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/derivation"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
@@ -314,6 +315,41 @@ func TestVerifyHeterogeneousCatITypes(t *testing.T) {
 	}
 	if report.VerifiedCount != 4 {
 		t.Errorf("VerifiedCount: got %d, want 4 (2 primary + 2 enrichment)", report.VerifiedCount)
+	}
+}
+
+// TestVerifyWithCatIIRecords proves verify passes over a substrate
+// that contains Category II OperationalSession records alongside Cat I
+// primary observations (per decision-log §0043). The substrate-
+// integrity audit is type-agnostic: hash-chain consistency does not
+// depend on which Category a record belongs to.
+func TestVerifyWithCatIIRecords(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Close() })
+
+	in := ingest.New(sub, time.Now)
+	decl := &eventsv1.DeclaredSession{DeclaredAt: 1000, ActorRef: "actor-cat-ii", SessionDescriptor: []byte("s")}
+	if _, err := in.Append(ctx, decl, decl.DeclaredAt, ingest.Envelope{Channel: "test"}); err != nil {
+		t.Fatalf("Append DeclaredSession: %v", err)
+	}
+	if _, err := derivation.DeriveAll(ctx, sub, derivation.PaddedV1{PadSeconds: 300}, time.Now); err != nil {
+		t.Fatalf("DeriveAll: %v", err)
+	}
+
+	report, err := Verify(ctx, sub, Options{})
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if report.Failed() {
+		t.Errorf("Cat-I+Cat-II substrate Verify reported failure: %+v", report)
+	}
+	if report.VerifiedCount != 3 {
+		t.Errorf("VerifiedCount: got %d, want 3 (1 primary + 1 enrichment + 1 derived)", report.VerifiedCount)
 	}
 }
 
