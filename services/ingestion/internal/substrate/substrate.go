@@ -91,6 +91,12 @@ func Open(ctx context.Context, dbPath, blobDir string) (*Substrate, error) {
 	return &Substrate{db: db, blobDir: blobDir}, nil
 }
 
+// BlobDir returns the configured blob-store directory. Exposed for
+// operational tooling (e.g. the verify CLI per §0039) and tests that
+// need to inspect on-disk state. Service code SHOULD NOT manipulate
+// the blob-store directly; use ReadBlob / Append / AppendPair.
+func (s *Substrate) BlobDir() string { return s.blobDir }
+
 // Close releases the underlying database connection. Idempotent.
 func (s *Substrate) Close() error {
 	if s.db == nil {
@@ -247,6 +253,41 @@ func (s *Substrate) Count(ctx context.Context) (int64, error) {
 	var n int64
 	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM events`).Scan(&n)
 	return n, err
+}
+
+// WalkEvents iterates over every events-table row in commit order
+// (committed_at ascending). For each row, fn is called with the row's
+// content. If fn returns a non-nil error, iteration stops and the
+// error is propagated to the caller; the cursor is then closed.
+//
+// Used by the verify CLI per docs/charter/decision-log.md §0039 +
+// §0033 §Restoration Procedure. The walk is read-only; the writeMu
+// is NOT acquired (WAL mode permits concurrent readers per §0027).
+func (s *Substrate) WalkEvents(ctx context.Context, fn func(EventRow) error) error {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT event_hash, event_time, message_type, payload_ref, committed_at
+		   FROM events
+		  ORDER BY committed_at ASC, event_hash ASC`)
+	if err != nil {
+		return fmt.Errorf("substrate.WalkEvents: query: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var row EventRow
+		var hashBytes []byte
+		if err := rows.Scan(&hashBytes, &row.EventTime, &row.MessageType, &row.PayloadRef, &row.CommittedAt); err != nil {
+			return fmt.Errorf("substrate.WalkEvents: scan: %w", err)
+		}
+		copy(row.EventHash[:], hashBytes)
+		if err := fn(row); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("substrate.WalkEvents: rows iteration: %w", err)
+	}
+	return nil
 }
 
 // AppendPair commits two events atomically: a primary observation and

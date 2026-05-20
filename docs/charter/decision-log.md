@@ -1122,6 +1122,56 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0039` — `verify` CLI tool added; §0033 verify follow-on discharged
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0033`](#0033--operational-ops-architecture-document-introduced-0027-backup-cadence--vacuum-cadence-open-questions-discharged) §Restoration Procedure step 3 named a `verify` CLI tool as follow-on work: "A dedicated `verify` CLI tool lands as follow-on work; for inception phase the verification is exercised via the substrate's existing ReadBlob path." [`§0033`](#0033--operational-ops-architecture-document-introduced-0027-backup-cadence--vacuum-cadence-open-questions-discharged) Open Questions reiterated: "A dedicated `verify` CLI that walks every events-table row + checks every blob hash up-front would surface verification failures before the service starts. Deferred to follow-on operational-ops work when the first restoration cycle is exercised." This entry adds the tool, ahead of any actual restoration cycle, so operators have it available the moment they need it.
+
+- **Decision:** Add **`verify`** as a second binary under the ingestion service module. Operationally:
+
+  - **Post-restore verification** per [`§0033`](#0033--operational-ops-architecture-document-introduced-0027-backup-cadence--vacuum-cadence-open-questions-discharged) — operator runs `bin/verify -db <path> -blobs <path>` against a restored substrate BEFORE launching the ingestion service. Failure aborts recovery; success confirms substrate hash-chain consistency.
+  - **Periodic substrate-integrity audit** on a running substrate. SQLite WAL permits concurrent readers; the verify run reads through the same `substrate.ReadBlob` path the live service uses (with hash recomputation per the canonical-serialization-contract).
+
+  Implementation shape:
+
+  - **New `substrate.WalkEvents(ctx, fn)`** — iterates over every events-table row in commit-ascending order, calling `fn` per row. Read-only; no writeMu acquisition (WAL permits concurrent readers per [`§0027`](#0027--inception-phase-storage-technology-selection-sqlite--content-addressed-blob-store-on-local-filesystem-adopted-third-and-final-technology-rfc-per-0022-pivot--0003-fully-discharged)). Stops at the first `fn` error.
+  - **New `substrate.BlobDir()`** accessor — exposes the configured blob-store directory for operational tooling + tests that inspect on-disk state. Service code continues to use ReadBlob / Append / AppendPair.
+  - **New `internal/verify` package** with `Verify(ctx, sub) (Report, error)`. Walks every row, calls `substrate.ReadBlob` (which recomputes the hash per the canonical-serialization-contract anti-pattern "hash-verification omitted from blob-read path"), aggregates failures into a `Report{VerifiedCount, HashMismatchCount, MissingBlobCount, HashMismatchHashes, MissingBlobHashes}`. `Report.Failed()` reports whether any §2.1 violation surfaced. Continues past individual failures so a single run surfaces ALL violations (rather than aborting at the first).
+  - **New `cmd/verify/main.go`** — thin binary wrapper around `internal/verify`. Writes structured JSON to stdout (`{verified, hash_mismatch, missing_blob, passed, hash_mismatch_hashes, missing_blob_hashes}`) + a brief human summary to stderr. Exit codes: **0** on pass; **1** on any verification failure (substrate-integrity violation); **2** on tool / configuration error (e.g. database open failure). Distinct exit codes let CI / orchestrator scripts distinguish "substrate is bad" from "tool itself broke."
+
+  Tests:
+
+  - `substrate.WalkEvents`: two new tests — `TestWalkEventsOrderedByCommittedAt` (verifies the commit-ascending order) + `TestWalkEventsStopsOnError` (verifies sentinel-error propagation + early exit).
+  - `internal/verify`: six tests — happy-path (3 events ingested, all verify clean — exercises full 6-row count: 3 primary + 3 enrichment per [`§0038`](#0038--ingestionevent-enrichment--mtls-client-identity-threaded-into-ingestion-provenance-0037-client-identity-follow-on-discharged) pairing); corruption-detection (deliberately overwrites a blob, verify surfaces hash mismatch); missing-blob detection (deliberately deletes a blob, verify surfaces the missing-blob failure with the correct hash); empty-substrate (passes vacuously); helper sanity tests.
+  - No new tests on the binary itself; it's a thin wrapper, and the package tests + smoke-test (verified at commit time against an empty substrate) exercise the wiring.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. Respects [§2.1](../charter/constitutional-charter.md#21-observational-integrity) — verify is a READ-only operation against the substrate; it surfaces §2.1 violations rather than introducing them. Respects [`§0029`](#0029--concurrency-pattern-architecture-document-introduced-0025-modification-5-discharged) concurrency-pattern — `WalkEvents` does not acquire `writeMu` (concurrent reads are safe under WAL per [`§0027`](#0027--inception-phase-storage-technology-selection-sqlite--content-addressed-blob-store-on-local-filesystem-adopted-third-and-final-technology-rfc-per-0022-pivot--0003-fully-discharged) F3); verify can run alongside an active ingestion service without contention. Respects [`§0033`](#0033--operational-ops-architecture-document-introduced-0027-backup-cadence--vacuum-cadence-open-questions-discharged) §Restoration Procedure — the hash-verification gate that §0033 prescribed is now mechanically falsifiable via the verify binary (exit code surfaces the gate's outcome). No glossary changes (verify, walk, report — operational vocabulary).
+
+- **Consequences:**
+  - [`services/ingestion/internal/substrate/substrate.go`](../../services/ingestion/internal/substrate/substrate.go) — new `WalkEvents` method + `BlobDir` accessor.
+  - [`services/ingestion/internal/substrate/substrate_test.go`](../../services/ingestion/internal/substrate/substrate_test.go) — `TestWalkEventsOrderedByCommittedAt` + `TestWalkEventsStopsOnError`.
+  - [`services/ingestion/internal/verify/verify.go`](../../services/ingestion/internal/verify/verify.go) — new package with `Verify` + `Report`.
+  - [`services/ingestion/internal/verify/verify_test.go`](../../services/ingestion/internal/verify/verify_test.go) — 6 tests.
+  - [`services/ingestion/cmd/verify/main.go`](../../services/ingestion/cmd/verify/main.go) — new binary.
+  - [`services/ingestion/Makefile`](../../services/ingestion/Makefile) — new `verify-build` target.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — new §`verify` CLI section.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0039 (this entry).
+  - **First non-`main` binary** in the service. The ingestion service module now has two binaries: the existing `ingestion` server (`./main.go` → `bin/ingestion`) and the new `verify` CLI (`./cmd/verify/main.go` → `bin/verify`). The `cmd/` subdirectory pattern is established for future per-service tooling.
+  - **Test count grows.** Combined: **93 tests** across the service (8 in main + 5 in canonical + 11 in substrate [+2 WalkEvents tests] + 5 in ingest + 22 in httpapi + 6 in the new verify package + helpers). All passing under `go test -race ./...`.
+  - **Substrate-integrity audit cadence now operationally feasible.** Per [`§0033`](#0033--operational-ops-architecture-document-introduced-0027-backup-cadence--vacuum-cadence-open-questions-discharged) §Disk-Capacity Monitoring + §Substrate Migration, operators can now run verify on a schedule (cron / systemd timer); failure surfaces a mechanically-detectable indicator rather than waiting for first read to fail.
+  - **`§0033` Open Questions reduces by one.** The `verify` CLI tool Open Question is closed.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Orphan-blob detection** — blobs without index rows. Per [`§0033`](#0033--operational-ops-architecture-document-introduced-0027-backup-cadence--vacuum-cadence-open-questions-discharged) §Restoration Procedure: "Orphans are harmless at the substrate layer (the events table is authoritative); they consume disk space but do not affect §2.1." Verify does NOT walk the blob-store directory; a separate `orphan-scan` or `--check-orphans` follow-on may add it when operationally needed.
+    - **Streaming JSON output** — verify currently buffers the full report before writing to stdout. For very large substrates, a streaming output mode (per-row JSON-lines) would let operators see progress + tail-end failures earlier. Deferred.
+    - **Parallel verification** — verify runs sequentially. The walk is I/O-bound on blob reads + hash recomputation; parallel verification could speed up large substrates. Deferred until empirical pressure justifies.
+    - **Resumable verification** — current verify reruns from scratch on each invocation. A checkpoint mechanism (skip rows below `committed_at >= <last-checkpoint>`) would help for very-long-running audits. Deferred.
+
+- **Supersession:** None. This entry discharges a deferred follow-on from [`§0033`](#0033--operational-ops-architecture-document-introduced-0027-backup-cadence--vacuum-cadence-open-questions-discharged); no prior decision reversed.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

@@ -12,6 +12,7 @@ help:
 	@echo "  tools          install protoc-gen-go locally per tools.go pin"
 	@echo "  generate       run protoc to produce $(GEN_OUT)/**/*.pb.go"
 	@echo "  build          go build -trimpath -o $(BIN_DIR)/ingestion ."
+	@echo "  verify-build   go build -trimpath -o $(BIN_DIR)/verify ./cmd/verify"
 	@echo "  test           go test -race ./..."
 	@echo "  golden-corpus  regenerate canonical-corpus golden files (schemas-evolution event)"
 	@echo "  clean          remove $(GEN_OUT) + $(BIN_DIR)"
@@ -40,6 +41,11 @@ $(PROTOC_GEN_GO):
 build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/ingestion .
+
+.PHONY: verify-build
+verify-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/verify ./cmd/verify
 
 .PHONY: test
 test:
