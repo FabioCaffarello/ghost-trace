@@ -91,7 +91,7 @@ Registered formation patterns:
 
 Adding a new formation pattern registers via [`internal/hypothesis`](./internal/hypothesis): implement `FormationPattern` (Signature, Parameters, Form) and wire it into `cmd/form-hypothesis/main.go`'s `resolvePattern`. Patterns that need additional Cat I observations beyond `DeclaredSession` extend the `FormationContext` interface with new typed accessors (the same incremental-extension procedure that [`§0044`](../../docs/charter/decision-log.md) established for Cat II `DerivationContext`).
 
-**Other lifecycle operations** per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness): promotion landed at [`§0046`](../../docs/charter/decision-log.md) via [`cmd/promote-hypothesis`](#promote-hypothesis-cli) below; demotion, merge, split, dissolution remain follow-on landings. Per Charter §2.5 BC3, the substrate stores ONLY lifecycle events — the hypothesis's current state is a projection over the operation event chain (projection layer deferred).
+**Other lifecycle operations** per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness): promotion landed at [`§0046`](../../docs/charter/decision-log.md) via [`cmd/promote-hypothesis`](#promote-hypothesis-cli); demotion at [`§0047`](../../docs/charter/decision-log.md) via [`cmd/demote-hypothesis`](#demote-hypothesis-cli); dissolution at [`§0048`](../../docs/charter/decision-log.md) via [`cmd/dissolve-hypothesis`](#dissolve-hypothesis-cli); merge at [`§0049`](../../docs/charter/decision-log.md) via [`cmd/merge-hypotheses`](#merge-hypotheses-cli). Split remains the final follow-on landing (1 of 6 lifecycle operations outstanding). Per Charter §2.5 BC3, the substrate stores ONLY lifecycle events — the hypothesis's current state is a projection over the operation event chain (projection layer deferred).
 
 ## `promote-hypothesis` CLI
 
@@ -182,6 +182,38 @@ Dissolution may be invoked regardless of whether the hypothesis was ever promote
 | `-reason` | empty | Operator-supplied forensic note; **strongly recommended** — dissolution is the terminal lifecycle operation on a hypothesis, and the absence of a reason removes the only record of the underlying judgment. |
 
 Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
+
+## `merge-hypotheses` CLI
+
+Operator-invoked tool to record the fifth Cat III lifecycle operation (per [`§0049`](../../docs/charter/decision-log.md) — `BehavioralClusterMerge`). Merge combines two hypotheses recognized as describing the same underlying phenomenon, per Charter §2.5 + [`lifecycle-semantics.md`](../../docs/ontology/lifecycle-semantics.md) line 28. Within-subtype only at this layer (both antecedents and the produced hypothesis are `BehavioralClusterFormation` events); cross-subtype merge per [`entity-model.md` §Cross-subtype operations](../../docs/ontology/entity-model.md) remains deferred to `lifecycle-semantics.md` post-Q4 redaction.
+
+```sh
+make merge-hypotheses-build                                              # builds ./bin/merge-hypotheses
+
+# Merge two distinct BehavioralCluster formations, referencing a third
+# (separately-committed) formation as the produced hypothesis
+./bin/merge-hypotheses \
+  -antecedent-a-hash <64-hex-chars> \
+  -antecedent-b-hash <64-hex-chars> \
+  -produced-formation-hash <64-hex-chars> \
+  -reason "alpha and beta recognized as same phenomenon"
+```
+
+Validates all three supplied hashes resolve to `BehavioralClusterFormation` rows (otherwise exits 3 — preserves §2.5-lifecycle-integrity). Commits the `BehavioralClusterMerge` event via `substrate.Append`. The two antecedents MUST be distinct; passing identical antecedent hashes returns `ErrMergeAntecedentsIdentical` (exit 3).
+
+**Argument-order invariance.** Merge is a symmetric relation per `lifecycle-semantics.md` line 28; the CLI sorts the two antecedent hashes ascending before recording so `-antecedent-a-hash A -antecedent-b-hash B` and `-antecedent-a-hash B -antecedent-b-hash A` produce a single substrate row (content-hash collision via normalization). The "A"/"B" labels are caller-facing only.
+
+**Structural choice (per [`§0049`](../../docs/charter/decision-log.md)).** The merge event references both antecedent formation hashes AND a separately-committed produced formation hash — rather than collapsing the produced hypothesis identity into the merge event itself. This preserves the [`§0045`](../../docs/charter/decision-log.md) invariant ("hypothesis identity IS the formation event's content-hash") so all lifecycle operations (promote, demote, dissolve, future merge/split) continue targeting hypotheses through formation hashes uniformly. The produced formation must be created separately (typically via `form-hypothesis` against a substrate populated with the union of source observations) before the merge is recorded.
+
+| Option | Default | Notes |
+|---|---|---|
+| `-antecedent-a-hash` | (required) | Hex-encoded BLAKE3-256 of the first `BehavioralClusterFormation` being merged. |
+| `-antecedent-b-hash` | (required) | Hex-encoded BLAKE3-256 of the second `BehavioralClusterFormation` being merged. MUST differ from antecedent A. |
+| `-produced-formation-hash` | (required) | Hex-encoded BLAKE3-256 of the separately-committed `BehavioralClusterFormation` representing the merged hypothesis. |
+| `-merged-at-ns` | 0 (= wall-clock now) | Explicit `merged_at` for forensic replay / deterministic test recording. |
+| `-reason` | empty | Operator-supplied forensic note; **strongly recommended** — the merge encodes a substantive epistemic claim. |
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found, target-wrong-type, or identical-antecedents (the §2.5-lifecycle-integrity errors).
 
 ## `orphan-cleanup` CLI
 

@@ -66,8 +66,7 @@
       "Write(docs/charter/amendments.md)",
       "Edit(docs/charter/amendments.md)",
       "Write(docs/ontology/**)",
-      "Edit(docs/ontology/**)",
-      "Bash"
+      "Edit(docs/ontology/**)"
     ]
   },
   "hooks": {
