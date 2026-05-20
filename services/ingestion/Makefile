@@ -23,6 +23,7 @@ help:
 	@echo "  split-hypothesis-build  go build -trimpath -o $(BIN_DIR)/split-hypothesis ./cmd/split-hypothesis"
 	@echo "  hypothesis-state-build  go build -trimpath -o $(BIN_DIR)/hypothesis-state ./cmd/hypothesis-state"
 	@echo "  list-hypotheses-build  go build -trimpath -o $(BIN_DIR)/list-hypotheses ./cmd/list-hypotheses"
+	@echo "  summarize-hypotheses-build  go build -trimpath -o $(BIN_DIR)/summarize-hypotheses ./cmd/summarize-hypotheses"
 	@echo "  test           go test -race ./..."
 	@echo "  golden-corpus  regenerate canonical-corpus golden files (schemas-evolution event)"
 	@echo "  clean          remove $(GEN_OUT) + $(BIN_DIR)"
@@ -114,6 +115,11 @@ hypothesis-state-build:
 list-hypotheses-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/list-hypotheses ./cmd/list-hypotheses
+
+.PHONY: summarize-hypotheses-build
+summarize-hypotheses-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/summarize-hypotheses ./cmd/summarize-hypotheses
 
 .PHONY: test
 test:

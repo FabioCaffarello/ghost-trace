@@ -1955,6 +1955,53 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0053` — Aggregate state counters (`CountByState` + `StateCounts`); §0052 carry-forward discharged; per-state-count equivalence invariant
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0052`](#0052--multi-hypothesis-aggregate-projection-listhypotheses--projectall-0051-named-carry-forward-discharged-substrate-linear-not-quadratic-walk) landed the multi-hypothesis aggregate query (`ListHypotheses`) and named **"Aggregate counters / histograms"** as a deferred carry-forward — operator questions like "how many hypotheses are in each state?" or "histogram of formation-to-promotion latency" are derived statistics over the per-formation projection. The first of those questions (per-state counts) is the smallest useful extension: an operator answering "what's the current health of the hypothesis pool?" needs total + per-state counts, not the full projection of every formation. This entry lands `CountByState` + `summarize-hypotheses` as that surface; latency histograms and other derived statistics remain follow-ons.
+
+  One structural choice in this entry:
+
+  - **Wire shape: sparse vs dense `by_state` map.** Option (A) — sparse: omit `by_state` keys whose value is zero. Option (B) — dense: every `State` enum value appears as a key, even at zero. Option (B) chosen: a sparse map forces consumers to distinguish "key absent" from "key present with value 0", and the distinction has no semantic content (both mean "no projections in that state"). The wire-shape predictability outweighs the few bytes saved by omission.
+
+- **Decision:** Land `CountByState` + `StateCounts` + `summarize-hypotheses` with the following structural moves:
+
+  1. **`StateCounts` struct** at [`services/ingestion/internal/projection/counts.go`](../../services/ingestion/internal/projection/counts.go). Two fields: `Total int` (number of formations in the substrate) and `ByState map[State]int` (per-state count; dense — every State enum value appears as a key).
+
+  2. **`CountByState(ctx, sub) (StateCounts, error)`** at the same file. Invokes `ProjectAll` (per [`§0052`](#0052--multi-hypothesis-aggregate-projection-listhypotheses--projectall-0051-named-carry-forward-discharged-substrate-linear-not-quadratic-walk)) and aggregates the per-formation `State` values. Same substrate-linear cost as `ProjectAll` plus an O(N_formations) aggregation step over the already-materialized projection map.
+
+  3. **`cmd/summarize-hypotheses` operator interface** at [`services/ingestion/cmd/summarize-hypotheses/main.go`](../../services/ingestion/cmd/summarize-hypotheses/main.go). Twelfth operational binary; **third in the read-only classification** (alongside `hypothesis-state` from §0051 and `list-hypotheses` from §0052). No options beyond `-db` and `-blobs`. Structured JSON output of `StateCounts`. Exit codes: **0** success (including empty substrate); **2** tool/configuration error.
+
+  4. **Per-state-count equivalence invariant**, tested at [`services/ingestion/internal/projection/counts_test.go`](../../services/ingestion/internal/projection/counts_test.go) via `TestCountByStateEquivalentToListFilter`: for every State value `s`, `CountByState.ByState[s]` equals `len(ListHypotheses(ctx, sub, ListOptions{StateFilter: s}))`. This invariant defends against precedence-rule drift between the count path and the list path; both paths share `ProjectAll` so divergence would require independent post-projection logic to diverge — which the test catches at CI time.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. Respects [§2.1](../charter/constitutional-charter.md#21-observational-integrity) — read-only over immutable substrate; no lifecycle event written, modified, or interpreted in a §2.1-violating way. Respects [§2.2](../charter/constitutional-charter.md#22-epistemic-separation) — aggregate counts are an operational summary, NOT category claims about the underlying phenomena. Respects [§2.3](../charter/constitutional-charter.md#23-provenance-integrity) — each per-state count is reconstructible from the substrate via `ProjectAll`; no derived statistic is committed to the substrate. Respects [§2.5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) — aggregates exactly the six lifecycle states that §2.5 + §0045–§0050 + §0051 surface. Respects [§2.5 BC3](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) — extends the BC3-mandated read shape with a smaller aggregate view without storing the aggregate state. Respects [`§0045`](#0045--first-category-iii-hypothesis-subtype-behavioralcluster-formation-lands-25-hypothesis-lifecycle-explicitness-structurally-observable), [`§0051`](#0051--first-projection-layer-landing-hypothesisprojection-single-hypothesis-read-side-materialization-over-the-25-lifecycle-event-chain-charter-25-bc3-deferred-state-read-shape-now-operationally-observable), and [`§0052`](#0052--multi-hypothesis-aggregate-projection-listhypotheses--projectall-0051-named-carry-forward-discharged-substrate-linear-not-quadratic-walk) — `CountByState` is a thin aggregation on top of `ProjectAll`, sharing the same per-formation precedence rules; equivalence is tested. Canonical vocabulary used as written: projection, hypothesis, lifecycle event, formation, substrate, BehavioralCluster.
+
+- **Consequences:**
+  - [`services/ingestion/internal/projection/counts.go`](../../services/ingestion/internal/projection/counts.go) — new file. `StateCounts`, `CountByState`. ~60 lines including doc comments.
+  - [`services/ingestion/internal/projection/counts_test.go`](../../services/ingestion/internal/projection/counts_test.go) — **6 tests** covering empty substrate (all keys present, all zero), single-forming substrate, mixed states, all-six-end-states substrate, the per-state-count equivalence invariant against `ListHypotheses`, and the sum-equals-total structural invariant.
+  - [`services/ingestion/cmd/summarize-hypotheses/main.go`](../../services/ingestion/cmd/summarize-hypotheses/main.go) — new binary; twelfth operational CLI; third read-only binary.
+  - [`services/ingestion/Makefile`](../../services/ingestion/Makefile) — new `summarize-hypotheses-build` target; help text updated.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — new §`summarize-hypotheses` CLI section with the equivalence-invariant + dense-wire-shape explainer.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0053 (this entry).
+  - **Test count grows.** Combined: **230 tests** across the service (up from 224 at [`§0052`](#0052--multi-hypothesis-aggregate-projection-listhypotheses--projectall-0051-named-carry-forward-discharged-substrate-linear-not-quadratic-walk); +6 = 6 counts tests). All passing under `go test -race ./...`.
+  - **Zero external dependencies added.**
+  - **Twelfth operational binary lands; third read-only binary.** `cmd/` now contains 12 binaries across three classifications: substrate-write (7), substrate-audit/maintenance (2), projection-read (3: `hypothesis-state`, `list-hypotheses`, `summarize-hypotheses`).
+  - **§0052 named carry-forward discharged.** "Aggregate counters / histograms — 'how many hypotheses are in each state'" — directly supported. The latency-histogram example named in the same §0052 carry-forward remains follow-on (requires deriving per-formation latency statistics, which is a different shape from per-state counting).
+  - **Equivalence invariant family.** Two equivalence invariants now hold across the projection layer: (1) per-formation `ProjectAll` projection byte-equal to `ProjectHypothesis(sameFormation)` (per [`§0052`](#0052--multi-hypothesis-aggregate-projection-listhypotheses--projectall-0051-named-carry-forward-discharged-substrate-linear-not-quadratic-walk)); (2) per-state count byte-equal to `len(ListHypotheses{StateFilter: state})` (this entry). Together they form a structural ladder: any future projection-layer aggregate surface MUST preserve both, and the test discipline catches drift at CI time before it lands.
+  - **Smoke test of binary.** Validated at commit time: `bin/summarize-hypotheses -db /tmp/empty.db -blobs /tmp/empty` exits 0 with `{"total":0,"by_state":{"demoted":0,"dissolved":0,"forming":0,"merged_into":0,"promoted":0,"split_into":0}}`.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Latency histograms** — derived statistics over per-formation lifecycle timestamps (e.g. formation-to-promotion duration, promotion-to-demotion duration). Requires per-formation latency extraction; structurally distinct from per-state counting. Deferred.
+    - **State counts with state filter** — currently `CountByState` always returns counts for all six states. A filtered variant (e.g. "count of only the promoted hypotheses, partitioned by time window") would compose state filtering + counting. Trivial extension when needed.
+    - **Time-window filters** — unchanged from [`§0052`](#0052--multi-hypothesis-aggregate-projection-listhypotheses--projectall-0051-named-carry-forward-discharged-substrate-linear-not-quadratic-walk) carry-forward.
+    - **Cross-operation provenance counters** — unchanged from §0052.
+    - **Projection-side caching / incremental updates** — unchanged from §0051.
+
+- **Supersession:** None. Extends the aggregate-projection surface opened at [`§0052`](#0052--multi-hypothesis-aggregate-projection-listhypotheses--projectall-0051-named-carry-forward-discharged-substrate-linear-not-quadratic-walk); no prior decision reversed. The per-state-count equivalence invariant ensures the count path (this entry) and the list path (§0052) remain in structural agreement, the same way §0052's equivalence ensured the aggregate path and the single-formation path (§0051) stayed in agreement. [`§0022`](#0022--implementation-pivot-22-implementation-against-current-structural-ground-authorized-storage-technology-deferral-reversed-by-authorization) implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
