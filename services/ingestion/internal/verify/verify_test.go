@@ -397,6 +397,64 @@ func TestVerifyWithCatIIIRecords(t *testing.T) {
 	}
 }
 
+// TestVerifyWithCatIIIPromotion proves verify passes over a substrate
+// that contains BOTH a BehavioralClusterFormation AND a subsequent
+// BehavioralClusterPromotion lifecycle event (per decision-log §0046).
+// The substrate-integrity audit is type-agnostic across all Cat III
+// lifecycle operations per Charter §2.5 BC5.
+func TestVerifyWithCatIIIPromotion(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Close() })
+
+	in := ingest.New(sub, time.Now)
+	for _, ar := range []string{"actor-prom-a", "actor-prom-b"} {
+		decl := &eventsv1.DeclaredSession{DeclaredAt: 1000, ActorRef: ar, SessionDescriptor: []byte("shared")}
+		if _, err := in.Append(ctx, decl, decl.DeclaredAt, ingest.Envelope{Channel: "test"}); err != nil {
+			t.Fatalf("Append DeclaredSession %s: %v", ar, err)
+		}
+	}
+	if _, err := hypothesis.FormAll(ctx, sub, hypothesis.SessionDescriptorSharedV1{MinClusterSize: 2}, time.Now); err != nil {
+		t.Fatalf("FormAll: %v", err)
+	}
+
+	// Find the formation event hash to promote against.
+	var formationHash [32]byte
+	if err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
+		if row.MessageType == "ghosttrace.events.v1.BehavioralClusterFormation" {
+			formationHash = row.EventHash
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("WalkEvents: %v", err)
+	}
+
+	if _, err := hypothesis.Promote(ctx, sub, hypothesis.PromoteOptions{
+		FormationEventHash: formationHash,
+		PromotedAt:         1716120000000000000,
+		CadenceSeconds:     3600,
+		Reason:             "integration test",
+	}, time.Now); err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+
+	report, err := Verify(ctx, sub, Options{})
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if report.Failed() {
+		t.Errorf("formation+promotion substrate Verify reported failure: %+v", report)
+	}
+	// 2 DeclaredSession + 2 IngestionEvent + 1 Formation + 1 Promotion = 6.
+	if report.VerifiedCount != 6 {
+		t.Errorf("VerifiedCount: got %d, want 6", report.VerifiedCount)
+	}
+}
+
 // Sanity: every proto.Message field on the test message round-trips
 // through canonical.Marshal without error.
 func TestMessageRoundtrip(t *testing.T) {

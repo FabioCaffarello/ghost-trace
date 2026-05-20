@@ -4,7 +4,7 @@ Golden-file corpus per [`docs/architecture/canonical-serialization-contract.md`]
 
 ## Status
 
-Active. CI golden-file gate operationalized as of [`decision-log §0031`](../../../../../../docs/charter/decision-log.md). Coverage extended to a second Cat I type ([`NetworkEvent`](../../../../../../schemas/events/v1/network_event.proto)) at [`decision-log §0042`](../../../../../../docs/charter/decision-log.md); extended again to the first Category II operational construct ([`OperationalSession`](../../../../../../schemas/events/v1/operational_session.proto)) at [`decision-log §0043`](../../../../../../docs/charter/decision-log.md); extended again to the first Category III lifecycle event ([`BehavioralClusterFormation`](../../../../../../schemas/events/v1/behavioral_cluster_formation.proto)) at [`decision-log §0045`](../../../../../../docs/charter/decision-log.md).
+Active. CI golden-file gate operationalized as of [`decision-log §0031`](../../../../../../docs/charter/decision-log.md). Coverage extended to a second Cat I type ([`NetworkEvent`](../../../../../../schemas/events/v1/network_event.proto)) at [`decision-log §0042`](../../../../../../docs/charter/decision-log.md); extended again to the first Category II operational construct ([`OperationalSession`](../../../../../../schemas/events/v1/operational_session.proto)) at [`decision-log §0043`](../../../../../../docs/charter/decision-log.md); extended again to the first Category III lifecycle event ([`BehavioralClusterFormation`](../../../../../../schemas/events/v1/behavioral_cluster_formation.proto)) at [`decision-log §0045`](../../../../../../docs/charter/decision-log.md); extended again to the second Category III lifecycle event ([`BehavioralClusterPromotion`](../../../../../../schemas/events/v1/behavioral_cluster_promotion.proto)) at [`decision-log §0046`](../../../../../../docs/charter/decision-log.md).
 
 ## Layout
 
@@ -29,6 +29,8 @@ The stem-name prefix selects the Protobuf message type via the `messageFactory` 
 | `operational-session-padded-v1` | typical padded-v1 derivation values | Exercises all six `OperationalSession` fields under the canonical `padded-v1` operational definition; `source_event_hash` is a synthetic 32-byte pattern. |
 | `behavioral-cluster-formation-minimal` | all proto3 defaults (`{}`) | First Category III lifecycle-event entry. Mirrors the all-defaults coverage shape; canonical bytes zero-length. |
 | `behavioral-cluster-formation-shared-descriptor` | typical session-descriptor-shared-v1 formation | Exercises all six `BehavioralClusterFormation` fields: `pattern_signature`, `pattern_parameters`, two sorted `actor_refs`, `formation_at`, placeholder `confidence`, two sorted `source_event_hashes`. |
+| `behavioral-cluster-promotion-minimal` | all proto3 defaults (`{}`) | First entry covering the second Cat III lifecycle event. Mirrors the all-defaults coverage shape; canonical bytes zero-length. |
+| `behavioral-cluster-promotion-typical` | typical operator-invoked promotion values | Exercises all four `BehavioralClusterPromotion` fields: `formation_event_hash` (synthetic 32-byte pattern referencing a formation), `promoted_at`, Layer A `cadence_seconds`, free-form `reason`. |
 
 ## Regeneration
 
