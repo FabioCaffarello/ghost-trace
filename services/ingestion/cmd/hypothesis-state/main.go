@@ -52,7 +52,7 @@ func main() {
 func run() error {
 	dbPath := flag.String("db", "./ghost-trace.db", "SQLite primary-event-log path")
 	blobDir := flag.String("blobs", "./blobs", "content-addressed blob-store directory")
-	formationHex := flag.String("formation-event-hash", "", "REQUIRED: hex-encoded BLAKE3-256 content-hash of the target BehavioralClusterFormation")
+	formationHex := flag.String("formation-event-hash", "", "REQUIRED: hex-encoded BLAKE3-256 content-hash of a Cat III formation event (BehavioralCluster or AutomationGroup — subtype auto-detected)")
 	flag.Parse()
 
 	if *formationHex == "" {
@@ -75,21 +75,46 @@ func run() error {
 	}
 	defer func() { _ = sub.Close() }()
 
-	proj, err := projection.ProjectHypothesis(ctx, sub, formationHash)
+	// Auto-detect subtype by looking up the formation row's message_type.
+	row, err := sub.LookupRow(ctx, formationHash)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %s", projection.ErrFormationNotFound, *formationHex)
 	}
 
-	out := buildOutput(*formationHex, proj)
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	if err := enc.Encode(out); err != nil {
-		return fmt.Errorf("encode json: %w", err)
-	}
 
-	fmt.Fprintf(os.Stderr,
-		"hypothesis-state: formation=%s state=%s lifecycle_events=%d\n",
-		*formationHex, proj.State, len(proj.LifecycleHistory))
+	switch row.MessageType {
+	case "ghosttrace.events.v1.BehavioralClusterFormation":
+		proj, err := projection.ProjectHypothesis(ctx, sub, formationHash)
+		if err != nil {
+			return err
+		}
+		out := buildOutput(*formationHex, proj)
+		out.Subtype = "behavioral_cluster"
+		if err := enc.Encode(out); err != nil {
+			return fmt.Errorf("encode json: %w", err)
+		}
+		fmt.Fprintf(os.Stderr,
+			"hypothesis-state: subtype=behavioral_cluster formation=%s state=%s lifecycle_events=%d\n",
+			*formationHex, proj.State, len(proj.LifecycleHistory))
+
+	case "ghosttrace.events.v1.AutomationGroupFormation":
+		proj, err := projection.ProjectAutomationGroup(ctx, sub, formationHash)
+		if err != nil {
+			return err
+		}
+		out := buildAGOutput(*formationHex, proj)
+		if err := enc.Encode(out); err != nil {
+			return fmt.Errorf("encode json: %w", err)
+		}
+		fmt.Fprintf(os.Stderr,
+			"hypothesis-state: subtype=automation_group formation=%s state=%s lifecycle_events=%d\n",
+			*formationHex, proj.State, len(proj.LifecycleHistory))
+
+	default:
+		return fmt.Errorf("%w: %s is %q (expected a Cat III formation event)", projection.ErrTargetNotFormation, *formationHex, row.MessageType)
+	}
 	return nil
 }
 
@@ -100,6 +125,7 @@ type lifecycleEntry struct {
 }
 
 type output struct {
+	Subtype          string           `json:"subtype"`
 	FormationHash    string           `json:"formation_event_hash"`
 	State            string           `json:"state"`
 	LatestPromotion  *promotionView   `json:"latest_promotion,omitempty"`
@@ -109,6 +135,69 @@ type output struct {
 	SplitInto        *splitView       `json:"split_into,omitempty"`
 	LifecycleHistory []lifecycleEntry `json:"lifecycle_history"`
 	Latencies        latencyView      `json:"latencies"`
+}
+
+func buildAGOutput(formationHex string, p projection.AutomationGroupProjection) output {
+	o := output{
+		Subtype:       "automation_group",
+		FormationHash: formationHex,
+		State:         string(p.State),
+	}
+	if p.LatestPromotion != nil {
+		o.LatestPromotion = &promotionView{
+			PromotedAt:     p.LatestPromotion.PromotedAt,
+			CadenceSeconds: p.LatestPromotion.CadenceSeconds,
+			Reason:         p.LatestPromotion.Reason,
+		}
+	}
+	if p.LatestDemotion != nil {
+		o.LatestDemotion = &demotionView{
+			DemotedAt: p.LatestDemotion.DemotedAt,
+			Reason:    p.LatestDemotion.Reason,
+		}
+	}
+	if p.Dissolution != nil {
+		o.Dissolution = &dissolutionView{
+			DissolvedAt: p.Dissolution.DissolvedAt,
+			Reason:      p.Dissolution.Reason,
+		}
+	}
+	if p.MergedInto != nil {
+		ants := make([]string, len(p.MergedInto.AntecedentFormationEventHashes))
+		for i, h := range p.MergedInto.AntecedentFormationEventHashes {
+			ants[i] = hex.EncodeToString(h)
+		}
+		o.MergedInto = &mergeView{
+			MergedAt:              p.MergedInto.MergedAt,
+			ProducedFormationHash: hex.EncodeToString(p.MergedInto.ProducedFormationEventHash),
+			AntecedentHashes:      ants,
+			Reason:                p.MergedInto.Reason,
+		}
+	}
+	if p.SplitInto != nil {
+		succs := make([]string, len(p.SplitInto.SuccessorFormationEventHashes))
+		for i, h := range p.SplitInto.SuccessorFormationEventHashes {
+			succs[i] = hex.EncodeToString(h)
+		}
+		o.SplitInto = &splitView{
+			SplitAt:         p.SplitInto.SplitAt,
+			SuccessorHashes: succs,
+			Reason:          p.SplitInto.Reason,
+		}
+	}
+	for _, entry := range p.LifecycleHistory {
+		o.LifecycleHistory = append(o.LifecycleHistory, lifecycleEntry{
+			Type:      entry.Type,
+			EventHash: hex.EncodeToString(entry.EventHash[:]),
+			EventTime: entry.EventTime,
+		})
+	}
+	o.Latencies = latencyView{
+		FormationToFirstPromotionNs:       p.FormationToFirstPromotionLatencyNs,
+		LatestPromotionToLatestDemotionNs: p.LatestPromotionToLatestDemotionLatencyNs,
+		FormationToDissolutionNs:          p.FormationToDissolutionLatencyNs,
+	}
+	return o
 }
 
 type latencyView struct {

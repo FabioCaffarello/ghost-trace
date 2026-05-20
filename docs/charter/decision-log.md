@@ -2383,6 +2383,61 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0062` — Projection layer extended to AutomationGroup; parallel per-subtype projection types per the typed-subtype-landings discipline; cross-subtype CLI dispatch
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** The §0051–§0055 projection layer (`HypothesisProjection`, `ProjectHypothesis`, `ProjectAll`, `ListHypotheses`, `CountByState`, time-window filter, latency derivation) was BehavioralCluster-implicit — hard-coded `behavioralClusterFormationMessageType` and BC-typed lifecycle event pointers. With §0056–§0061 landing the full AutomationGroup lifecycle surface, operators could write AutomationGroup events but had no read-side surface — `hypothesis-state` against an AutomationGroupFormation returned `ErrTargetNotFormation`. This entry closes that gap.
+
+  One structural choice surfaces in this entry:
+
+  - **Parallel per-subtype projection types vs subtype-aware refactor.** Option (A): parallel `AutomationGroupProjection` + `ProjectAutomationGroup` / `ListAutomationGroups` / `CountAutomationGroupsByState`, mirroring the writer-side typed-subtype-landings discipline from §0056. Option (B): refactor existing `HypothesisProjection` to be subtype-aware — interface-typed lifecycle event pointers, single dispatching API. Option (A) chosen per the §0056 commitment that the typed-subtype-landings discipline transfers across surfaces; interface-based unification (option B) would defer rather than resolve the subtype-distinction work (CoordinationRing's likely-different lifecycle shape would force the interfaces to either widen breaking existing code or split per-subtype again). Parallel types preserve strong subtype-distinction at the projection layer too; the duplication is bounded (~600 LOC of new projection code) and structurally honest.
+
+- **Decision:** Extend the projection layer for AutomationGroup with parallel per-subtype types + functions, plus cross-subtype CLI dispatch:
+
+  1. **`AutomationGroupProjection` struct** at [`services/ingestion/internal/projection/automation_group.go`](../../services/ingestion/internal/projection/automation_group.go). Mirrors `HypothesisProjection` with AG-typed lifecycle event pointers (`*eventsv1.AutomationGroupPromotion`, etc.). Reuses the shared `State` enum + `LifecycleEntry` types from §0051 (those are subtype-agnostic by construction). Six new AG-subtype `automationGroupXxxMessageType` constants.
+
+  2. **`ProjectAutomationGroup`** at the same file. Two-pass walk parallel to §0051's `ProjectHypothesis`. Validates the formation row's message_type is `AutomationGroupFormation`; cross-subtype rejection structurally enforced (passing a `BehavioralClusterFormation` hash returns `ErrTargetNotFormation`).
+
+  3. **`computeAutomationGroupState`** + **`computeAutomationGroupLatencies`** at the same file. Same precedence rules + latency-derivation patterns as §0051 + §0055.
+
+  4. **`ProjectAllAutomationGroups`** + **`ListAutomationGroups`** + **`CountAutomationGroupsByState`** at [`services/ingestion/internal/projection/automation_group_list.go`](../../services/ingestion/internal/projection/automation_group_list.go). Mirrors §0052+§0053+§0054. New `AutomationGroupListOptions` struct parallel to `ListOptions`.
+
+  5. **CLI dispatch** in [`cmd/hypothesis-state`](../../services/ingestion/cmd/hypothesis-state/main.go), [`cmd/list-hypotheses`](../../services/ingestion/cmd/list-hypotheses/main.go), and [`cmd/summarize-hypotheses`](../../services/ingestion/cmd/summarize-hypotheses/main.go):
+     - `hypothesis-state`: auto-detects subtype by looking up the formation row's `message_type`; dispatches to the appropriate per-subtype projection. JSON output gains a top-level `subtype` field.
+     - `list-hypotheses`: new `-subtype` option filters to one subtype (default = all). Returns combined cross-subtype list with per-entry `subtype` field. Limit/Offset paging applied across the combined slice.
+     - `summarize-hypotheses`: emits per-subtype sections (`behavioral_cluster` + `automation_group`), each carrying its own `total` + `by_state`. Per-subtype equivalence invariant preserved.
+
+  6. **Tests** at [`internal/projection/automation_group_test.go`](../../services/ingestion/internal/projection/automation_group_test.go) — 9 tests covering forming/promoted/dissolved states, unknown formation, cross-subtype rejection, list ordering, count-equivalent-to-list-filter, ProjectAll-equivalent-to-ProjectAutomationGroup, latency derivation.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1 (read-only over immutable substrate), §2.2 (`State` is operational summary across subtypes, NOT a category claim), §2.3 (projection entries reference producing lifecycle events by content-hash), §2.5 + §2.5 BC3 + §2.5 BC5. Respects §0045+§0056 hypothesis-identity invariant — AutomationGroupProjection always anchors at an AutomationGroupFormation hash. Respects §0056 typed-subtype-landings commitment — parallel per-subtype projection types preserve subtype distinction at the read layer too. Cross-subtype rejection structurally enforced via per-subtype message_type discriminators in both `ProjectHypothesis` and `ProjectAutomationGroup`. Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`services/ingestion/internal/projection/automation_group.go`](../../services/ingestion/internal/projection/automation_group.go) — new file. `AutomationGroupProjection`, `ProjectAutomationGroup`, `computeAutomationGroupState`, `computeAutomationGroupLatencies`, 6 AG message_type constants. ~350 lines.
+  - [`services/ingestion/internal/projection/automation_group_list.go`](../../services/ingestion/internal/projection/automation_group_list.go) — new file. `AutomationGroupListOptions`, `ProjectAllAutomationGroups`, `ListAutomationGroups`, `CountAutomationGroupsByState`. ~250 lines.
+  - [`services/ingestion/internal/projection/automation_group_test.go`](../../services/ingestion/internal/projection/automation_group_test.go) — **9 tests** as enumerated above.
+  - [`services/ingestion/cmd/hypothesis-state/main.go`](../../services/ingestion/cmd/hypothesis-state/main.go) — subtype dispatch + `subtype` JSON field.
+  - [`services/ingestion/cmd/list-hypotheses/main.go`](../../services/ingestion/cmd/list-hypotheses/main.go) — `-subtype` option + per-entry subtype field + cross-subtype aggregation.
+  - [`services/ingestion/cmd/summarize-hypotheses/main.go`](../../services/ingestion/cmd/summarize-hypotheses/main.go) — per-subtype sections in JSON output.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — three CLI sections updated to reflect subtype-aware behavior.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0062 (this entry).
+  - **Test count grows.** Combined: **305 tests** (up from 296 at §0061; +9 AG projection tests).
+  - **§0056 carry-forward fully discharged.** "Projection layer extension for AutomationGroup" named at §0056 + §0057 + §0058 + §0059 + §0060 + §0061 carry-forwards is now landed. Operators can use `hypothesis-state`/`list-hypotheses`/`summarize-hypotheses` against AutomationGroup formations.
+  - **Equivalence invariant family extends to second subtype.** Two new invariants tested:
+    - `ProjectAllAutomationGroups[hash]` byte-equal to `ProjectAutomationGroup(sameHash)` (mirrors §0052 BC invariant)
+    - For every State `s`, `CountAutomationGroupsByState.ByState[s]` equals `len(ListAutomationGroups{StateFilter: s})` (mirrors §0053 BC invariant)
+  - **Typed-subtype-landings discipline now spans BOTH writer and reader surfaces.** §0056 established it at the write layer; §0062 extends it to the read layer. Future Cat III subtypes (CoordinationRing, CampaignHypothesis) will follow the same template across both surfaces.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Per-subtype CLI binaries** — currently the three read CLIs auto-dispatch. Future complexity (subtype-specific options, subtype-specific output shapes for non-shared fields) may justify dedicated per-subtype binaries (e.g. `automation-group-state`). Deferred until pressure surfaces.
+    - **Cross-subtype provenance queries** — e.g. "which merges have crossed subtype boundaries?". Cross-subtype merge remains the open Ontology question per Q4 deferral; cross-subtype provenance projection is deferred along with it.
+    - **Remaining Cat III subtypes' projection** — when CoordinationRing or CampaignHypothesis lands, their projections will follow the same parallel-per-subtype template established here.
+    - **Aggregate cross-subtype counters/histograms** — `summarize-hypotheses` emits per-subtype sections but does NOT emit a top-level combined sum. If operators want "every Cat III hypothesis, regardless of subtype, by state", they sum the per-subtype counts. A future surface could emit the combined total natively.
+
+- **Supersession:** None. Extends the projection layer (§0051–§0055) to the second subtype following the typed-subtype-landings discipline established at §0056. The §0056+§0057+§0058+§0059+§0060+§0061 "Projection layer extension for AutomationGroup" carry-forward is fully discharged. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

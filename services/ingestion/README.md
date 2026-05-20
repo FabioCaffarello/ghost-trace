@@ -380,6 +380,8 @@ Exit codes: **0** success; **2** tool/configuration error; **3** target-not-foun
 
 First operator-facing materializer of the **projection layer** over the §2.5 lifecycle event chain (per [`§0051`](../../docs/charter/decision-log.md)). Charter §2.5 BC3 forbids storing "current state" as a substrate row — the substrate stores immutable lifecycle events (formation, promotion, demotion, dissolution, merge, split) and the hypothesis's current state is reconstructed by replaying those events. This binary walks the substrate, builds the projection for a single formation, and emits structured JSON.
 
+**Subtype-aware** (per [`§0062`](../../docs/charter/decision-log.md)): auto-detects the formation's Cat III subtype (`behavioral_cluster` or `automation_group`) by looking up the formation row's message_type, then dispatches to the appropriate per-subtype projection. The JSON output includes a `subtype` field.
+
 ```sh
 make hypothesis-state-build                                              # builds ./bin/hypothesis-state
 
@@ -435,17 +437,20 @@ make list-hypotheses-build                                               # build
 
 Output is a JSON ARRAY where each element shares the structure of `hypothesis-state`'s single-projection output (formation hash, state, optional per-lifecycle-type payloads, lifecycle event count, and `latencies` per §0055).
 
-**Single linear walk over the substrate** (per `projection.ProjectAll`) regardless of formation count: pass one collects formations + promotions; pass two dispatches demotions/dissolutions/merges/splits against the per-formation projections. Linear in substrate size, NOT in formation-count × substrate-size.
+**Subtype-aware** (per [`§0062`](../../docs/charter/decision-log.md)): returns projections for BOTH `behavioral_cluster` and `automation_group` subtypes by default. The `-subtype` option filters to one. Each entry includes a `subtype` field.
+
+**Single linear walk per subtype over the substrate** (per `projection.ProjectAll` + `projection.ProjectAllAutomationGroups`): pass one collects formations + promotions; pass two dispatches demotions/dissolutions/merges/splits against the per-formation projections. Linear in substrate size, NOT in formation-count × substrate-size.
 
 **Deterministic ordering**: ascending lex order of formation event hash (the content-hash). Substrate-position-independent — repeated calls against the same substrate return projections in the same order regardless of commit order.
 
 | Option | Default | Notes |
 |---|---|---|
+| `-subtype` | empty | Filter by Cat III subtype: `behavioral_cluster` or `automation_group`. Empty = all subtypes. |
 | `-state` | empty | Filter by projected state: one of `forming`, `promoted`, `demoted`, `dissolved`, `merged_into`, `split_into`. Empty = no filter. |
 | `-after-ns` | 0 | Inclusive lower bound (Unix ns) on the **latest** event_time of each projection. 0 disables. |
 | `-before-ns` | 0 | Inclusive upper bound (Unix ns) on the **latest** event_time. 0 disables. |
-| `-limit` | 0 | Cap the number of projections returned. 0 = unbounded. |
-| `-offset` | 0 | Skip the first N projections (after state + time-window filtering, after ordering). |
+| `-limit` | 0 | Cap the number of projections returned (after subtype + state + time-window filtering). 0 = unbounded. |
+| `-offset` | 0 | Skip the first N projections. |
 
 **Time-window semantic (per §0054):** the filter matches against the projection's **latest** lifecycle event_time, not "any event in window". Operator pressure is "what's changed recently", not "what touches this window at all". Both bounds are inclusive.
 
@@ -455,7 +460,7 @@ Exit codes: **0** success (including empty results); **2** tool/configuration er
 
 ## `summarize-hypotheses` CLI
 
-Third binary in the **read-only** classification (per [`§0053`](../../docs/charter/decision-log.md)). Discharges the §0052 named carry-forward "Aggregate counters / histograms". Returns counts of every `BehavioralClusterFormation` in the substrate grouped by projected state.
+Third binary in the **read-only** classification (per [`§0053`](../../docs/charter/decision-log.md)). Discharges the §0052 named carry-forward "Aggregate counters / histograms". Returns counts of every Cat III formation grouped by subtype and projected state (per [`§0062`](../../docs/charter/decision-log.md)).
 
 ```sh
 make summarize-hypotheses-build                                          # builds ./bin/summarize-hypotheses
@@ -464,7 +469,7 @@ make summarize-hypotheses-build                                          # build
 ./bin/summarize-hypotheses -db ./ghost-trace.db -blobs ./blobs
 ```
 
-Output is structured JSON: `total` (formation count) + `by_state` (map from state value to count). Every State key is present (even at zero) — the wire shape is predictable so callers do not need to distinguish "missing key" from "zero".
+Output is structured JSON with **per-subtype sections** (per [`§0062`](../../docs/charter/decision-log.md)): `behavioral_cluster` and `automation_group` each carry `total` (formation count) + `by_state` (map from state value to count). Every State key is present (even at zero) — predictable wire shape.
 
 **Equivalence invariant per §0053:** for every State value `s`, `by_state[s]` equals `len(list-hypotheses -state s)`. The equivalence is tested in `internal/projection/counts_test.go` and defends against precedence-rule drift between the count path and the list path. Both paths share `ProjectAll` (per [`§0052`](../../docs/charter/decision-log.md)).
 
