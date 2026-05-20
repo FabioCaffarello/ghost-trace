@@ -66,7 +66,14 @@ func run() error {
 	}
 	defer func() { _ = sub.Close() }()
 
-	counts, err := projection.CountByState(ctx, sub, projection.ListOptions{
+	bcCounts, err := projection.CountByState(ctx, sub, projection.ListOptions{
+		TimeAfterNs:  *afterNs,
+		TimeBeforeNs: *beforeNs,
+	})
+	if err != nil {
+		return err
+	}
+	agCounts, err := projection.CountAutomationGroupsByState(ctx, sub, projection.AutomationGroupListOptions{
 		TimeAfterNs:  *afterNs,
 		TimeBeforeNs: *beforeNs,
 	})
@@ -74,21 +81,24 @@ func run() error {
 		return err
 	}
 
+	output := perSubtype{
+		BehavioralCluster: bcCounts,
+		AutomationGroup:   agCounts,
+	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	if err := enc.Encode(counts); err != nil {
+	if err := enc.Encode(output); err != nil {
 		return fmt.Errorf("encode json: %w", err)
 	}
 
 	fmt.Fprintf(os.Stderr,
-		"summarize-hypotheses: total=%d forming=%d promoted=%d demoted=%d dissolved=%d merged_into=%d split_into=%d after_ns=%d before_ns=%d\n",
-		counts.Total,
-		counts.ByState[projection.StateForming],
-		counts.ByState[projection.StatePromoted],
-		counts.ByState[projection.StateDemoted],
-		counts.ByState[projection.StateDissolved],
-		counts.ByState[projection.StateMergedInto],
-		counts.ByState[projection.StateSplitInto],
+		"summarize-hypotheses: bc_total=%d ag_total=%d after_ns=%d before_ns=%d\n",
+		bcCounts.Total, agCounts.Total,
 		*afterNs, *beforeNs)
 	return nil
+}
+
+type perSubtype struct {
+	BehavioralCluster projection.StateCounts `json:"behavioral_cluster"`
+	AutomationGroup   projection.StateCounts `json:"automation_group"`
 }

@@ -48,6 +48,7 @@ func main() {
 func run() error {
 	dbPath := flag.String("db", "./ghost-trace.db", "SQLite primary-event-log path")
 	blobDir := flag.String("blobs", "./blobs", "content-addressed blob-store directory")
+	subtypeFilter := flag.String("subtype", "", "filter by Cat III subtype: behavioral_cluster|automation_group (empty = all subtypes)")
 	stateFilter := flag.String("state", "", "filter by projected state: forming|promoted|demoted|dissolved|merged_into|split_into (empty = all)")
 	afterNs := flag.Int64("after-ns", 0, "inclusive lower bound (Unix nanoseconds) on the latest event_time of each projection; 0 disables the lower bound")
 	beforeNs := flag.Int64("before-ns", 0, "inclusive upper bound (Unix nanoseconds) on the latest event_time of each projection; 0 disables the upper bound")
@@ -57,6 +58,9 @@ func run() error {
 
 	if *stateFilter != "" && !validState(*stateFilter) {
 		return fmt.Errorf("--state %q is not one of: forming, promoted, demoted, dissolved, merged_into, split_into", *stateFilter)
+	}
+	if *subtypeFilter != "" && *subtypeFilter != "behavioral_cluster" && *subtypeFilter != "automation_group" {
+		return fmt.Errorf("--subtype %q is not one of: behavioral_cluster, automation_group", *subtypeFilter)
 	}
 	if *limit < 0 {
 		return fmt.Errorf("--limit must be non-negative; got %d", *limit)
@@ -81,21 +85,51 @@ func run() error {
 	}
 	defer func() { _ = sub.Close() }()
 
-	results, err := projection.ListHypotheses(ctx, sub, projection.ListOptions{
-		StateFilter:  projection.State(*stateFilter),
-		TimeAfterNs:  *afterNs,
-		TimeBeforeNs: *beforeNs,
-		Limit:        *limit,
-		Offset:       *offset,
-	})
-	if err != nil {
-		return err
+	out := []entry{}
+
+	if *subtypeFilter == "" || *subtypeFilter == "behavioral_cluster" {
+		bcResults, err := projection.ListHypotheses(ctx, sub, projection.ListOptions{
+			StateFilter:  projection.State(*stateFilter),
+			TimeAfterNs:  *afterNs,
+			TimeBeforeNs: *beforeNs,
+		})
+		if err != nil {
+			return err
+		}
+		for _, p := range bcResults {
+			e := buildEntry(p)
+			e.Subtype = "behavioral_cluster"
+			out = append(out, e)
+		}
+	}
+	if *subtypeFilter == "" || *subtypeFilter == "automation_group" {
+		agResults, err := projection.ListAutomationGroups(ctx, sub, projection.AutomationGroupListOptions{
+			StateFilter:  projection.State(*stateFilter),
+			TimeAfterNs:  *afterNs,
+			TimeBeforeNs: *beforeNs,
+		})
+		if err != nil {
+			return err
+		}
+		for _, p := range agResults {
+			e := buildAGEntry(p)
+			e.Subtype = "automation_group"
+			out = append(out, e)
+		}
 	}
 
-	out := make([]entry, 0, len(results))
-	for _, p := range results {
-		out = append(out, buildEntry(p))
+	// Apply paging across the combined cross-subtype slice.
+	if *offset > 0 {
+		if *offset >= len(out) {
+			out = nil
+		} else {
+			out = out[*offset:]
+		}
 	}
+	if *limit > 0 && len(out) > *limit {
+		out = out[:*limit]
+	}
+
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(out); err != nil {
@@ -103,8 +137,8 @@ func run() error {
 	}
 
 	fmt.Fprintf(os.Stderr,
-		"list-hypotheses: returned=%d state_filter=%q after_ns=%d before_ns=%d limit=%d offset=%d\n",
-		len(results), *stateFilter, *afterNs, *beforeNs, *limit, *offset)
+		"list-hypotheses: returned=%d subtype_filter=%q state_filter=%q after_ns=%d before_ns=%d limit=%d offset=%d\n",
+		len(out), *subtypeFilter, *stateFilter, *afterNs, *beforeNs, *limit, *offset)
 	return nil
 }
 
@@ -118,6 +152,7 @@ func validState(s string) bool {
 }
 
 type entry struct {
+	Subtype          string         `json:"subtype"`
 	FormationHash    string         `json:"formation_event_hash"`
 	State            string         `json:"state"`
 	LatestPromotion  *promotionView `json:"latest_promotion,omitempty"`
@@ -127,6 +162,62 @@ type entry struct {
 	SplitInto        *splitView     `json:"split_into,omitempty"`
 	LifecycleEntries int            `json:"lifecycle_event_count"`
 	Latencies        latencyView    `json:"latencies"`
+}
+
+func buildAGEntry(p projection.AutomationGroupProjection) entry {
+	e := entry{
+		FormationHash:    hex.EncodeToString(p.FormationHash[:]),
+		State:            string(p.State),
+		LifecycleEntries: len(p.LifecycleHistory),
+	}
+	if p.LatestPromotion != nil {
+		e.LatestPromotion = &promotionView{
+			PromotedAt:     p.LatestPromotion.PromotedAt,
+			CadenceSeconds: p.LatestPromotion.CadenceSeconds,
+			Reason:         p.LatestPromotion.Reason,
+		}
+	}
+	if p.LatestDemotion != nil {
+		e.LatestDemotion = &demotionView{
+			DemotedAt: p.LatestDemotion.DemotedAt,
+			Reason:    p.LatestDemotion.Reason,
+		}
+	}
+	if p.Dissolution != nil {
+		e.Dissolution = &eventView{
+			At:     p.Dissolution.DissolvedAt,
+			Reason: p.Dissolution.Reason,
+		}
+	}
+	if p.MergedInto != nil {
+		ants := make([]string, len(p.MergedInto.AntecedentFormationEventHashes))
+		for i, h := range p.MergedInto.AntecedentFormationEventHashes {
+			ants[i] = hex.EncodeToString(h)
+		}
+		e.MergedInto = &mergeView{
+			MergedAt:              p.MergedInto.MergedAt,
+			ProducedFormationHash: hex.EncodeToString(p.MergedInto.ProducedFormationEventHash),
+			AntecedentHashes:      ants,
+			Reason:                p.MergedInto.Reason,
+		}
+	}
+	if p.SplitInto != nil {
+		succs := make([]string, len(p.SplitInto.SuccessorFormationEventHashes))
+		for i, h := range p.SplitInto.SuccessorFormationEventHashes {
+			succs[i] = hex.EncodeToString(h)
+		}
+		e.SplitInto = &splitView{
+			SplitAt:         p.SplitInto.SplitAt,
+			SuccessorHashes: succs,
+			Reason:          p.SplitInto.Reason,
+		}
+	}
+	e.Latencies = latencyView{
+		FormationToFirstPromotionNs:       p.FormationToFirstPromotionLatencyNs,
+		LatestPromotionToLatestDemotionNs: p.LatestPromotionToLatestDemotionLatencyNs,
+		FormationToDissolutionNs:          p.FormationToDissolutionLatencyNs,
+	}
+	return e
 }
 
 type latencyView struct {
