@@ -1,36 +1,3 @@
-// Ghost Trace operational settings for Claude Code.
-// Governance source: .claude/CLAUDE.md §5.4 (write gating) and §5.2 (hooks).
-//
-// DEVIATIONS FROM THE PHASE 2 PROMPT EXAMPLE (applied with documentation,
-// not invention; see CLAUDE.md §5.2 closing rule):
-//
-// 1. Hook event renamed from "PreCommit" to "Stop". Claude Code does not
-//    define a PreCommit event; its event names are PreToolUse, PostToolUse,
-//    Stop, UserPromptSubmit, Notification, SubagentStop, PreCompact.
-//    "Stop" fires when Claude finishes a turn, which is the closest
-//    semantic to "check the working tree before the human commits".
-//    The git pre-commit hook (configured via core.hooksPath; documented in
-//    WORKFLOW.md, Phase 7) remains the enforcement surface.
-//
-// 2. Hook entry structure follows the Claude Code schema:
-//    {matcher, hooks: [{type: "command", command: ...}]}.
-//    The Stop event has no tool to match; matcher is the empty string.
-//
-// 3. Path-scoped permission matchers use the "**" glob to recurse under a
-//    directory. The prompt's example Write(docs/ontology/) is replaced by
-//    Write(docs/ontology/**).
-//
-// FALLBACK: if any path-scoped matcher fails to parse in the active
-// Claude Code version, replace the "ask" array below with
-// ["Write", "Edit"] globally and note the version checked here.
-//
-// Not gated (intentional, per CLAUDE.md §5.4):
-//   - docs/charter/decision-log.md   (append-only is legitimate; the
-//                                     decision-logger skill enforces
-//                                     append discipline)
-//   - docs/charter/in-committee/**   (committee redaction work product,
-//                                     expected edits)
-//   - everything else                (inherits Write/Edit as non-ask)
 {
   "permissions": {
     "allow": ["Read", "Glob", "Grep", "WebFetch"],

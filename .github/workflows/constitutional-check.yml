@@ -1,8 +1,15 @@
 # Constitutional check — Ghost Trace
 #
 # Governance source: .claude/CLAUDE.md §5.6 (CI scope is bounded).
-# Three jobs run on PRs touching *.md files. All three are mechanical:
-# grep, anchor extraction, list comparison. No NLP, no judgment.
+# Three jobs run on every PR. All three are mechanical: grep, anchor
+# extraction, list comparison. No NLP, no judgment.
+#
+# Path filter intentionally absent: a `paths:` filter at the workflow
+# level makes the jobs unreachable on Go-only PRs, which prevents them
+# from being usable as required status checks under branch protection.
+# Each job no-ops gracefully when no in-scope .md files changed (the
+# hook script exits 0 on empty STAGED; check_subordination.py iterates
+# an empty file list; check_glossary_coverage.py is diff-independent).
 #
 # Explicitly out of scope (per CLAUDE.md §5.6):
 #   - RFC template compliance check (premature; no RFC exists yet)
@@ -17,8 +24,6 @@ name: constitutional-check
 
 on:
   pull_request:
-    paths:
-      - '**/*.md'
 
 permissions:
   contents: read
