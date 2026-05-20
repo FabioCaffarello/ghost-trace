@@ -284,6 +284,7 @@ func ProjectAll(ctx context.Context, sub *substrate.Substrate) (map[[32]byte]Hyp
 			return proj.LifecycleHistory[i].EventTime < proj.LifecycleHistory[j].EventTime
 		})
 		proj.State = computeState(&proj)
+		computeLatencies(&proj)
 		out[hash] = proj
 	}
 

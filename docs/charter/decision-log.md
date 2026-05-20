@@ -2067,6 +2067,63 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0055` — Per-projection latency derivation; §0053 latency-histogram carry-forward partially discharged at the per-projection layer
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0053`](#0053--aggregate-state-counters-countbystate--statecounts-0052-carry-forward-discharged-per-state-count-equivalence-invariant) named **"Latency histograms"** as a carry-forward — derived statistics over per-formation lifecycle timestamps. The histogram aggregate (buckets, percentiles) is a multi-formation aggregate; the prerequisite is per-formation latency derivation. This entry discharges the prerequisite: three per-projection latency fields are computed during `ProjectHypothesis` and `ProjectAll`, surfaced via the read-only CLIs. Histogram aggregation across many projections remains follow-on.
+
+  One structural choice in this entry:
+
+  - **Negative-latency handling.** A producer-supplied promotion timestamp PRECEDING the formation's `event_time` would yield a negative `formation_to_first_promotion_ns`. The substrate accepts both timestamps (operator-supplied; no temporal-ordering gate at §2.1). Option (A): clamp negative latencies to zero, treating them as "promotion was concurrent with formation". Option (B): report the raw difference, accepting that some values may be negative. Option (B) chosen per the §2.2 epistemic-separation reading — the projection reports OBSERVED timestamps, NOT a category claim about producer correctness. Clamping would be a covert category claim ("we know better than the producer"); reporting the raw value preserves the substrate's record while surfacing the anomaly for operator review.
+
+- **Decision:** Land three per-projection latency fields with the following moves:
+
+  1. **`HypothesisProjection` extension** at [`services/ingestion/internal/projection/projection.go`](../../services/ingestion/internal/projection/projection.go). Three new pointer-valued int64 fields:
+     - `FormationToFirstPromotionLatencyNs` — elapsed ns between formation event and EARLIEST promotion. Nil when no promotion has been recorded. Per §0055 specifically the EARLIEST (not latest) — answers "how long after formation did this hypothesis first move into operational use?".
+     - `LatestPromotionToLatestDemotionLatencyNs` — elapsed ns between `LatestPromotion.promoted_at` and `LatestDemotion.demoted_at`. Nil when the latest promotion has no corresponding demotion (or no promotion exists). Reuses §0051's single-projection LatestPromotion/LatestDemotion pairing semantics.
+     - `FormationToDissolutionLatencyNs` — elapsed ns between formation and dissolution events. Nil when no dissolution exists.
+
+     Pointer-valued so absent fields render as JSON null / omitempty (vs zero-valued, which would be indistinguishable from "the latency happens to be 0").
+
+  2. **`computeLatencies(proj *HypothesisProjection)`** at [`services/ingestion/internal/projection/latency.go`](../../services/ingestion/internal/projection/latency.go). Pure function operating on a fully-populated projection — reads `LifecycleHistory` + per-type pointers; writes the three latency fields. Idempotent under repeated invocation.
+
+  3. **Wiring into ProjectHypothesis + ProjectAll** — both call `computeLatencies` after `computeState`. Same per-projection cost; no additional substrate walks.
+
+  4. **CLI surface** on [`cmd/hypothesis-state`](../../services/ingestion/cmd/hypothesis-state/main.go) and [`cmd/list-hypotheses`](../../services/ingestion/cmd/list-hypotheses/main.go) — JSON output gains a `latencies` object with three fields (matching the projection field names, omitempty when nil).
+
+  5. **`latency_test.go`** at [`services/ingestion/internal/projection/latency_test.go`](../../services/ingestion/internal/projection/latency_test.go) — 7 tests covering: forming projection (all nil), formation-to-first-promotion populated, EARLIEST-promotion semantic (re-promotion arc: first-promotion latency uses the EARLIEST, not the latest), latest-promotion-to-latest-demotion, formation-to-dissolution, all-three-arcs-populated, ProjectAll-vs-ProjectHypothesis equivalence (extends the §0052 equivalence invariant family to the latency fields), and negative-latency-when-out-of-order (verifies the Option B raw-difference reading).
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. Respects [§2.1](../charter/constitutional-charter.md#21-observational-integrity) — read-only computation over immutable substrate. Respects [§2.2](../charter/constitutional-charter.md#22-epistemic-separation) — latency fields report OBSERVED inter-event intervals derived from the substrate's recorded timestamps; they do NOT claim a category about producer correctness (a clamping policy would constitute such a claim). Respects [§2.3](../charter/constitutional-charter.md#23-provenance-integrity) — every latency value is reconstructible from the same substrate state via `computeLatencies`. Respects [§2.5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness), [§2.5 BC3](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) — latency derivation operates on lifecycle events; no substrate-side current-state record is created. Respects [`§0045`](#0045--first-category-iii-hypothesis-subtype-behavioralcluster-formation-lands-25-hypothesis-lifecycle-explicitness-structurally-observable), [`§0051`](#0051--first-projection-layer-landing-hypothesisprojection-single-hypothesis-read-side-materialization-over-the-25-lifecycle-event-chain-charter-25-bc3-deferred-state-read-shape-now-operationally-observable), [`§0052`](#0052--multi-hypothesis-aggregate-projection-listhypotheses--projectall-0051-named-carry-forward-discharged-substrate-linear-not-quadratic-walk) — latency fields are an additive enrichment of the projection structure; the §0051 + §0052 equivalence invariants continue to hold (extended in §0055's tests). Canonical vocabulary used as written: projection, hypothesis, lifecycle event, formation, promotion, demotion, dissolution, substrate.
+
+- **Consequences:**
+  - [`services/ingestion/internal/projection/projection.go`](../../services/ingestion/internal/projection/projection.go) — `HypothesisProjection` extended with three pointer-valued int64 fields; `ProjectHypothesis` calls `computeLatencies` after `computeState`.
+  - [`services/ingestion/internal/projection/list.go`](../../services/ingestion/internal/projection/list.go) — `ProjectAll` calls `computeLatencies` per formation in the finalization loop.
+  - [`services/ingestion/internal/projection/latency.go`](../../services/ingestion/internal/projection/latency.go) — new file. `computeLatencies`. ~65 lines including doc comments.
+  - [`services/ingestion/internal/projection/latency_test.go`](../../services/ingestion/internal/projection/latency_test.go) — **7 new tests** as enumerated above.
+  - [`services/ingestion/cmd/hypothesis-state/main.go`](../../services/ingestion/cmd/hypothesis-state/main.go) — JSON output gains `latencies` object.
+  - [`services/ingestion/cmd/list-hypotheses/main.go`](../../services/ingestion/cmd/list-hypotheses/main.go) — same; each array element includes `latencies`.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — `hypothesis-state` + `list-hypotheses` sections updated with the `latencies` field table + negative-latency explainer.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0055 (this entry).
+  - **Test count grows.** Combined: **244 tests** across the service (up from 237 at [`§0054`](#0054--time-window-filter-on-projection-queries-latest-event-semantic-005200053-carry-forward-discharged-equivalence-invariant-preserved-across-the-window-filter); +7 = 7 latency tests). All passing under `go test -race ./...`.
+  - **Zero external dependencies added.**
+  - **First per-projection enrichment beyond the immutable substrate replay.** Until this entry, every field on `HypothesisProjection` either named a specific lifecycle event (LatestPromotion, Dissolution, etc.) or summarized the chain (State). The latency fields are the first to compute DERIVED statistics — intervals between events. The pattern (pure-function derivation over an already-materialized projection) is the template for subsequent richer per-projection enrichments (e.g. cadence-gate-satisfaction-at-demotion, promotion-frequency, observation-volume per formation).
+  - **§0053 latency-histogram carry-forward partially discharged.** The per-projection latency surface lands here; the histogram aggregate (bucketing, percentile computation across many projections) remains a follow-on. The §0053 carry-forward was named at the histogram level; this entry covers the prerequisite (per-projection derivation) without yet implementing the aggregate.
+  - **Equivalence invariant family extends to the latency fields.** `ProjectAll[hash]` latency fields are byte-equal to `ProjectHypothesis(sameHash)` latency fields. Tested at `TestLatencyProjectAllEquivalentToProjectHypothesis`. Future projection-side optimizations MUST preserve this invariant alongside the existing State + LifecycleHistory equivalences.
+  - **Negative-latency semantic is operator-visible.** A producer recording an out-of-order timestamp will produce a negative latency in the projection output; the operator can detect the anomaly and reach back to the producer. Clamping would have hidden the anomaly while changing the semantic from "observed interval" to "non-negative observed interval, with the truncation point un-recorded". The chosen semantic is more honest about substrate state.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Histogram aggregation across projections** — buckets, percentiles, sum/count/avg over the per-projection latency fields. Discharges the §0053 carry-forward at the aggregate layer; deferred until operator pressure surfaces the bucket-shape question.
+    - **Additional latency arcs** — promotion-to-dissolution (skipping demotion), demotion-to-re-promotion (cycle latency), merge-to-split (when a hypothesis is recognized as conflated soon after being recognized as merged). All structurally derivable; deferred until specific operator pressure.
+    - **Wall-clock-vs-substrate-time latency** — the current fields use lifecycle event_time (`promoted_at`, `demoted_at`, etc.). An alternative would use substrate `committed_at`. Both are valid; deferred.
+    - **Inference-time vs observation-time latency** — formation_at uses max(declared_at) of observations (per the canonical pattern); a separate "inference recognition latency" (formation_at − inference_started_at) is not recorded today. Deferred.
+    - **Per-event-type window filter** — unchanged from [`§0054`](#0054--time-window-filter-on-projection-queries-latest-event-semantic-005200053-carry-forward-discharged-equivalence-invariant-preserved-across-the-window-filter) carry-forward.
+    - **Cross-operation provenance queries** — unchanged from §0052 carry-forward.
+
+- **Supersession:** None. Additive enrichment of `HypothesisProjection`; no prior decision reversed. The pure-function derivation pattern (`computeLatencies`) is the template for subsequent per-projection enrichments. [`§0022`](#0022--implementation-pivot-22-implementation-against-current-structural-ground-authorized-storage-technology-deferral-reversed-by-authorization) implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
