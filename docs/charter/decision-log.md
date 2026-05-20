@@ -1066,6 +1066,62 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0038` — IngestionEvent enrichment + mTLS client identity threaded into ingestion provenance; §0037 client-identity follow-on discharged
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0037`](#0037--mtls-option-added-to-ingestion-http-interface-0035--0036-mtls-deferred-discharged) added mTLS to the HTTP interface and named "Client identity → ingestion provenance" as a deferred follow-on: "The mTLS handshake establishes a per-client identity (Common Name + SANs from the verified cert chain), but the current ingestion path does NOT thread the verified identity into the substrate. A follow-on may add it as an enrichment field per [Charter §2.1 Boundary Conditions](../charter/constitutional-charter.md#21-observational-integrity) — enrichment paired with observations as separate immutable events, never as observation mutation." This entry fulfils that follow-on while extending the pairing to capture the ingestion act for ALL channels (stdin / http / https / https+mtls), not just mTLS.
+
+- **Decision:** Add a Cat I primary observation type **`IngestionEvent`** that captures the system's observation of an ingestion act. Every primary observation that the service commits is paired with an `IngestionEvent` enrichment via atomic transactional substrate write.
+
+  Shape of the pairing:
+
+  - `IngestionEvent` (new Cat I message type at [`schemas/events/v1/ingestion_event.proto`](../../schemas/events/v1/ingestion_event.proto)) — fields: `primary_event_hash bytes` (32-byte BLAKE3 of the paired observation), `received_at int64` (Unix nanos when service first received the primary), `ingested_at int64` (Unix nanos when service committed), `channel string` (`stdin` / `http` / `https` / `https+mtls` / `unspecified`), `client_common_name string` (Subject CN from verified mTLS peer cert; empty otherwise), `client_subject_alt_names repeated string` (SAN entries in stable order: DNS, IP, URI, email), `client_cert_sha256 string` (lowercase-hex SHA-256 of verified peer cert DER; stable per-cert identifier surviving CN reuse).
+  - **Substrate primitive**: new `substrate.AppendPair(ctx, primaryRow, primaryPayload, enrichmentRow, enrichmentPayload)` commits two events inside a single SQL transaction. Both blobs are written first (idempotent, content-addressed); both rows insert under the same `BeginTx` → `INSERT OR IGNORE` × 2 → `Commit`. Either both rows commit or neither (per `PRAGMA synchronous=FULL` + WAL durability).
+  - **Ingest boundary**: `ingest.Ingester.Append` signature extended to `Append(ctx, msg, eventTime, env ingest.Envelope)`. `Envelope` carries `Channel`, `ClientCommonName`, `ClientSubjectAltNames`, `ClientCertSHA256`, `ReceivedAt`. Empty `Channel` coerces to `"unspecified"` at commit so the IngestionEvent always carries a non-empty channel marker.
+  - **AppendReport** extended with `IngestionEventHashHex` so per-message JSON confirmations carry both content-hashes (primary + paired enrichment).
+  - **HTTP handler**: `envelopeForRequest(r)` introspects `r.TLS`: no TLS → `channel="http"`; TLS without verified client cert → `channel="https"`; TLS with verified client cert → `channel="https+mtls"` + populates CN, SANs, SHA-256 from `r.TLS.PeerCertificates[0]`.
+  - **Stdin worker** (main.go readLoop): emits `Envelope{Channel: "stdin", ReceivedAt: <now>}`.
+
+  Constitutional shape:
+
+  - The `IngestionEvent` is itself a Cat I primary observation — what the system observed about the ingestion act, distinct from what the producer reported (the `DeclaredSession`). It is NOT a mutation of the paired observation and NOT inferential content; per Charter §2.1 Boundary Conditions ("Annotation of raw events with inferential conclusions"), the discipline is preserved.
+  - The pairing is by reference (`IngestionEvent.primary_event_hash` → paired primary). Reverse direction (primary → ingestion) is recovered by index lookup at read time; no field on the primary observation is changed.
+  - Atomicity via `AppendPair` ensures no half-committed states: a producer-side replay of an ingest call produces idempotent commits of the same primary AND a fresh `IngestionEvent` only when the envelope differs (same primary across two channels → one primary + two `IngestionEvent`s).
+  - **Re-ingestion under different envelope is a feature, not a bug**. If the same `DeclaredSession` is ingested over stdin AND later over https+mtls, the substrate records: one primary (content-addressed, deduplicated) + two `IngestionEvent`s (one per channel + identity). The forensic trail captures every receipt path.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. Respects [§2.1](../charter/constitutional-charter.md#21-observational-integrity) — the `IngestionEvent` is a separate immutable record; the primary observation is not annotated; the pairing is by reference per the Boundary-Conditions discipline. Respects [§2.2](../charter/constitutional-charter.md#22-epistemic-separation) — both records are Cat I observations (categorically distinct types: `DeclaredSession` vs `IngestionEvent`); no unified-record-with-discriminator pattern; the new type has its own descriptor + structural commitments. Respects [§2.3 frozen v0.4](../charter/constitutional-charter.md#23-provenance-integrity) — the `primary_event_hash` field is the structural reference from the enrichment to the primary; chain reconstructibility is preserved (substrate replay walks the events table; both records' hashes are content-addressable). Respects [`§0029`](#0029--concurrency-pattern-architecture-document-introduced-0025-modification-5-discharged) concurrency-pattern — `substrate.AppendPair` serializes through the same `writeMu` as `substrate.Append`; the atomic transactional write inherits the single-writer guarantee. No glossary changes: `enrichment` is already canonical (`docs/CLAUDE.md §3`); `IngestionEvent` is a technology vocabulary type-name, not a project vocabulary term.
+
+- **Consequences:**
+  - [`schemas/events/v1/ingestion_event.proto`](../../schemas/events/v1/ingestion_event.proto) — new Cat I message type with seven fields per the Decision shape.
+  - [`services/ingestion/internal/substrate/substrate.go`](../../services/ingestion/internal/substrate/substrate.go) — new `AppendPair` method; same `writeMu` discipline; hash-verification on both payloads before the transaction begins; transactional commit of both rows.
+  - [`services/ingestion/internal/substrate/substrate_test.go`](../../services/ingestion/internal/substrate/substrate_test.go) — 3 new tests: `TestAppendPairCommitsAtomically`; `TestAppendPairIdempotent`; `TestAppendPairHashMismatchRejects`.
+  - [`services/ingestion/internal/ingest/ingest.go`](../../services/ingestion/internal/ingest/ingest.go) — `Envelope` struct; `Append` signature extended; `AppendReport.IngestionEventHashHex` field; emits paired `IngestionEvent` via `substrate.AppendPair`.
+  - [`services/ingestion/internal/ingest/ingest_test.go`](../../services/ingestion/internal/ingest/ingest_test.go) — existing tests updated for new signature; new `TestAppendDistinctEnvelopesProduceDistinctEnrichmentHashes` (cross-channel ingestion → 1 primary + N enrichments); new `TestEnvelopeChannelDefaultsToUnspecified`.
+  - [`services/ingestion/internal/httpapi/handler.go`](../../services/ingestion/internal/httpapi/handler.go) — `envelopeForRequest(r)` extracts channel + client identity from `r.TLS`; `AppendFunc` signature extended; `confirmation.IngestionEventHash` field; `mTLSSubjectAltNames` helper stable-orders SAN entries.
+  - [`services/ingestion/internal/httpapi/handler_test.go`](../../services/ingestion/internal/httpapi/handler_test.go) — 2 new tests: `TestEnvelopeForRequestPlainHTTP` (envelope reflects no-TLS state); `TestPostEventsSuccessIncludesIngestionEventHash` (confirmation carries both hashes).
+  - [`services/ingestion/main.go`](../../services/ingestion/main.go) — stdin worker builds `Envelope{Channel: "stdin", ReceivedAt: now}`; `appendFunc` type extended; `confirmation` struct extended with `IngestionEventHash`.
+  - [`services/ingestion/main_test.go`](../../services/ingestion/main_test.go) — `stubAppendFunc` updated for new signature; existing tests unchanged otherwise.
+  - [`services/ingestion/internal/canonical/corpus_test.go`](../../services/ingestion/internal/canonical/corpus_test.go) — `messageFactory` extended with `ingestion-event` entry.
+  - [`services/ingestion/internal/canonical/testdata/canonical-corpus/ingestion-event-mtls.json`](../../services/ingestion/internal/canonical/testdata/canonical-corpus/ingestion-event-mtls.json) + paired `.bin` + `.hash` — third corpus entry exercising the new type's fields including SAN list + cert SHA-256.
+  - [`services/ingestion/Makefile`](../../services/ingestion/Makefile) — `generate` target includes both `.proto` files.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — Architecture section opens with a provenance paragraph naming the pairing + atomicity guarantee.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0038 (this entry) records the addition.
+  - **Test count grows substantially.** Combined: **85 tests** across the service (8 in main + 5 in canonical [+1 corpus entry] + 9 in substrate [+3 AppendPair tests] + 5 in ingest [+1 cross-envelope test + 1 channel-coercion test] + 22 in httpapi [+2 envelope tests]). All passing under `go test -race ./...`.
+  - **Zero external dependencies added.** `crypto/sha256` + `crypto/x509` + `encoding/hex` are Go stdlib.
+  - **Wire format change is forward-only.** Existing `confirmation` JSON gains a new `ingestion_event_hash` field. Producers that ignored unknown JSON fields continue to work; producers that strict-parse must accept the new field. No prior substrate state needs migration (this PR represents the second Cat I message type; the substrate's events table accommodated additional message types from inception per [`§0030`](#0030--ingestion-service-skeleton--first-commit-producing-executable-code-0022-originally-proposed-work-commenced)).
+
+  - **Out of scope at this layer (carry-forwards).**
+    - **`IngestionEvent` consumption** — read paths that walk the events table by `message_type` to surface ingestion provenance are not exercised at this layer. Follow-on (likely the assertion-engine service or a forensic-query CLI) will consume both records via index lookup.
+    - **Schema versioning for `IngestionEvent`** — `v1` per the existing convention; evolution governed by the canonical-serialization-contract + the (still-anticipated per [`§0024`](#0024--schemas-technology-selection-protocol-buffers-proto3-adopted-first-technology-rfc-per-0022-pivot)) schemas-evolution-discipline RFC.
+    - **Per-client authorization scopes** — still deferred per [`§0037`](#0037--mtls-option-added-to-ingestion-http-interface-0035--0036-mtls-deferred-discharged); recording the client identity (this entry) is a prerequisite for scoped authz (future work).
+    - **Per-channel rate-limiting / quota** — possible follow-on once ingestion volume is characterized; the channel marker in the `IngestionEvent` supplies the per-channel observability surface.
+
+- **Supersession:** None. This entry discharges a deferred follow-on from [`§0037`](#0037--mtls-option-added-to-ingestion-http-interface-0035--0036-mtls-deferred-discharged); no prior decision reversed.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

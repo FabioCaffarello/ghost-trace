@@ -31,6 +31,7 @@ const corpusDir = "testdata/canonical-corpus"
 // contract's coverage requirement).
 var messageFactory = map[string]func() proto.Message{
 	"declared-session": func() proto.Message { return &eventsv1.DeclaredSession{} },
+	"ingestion-event":  func() proto.Message { return &eventsv1.IngestionEvent{} },
 }
 
 // TestCanonicalCorpus is the CI golden-file gate per

@@ -248,3 +248,73 @@ func (s *Substrate) Count(ctx context.Context) (int64, error) {
 	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM events`).Scan(&n)
 	return n, err
 }
+
+// AppendPair commits two events atomically: a primary observation and
+// an enrichment record paired by reference. Used by the ingestion path
+// to commit a primary observation (e.g. DeclaredSession) alongside its
+// paired IngestionEvent per docs/charter/decision-log.md §0038.
+//
+// Atomicity discipline:
+//  1. Both hashes are verified against their payloads (hash mismatch
+//     rejects the call without writing anything).
+//  2. Both blobs are written to the blob-store (idempotent on
+//     content-hash; safe outside the SQL transaction — orphan blobs
+//     are harmless per §0027 Proposal item 5 + §0033 §Restoration).
+//  3. Both events-table rows are inserted inside a single SQL
+//     transaction. Either both rows commit or neither (SQLite WAL +
+//     synchronous=FULL provides the durability guarantee).
+//
+// Either both events become visible in subsequent reads or neither.
+// The pairing is by reference (enrichment carries a hash to the
+// primary); recovery from orphan blobs is operator concern per §0033.
+//
+// Serializes via writeMu per concurrency-pattern §Substrate-Writer
+// Serialization (same single-writer semantics as Append).
+func (s *Substrate) AppendPair(ctx context.Context,
+	primaryRow EventRow, primaryPayload []byte,
+	enrichmentRow EventRow, enrichmentPayload []byte,
+) error {
+	if want := canonical.Hash(primaryPayload); subtle.ConstantTimeCompare(primaryRow.EventHash[:], want[:]) != 1 {
+		return fmt.Errorf("substrate.AppendPair: %w (primary row.EventHash != Hash(primaryPayload))", ErrHashMismatch)
+	}
+	if want := canonical.Hash(enrichmentPayload); subtle.ConstantTimeCompare(enrichmentRow.EventHash[:], want[:]) != 1 {
+		return fmt.Errorf("substrate.AppendPair: %w (enrichment row.EventHash != Hash(enrichmentPayload))", ErrHashMismatch)
+	}
+
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	if err := s.writeBlob(primaryRow.EventHash, primaryPayload); err != nil {
+		return fmt.Errorf("substrate.AppendPair: primary blob write: %w", err)
+	}
+	if err := s.writeBlob(enrichmentRow.EventHash, enrichmentPayload); err != nil {
+		return fmt.Errorf("substrate.AppendPair: enrichment blob write: %w", err)
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("substrate.AppendPair: begin tx: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT OR IGNORE INTO events
+		   (event_hash, event_time, message_type, payload_ref, committed_at)
+		 VALUES (?, ?, ?, ?, ?)`,
+		primaryRow.EventHash[:], primaryRow.EventTime, primaryRow.MessageType, primaryRow.PayloadRef, primaryRow.CommittedAt,
+	); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("substrate.AppendPair: insert primary: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT OR IGNORE INTO events
+		   (event_hash, event_time, message_type, payload_ref, committed_at)
+		 VALUES (?, ?, ?, ?, ?)`,
+		enrichmentRow.EventHash[:], enrichmentRow.EventTime, enrichmentRow.MessageType, enrichmentRow.PayloadRef, enrichmentRow.CommittedAt,
+	); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("substrate.AppendPair: insert enrichment: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("substrate.AppendPair: commit: %w", err)
+	}
+	return nil
+}

@@ -44,15 +44,16 @@ func (r *recordingFatalReporter) Calls() []error {
 // outcomes[i] (or success if i ≥ len(outcomes) or outcomes[i] is nil).
 func stubAppendFunc(outcomes []error) (AppendFunc, *int) {
 	var calls int
-	fn := func(ctx context.Context, msg proto.Message, eventTime int64) (ingest.AppendReport, error) {
+	fn := func(ctx context.Context, msg proto.Message, eventTime int64, env ingest.Envelope) (ingest.AppendReport, error) {
 		idx := calls
 		calls++
 		if idx < len(outcomes) && outcomes[idx] != nil {
 			return ingest.AppendReport{}, outcomes[idx]
 		}
 		return ingest.AppendReport{
-			EventHashHex: "0000000000000000000000000000000000000000000000000000000000000001",
-			PayloadBytes: 8,
+			EventHashHex:          "0000000000000000000000000000000000000000000000000000000000000001",
+			IngestionEventHashHex: "1111111111111111111111111111111111111111111111111111111111111111",
+			PayloadBytes:          8,
 		}, nil
 	}
 	return fn, &calls
@@ -484,6 +485,50 @@ func TestUnknownPathReturns401WhenAuthConfigured(t *testing.T) {
 
 	if got, want := rr.Code, http.StatusUnauthorized; got != want {
 		t.Errorf("status: got %d, want %d (unknown path under auth; body: %s)", got, want, rr.Body.String())
+	}
+}
+
+func TestEnvelopeForRequestPlainHTTP(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", nil)
+	env := envelopeForRequest(req)
+	if env.Channel != "http" {
+		t.Errorf("Channel: got %q, want %q", env.Channel, "http")
+	}
+	if env.ClientCommonName != "" || env.ClientCertSHA256 != "" || len(env.ClientSubjectAltNames) != 0 {
+		t.Errorf("client identity fields should be empty for plain HTTP: %+v", env)
+	}
+	if env.ReceivedAt == 0 {
+		t.Errorf("ReceivedAt should be set")
+	}
+}
+
+// TestPostEventsSuccessIncludesIngestionEventHash verifies the success
+// response carries both hashes (primary + paired enrichment) per §0038.
+func TestPostEventsSuccessIncludesIngestionEventHash(t *testing.T) {
+	doAppend, _ := stubAppendFunc(nil)
+	h := New(doAppend, nil)
+
+	payload := encodePayload(t, newTestMsg())
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want 200 (body: %s)", rr.Code, rr.Body.String())
+	}
+	var conf confirmation
+	if err := json.Unmarshal(rr.Body.Bytes(), &conf); err != nil {
+		t.Fatalf("body not parseable as confirmation: %v", err)
+	}
+	if conf.EventHash == "" {
+		t.Error("confirmation missing event_hash")
+	}
+	if conf.IngestionEventHash == "" {
+		t.Error("confirmation missing ingestion_event_hash (provenance pair not surfaced)")
+	}
+	if conf.EventHash == conf.IngestionEventHash {
+		t.Errorf("event_hash and ingestion_event_hash should differ: %s", conf.EventHash)
 	}
 }
 

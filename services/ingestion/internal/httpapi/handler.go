@@ -19,7 +19,10 @@ package httpapi
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
+	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -38,7 +41,7 @@ import (
 // AppendFunc is the handler's dependency on the ingestion pipeline.
 // Implemented in production by ingest.Ingester.Append; injectable in
 // tests for unrecoverable-error path coverage.
-type AppendFunc func(ctx context.Context, msg proto.Message, eventTime int64) (ingest.AppendReport, error)
+type AppendFunc func(ctx context.Context, msg proto.Message, eventTime int64, env ingest.Envelope) (ingest.AppendReport, error)
 
 // FatalReporter is the service-level escalation channel. Handlers call
 // ReportFatal on unrecoverable errors; the service's errgroup
@@ -187,9 +190,56 @@ func (h *Handler) writeUnauthorized(w http.ResponseWriter) {
 // Wire shape matches main.confirmation; the two channels (HTTP + stdin)
 // emit the same record type so producers can rely on a single schema.
 type confirmation struct {
-	EventHash    string `json:"event_hash"`
-	PayloadBytes int    `json:"payload_bytes"`
-	CommittedAt  int64  `json:"committed_at_ns"`
+	EventHash          string `json:"event_hash"`
+	IngestionEventHash string `json:"ingestion_event_hash"`
+	PayloadBytes       int    `json:"payload_bytes"`
+	CommittedAt        int64  `json:"committed_at_ns"`
+}
+
+// envelopeForRequest derives the ingest.Envelope from the HTTP request,
+// populating channel + client identity from the verified mTLS peer
+// certificate when present. When the connection is plain HTTP the
+// envelope reports channel="http"; plain HTTPS without client cert is
+// "https"; HTTPS with verified client cert is "https+mtls".
+func envelopeForRequest(r *http.Request) ingest.Envelope {
+	env := ingest.Envelope{ReceivedAt: time.Now().UnixNano()}
+	if r.TLS == nil {
+		env.Channel = "http"
+		return env
+	}
+	if len(r.TLS.VerifiedChains) == 0 || len(r.TLS.PeerCertificates) == 0 {
+		// TLS handshake completed (server cert presented + verified by
+		// client) but no client cert was verified — plain HTTPS.
+		env.Channel = "https"
+		return env
+	}
+	env.Channel = "https+mtls"
+	peerCert := r.TLS.PeerCertificates[0]
+	env.ClientCommonName = peerCert.Subject.CommonName
+	env.ClientSubjectAltNames = mTLSSubjectAltNames(peerCert)
+	sum := sha256.Sum256(peerCert.Raw)
+	env.ClientCertSHA256 = hex.EncodeToString(sum[:])
+	return env
+}
+
+// mTLSSubjectAltNames returns the SAN entries from cert in a stable
+// order: DNS names, then IP addresses (as strings), then URIs, then
+// email addresses. Used to populate the IngestionEvent's
+// client_subject_alt_names field per §0038.
+func mTLSSubjectAltNames(cert *x509.Certificate) []string {
+	if cert == nil {
+		return nil
+	}
+	var out []string
+	out = append(out, cert.DNSNames...)
+	for _, ip := range cert.IPAddresses {
+		out = append(out, ip.String())
+	}
+	for _, u := range cert.URIs {
+		out = append(out, u.String())
+	}
+	out = append(out, cert.EmailAddresses...)
+	return out
 }
 
 // ingestError is the structured per-message error outcome. Wire shape
@@ -246,7 +296,8 @@ func (h *Handler) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rep, err := h.doAppend(r.Context(), msg, msg.DeclaredAt)
+	env := envelopeForRequest(r)
+	rep, err := h.doAppend(r.Context(), msg, msg.DeclaredAt, env)
 	if err != nil {
 		if isUnrecoverable(err) {
 			// Write a 500 with a structured error body, then signal
@@ -269,9 +320,10 @@ func (h *Handler) handleEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(confirmation{
-		EventHash:    rep.EventHashHex,
-		PayloadBytes: rep.PayloadBytes,
-		CommittedAt:  time.Now().UnixNano(),
+		EventHash:          rep.EventHashHex,
+		IngestionEventHash: rep.IngestionEventHashHex,
+		PayloadBytes:       rep.PayloadBytes,
+		CommittedAt:        time.Now().UnixNano(),
 	})
 }
 
