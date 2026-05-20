@@ -13,6 +13,7 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/canonical"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/derivation"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/hypothesis"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
@@ -350,6 +351,49 @@ func TestVerifyWithCatIIRecords(t *testing.T) {
 	}
 	if report.VerifiedCount != 3 {
 		t.Errorf("VerifiedCount: got %d, want 3 (1 primary + 1 enrichment + 1 derived)", report.VerifiedCount)
+	}
+}
+
+// TestVerifyWithCatIIIRecords proves verify passes over a substrate
+// that contains Category III lifecycle event records
+// (BehavioralClusterFormation) alongside Cat I primary observations
+// and Cat II operational constructs (per decision-log §0045). The
+// substrate-integrity audit is type-agnostic across all three
+// Categories per Charter §2.5 BC5 (lifecycle events are Cat I records).
+func TestVerifyWithCatIIIRecords(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Close() })
+
+	in := ingest.New(sub, time.Now)
+	for _, ar := range []string{"actor-cat-iii-a", "actor-cat-iii-b"} {
+		decl := &eventsv1.DeclaredSession{
+			DeclaredAt:        1000,
+			ActorRef:          ar,
+			SessionDescriptor: []byte("shared"),
+		}
+		if _, err := in.Append(ctx, decl, decl.DeclaredAt, ingest.Envelope{Channel: "test"}); err != nil {
+			t.Fatalf("Append DeclaredSession %s: %v", ar, err)
+		}
+	}
+	if _, err := hypothesis.FormAll(ctx, sub, hypothesis.SessionDescriptorSharedV1{MinClusterSize: 2}, time.Now); err != nil {
+		t.Fatalf("FormAll: %v", err)
+	}
+
+	report, err := Verify(ctx, sub, Options{})
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if report.Failed() {
+		t.Errorf("Cat-III substrate Verify reported failure: %+v", report)
+	}
+	// 2 DeclaredSession + 2 IngestionEvent + 1 BehavioralClusterFormation = 5.
+	if report.VerifiedCount != 5 {
+		t.Errorf("VerifiedCount: got %d, want 5", report.VerifiedCount)
 	}
 }
 
