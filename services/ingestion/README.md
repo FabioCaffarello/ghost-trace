@@ -190,6 +190,24 @@ Validates the supplied `formation-event-hash` resolves to an `AutomationGroupFor
 
 Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
 
+## `merge-automation-groups` CLI
+
+Operator-invoked tool to record the **AutomationGroup merge** lifecycle operation per [`§0060`](../../docs/charter/decision-log.md) — fifth lifecycle operation of the second Cat III subtype arc. Mirrors [`merge-hypotheses`](#merge-hypotheses-cli). Within-subtype only; cross-subtype merge deferred per existing entity-model.md.
+
+```sh
+make merge-automation-groups-build                                        # builds ./bin/merge-automation-groups
+
+./bin/merge-automation-groups \
+  -antecedent-a-hash <64-hex-chars> \
+  -antecedent-b-hash <64-hex-chars> \
+  -produced-formation-hash <64-hex-chars> \
+  -reason "same automation signature"
+```
+
+Symmetric (argument order invariant): ascending-sort of antecedent hashes before recording. Validates all three hashes resolve to AutomationGroupFormation rows; identical antecedents return `ErrMergeAntecedentsIdentical` (exit 3). Mirrors §0049 Option B: the produced hypothesis identity is a separately-committed `AutomationGroupFormation`.
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found, target-wrong-type, or identical-antecedents.
+
 ## `promote-hypothesis` CLI
 
 Operator-invoked tool to record the second Cat III lifecycle operation (per [`§0046`](../../docs/charter/decision-log.md) — `BehavioralClusterPromotion`). Promotion transitions a hypothesis from active inference to operational use as enrichment context; per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) + [`decision-log §0011`](../../docs/charter/decision-log.md), the event MUST carry the Layer A cadence parameter governing subsequent demotion-candidacy.
