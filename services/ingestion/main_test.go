@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -201,6 +202,77 @@ func TestEmitFatalStructure(t *testing.T) {
 	if !strings.Contains(got.Note, "concurrency-pattern.md") {
 		t.Errorf("Note field missing concurrency-pattern.md reference: %q", got.Note)
 	}
+}
+
+func TestResolveAuthToken(t *testing.T) {
+	t.Run("both empty returns empty (auth disabled)", func(t *testing.T) {
+		got, err := resolveAuthToken("", "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "" {
+			t.Errorf("got %q, want empty", got)
+		}
+	})
+
+	t.Run("inline token returns as-is", func(t *testing.T) {
+		got, err := resolveAuthToken("inline-secret", "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "inline-secret" {
+			t.Errorf("got %q, want %q", got, "inline-secret")
+		}
+	})
+
+	t.Run("file takes precedence over inline", func(t *testing.T) {
+		dir := t.TempDir()
+		path := dir + "/token"
+		if err := os.WriteFile(path, []byte("file-secret\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := resolveAuthToken("inline-secret", path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "file-secret" {
+			t.Errorf("got %q, want %q (file should win)", got, "file-secret")
+		}
+	})
+
+	t.Run("file trims surrounding whitespace", func(t *testing.T) {
+		dir := t.TempDir()
+		path := dir + "/token"
+		if err := os.WriteFile(path, []byte("  \t spaced-secret  \n\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := resolveAuthToken("", path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "spaced-secret" {
+			t.Errorf("got %q, want %q", got, "spaced-secret")
+		}
+	})
+
+	t.Run("missing file returns error", func(t *testing.T) {
+		_, err := resolveAuthToken("", "/nonexistent/path/to/token")
+		if err == nil {
+			t.Fatal("expected error for missing file, got nil")
+		}
+	})
+
+	t.Run("empty file returns error", func(t *testing.T) {
+		dir := t.TempDir()
+		path := dir + "/empty"
+		if err := os.WriteFile(path, []byte("   \n\n  "), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := resolveAuthToken("inline-secret", path)
+		if err == nil {
+			t.Fatal("expected error for whitespace-only file, got nil")
+		}
+	})
 }
 
 // Sanity check: emitFatal accepts a nil-safe io.Writer of any kind.

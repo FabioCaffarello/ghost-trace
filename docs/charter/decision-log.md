@@ -918,6 +918,57 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0035` — Bearer-token authentication added to ingestion HTTP interface; §0034 auth-deferred discharged
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0034`](#0034--http-interface-added-to-ingestion-service-post-v1events--get-healthz-0030-httpgrpc-item-partially-discharged) introduced the HTTP interface and explicitly deferred authentication ("Authentication — deferred follow-on; producers are trusted at inception"). For any deployment beyond a single-host trusted-network scenario, unauthenticated HTTP ingestion is unacceptable: a §2.1-load-bearing substrate cannot accept arbitrary writes from any network peer. This entry adds the simplest authentication shape compatible with reverse-proxy deployment and follow-on TLS.
+
+- **Decision:** **Bearer-token authentication** added to the HTTP interface. Selection rationale (bearer vs alternatives):
+
+  | Mechanism | Why considered | Selection verdict |
+  |---|---|---|
+  | **Bearer token** | Operationally simple; standard HTTP discipline; one shared secret; constant-time-comparable | **Selected** at inception |
+  | mTLS | Strongest; per-producer identity; PKI-grounded | Deferred (requires PKI setup; reverse-proxy concern) |
+  | HMAC request signing | Replay-resistant with timestamp; per-request payload-binding | Deferred (operational complexity disproportionate at inception) |
+  | HTTP Basic | Simplest; less specified than Bearer for token semantics | Rejected (per-request credential transmission with no scheme-level distinction from username/password use cases) |
+
+  Implementation shape:
+  - **`httpapi.WithAuthToken(token)` option** at handler construction; empty token disables auth (backward-compatible).
+  - **`Authorization: Bearer <token>` header** required on all paths except `/healthz` when auth is configured.
+  - **Constant-time comparison** via `crypto/subtle.ConstantTimeCompare`. Length-mismatch leak channel acknowledged (attacker learns token length on length-mismatch); acceptable at inception. Stricter (always-fixed-length) comparison via SHA-equivalent deferred.
+  - **`/healthz` exempt** from auth unconditionally for orchestrator (Kubernetes, systemd, etc.) liveness probing.
+  - **Unknown paths return 401** (not 404) when auth is configured, so the path structure is not leaked to unauthenticated clients.
+  - **`WWW-Authenticate: Bearer realm="ghost-trace-ingestion"` header** on 401 responses (standard HTTP discipline).
+  - **`--http-auth-token-file <path>`** command-line option — preferred for production (avoids process-listing leak via /proc/$pid/cmdline); reads file, trims surrounding whitespace, rejects empty-after-trim.
+  - **`--http-auth-token <token>`** command-line option — inline alternative for scripting/dev; the file option takes precedence when both are set.
+  - **No token = no auth** (default; preserves backward compatibility with [`§0034`](#0034--http-interface-added-to-ingestion-service-post-v1events--get-healthz-0030-httpgrpc-item-partially-discharged) deployment shape).
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. Auth is a service-tier access-control concern; no §2.1/§2.2/§2.3/§2.5 commitment is affected. Respects [§4 frozen v0.2](../charter/constitutional-charter.md#4-constitutional-design-rule) — the auth predicate is mechanically falsifiable (request either has a valid Bearer token or it does not; test coverage exhausts the truth table including length-mismatch + wrong-scheme + missing-header cases). No glossary changes (HTTP auth vocabulary — Bearer, realm, WWW-Authenticate — is technology vocabulary).
+
+- **Consequences:**
+  - [`services/ingestion/internal/httpapi/handler.go`](../../services/ingestion/internal/httpapi/handler.go) — `Option` type + `WithAuthToken` / `WithAuthRealm` / `WithRequestBodyLimit` functional options; `authorized` + `requiresAuth` + `writeUnauthorized` helpers; ServeHTTP refactored to apply mux-level auth check before dispatch.
+  - [`services/ingestion/internal/httpapi/handler_test.go`](../../services/ingestion/internal/httpapi/handler_test.go) — 8 new tests / 11 subtests: backward-compat no-auth path; auth-required-when-configured; wrong-token-same-length; wrong-token-different-length; correct-token (success); bad-header-format (4 subtests: basic-scheme, raw-token-no-scheme, bearer-lowercase, empty); healthz-exempt-from-auth; unknown-path-returns-401-when-auth-configured.
+  - [`services/ingestion/main.go`](../../services/ingestion/main.go) — `--http-auth-token` + `--http-auth-token-file` flags; `resolveAuthToken` helper with file-precedence + whitespace-trim + empty-rejection semantics.
+  - [`services/ingestion/main_test.go`](../../services/ingestion/main_test.go) — `TestResolveAuthToken` (6 subtests: both empty; inline; file-takes-precedence; whitespace-trim; missing-file-error; empty-file-error).
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — Run section extended with auth example (file-based + inline); security notes (constant-time comparison; length-mismatch leak channel; reverse-proxy TLS recommendation).
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0035 (this entry) records the addition.
+  - **§0034 auth-deferred item discharged.** The [`§0034`](#0034--http-interface-added-to-ingestion-service-post-v1events--get-healthz-0030-httpgrpc-item-partially-discharged) Decision noted "Authentication (deferred follow-on)"; this entry fulfills it.
+  - **Test count grows.** Combined: **38 tests** across main (7; +TestResolveAuthToken with 6 subtests), canonical (5), substrate (6), ingest (3), httpapi (20; +8 new auth tests / 11 subtests). All passing under `go test -race ./...`.
+  - **Zero external dependencies added.** `crypto/subtle` is Go stdlib.
+  - **Out of scope at this layer (carry-forwards).**
+    - **TLS termination** — reverse-proxy concern. A follow-on TLS RFC may add native TLS to the service when the operational pressure justifies it (e.g., direct-to-internet exposure without a fronting proxy).
+    - **Multi-token / scoped tokens** — single shared secret at inception. Multi-tenant deployments or per-producer auth requires a separate RFC.
+    - **Token rotation** — operator handles rotation today (stop service, swap token file, restart). Online rotation deferred.
+    - **mTLS** — admissible-but-deferred at inception per the rationale table above; reversal triggers when per-producer identity becomes load-bearing.
+    - **HMAC request signing** — admissible-but-deferred; reversal triggers when replay-resistance becomes load-bearing (e.g., persistent attackers with packet capture).
+  - **Service-tier discipline standard extended.** Future service-tier code that exposes HTTP interfaces SHOULD adopt the same shape: file-path-preferred token configuration; bearer-on-protected-paths; healthz-exempt; unknown-paths-401-when-auth-configured; constant-time comparison.
+
+- **Supersession:** None. This entry discharges a [`§0034`](#0034--http-interface-added-to-ingestion-service-post-v1events--get-healthz-0030-httpgrpc-item-partially-discharged) deferred follow-on; no prior decision reversed.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
