@@ -29,6 +29,7 @@ help:
 	@echo "  demote-automation-group-build  go build -trimpath -o $(BIN_DIR)/demote-automation-group ./cmd/demote-automation-group"
 	@echo "  dissolve-automation-group-build  go build -trimpath -o $(BIN_DIR)/dissolve-automation-group ./cmd/dissolve-automation-group"
 	@echo "  merge-automation-groups-build  go build -trimpath -o $(BIN_DIR)/merge-automation-groups ./cmd/merge-automation-groups"
+	@echo "  split-automation-group-build  go build -trimpath -o $(BIN_DIR)/split-automation-group ./cmd/split-automation-group"
 	@echo "  test           go test -race ./..."
 	@echo "  golden-corpus  regenerate canonical-corpus golden files (schemas-evolution event)"
 	@echo "  clean          remove $(GEN_OUT) + $(BIN_DIR)"
@@ -61,7 +62,8 @@ generate: $(PROTOC_GEN_GO)
 	  events/v1/automation_group_promotion.proto \
 	  events/v1/automation_group_demotion.proto \
 	  events/v1/automation_group_dissolution.proto \
-	  events/v1/automation_group_merge.proto
+	  events/v1/automation_group_merge.proto \
+	  events/v1/automation_group_split.proto
 
 $(PROTOC_GEN_GO):
 	$(MAKE) tools
@@ -155,6 +157,11 @@ dissolve-automation-group-build:
 merge-automation-groups-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/merge-automation-groups ./cmd/merge-automation-groups
+
+.PHONY: split-automation-group-build
+split-automation-group-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/split-automation-group ./cmd/split-automation-group
 
 .PHONY: test
 test:

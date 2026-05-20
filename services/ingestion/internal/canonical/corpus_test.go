@@ -45,6 +45,7 @@ var messageFactory = map[string]func() proto.Message{
 	"automation-group-demotion":    func() proto.Message { return &eventsv1.AutomationGroupDemotion{} },
 	"automation-group-dissolution": func() proto.Message { return &eventsv1.AutomationGroupDissolution{} },
 	"automation-group-merge":       func() proto.Message { return &eventsv1.AutomationGroupMerge{} },
+	"automation-group-split":       func() proto.Message { return &eventsv1.AutomationGroupSplit{} },
 }
 
 // TestCanonicalCorpus is the CI golden-file gate per

@@ -2339,6 +2339,50 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0061` — Sixth (final) AutomationGroup lifecycle operation (`AutomationGroupSplit`) lands; second-subtype §2.5 lifecycle surface complete; typed-subtype-landings commitment fully validated across two subtypes
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0060`](#0060--second-subtype-merge-automationgroupmerge-lands-symmetric-relation-idempotency-carries-forward-errmergeantecedentsidentical-sentinel-shared-across-subtypes) landed AutomationGroup merge. This entry lands AutomationGroup split — the **sixth (final) lifecycle operation** of the second Cat III subtype arc opened at [`§0056`](#0056--second-category-iii-concrete-subtype-automationgroup-formation-lands-second-subtype-lifecycle-arc-opens-typed-subtype-landings-commitment-reaffirmed). The §2.5 lifecycle surface is now complete for BOTH Cat III concrete subtypes implemented to date (BehavioralCluster via §0045–§0050; AutomationGroup via §0056–§0061).
+
+  Two structural observations close this entry:
+
+  - **Sentinel-sharing pattern fully validated across two subtypes.** All four cross-cutting sentinels (`ErrTargetNotFound`, `ErrTargetWrongType`, `ErrMergeAntecedentsIdentical`, `ErrSplitInsufficientSuccessors`, `ErrSplitSuccessorsNotDistinct`) are shared by both subtypes' operators without modification. The pattern (operation-agnostic sentinels + subtype-specific message_type discriminators) scales structurally. Future subtypes (CoordinationRing, CampaignHypothesis) will follow the same pattern.
+  - **Typed-subtype-landings commitment fully validated.** The §0045+§0050+§0056 commitment (each Cat III subtype gets its own subtype-specific lifecycle event types + entry points, NOT a uniform abstract surface) has now been carried through 12 PRs across two complete lifecycle arcs (6 per subtype × 2 subtypes). The duplication is bounded and structurally meaningful — each per-subtype file carries ~150 lines of subtype-specific boilerplate, but the wire types remain distinct (the subtype distinction is recorded by the message_type discriminator itself, not by a label on a uniform type).
+
+- **Decision:** Land `AutomationGroupSplit` with three structural moves mirroring §0050:
+
+  1. **`AutomationGroupSplit` Protobuf message** at [`schemas/events/v1/automation_group_split.proto`](../../schemas/events/v1/automation_group_split.proto). Four fields mirroring §0050: `antecedent_formation_event_hash` (single bytes), `successor_formation_event_hashes` (repeated bytes, sorted ascending, len ≥ 2), `split_at`, `reason`.
+
+  2. **`SplitAutomationGroup` entry point** at [`services/ingestion/internal/hypothesis/automation_group_split.go`](../../services/ingestion/internal/hypothesis/automation_group_split.go). Parallel to §0050's `Split`. Reuses `ErrSplitInsufficientSuccessors` + `ErrSplitSuccessorsNotDistinct` sentinels (now subtype-shared); validates antecedent + every successor resolves to `AutomationGroupFormation`; sorts successors ascending (set-equality idempotency).
+
+  3. **`cmd/split-automation-group` operator interface** — eighteenth operational binary; thirteenth substrate-write. Uses the Go-standard option-parser repeatable accumulator for the successor-formation-hash option per §0050.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1, §2.2, §2.3, §2.5 + §2.5 BC3 + §2.5 BC5. Respects §0045+§0056 hypothesis-identity invariant. Respects §0050 structural-inverse-of-merge pattern. Respects §0049+§0050 set-equality idempotency. Respects §0056 typed-subtype-landings commitment. Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`schemas/events/v1/automation_group_split.proto`](../../schemas/events/v1/automation_group_split.proto) — new file.
+  - [`services/ingestion/internal/hypothesis/automation_group_split.go`](../../services/ingestion/internal/hypothesis/automation_group_split.go) — new file.
+  - [`services/ingestion/internal/hypothesis/automation_group_split_test.go`](../../services/ingestion/internal/hypothesis/automation_group_split_test.go) — **10 tests** covering happy-path, successor-order invariance, insufficient successors, duplicate successors, antecedent-equals-successor, idempotency, unknown antecedent, unknown successor, wrong-type, default split_at, and a terminal **all-six-AG-lifecycle-ops-in-substrate** test that proves all six AutomationGroup lifecycle event types coexist in a single substrate.
+  - [`services/ingestion/cmd/split-automation-group/main.go`](../../services/ingestion/cmd/split-automation-group/main.go) — new binary; eighteenth operational CLI; thirteenth substrate-write.
+  - Makefile, canonical corpus (minimal + typical), service README, decision-log §0061.
+  - **Test count grows.** Combined: **296 tests** (up from 286 at §0060; +10).
+  - **§2.5 lifecycle surface complete for AutomationGroup.** All six lifecycle operations (formation, promotion, demotion, dissolution, merge, split) are now operationally observable for the second concrete Cat III subtype. The §0056+§0050 commitments (parallel-pattern-per-subtype, typed-subtype-landings, Option B identity routing) are validated across 12 PRs covering both subtypes' full arcs.
+  - **Eighteenth operational binary lands; thirteenth substrate-write.** `cmd/` now contains 18 binaries across three classifications:
+    - substrate-write (13): all 6 BC lifecycle operators + all 6 AG lifecycle operators + `derive-operational-session`.
+    - substrate-audit/maintenance (2): `verify`, `orphan-cleanup`.
+    - projection-read (3): `hypothesis-state`, `list-hypotheses`, `summarize-hypotheses`.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Projection layer extension for AutomationGroup** — unchanged from §0056 carry-forward. `internal/projection` still hard-codes BehavioralCluster message_type constants; AutomationGroup projections still error with `ErrTargetNotFormation`. Natural §0062 candidate.
+    - **Remaining Cat III subtypes** — `CoordinationRing` (introduces pairwise relations), `CampaignHypothesis` (targets events, not actors). Each would require its own lifecycle-arc series (6 PRs each). Deferred until operator pressure surfaces.
+    - **Cross-subtype merge/split semantics** — unchanged from §0049+§0050 carry-forwards. Cross-subtype operations remain the open Ontology question per Q4 deferral.
+    - **Layer B deep-criterion** — unchanged from §0047 carry-forward; blocked on §2.6 redaction.
+
+- **Supersession:** None. Closes the second Cat III subtype's lifecycle arc opened at §0056. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
