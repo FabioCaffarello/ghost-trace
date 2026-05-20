@@ -64,6 +64,35 @@ Registered operational definitions:
 
 Adding a new operational definition registers via [`internal/derivation`](./internal/derivation): implement `OperationalDefinition` (Version, Parameters, Derive) and wire it into `cmd/derive-operational-session/main.go`'s `resolveDefinition`. Definitions that need additional Cat I observations beyond the source `DeclaredSession` consult the `DerivationContext` passed to `Derive` (per [`§0044`](../../docs/charter/decision-log.md)).
 
+## `form-hypothesis` CLI
+
+Operator-invoked tool to form Category III hypotheses from the substrate's primary observations (per [`§0045`](../../docs/charter/decision-log.md) — first Cat III subtype landing). Lands the first Cat III lifecycle event (`BehavioralClusterFormation`) per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) (frozen v0.3).
+
+```sh
+make form-hypothesis-build                                                # builds ./bin/form-hypothesis
+
+# Run the default session-descriptor-shared-v1 pattern with min-cluster-size 2
+./bin/form-hypothesis -db ./ghost-trace.db -blobs ./blobs
+
+# Override the minimum cluster size — produces NEW formation events
+# alongside the prior derivations (versioning per entity-model.md line 45)
+./bin/form-hypothesis -db ./ghost-trace.db -blobs ./blobs -min-cluster-size 3
+```
+
+The CLI walks every `DeclaredSession` in the substrate, applies the formation pattern, and commits each resulting `BehavioralClusterFormation` event via `substrate.Append` (acquires `writeMu` per [`concurrency-pattern.md`](../../docs/architecture/concurrency-pattern.md) §Substrate-Writer Serialization). Re-running with an identical `(pattern_signature, pattern_parameters)` tuple is a no-op (content-hash collision → `INSERT OR IGNORE`); re-running with a NEW tuple produces NEW lifecycle events and preserves the prior ones per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness).
+
+Writes structured JSON to stdout (`pattern_signature`, `pattern_parameters`, `examined`, `newly_formed`, `already_formed`) + a brief human summary to stderr. Exit code: **0** on success (including zero-newly-formed); **2** on tool/configuration error.
+
+Registered formation patterns:
+
+| Signature | Parameters | Inference |
+|---|---|---|
+| `session-descriptor-shared-v1` | `min_cluster_size=<int>` (default 2) | Groups `DeclaredSession` rows by byte-equal `session_descriptor`; forms a `BehavioralCluster` per group with >= `min_cluster_size` distinct `actor_ref`s. Minimum-viable canonical example exercising every Cat III structural mechanism (deterministic recording, lifecycle-event-as-Cat-I per §2.5 BC5, observational provenance per §2.3, identity-via-content-hash). |
+
+Adding a new formation pattern registers via [`internal/hypothesis`](./internal/hypothesis): implement `FormationPattern` (Signature, Parameters, Form) and wire it into `cmd/form-hypothesis/main.go`'s `resolvePattern`. Patterns that need additional Cat I observations beyond `DeclaredSession` extend the `FormationContext` interface with new typed accessors (the same incremental-extension procedure that [`§0044`](../../docs/charter/decision-log.md) established for Cat II `DerivationContext`).
+
+**Deferred lifecycle operations** per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness): promotion, demotion, merge, split, dissolution. Each lands as a separate Cat I lifecycle-event record type referencing the originating `BehavioralClusterFormation`'s content-hash; the same `cmd/form-hypothesis` pattern extends to drive them under follow-on landings. Per Charter §2.5 BC3, the substrate stores ONLY lifecycle events — the hypothesis's current state is a projection over the operation event chain (projection layer deferred).
+
 ## `orphan-cleanup` CLI
 
 Operator-invoked tool to delete orphan blobs (per [`§0041`](../../docs/charter/decision-log.md)). Per [`§0033` Anti-Patterns](../../docs/architecture/operational-ops.md), orphan deletion MUST be operator-invoked with explicit confirmation; this tool implements that discipline.
@@ -108,6 +137,8 @@ Registered Cat I primary-observation types accepted by the ingestion pipeline (p
 The substrate stores all types in the same events table with the `message_type` column carrying the Protobuf descriptor's full name (e.g. `ghosttrace.events.v1.DeclaredSession`, `ghosttrace.events.v1.NetworkEvent`). Verify + orphan-cleanup are type-agnostic and operate over heterogeneous-type substrates without change.
 
 Category II `OperationalSession` records also live in the same events table — substrate immutability (Charter §2.1) applies to Cat II per [`entity-model.md` §Category II](../../docs/ontology/entity-model.md). Derivation is operator-invoked via [`cmd/derive-operational-session`](#derive-operational-session-cli); see that section for the registered operational definitions.
+
+Category III hypothesis **lifecycle events** (per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) BC5: "lifecycle events are Category I records under §2.5") also live in the same events table — `message_type` = `ghosttrace.events.v1.BehavioralClusterFormation` for the first Cat III subtype's formation event. Formation is operator-invoked via [`cmd/form-hypothesis`](#form-hypothesis-cli); see that section for the registered formation patterns. Per Charter §2.5 BC3, the substrate does NOT store a "current state" Cat III record — the hypothesis is reconstructed by replaying its lifecycle event chain (projection layer deferred).
 
 ## Build Sequence
 

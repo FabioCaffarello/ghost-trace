@@ -1,0 +1,87 @@
+// Category III hypothesis lifecycle event per Charter §2.5
+// (Hypothesis Lifecycle Explicitness, frozen v0.3) + entity-model.md
+// §Category III (BehavioralCluster concrete subtype, line 65) +
+// decision-log §0010 (Q2 subtype resolution) + §0013 (formation
+// definition). Encoded under the canonical-serialization-contract at
+// docs/architecture/canonical-serialization-contract.md.
+//
+// Constitutional shape per Charter §2.5 Boundary Condition 5:
+// "Chains crossing Category III continue to the hypothesis's
+// lifecycle events, which are Category I records under §2.5."
+// BehavioralClusterFormation is therefore a Category I record
+// committed under §2.1 immutability — the formation event IS the
+// substrate-level fact, while the BehavioralCluster's current state
+// is a projection over the operation event history (per §2.5
+// Boundary Condition 3 forbidding direct hypothesis-state commits).
+//
+// Hypothesis identity: per Charter §2.3 (frozen v0.4), the
+// hypothesis's stable identifier is the content-hash of this
+// formation event. Subsequent lifecycle events (promotion, demotion,
+// merge, split, dissolution — all deferred to follow-on landings)
+// reference the formation event's content-hash to identify the
+// hypothesis they operate on.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// BehavioralClusterFormation records the formation of a Category III
+// BehavioralCluster hypothesis per entity-model.md line 65:
+// "a set of actors whose behavioral patterns suggest operation by a
+// common underlying entity."
+//
+// The inference that triggered formation is non-deterministic per
+// Charter §2.2 (Category III: "probabilistic constructions whose
+// boundaries, membership, and continued existence are matters of
+// degree"). The recording of the formation event is deterministic —
+// given the same (substrate state, pattern_signature, pattern_parameters)
+// tuple, the resulting BehavioralClusterFormation content-hash is
+// reproducible.
+message BehavioralClusterFormation {
+  // pattern_signature is the stable identifier of the formation
+  // pattern that produced this BehavioralCluster (e.g.
+  // "session-descriptor-shared-v1"). Maps to entity-model.md line 65
+  // "pattern-signature reference". Part of the formation event's
+  // content-hash → part of the hypothesis's identity.
+  string pattern_signature = 1;
+
+  // pattern_parameters is the canonical-form string encoding of the
+  // pattern's parameters (e.g. "min_cluster_size=2"). Canonical form:
+  // lowercase key=value pairs sorted by key, separated by semicolons.
+  // Two formations with logically-identical parameters MUST produce
+  // byte-identical pattern_parameters strings.
+  string pattern_parameters = 2;
+
+  // actor_refs is the set of actor identity references identifying
+  // the cluster members per entity-model.md line 65 ("actor membership
+  // representation"). Sorted ASCENDING for content-hash stability —
+  // two formations with identical member sets but different ingestion
+  // orders MUST produce byte-identical formation events. Each
+  // actor_ref is single-tier per decision-log §0023.
+  repeated string actor_refs = 3;
+
+  // formation_at is the Unix-nanoseconds time the inference recognized
+  // the formation. Distinct from substrate's committed_at and from
+  // any source observation's event_time. May equal the latest
+  // source_event_hashes entry's event_time when the formation
+  // pattern's window closes at the latest contributing observation.
+  int64 formation_at = 4;
+
+  // confidence is a scalar in [0.0, 1.0] expressing the formation
+  // pattern's confidence in the hypothesis. PLACEHOLDER pending
+  // Charter §2.6 (Evidential Independence Integrity) redaction —
+  // §2.6 will introduce the paired evidential_independence dimension
+  // per Charter §1 + entity-model.md line 58. Until then this scalar
+  // is computed deterministically by each formation pattern (no
+  // semantic interpretation beyond ordering).
+  float confidence = 5;
+
+  // source_event_hashes is the set of Category I observation
+  // content-hashes from which the formation was inferred —
+  // observational provenance per Charter §2.3 (Provenance Integrity,
+  // frozen v0.4). Each hash is the BLAKE3-256 of a DeclaredSession
+  // (or other Cat I primary) that contributed to the formation
+  // decision. Sorted ASCENDING for content-hash stability.
+  repeated bytes source_event_hashes = 6;
+}

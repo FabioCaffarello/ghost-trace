@@ -15,6 +15,7 @@ help:
 	@echo "  verify-build   go build -trimpath -o $(BIN_DIR)/verify ./cmd/verify"
 	@echo "  orphan-cleanup-build  go build -trimpath -o $(BIN_DIR)/orphan-cleanup ./cmd/orphan-cleanup"
 	@echo "  derive-build   go build -trimpath -o $(BIN_DIR)/derive-operational-session ./cmd/derive-operational-session"
+	@echo "  form-hypothesis-build  go build -trimpath -o $(BIN_DIR)/form-hypothesis ./cmd/form-hypothesis"
 	@echo "  test           go test -race ./..."
 	@echo "  golden-corpus  regenerate canonical-corpus golden files (schemas-evolution event)"
 	@echo "  clean          remove $(GEN_OUT) + $(BIN_DIR)"
@@ -36,7 +37,8 @@ generate: $(PROTOC_GEN_GO)
 	  events/v1/declared_session.proto \
 	  events/v1/ingestion_event.proto \
 	  events/v1/network_event.proto \
-	  events/v1/operational_session.proto
+	  events/v1/operational_session.proto \
+	  events/v1/behavioral_cluster_formation.proto
 
 $(PROTOC_GEN_GO):
 	$(MAKE) tools
@@ -60,6 +62,11 @@ orphan-cleanup-build:
 derive-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/derive-operational-session ./cmd/derive-operational-session
+
+.PHONY: form-hypothesis-build
+form-hypothesis-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/form-hypothesis ./cmd/form-hypothesis
 
 .PHONY: test
 test:
