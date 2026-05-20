@@ -243,6 +243,36 @@ Validates the antecedent + every successor hash resolves to a `BehavioralCluster
 
 Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found, target-wrong-type, insufficient-successors, or successors-not-distinct (the §2.5-lifecycle-integrity errors).
 
+## `hypothesis-state` CLI
+
+First operator-facing materializer of the **projection layer** over the §2.5 lifecycle event chain (per [`§0051`](../../docs/charter/decision-log.md)). Charter §2.5 BC3 forbids storing "current state" as a substrate row — the substrate stores immutable lifecycle events (formation, promotion, demotion, dissolution, merge, split) and the hypothesis's current state is reconstructed by replaying those events. This binary walks the substrate, builds the projection for a single formation, and emits structured JSON.
+
+```sh
+make hypothesis-state-build                                              # builds ./bin/hypothesis-state
+
+# Project the current state of a hypothesis (formation hash from form-hypothesis output)
+./bin/hypothesis-state \
+  -formation-event-hash <64-hex-chars>
+```
+
+Output is structured JSON describing the projection: `formation_event_hash`, `state` (one of `forming`, `promoted`, `demoted`, `dissolved`, `merged_into`, `split_into`), optional `latest_promotion` / `latest_demotion` / `dissolution` / `merged_into` / `split_into` payloads, and the full chronological `lifecycle_history` (entries sorted ascending by per-event timestamp).
+
+**State precedence rules** (per `internal/projection.computeState`):
+
+1. `dissolved` beats everything — dissolution recognizes non-existence per §0048 and is terminal.
+2. `split_into` beats `merged_into` when both apply to the same formation (rare cross-arc; see `TestProjectSplitBeatsMerge`).
+3. `merged_into` beats the promote/demote arc.
+4. Within the promote/demote arc: `demoted` when a demotion targets the latest promotion; otherwise `promoted`.
+5. Default: `forming` (formation row exists; no lifecycle event reaches it).
+
+**Scope at this layer (per §0051):** single-hypothesis projection; on-demand walk; no caching or materialized indexes. Multi-hypothesis aggregate queries (e.g. "list every currently-promoted hypothesis") are deferred to a follow-on landing.
+
+| Option | Default | Notes |
+|---|---|---|
+| `-formation-event-hash` | (required) | Hex-encoded BLAKE3-256 of the target `BehavioralClusterFormation`. |
+
+Exit codes: **0** success; **2** tool/configuration error; **3** formation-not-found or target-not-formation.
+
 ## `orphan-cleanup` CLI
 
 Operator-invoked tool to delete orphan blobs (per [`§0041`](../../docs/charter/decision-log.md)). Per [`§0033` Anti-Patterns](../../docs/architecture/operational-ops.md), orphan deletion MUST be operator-invoked with explicit confirmation; this tool implements that discipline.
