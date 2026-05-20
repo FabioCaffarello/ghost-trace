@@ -9,10 +9,13 @@ import (
 	"context"
 	"crypto/subtle"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	_ "modernc.org/sqlite" // pure-Go driver per decision-log §0027 Proposal item 4.
@@ -253,6 +256,55 @@ func (s *Substrate) Count(ctx context.Context) (int64, error) {
 	var n int64
 	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM events`).Scan(&n)
 	return n, err
+}
+
+// WalkBlobs iterates over every file in the blob-store that matches the
+// blob-path convention (<2-char-prefix>/<62-char-suffix>, where the
+// concatenated 64 chars decode to a 32-byte hash). For each match, fn
+// is called with the decoded hash + the absolute filesystem path.
+// Files that do not match the convention (temp files, accidentally-
+// placed artifacts) are silently skipped.
+//
+// Used by the verify CLI's orphan-blob detection per
+// docs/charter/decision-log.md §0040. Read-only walk; no writeMu.
+//
+// Order is filesystem-iteration order (operating-system dependent;
+// typically sorted by shard then filename on POSIX). Callers MUST NOT
+// rely on a specific traversal order.
+func (s *Substrate) WalkBlobs(ctx context.Context, fn func(hash [32]byte, path string) error) error {
+	return filepath.WalkDir(s.blobDir, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		// Honor context cancellation between entries.
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		// Skip leftover tmp files (write-temp-then-rename leaves none
+		// in steady state, but a crashed write may orphan one).
+		if strings.HasPrefix(d.Name(), "tmp-blob-") {
+			return nil
+		}
+		rel, err := filepath.Rel(s.blobDir, path)
+		if err != nil {
+			return fmt.Errorf("substrate.WalkBlobs: rel %s: %w", path, err)
+		}
+		cleaned := filepath.ToSlash(rel)
+		// Expected form: "<2-hex>/<62-hex>".
+		parts := strings.SplitN(cleaned, "/", 2)
+		if len(parts) != 2 || len(parts[0]) != 2 || len(parts[1]) != 62 {
+			return nil // not a blob-store file; skip silently
+		}
+		hexStr := parts[0] + parts[1]
+		var hash [32]byte
+		if _, err := hex.Decode(hash[:], []byte(hexStr)); err != nil {
+			return nil // unparseable hex; skip
+		}
+		return fn(hash, path)
+	})
 }
 
 // WalkEvents iterates over every events-table row in commit order
