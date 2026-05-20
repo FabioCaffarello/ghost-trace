@@ -237,7 +237,7 @@ Validates the antecedent + every successor hash resolves to a `BehavioralCluster
 | Option | Default | Notes |
 |---|---|---|
 | `-antecedent-formation-hash` | (required) | Hex-encoded BLAKE3-256 of the `BehavioralClusterFormation` being split. |
-| `-successor-formation-hash` | (required, ≥ 2 invocations) | Hex-encoded BLAKE3-256 of a successor `BehavioralClusterFormation`; repeat the flag for each successor. |
+| `-successor-formation-hash` | (required, ≥ 2 invocations) | Hex-encoded BLAKE3-256 of a successor `BehavioralClusterFormation`; repeat the option for each successor. |
 | `-split-at-ns` | 0 (= wall-clock now) | Explicit `split_at` for forensic replay / deterministic test recording. |
 | `-reason` | empty | Operator-supplied forensic note; **strongly recommended** — split encodes a substantive epistemic claim (the antecedent conflated multiple phenomena). |
 
