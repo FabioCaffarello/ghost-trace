@@ -1,6 +1,28 @@
 {
   "permissions": {
-    "allow": ["Read", "Glob", "Grep", "WebFetch"],
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "Bash(go test:*)",
+      "Bash(go test *)",
+      "Bash(go build:*)",
+      "Bash(go build *)",
+      "Bash(go vet:*)",
+      "Bash(go vet *)",
+      "Bash(make test)",
+      "Bash(make build)",
+      "Bash(make tools)",
+      "Bash(make generate)",
+      "Bash(make verify-build)",
+      "Bash(make orphan-cleanup-build)",
+      "Bash(make derive-build)",
+      "Bash(make golden-corpus)",
+      "Bash(make clean)",
+      "Bash(make help)",
+      "Bash(bash .claude/hooks/pre-commit-doc-check.sh)"
+    ],
     "ask": [
       "Write(docs/charter/constitutional-charter.md)",
       "Edit(docs/charter/constitutional-charter.md)",
