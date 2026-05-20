@@ -66,19 +66,18 @@ The author does not mark the draft `status: discussion` until three skills have 
 
 A draft that fails any of these is rewritten before review.
 
-## 4. Numbering procedure
+## 4. Acceptance procedure
 
-Drafts in [`docs/rfcs/draft/`](../../../../docs/rfcs/) carry working titles, not numbers ([`docs/rfcs/README.md` §Numbering](../../../../docs/rfcs/README.md)).
+Drafts in [`docs/rfcs/draft/`](../../../../docs/rfcs/) carry working-title filenames. Acceptance does not rename or move the file; it updates the `Status:` field and populates the `Decision Record` section. RFCs are referenced by working-title filename in subsequent decision-log entries and amendments.md entries.
 
-Numbering happens at acceptance. The procedure:
+Procedure at acceptance:
 
-1. The next sequential RFC number is determined by inspecting accepted RFCs already moved out of `draft/`.
-2. The accepted RFC's file is renamed to include the number.
-3. The RFC's status field is updated to `accepted`.
-4. A decision-log entry is added per [`decision-logger`](../decision-logger/SKILL.md). The entry references the RFC by its new number.
-5. The Charter amendments log is updated only if the RFC is type `charter-amendment`.
+1. The RFC's `Status:` field is updated from `discussion` to `accepted`.
+2. The RFC's `Decision Record` section is populated with the resolution + any committee extensions + reversal conditions.
+3. A decision-log entry is added per [`decision-logger`](../decision-logger/SKILL.md). The entry references the RFC by its filename relative link.
+4. The Charter amendments log is updated only if the RFC is type `charter-amendment`.
 
-A draft is never numbered. Numbering before acceptance creates a fiction of decision and is rejected.
+A draft is never numbered. Filename-based referencing (rather than numbering with rename) is the actual-practice convention established across the [`§0007`](../../../../docs/charter/decision-log.md)–[`§0025`](../../../../docs/charter/decision-log.md) RFC acceptance cycles and codified at [`§0026`](../../../../docs/charter/decision-log.md). Earlier versions of this skill described a numbering-with-rename procedure that was never followed in practice; the [`§0026`](../../../../docs/charter/decision-log.md) decision aligns this skill with the convention the committee actually applied across fourteen RFC acceptance cycles.
 
 ## 5. What this skill does not do
 
