@@ -126,6 +126,13 @@ type entry struct {
 	MergedInto       *mergeView     `json:"merged_into,omitempty"`
 	SplitInto        *splitView     `json:"split_into,omitempty"`
 	LifecycleEntries int            `json:"lifecycle_event_count"`
+	Latencies        latencyView    `json:"latencies"`
+}
+
+type latencyView struct {
+	FormationToFirstPromotionNs        *int64 `json:"formation_to_first_promotion_ns,omitempty"`
+	LatestPromotionToLatestDemotionNs  *int64 `json:"latest_promotion_to_latest_demotion_ns,omitempty"`
+	FormationToDissolutionNs           *int64 `json:"formation_to_dissolution_ns,omitempty"`
 }
 
 type promotionView struct {
@@ -204,6 +211,11 @@ func buildEntry(p projection.HypothesisProjection) entry {
 			SuccessorHashes: succs,
 			Reason:          p.SplitInto.Reason,
 		}
+	}
+	e.Latencies = latencyView{
+		FormationToFirstPromotionNs:       p.FormationToFirstPromotionLatencyNs,
+		LatestPromotionToLatestDemotionNs: p.LatestPromotionToLatestDemotionLatencyNs,
+		FormationToDissolutionNs:          p.FormationToDissolutionLatencyNs,
 	}
 	return e
 }

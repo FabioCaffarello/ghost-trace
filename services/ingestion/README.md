@@ -255,7 +255,17 @@ make hypothesis-state-build                                              # build
   -formation-event-hash <64-hex-chars>
 ```
 
-Output is structured JSON describing the projection: `formation_event_hash`, `state` (one of `forming`, `promoted`, `demoted`, `dissolved`, `merged_into`, `split_into`), optional `latest_promotion` / `latest_demotion` / `dissolution` / `merged_into` / `split_into` payloads, and the full chronological `lifecycle_history` (entries sorted ascending by per-event timestamp).
+Output is structured JSON describing the projection: `formation_event_hash`, `state` (one of `forming`, `promoted`, `demoted`, `dissolved`, `merged_into`, `split_into`), optional `latest_promotion` / `latest_demotion` / `dissolution` / `merged_into` / `split_into` payloads, the full chronological `lifecycle_history` (entries sorted ascending by per-event timestamp), and `latencies` (per-projection latency derivations — see §0055).
+
+**Latency fields (per §0055):** the `latencies` object surfaces three derived nanosecond intervals computed from the projection's lifecycle history:
+
+| Field | When populated | Definition |
+|---|---|---|
+| `formation_to_first_promotion_ns` | hypothesis has been promoted at least once | EARLIEST promotion's `promoted_at` − formation's `event_time`. Answers "how long after formation did this hypothesis first move into operational use?" |
+| `latest_promotion_to_latest_demotion_ns` | latest promotion has a corresponding demotion | `LatestDemotion.demoted_at` − `LatestPromotion.promoted_at` |
+| `formation_to_dissolution_ns` | hypothesis has been dissolved | `Dissolution.dissolved_at` − formation's `event_time` |
+
+Fields are absent (omitempty) when the underlying arc is incomplete. Values may be negative if the producer recorded out-of-order timestamps — the projection reports observed timestamps, not assertions about producer correctness.
 
 **State precedence rules** (per `internal/projection.computeState`):
 
@@ -290,7 +300,7 @@ make list-hypotheses-build                                               # build
 ./bin/list-hypotheses -limit 50 -offset 100
 ```
 
-Output is a JSON ARRAY where each element shares the structure of `hypothesis-state`'s single-projection output (formation hash, state, optional per-lifecycle-type payloads, lifecycle event count).
+Output is a JSON ARRAY where each element shares the structure of `hypothesis-state`'s single-projection output (formation hash, state, optional per-lifecycle-type payloads, lifecycle event count, and `latencies` per §0055).
 
 **Single linear walk over the substrate** (per `projection.ProjectAll`) regardless of formation count: pass one collects formations + promotions; pass two dispatches demotions/dissolutions/merges/splits against the per-formation projections. Linear in substrate size, NOT in formation-count × substrate-size.
 

@@ -157,6 +157,27 @@ type HypothesisProjection struct {
 	// The list is for operator inspection; the State field
 	// summarizes it.
 	LifecycleHistory []LifecycleEntry
+
+	// FormationToFirstPromotionLatencyNs is the elapsed time (Unix
+	// nanoseconds) between the formation event and the EARLIEST
+	// promotion event targeting this formation. Nil when no
+	// promotion has been recorded (the hypothesis never moved into
+	// operational use). Per §0055 this is the per-projection
+	// latency surface; histogram bucketing across many projections
+	// remains a follow-on aggregate.
+	FormationToFirstPromotionLatencyNs *int64
+
+	// LatestPromotionToLatestDemotionLatencyNs is the elapsed time
+	// (Unix ns) between the LatestPromotion and the LatestDemotion
+	// targeting it. Nil when the latest promotion has no
+	// corresponding demotion (state is currently Promoted, or no
+	// promotion exists).
+	LatestPromotionToLatestDemotionLatencyNs *int64
+
+	// FormationToDissolutionLatencyNs is the elapsed time (Unix ns)
+	// between the formation event and the dissolution event for
+	// this formation. Nil when no dissolution has been recorded.
+	FormationToDissolutionLatencyNs *int64
 }
 
 // Cat III lifecycle event message_type discriminators. Kept as
@@ -364,6 +385,7 @@ func ProjectHypothesis(ctx context.Context, sub *substrate.Substrate, formationH
 	})
 
 	proj.State = computeState(&proj)
+	computeLatencies(&proj)
 	return proj, nil
 }
 
