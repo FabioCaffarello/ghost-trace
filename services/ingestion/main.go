@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -58,6 +59,8 @@ func run() error {
 	dbPath := flag.String("db", "./ghost-trace.db", "SQLite primary-event-log path")
 	blobDir := flag.String("blobs", "./blobs", "content-addressed blob-store directory")
 	httpAddr := flag.String("http", "", "HTTP listen address (e.g. :8080); empty disables the HTTP server")
+	httpAuthToken := flag.String("http-auth-token", "", "bearer token for HTTP authentication (inline; prefer --http-auth-token-file for production). Empty disables auth (default).")
+	httpAuthTokenFile := flag.String("http-auth-token-file", "", "path to a file containing the bearer token (single line; trailing whitespace trimmed). Takes precedence over --http-auth-token.")
 	flag.Parse()
 
 	// Root context cancellable on SIGINT / SIGTERM per concurrency-pattern §Context Propagation.
@@ -93,7 +96,15 @@ func run() error {
 	})
 
 	if *httpAddr != "" {
-		handler := httpapi.New(in.Append, reporter)
+		token, err := resolveAuthToken(*httpAuthToken, *httpAuthTokenFile)
+		if err != nil {
+			return fmt.Errorf("resolve HTTP auth token: %w", err)
+		}
+		var handlerOpts []httpapi.Option
+		if token != "" {
+			handlerOpts = append(handlerOpts, httpapi.WithAuthToken(token))
+		}
+		handler := httpapi.New(in.Append, reporter, handlerOpts...)
 		srv := &http.Server{
 			Addr:              *httpAddr,
 			Handler:           handler,
@@ -126,6 +137,29 @@ func run() error {
 		return fmt.Errorf("worker terminated: %w", err)
 	}
 	return nil
+}
+
+// resolveAuthToken returns the effective bearer token for the HTTP
+// interface. Precedence:
+//  1. tokenFile (read + trim whitespace) if non-empty.
+//  2. tokenInline if non-empty.
+//  3. "" — auth disabled.
+//
+// The file path is preferred for production deployments to avoid token
+// leakage via process listings.
+func resolveAuthToken(tokenInline, tokenFile string) (string, error) {
+	if tokenFile != "" {
+		raw, err := os.ReadFile(tokenFile)
+		if err != nil {
+			return "", fmt.Errorf("read token file %q: %w", tokenFile, err)
+		}
+		token := strings.TrimSpace(string(raw))
+		if token == "" {
+			return "", fmt.Errorf("token file %q is empty after whitespace trim", tokenFile)
+		}
+		return token, nil
+	}
+	return tokenInline, nil
 }
 
 // fatalReporter implements httpapi.FatalReporter. The HTTP handler calls

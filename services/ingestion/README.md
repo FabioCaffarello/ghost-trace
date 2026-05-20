@@ -50,6 +50,20 @@ Each input line produces one output line (JSON object).
 
 Then producers may POST to `http://localhost:8080/v1/events` with `Content-Type: application/x-protobuf` and a Protobuf-marshaled `DeclaredSession` body. The response is `200 OK` + JSON `confirmation` on success, `400 Bad Request` + JSON `ingestError` on recoverable input failures, `500 Internal Server Error` + JSON `ingestError` on unrecoverable substrate violations (which also trigger service shutdown). `GET /healthz` returns `200 OK` + `{"status":"ok"}`. The stdin worker runs simultaneously; both channels share the same single-writer mutex per [`concurrency-pattern.md`](../../docs/architecture/concurrency-pattern.md) §Substrate-Writer Serialization.
 
+**HTTP with bearer-token authentication (opt-in):**
+
+```sh
+# Production: token stored in a 0600-mode file (avoids process-listing leak).
+echo -n "deployment-secret-token" > /etc/ghost-trace/ingestion.token
+chmod 0600 /etc/ghost-trace/ingestion.token
+./bin/ingestion -http :8080 -http-auth-token-file /etc/ghost-trace/ingestion.token
+
+# Alternative (scripting/dev only): inline token.
+./bin/ingestion -http :8080 -http-auth-token "dev-secret"
+```
+
+Producers MUST send `Authorization: Bearer <token>` with every `POST /v1/events`. Missing or wrong tokens return `401 Unauthorized` + JSON `ingestError` + `WWW-Authenticate: Bearer realm="ghost-trace-ingestion"`. Token comparison uses constant-time equality (`crypto/subtle.ConstantTimeCompare`); a length-mismatch leak channel exists but is acceptable at inception per [`§0035`](../../docs/charter/decision-log.md). `/healthz` is exempt from auth (orchestrator-friendly liveness probing); unknown paths return `401` (not `404`) when auth is configured, so the path structure is not leaked. Bearer tokens transmit credentials in plaintext on the wire — production deployments SHOULD also terminate TLS via reverse proxy (or a follow-on TLS RFC).
+
 Signals (SIGINT, SIGTERM) trigger graceful shutdown via context cancellation; in-flight HTTP requests drain up to a 10-second grace window before the server returns from `Shutdown`.
 
 ## Required Properties

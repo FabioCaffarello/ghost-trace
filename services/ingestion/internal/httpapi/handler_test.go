@@ -328,6 +328,165 @@ func TestRequestBodyLimitEnforced(t *testing.T) {
 	}
 }
 
+func TestPostEventsNoAuthRequiredByDefault(t *testing.T) {
+	// Sanity: backward-compat check. Without WithAuthToken, requests
+	// without an Authorization header succeed.
+	doAppend, _ := stubAppendFunc(nil)
+	h := New(doAppend, nil)
+
+	payload := encodePayload(t, newTestMsg())
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Errorf("status: got %d, want %d (no-auth path; body: %s)", got, want, rr.Body.String())
+	}
+}
+
+func TestPostEventsRequiresAuthWhenConfigured(t *testing.T) {
+	doAppend, callCount := stubAppendFunc(nil)
+	h := New(doAppend, nil, WithAuthToken("secret-token"))
+
+	payload := encodePayload(t, newTestMsg())
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	// No Authorization header.
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusUnauthorized; got != want {
+		t.Errorf("status: got %d, want %d (auth required, no header; body: %s)", got, want, rr.Body.String())
+	}
+	if *callCount != 0 {
+		t.Errorf("Append should not have been called; got %d calls", *callCount)
+	}
+	if got := rr.Header().Get("WWW-Authenticate"); !strings.HasPrefix(got, "Bearer realm=") {
+		t.Errorf("WWW-Authenticate header missing or wrong shape: %q", got)
+	}
+}
+
+func TestPostEventsAuthWrongToken(t *testing.T) {
+	doAppend, callCount := stubAppendFunc(nil)
+	h := New(doAppend, nil, WithAuthToken("secret-token"))
+
+	payload := encodePayload(t, newTestMsg())
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	req.Header.Set("Authorization", "Bearer wrong-token-same-length")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusUnauthorized; got != want {
+		t.Errorf("status: got %d, want %d (wrong token)", got, want)
+	}
+	if *callCount != 0 {
+		t.Errorf("Append should not have been called on wrong-token; got %d calls", *callCount)
+	}
+}
+
+func TestPostEventsAuthWrongTokenDifferentLength(t *testing.T) {
+	doAppend, _ := stubAppendFunc(nil)
+	h := New(doAppend, nil, WithAuthToken("secret-token"))
+
+	payload := encodePayload(t, newTestMsg())
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	req.Header.Set("Authorization", "Bearer short")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusUnauthorized; got != want {
+		t.Errorf("status: got %d, want %d (wrong-length token)", got, want)
+	}
+}
+
+func TestPostEventsAuthCorrectToken(t *testing.T) {
+	doAppend, callCount := stubAppendFunc(nil)
+	h := New(doAppend, nil, WithAuthToken("secret-token"))
+
+	payload := encodePayload(t, newTestMsg())
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	req.Header.Set("Authorization", "Bearer secret-token")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Errorf("status: got %d, want %d (correct token; body: %s)", got, want, rr.Body.String())
+	}
+	if *callCount != 1 {
+		t.Errorf("Append calls: got %d, want 1 (correct token should reach Append)", *callCount)
+	}
+}
+
+func TestPostEventsAuthBadHeaderFormat(t *testing.T) {
+	// Authorization header present but not "Bearer <token>" — e.g.,
+	// "Basic ..." or raw token without scheme.
+	doAppend, _ := stubAppendFunc(nil)
+	h := New(doAppend, nil, WithAuthToken("secret-token"))
+
+	cases := []struct {
+		name   string
+		header string
+	}{
+		{"basic-scheme", "Basic dXNlcjpwYXNz"},
+		{"raw-token-no-scheme", "secret-token"},
+		{"bearer-lowercase", "bearer secret-token"},
+		{"empty", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := encodePayload(t, newTestMsg())
+			rr := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(payload))
+			req.Header.Set("Content-Type", "application/x-protobuf")
+			if tc.header != "" {
+				req.Header.Set("Authorization", tc.header)
+			}
+			h.ServeHTTP(rr, req)
+
+			if got, want := rr.Code, http.StatusUnauthorized; got != want {
+				t.Errorf("status: got %d, want %d (header: %q)", got, want, tc.header)
+			}
+		})
+	}
+}
+
+func TestHealthzExemptFromAuth(t *testing.T) {
+	// /healthz must NOT require auth even when a token is configured,
+	// so that orchestrators (Kubernetes, etc.) can liveness-probe
+	// without credentials.
+	doAppend, _ := stubAppendFunc(nil)
+	h := New(doAppend, nil, WithAuthToken("secret-token"))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	// No Authorization header.
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Errorf("status: got %d, want %d (healthz must be auth-exempt; body: %s)", got, want, rr.Body.String())
+	}
+}
+
+func TestUnknownPathReturns401WhenAuthConfigured(t *testing.T) {
+	// Unauthenticated probes for unknown paths return 401 (not 404)
+	// when auth is configured, so the path structure is not leaked
+	// to unauthenticated clients.
+	doAppend, _ := stubAppendFunc(nil)
+	h := New(doAppend, nil, WithAuthToken("secret-token"))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/some-random-path", nil)
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusUnauthorized; got != want {
+		t.Errorf("status: got %d, want %d (unknown path under auth; body: %s)", got, want, rr.Body.String())
+	}
+}
+
 // sanity: handler implements http.Handler.
 var _ http.Handler = (*Handler)(nil)
 var _ io.Writer = (*bytes.Buffer)(nil)

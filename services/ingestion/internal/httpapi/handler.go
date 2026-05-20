@@ -19,11 +19,13 @@ package httpapi
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -56,24 +58,79 @@ type Handler struct {
 	// concurrency-pattern §Bounded Concurrency (analogue at the HTTP
 	// layer). 1 MiB matches the readLoop scanner buffer ceiling.
 	requestBodyLimit int64
+
+	// authToken, when non-empty, requires producers to send
+	// "Authorization: Bearer <authToken>" on every protected request.
+	// Empty disables authentication (backward-compatible default for
+	// inception phase where producers are local + trusted). /healthz
+	// is exempt unconditionally for liveness probing.
+	authToken string
+
+	// authRealm is the value advertised in WWW-Authenticate on 401
+	// responses. Defaults to "ghost-trace-ingestion".
+	authRealm string
+}
+
+// Option configures a Handler at construction. See WithAuthToken,
+// WithRequestBodyLimit.
+type Option func(*Handler)
+
+// WithAuthToken enables bearer-token authentication on protected
+// endpoints. /v1/events requires `Authorization: Bearer <token>` with
+// constant-time-compared <token>. /healthz remains unauthenticated for
+// liveness probes. Empty token disables authentication (default).
+//
+// Bearer tokens are vulnerable to interception; production deployments
+// SHOULD also terminate TLS (reverse proxy or follow-on TLS RFC) and
+// store the token in a file with mode 0600 rather than passing it on
+// the command line.
+func WithAuthToken(token string) Option {
+	return func(h *Handler) { h.authToken = token }
+}
+
+// WithAuthRealm overrides the WWW-Authenticate realm string. Operator
+// convenience; default "ghost-trace-ingestion" suffices in most cases.
+func WithAuthRealm(realm string) Option {
+	return func(h *Handler) { h.authRealm = realm }
+}
+
+// WithRequestBodyLimit overrides the per-request body-size cap. Default
+// 1 MiB matches the readLoop scanner buffer ceiling.
+func WithRequestBodyLimit(n int64) Option {
+	return func(h *Handler) { h.requestBodyLimit = n }
 }
 
 // New constructs a Handler. doAppend MUST NOT be nil. fatal MAY be nil
 // in tests where unrecoverable-error escalation is not exercised; in
-// production main wires a real FatalReporter.
-func New(doAppend AppendFunc, fatal FatalReporter) *Handler {
+// production main wires a real FatalReporter. Options apply
+// configuration overrides in order.
+func New(doAppend AppendFunc, fatal FatalReporter, opts ...Option) *Handler {
 	if doAppend == nil {
 		panic("httpapi.New: doAppend must not be nil")
 	}
-	return &Handler{
+	h := &Handler{
 		doAppend:         doAppend,
 		fatal:            fatal,
 		requestBodyLimit: 1 << 20, // 1 MiB
+		authRealm:        "ghost-trace-ingestion",
 	}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
 }
 
-// ServeHTTP implements http.Handler.
+// ServeHTTP implements http.Handler. Auth check is mux-level: if a
+// bearer token is configured, every path except /healthz requires a
+// valid Authorization header. Unauthenticated probes for unknown paths
+// return 401 (not 404) so the path structure is not leaked to
+// unauthenticated clients.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if h.requiresAuth(r) && !h.authorized(r) {
+		h.writeUnauthorized(w)
+		return
+	}
+
 	switch r.URL.Path {
 	case "/v1/events":
 		h.handleEvents(w, r)
@@ -82,6 +139,48 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+// requiresAuth reports whether the request must carry a valid bearer
+// token. Returns false when no token is configured (auth disabled) or
+// when the path is the exempt /healthz liveness probe.
+func (h *Handler) requiresAuth(r *http.Request) bool {
+	if h.authToken == "" {
+		return false
+	}
+	if r.URL.Path == "/healthz" {
+		return false
+	}
+	return true
+}
+
+// authorized reports whether the request's Authorization header carries
+// "Bearer <token>" matching the configured authToken under constant-time
+// comparison.
+func (h *Handler) authorized(r *http.Request) bool {
+	const prefix = "Bearer "
+	header := r.Header.Get("Authorization")
+	if !strings.HasPrefix(header, prefix) {
+		return false
+	}
+	provided := header[len(prefix):]
+	// Pad lengths to enable constant-time comparison even when the
+	// provided token has a different length than the configured one.
+	// subtle.ConstantTimeCompare requires equal lengths; using fixed-
+	// length comparison via SHA-equivalent would be stricter, but for
+	// inception phase the length-leak channel (attacker learns token
+	// length on length mismatch) is acceptable.
+	if len(provided) != len(h.authToken) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(provided), []byte(h.authToken)) == 1
+}
+
+// writeUnauthorized emits a 401 with a WWW-Authenticate header advertising
+// the realm + a JSON error body matching the ingestError wire shape.
+func (h *Handler) writeUnauthorized(w http.ResponseWriter) {
+	w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm=%q`, h.authRealm))
+	writeIngestError(w, http.StatusUnauthorized, "missing or invalid Authorization header (Bearer token required)")
 }
 
 // confirmation is the structured per-message success outcome.
