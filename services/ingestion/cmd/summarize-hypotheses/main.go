@@ -45,7 +45,19 @@ func main() {
 func run() error {
 	dbPath := flag.String("db", "./ghost-trace.db", "SQLite primary-event-log path")
 	blobDir := flag.String("blobs", "./blobs", "content-addressed blob-store directory")
+	afterNs := flag.Int64("after-ns", 0, "inclusive lower bound (Unix nanoseconds) on the latest event_time of each projection; 0 disables the lower bound")
+	beforeNs := flag.Int64("before-ns", 0, "inclusive upper bound (Unix nanoseconds) on the latest event_time of each projection; 0 disables the upper bound")
 	flag.Parse()
+
+	if *afterNs < 0 {
+		return fmt.Errorf("--after-ns must be non-negative; got %d", *afterNs)
+	}
+	if *beforeNs < 0 {
+		return fmt.Errorf("--before-ns must be non-negative; got %d", *beforeNs)
+	}
+	if *afterNs != 0 && *beforeNs != 0 && *afterNs > *beforeNs {
+		return fmt.Errorf("--after-ns (%d) must not exceed --before-ns (%d)", *afterNs, *beforeNs)
+	}
 
 	ctx := context.Background()
 	sub, err := substrate.Open(ctx, *dbPath, *blobDir)
@@ -54,7 +66,10 @@ func run() error {
 	}
 	defer func() { _ = sub.Close() }()
 
-	counts, err := projection.CountByState(ctx, sub)
+	counts, err := projection.CountByState(ctx, sub, projection.ListOptions{
+		TimeAfterNs:  *afterNs,
+		TimeBeforeNs: *beforeNs,
+	})
 	if err != nil {
 		return err
 	}
@@ -66,13 +81,14 @@ func run() error {
 	}
 
 	fmt.Fprintf(os.Stderr,
-		"summarize-hypotheses: total=%d forming=%d promoted=%d demoted=%d dissolved=%d merged_into=%d split_into=%d\n",
+		"summarize-hypotheses: total=%d forming=%d promoted=%d demoted=%d dissolved=%d merged_into=%d split_into=%d after_ns=%d before_ns=%d\n",
 		counts.Total,
 		counts.ByState[projection.StateForming],
 		counts.ByState[projection.StatePromoted],
 		counts.ByState[projection.StateDemoted],
 		counts.ByState[projection.StateDissolved],
 		counts.ByState[projection.StateMergedInto],
-		counts.ByState[projection.StateSplitInto])
+		counts.ByState[projection.StateSplitInto],
+		*afterNs, *beforeNs)
 	return nil
 }

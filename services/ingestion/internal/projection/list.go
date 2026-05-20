@@ -13,24 +13,68 @@ import (
 )
 
 // ListOptions configures filtering + paging behavior of
-// ListHypotheses. Zero values disable each filter (state = "" means
-// no filter; Limit = 0 means unbounded; Offset = 0 means start at
-// the beginning).
+// ListHypotheses (and, per §0054, of CountByState). Zero values
+// disable each filter (StateFilter = "" means no filter; Limit = 0
+// means unbounded; Offset = 0 means start at the beginning;
+// TimeAfterNs/TimeBeforeNs = 0 means no time-window filter on that
+// side).
 type ListOptions struct {
 	// StateFilter restricts results to projections whose computed
 	// State matches this value. Empty string returns every
 	// projection regardless of state.
 	StateFilter State
 
-	// Limit caps the number of projections returned (after state
-	// filtering, after stable ordering). Zero = unbounded.
+	// TimeAfterNs is the inclusive lower bound (Unix nanoseconds)
+	// on the latest event_time of the projection's LifecycleHistory.
+	// Projections whose latest event_time is strictly less than this
+	// value are filtered out. Zero disables the lower bound.
+	//
+	// Per §0054 semantic choice: the filter matches against the
+	// LATEST event_time, not "any event in window" — operator
+	// pressure is "what's changed recently", not "what touches this
+	// window at all".
+	TimeAfterNs int64
+
+	// TimeBeforeNs is the inclusive upper bound (Unix nanoseconds)
+	// on the latest event_time. Projections whose latest event_time
+	// is strictly greater than this value are filtered out. Zero
+	// disables the upper bound.
+	TimeBeforeNs int64
+
+	// Limit caps the number of projections returned (after state +
+	// time-window filtering, after stable ordering). Zero = unbounded.
+	// Honored by ListHypotheses; CountByState ignores Limit/Offset
+	// (counts always reflect the full filtered population).
 	Limit int
 
-	// Offset skips the first N projections (after state filtering,
-	// after stable ordering). Zero = start at the first projection.
-	// Together with Limit this enables paging through large result
-	// sets without the projection layer maintaining cursor state.
+	// Offset skips the first N projections (after state + time-
+	// window filtering, after stable ordering). Zero = start at the
+	// first projection. Honored by ListHypotheses; CountByState
+	// ignores Limit/Offset.
 	Offset int
+}
+
+// withinTimeWindow returns true when proj's latest event_time falls
+// within the [TimeAfterNs, TimeBeforeNs] inclusive window. Empty
+// LifecycleHistory (which should never occur — every projection has
+// at least its formation entry) is treated as "no event" and
+// inclusion depends on whether either bound is set.
+func withinTimeWindow(proj HypothesisProjection, opts ListOptions) bool {
+	if opts.TimeAfterNs == 0 && opts.TimeBeforeNs == 0 {
+		return true
+	}
+	if len(proj.LifecycleHistory) == 0 {
+		// Defensive: treat as "no event", filter out when a bound is set.
+		return false
+	}
+	latest := proj.LifecycleHistory[len(proj.LifecycleHistory)-1].EventTime
+	if opts.TimeAfterNs != 0 && latest < opts.TimeAfterNs {
+		return false
+	}
+	if opts.TimeBeforeNs != 0 && latest > opts.TimeBeforeNs {
+		return false
+	}
+	return true
 }
 
 // ProjectAll returns the HypothesisProjection for EVERY
@@ -311,10 +355,13 @@ func ListHypotheses(ctx context.Context, sub *substrate.Substrate, opts ListOpti
 		return nil, err
 	}
 
-	// Filter by state.
+	// Filter by state + time-window.
 	var filtered []HypothesisProjection
 	for _, proj := range all {
 		if opts.StateFilter != "" && proj.State != opts.StateFilter {
+			continue
+		}
+		if !withinTimeWindow(proj, opts) {
 			continue
 		}
 		filtered = append(filtered, proj)

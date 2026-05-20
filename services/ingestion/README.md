@@ -299,10 +299,14 @@ Output is a JSON ARRAY where each element shares the structure of `hypothesis-st
 | Option | Default | Notes |
 |---|---|---|
 | `-state` | empty | Filter by projected state: one of `forming`, `promoted`, `demoted`, `dissolved`, `merged_into`, `split_into`. Empty = no filter. |
+| `-after-ns` | 0 | Inclusive lower bound (Unix ns) on the **latest** event_time of each projection. 0 disables. |
+| `-before-ns` | 0 | Inclusive upper bound (Unix ns) on the **latest** event_time. 0 disables. |
 | `-limit` | 0 | Cap the number of projections returned. 0 = unbounded. |
-| `-offset` | 0 | Skip the first N projections (after state filtering, after ordering). |
+| `-offset` | 0 | Skip the first N projections (after state + time-window filtering, after ordering). |
 
-Exit codes: **0** success (including empty results); **2** tool/configuration error (e.g. invalid `-state` value).
+**Time-window semantic (per §0054):** the filter matches against the projection's **latest** lifecycle event_time, not "any event in window". Operator pressure is "what's changed recently", not "what touches this window at all". Both bounds are inclusive.
+
+Exit codes: **0** success (including empty results); **2** tool/configuration error (e.g. invalid `-state` value, negative `-after-ns`/`-before-ns`, `-after-ns > -before-ns`).
 
 **Scope at this layer (per §0052):** Limit/Offset paging is sufficient for inception-phase substrate sizes. Cursor-based paging (resumable across substrate growth between calls) is deferred until operational pressure surfaces.
 
@@ -325,8 +329,12 @@ Output is structured JSON: `total` (formation count) + `by_state` (map from stat
 |---|---|---|
 | `-db` | `./ghost-trace.db` | SQLite primary-event-log path. |
 | `-blobs` | `./blobs` | Content-addressed blob-store directory. |
+| `-after-ns` | 0 | Inclusive lower bound (Unix ns) on the **latest** event_time of each projection. 0 disables. Per §0054. |
+| `-before-ns` | 0 | Inclusive upper bound (Unix ns) on the **latest** event_time. 0 disables. Per §0054. |
 
-Exit codes: **0** success (including empty substrate); **2** tool/configuration error.
+**Time-window semantic (per §0054):** same latest-event semantic as `list-hypotheses`. The per-state-count equivalence invariant holds across the window filter: for every state `s`, `by_state[s]` equals `len(list-hypotheses -state s -after-ns X -before-ns Y)`.
+
+Exit codes: **0** success (including empty substrate); **2** tool/configuration error (e.g. negative `-after-ns`/`-before-ns`, `-after-ns > -before-ns`).
 
 ## `orphan-cleanup` CLI
 

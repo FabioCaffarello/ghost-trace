@@ -2002,6 +2002,71 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0054` — Time-window filter on projection queries (latest-event semantic); §0052/§0053 carry-forward discharged; equivalence invariant preserved across the window filter
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0052`](#0052--multi-hypothesis-aggregate-projection-listhypotheses--projectall-0051-named-carry-forward-discharged-substrate-linear-not-quadratic-walk) and [`§0053`](#0053--aggregate-state-counters-countbystate--statecounts-0052-carry-forward-discharged-per-state-count-equivalence-invariant) each named **"Time-window filters"** as a deferred carry-forward — operator questions like "every hypothesis dissolved in the last 7 days" or "what's changed today?" require filtering the projection by a time bound. This entry adds `TimeAfterNs` + `TimeBeforeNs` to `ListOptions` and propagates the filter through both `ListHypotheses` and `CountByState`, then surfaces matching `-after-ns`/`-before-ns` options on both CLIs.
+
+  One structural choice in this entry:
+
+  - **Latest-event semantic vs any-event-in-window.** Option (A): window matches against the projection's LATEST event_time (the last entry in `LifecycleHistory`). Option (B): window matches if ANY event in the lifecycle history falls in the window. Option (A) chosen: operator pressure is "what's changed recently" not "what touches this window at all". A hypothesis formed 5 years ago and dissolved last week, queried with `-after-ns=<one-week-ago>`, SHOULD return under (A) — the recent change is the dissolution. Under (B) the same projection would also match for any window containing the 5-year-old formation, which is operationally noisy. Option (B) remains structurally available later if a use case surfaces (a separate `MatchAnyEvent bool` field would be additive); deferred.
+
+- **Decision:** Land `TimeAfterNs` + `TimeBeforeNs` filtering with the following moves:
+
+  1. **`ListOptions` extension** at [`services/ingestion/internal/projection/list.go`](../../services/ingestion/internal/projection/list.go). Two new int64 fields:
+     - `TimeAfterNs` — inclusive lower bound on the latest event_time. Zero disables the lower bound.
+     - `TimeBeforeNs` — inclusive upper bound on the latest event_time. Zero disables the upper bound.
+     - Both bounds are INCLUSIVE per the standard half-open vs closed-window convention — the boundary value passes the filter on both sides.
+
+  2. **`withinTimeWindow(proj, opts) bool` helper** at the same file. Pure function, no side effects. Returns true when both bounds either disabled or satisfied; defensive against empty `LifecycleHistory` (which should never occur — every projection has at least its formation entry — but the defensive branch keeps the function total).
+
+  3. **`ListHypotheses` filter** — applies `withinTimeWindow` after the state filter and before sorting/paging.
+
+  4. **`CountByState` signature change** — new mandatory `opts ListOptions` parameter. Honors `TimeAfterNs` + `TimeBeforeNs`. Ignores `StateFilter` (would degenerate the output to a single bucket; redundant with `len(ListHypotheses)`), `Limit`, and `Offset` (paging concerns on a sorted slice; counts reflect the full filtered population by definition). The signature change is a structural shape change to the projection API; six existing test callers updated to pass `ListOptions{}` explicitly.
+
+  5. **`window_test.go`** at [`services/ingestion/internal/projection/window_test.go`](../../services/ingestion/internal/projection/window_test.go) — 7 tests:
+     - Pure-formation projections in/outside window.
+     - Latest-event semantic (lifecycle event AFTER formation determines the matching bound; formation-only window EXCLUDES a projection with a later lifecycle event).
+     - Open lower / open upper bound behavior (zero disables that side).
+     - Time-window applied to `CountByState`.
+     - Inclusive boundary behavior.
+     - Equivalence invariant preserved across the window filter — for every State value `s`, `CountByState.ByState[s]` STILL equals `len(ListHypotheses(opts-with-StateFilter=s))` when the same window is applied to both.
+
+  6. **CLI surface** on both [`cmd/list-hypotheses`](../../services/ingestion/cmd/list-hypotheses/main.go) and [`cmd/summarize-hypotheses`](../../services/ingestion/cmd/summarize-hypotheses/main.go):
+     - `-after-ns int64` (default 0 = no lower bound).
+     - `-before-ns int64` (default 0 = no upper bound).
+     - Validation: both non-negative; if both non-zero, `after-ns <= before-ns`. Invalid combinations exit 2.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. Respects [§2.1](../charter/constitutional-charter.md#21-observational-integrity), [§2.2](../charter/constitutional-charter.md#22-epistemic-separation), [§2.3](../charter/constitutional-charter.md#23-provenance-integrity), [§2.5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) — same surface as §0051/§0052/§0053; the window filter is a post-projection predicate, not a substrate-side mutation. Respects [§2.5 BC3](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) — extends the BC3-mandated read shape with a time-window predicate without storing derived state. Respects the equivalence invariant family established at §0052 + §0053 — both invariants continue to hold when the window filter is applied to both sides. Canonical vocabulary used as written: projection, hypothesis, lifecycle event, formation, substrate.
+
+- **Consequences:**
+  - [`services/ingestion/internal/projection/list.go`](../../services/ingestion/internal/projection/list.go) — `ListOptions` extended; new `withinTimeWindow` helper; `ListHypotheses` filter chain extended.
+  - [`services/ingestion/internal/projection/counts.go`](../../services/ingestion/internal/projection/counts.go) — `CountByState` signature change (new `opts ListOptions` parameter); doc-comments updated.
+  - [`services/ingestion/internal/projection/window_test.go`](../../services/ingestion/internal/projection/window_test.go) — **7 new tests** as enumerated above.
+  - [`services/ingestion/internal/projection/counts_test.go`](../../services/ingestion/internal/projection/counts_test.go) — six callers updated to pass `ListOptions{}` explicitly (mechanical signature change).
+  - [`services/ingestion/cmd/list-hypotheses/main.go`](../../services/ingestion/cmd/list-hypotheses/main.go) — `-after-ns` + `-before-ns` flags + validation.
+  - [`services/ingestion/cmd/summarize-hypotheses/main.go`](../../services/ingestion/cmd/summarize-hypotheses/main.go) — same.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — `list-hypotheses` + `summarize-hypotheses` sections updated with the new options + the latest-event semantic explainer.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0054 (this entry).
+  - **Test count grows.** Combined: **237 tests** across the service (up from 230 at [`§0053`](#0053--aggregate-state-counters-countbystate--statecounts-0052-carry-forward-discharged-per-state-count-equivalence-invariant); +7 = 7 window tests). All passing under `go test -race ./...`.
+  - **Zero external dependencies added.**
+  - **Two named carry-forwards discharged.** §0052's "Time-window filters" and §0053's "Time-window filters" (same name carried forward through both) are now both supported via `ListOptions.TimeAfterNs` / `TimeBeforeNs`.
+  - **Signature change is non-breaking at the binary boundary.** All in-tree callers updated mechanically; the projection package has no external Go consumers yet. Future external consumers would see the new mandatory parameter as a compile-time indication at integration time.
+  - **Equivalence invariant family extends.** Now applies to all `ListOptions` configurations (state filter alone, time window alone, both together) — `CountByState.ByState[s]` equals `len(ListHypotheses{StateFilter: s, TimeAfterNs: a, TimeBeforeNs: b})` for any `(a, b)` and `s`. Tested explicitly at `TestWindowFilterEquivalenceAcrossAllStates`.
+  - **Latest-event semantic is the projection's first non-trivial post-projection predicate.** Earlier filters (state) collapsed the per-formation `LifecycleHistory` to a single attribute (`State`); the time-window filter is the first to consult the lifecycle history shape directly (specifically its last entry). The pattern (post-projection predicates over the materialized history) is the template subsequent richer filters will follow (per-event-type filtering, latency thresholds, etc.).
+  - **Out of scope at this layer (carry-forwards).**
+    - **Any-event-in-window semantic** — alternative semantic per §Context above; structurally available as an additive `MatchAnyEvent bool` field if/when a use case surfaces.
+    - **Per-event-type window** — e.g. "every hypothesis whose PROMOTION fell in the last 7 days" (regardless of subsequent events). The current latest-event semantic answers "what's the latest activity?"; the per-event-type form answers "when did THIS lifecycle operation happen?". Structurally distinct; deferred.
+    - **Wall-clock vs substrate-commit time semantic** — the filter currently uses `event_time` (the lifecycle event's own per-event timestamp field — `formation_at`, `promoted_at`, etc.). An alternative would be `committed_at` (substrate row's commit time). Both are valid read shapes; deferred until operator pressure surfaces.
+    - **Latency histograms** — unchanged from [`§0053`](#0053--aggregate-state-counters-countbystate--statecounts-0052-carry-forward-discharged-per-state-count-equivalence-invariant) carry-forward.
+    - **Cross-operation provenance queries** — unchanged from §0052/§0053 carry-forwards.
+
+- **Supersession:** None. Extends `ListOptions` and `CountByState` opened at [`§0052`](#0052--multi-hypothesis-aggregate-projection-listhypotheses--projectall-0051-named-carry-forward-discharged-substrate-linear-not-quadratic-walk) + [`§0053`](#0053--aggregate-state-counters-countbystate--statecounts-0052-carry-forward-discharged-per-state-count-equivalence-invariant); no prior decision reversed. The `CountByState` signature change is the first projection-API shape change since §0053 introduced it; existing test callers updated mechanically. [`§0022`](#0022--implementation-pivot-22-implementation-against-current-structural-ground-authorized-storage-technology-deferral-reversed-by-authorization) implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
