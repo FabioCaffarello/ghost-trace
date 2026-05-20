@@ -1014,6 +1014,58 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0037` — mTLS option added to ingestion HTTP interface; §0035 + §0036 mTLS-deferred discharged
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0035`](#0035--bearer-token-authentication-added-to-ingestion-http-interface-0034-auth-deferred-discharged) registered mTLS as admissible-but-deferred with reversal trigger "when per-producer identity becomes load-bearing or when bearer-token security model proves insufficient." [`§0036`](#0036--tls-termination-added-to-ingestion-http-interface-0035-tls-deferred-discharged) added server-side TLS and again named mTLS as a deferred follow-on. This entry adds the mTLS option — not as a forced reversal (the trigger conditions have not formally fired), but as a pre-emptive availability so operators with the trigger conditions in-hand can use it without further work.
+
+- **Decision:** Add **mutual-TLS (mTLS)** as an opt-in third command-line option layered on top of the existing TLS termination. mTLS requires server-side TLS (cert + key); when enabled, the server requires + verifies client certificates against a configured CA bundle.
+
+  Implementation shape:
+
+  - **`--http-tls-client-ca <path>`** — PEM-encoded CA bundle. When set, turns on mTLS via `tls.Config.ClientAuth = tls.RequireAndVerifyClientCert` + `ClientCAs = <pool parsed from bundle>`. When empty: no client-cert verification (existing [`§0036`](#0036--tls-termination-added-to-ingestion-http-interface-0035-tls-deferred-discharged) behavior).
+  - **Dependency**: `--http-tls-client-ca` REQUIRES `--http-tls-cert` + `--http-tls-key`. Setting client-CA without server cert/key is a startup-time error.
+  - **Eager parse**: the CA bundle is read + parsed at startup via `x509.NewCertPool` + `AppendCertsFromPEM`. An unparseable file fails fast (no waiting for first connection).
+  - **Connection rejection layer**: connections without a valid client cert are rejected at the **TLS handshake** layer — before any HTTP request is processed. Producers see a TLS-error connection close, NOT a 401 response. This is the standard mTLS behavior.
+  - **Composability**:
+    - TLS only: server-side certificate presentation; client verifies server cert at the transport layer; no per-producer identity.
+    - TLS + bearer token: bearer-only auth, transmitted under TLS encryption.
+    - TLS + mTLS: per-producer cert-based identity; no bearer token required.
+    - TLS + mTLS + bearer token: defense-in-depth — BOTH the client cert verification AND the bearer-token check must pass.
+  - **Revocation**: per-client-cert revocation (CRL / OCSP) NOT exercised at inception. Operators revoke clients by rotating the CA bundle + restarting the service. Online revocation is deferred follow-on work.
+
+  Test coverage:
+
+  - **`TestResolveHTTPTLS`** extended with 4 new subtests: clientCA-without-cert-key (error); clientCA + cert + key (mTLS-enabled); unparseable clientCA file (error); missing clientCA file (error). Existing subtests updated for the new three-argument signature.
+  - **`TestHTTPmTLSEndToEnd`** integration test with **3 subtests** + full PKI generation:
+    - PKI helpers added: `testPKI` struct + `generateTestPKI` (self-signed CA); `signServerCert` (ECDSA leaf with ServerAuth EKU + localhost SANs); `signClientCert` (ECDSA leaf with ClientAuth EKU + CN identity); `writeCertKey` (shared PEM-write helper).
+    - **`trusted_client_succeeds`** — client presents cert signed by the configured CA; HTTPS round-trip succeeds; `/healthz` returns 200.
+    - **`untrusted_client_cert_rejected_at_TLS_handshake`** — client presents cert signed by a DIFFERENT CA; connection fails at TLS layer with cert error.
+    - **`no_client_cert_rejected_at_TLS_handshake`** — client presents no cert; connection fails at TLS layer.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. mTLS is a transport-layer access-control concern; no §2.1/§2.2/§2.3/§2.5 commitment is affected. Respects [§4 frozen v0.2](../charter/constitutional-charter.md#4-constitutional-design-rule) — the mTLS-enabled predicate is mechanically falsifiable (trusted client succeeds; untrusted client fails at TLS layer; no-cert client fails at TLS layer; test coverage exercises all three). Respects [`§0029`](#0029--concurrency-pattern-architecture-document-introduced-0025-modification-5-discharged) concurrency-pattern — mTLS rejection at the TLS layer does not engage the application-level concurrency machinery; the existing graceful-shutdown coordinator inherits unchanged. No glossary changes (mTLS vocabulary — `RequireAndVerifyClientCert`, ClientCAs, CertPool — is technology vocabulary).
+
+- **Consequences:**
+  - [`services/ingestion/main.go`](../../services/ingestion/main.go) — `--http-tls-client-ca` command-line option; `resolveHTTPTLS` extended to three-argument signature `(certFile, keyFile, clientCAFile)` returning `httpTLS{clientCAPool *x509.CertPool, ...}`; TLS config branches to set `ClientAuth: RequireAndVerifyClientCert` + `ClientCAs: pool` when clientCAPool is non-nil.
+  - [`services/ingestion/main_test.go`](../../services/ingestion/main_test.go) — `TestResolveHTTPTLS` extended with 4 mTLS-validation subtests (total 10 subtests); `TestHTTPmTLSEndToEnd` integration test with 3 subtests; `testPKI` + `generateTestPKI` + `signServerCert` + `signClientCert` + `writeCertKey` helpers.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — Run section extended with mTLS deployment example; composability table (TLS / TLS+token / TLS+mTLS / TLS+mTLS+token); revocation guidance (rotate CA + restart at inception; online revocation deferred).
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0037 (this entry) records the addition.
+  - **[`§0035`](#0035--bearer-token-authentication-added-to-ingestion-http-interface-0034-auth-deferred-discharged) + [`§0036`](#0036--tls-termination-added-to-ingestion-http-interface-0035-tls-deferred-discharged) mTLS-deferred follow-ons discharged.** mTLS is now available; operators with per-producer-identity load-bearing or with bearer-token-insufficient deployments can use it without further service-tier work.
+  - **Test count grows.** Combined: **49 tests** across the service (8 in main + `TestResolveHTTPTLS` now 10 subtests + `TestHTTPmTLSEndToEnd` 3 subtests + existing TLS end-to-end; canonical 5; substrate 6; ingest 3; httpapi 20). All passing under `go test -race ./...`.
+  - **Zero external dependencies added.** All PKI machinery (`crypto/x509`, `crypto/ecdsa`, `crypto/elliptic`, `crypto/rand`, `encoding/pem`, `math/big`) is Go stdlib.
+  - **Composability documented.** Operators may run TLS alone, TLS+token, TLS+mTLS, or TLS+mTLS+token; the layered shape gives defense-in-depth options without forcing them on deployments that don't need them.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Per-client-cert revocation** (CRL / OCSP) — operator revokes by rotating CA + restart at inception; follow-on may add online CRL/OCSP when revocation cadence becomes operationally significant.
+    - **Online cert reload** — still restart-on-rotate at inception per [`§0036`](#0036--tls-termination-added-to-ingestion-http-interface-0035-tls-deferred-discharged).
+    - **Client identity → ingestion provenance**. The mTLS handshake establishes a per-client identity (Common Name + SANs from the verified cert chain), but the current ingestion path does NOT thread the verified identity into the substrate. A follow-on may add it as an enrichment field per [Charter §2.1 Boundary Conditions](../charter/constitutional-charter.md#21-observational-integrity) — enrichment paired with observations as separate immutable events, never as observation mutation.
+    - **Per-client-cert authorization rules** (different clients have different access scopes). Inception assumes all authenticated clients have equivalent ingestion authority. Multi-tenant scoped authorization deferred.
+
+- **Supersession:** None. This entry discharges deferred follow-ons from [`§0035`](#0035--bearer-token-authentication-added-to-ingestion-http-interface-0034-auth-deferred-discharged) and [`§0036`](#0036--tls-termination-added-to-ingestion-http-interface-0035-tls-deferred-discharged); no prior decision reversed.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

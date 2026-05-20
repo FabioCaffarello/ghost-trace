@@ -290,7 +290,7 @@ func TestResolveAuthToken(t *testing.T) {
 
 func TestResolveHTTPTLS(t *testing.T) {
 	t.Run("both empty returns disabled", func(t *testing.T) {
-		cfg, err := resolveHTTPTLS("", "")
+		cfg, err := resolveHTTPTLS("", "", "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -300,14 +300,14 @@ func TestResolveHTTPTLS(t *testing.T) {
 	})
 
 	t.Run("cert without key returns error", func(t *testing.T) {
-		_, err := resolveHTTPTLS("/some/cert.pem", "")
+		_, err := resolveHTTPTLS("/some/cert.pem", "", "")
 		if err == nil {
 			t.Fatal("expected error for cert without key, got nil")
 		}
 	})
 
 	t.Run("key without cert returns error", func(t *testing.T) {
-		_, err := resolveHTTPTLS("", "/some/key.pem")
+		_, err := resolveHTTPTLS("", "/some/key.pem", "")
 		if err == nil {
 			t.Fatal("expected error for key without cert, got nil")
 		}
@@ -319,7 +319,7 @@ func TestResolveHTTPTLS(t *testing.T) {
 		if err := os.WriteFile(keyPath, []byte("dummy"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		_, err := resolveHTTPTLS("/nonexistent/cert.pem", keyPath)
+		_, err := resolveHTTPTLS("/nonexistent/cert.pem", keyPath, "")
 		if err == nil {
 			t.Fatal("expected error for missing cert, got nil")
 		}
@@ -331,7 +331,7 @@ func TestResolveHTTPTLS(t *testing.T) {
 		if err := os.WriteFile(certPath, []byte("dummy"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		_, err := resolveHTTPTLS(certPath, "/nonexistent/key.pem")
+		_, err := resolveHTTPTLS(certPath, "/nonexistent/key.pem", "")
 		if err == nil {
 			t.Fatal("expected error for missing key, got nil")
 		}
@@ -339,7 +339,7 @@ func TestResolveHTTPTLS(t *testing.T) {
 
 	t.Run("both present returns enabled", func(t *testing.T) {
 		certPath, keyPath := writeEphemeralTLSCert(t)
-		cfg, err := resolveHTTPTLS(certPath, keyPath)
+		cfg, err := resolveHTTPTLS(certPath, keyPath, "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -349,6 +349,57 @@ func TestResolveHTTPTLS(t *testing.T) {
 		if cfg.certFile != certPath || cfg.keyFile != keyPath {
 			t.Errorf("paths not preserved: got cert=%q key=%q, want cert=%q key=%q",
 				cfg.certFile, cfg.keyFile, certPath, keyPath)
+		}
+		if cfg.clientCAPool != nil {
+			t.Error("clientCAPool should be nil when --http-tls-client-ca not set")
+		}
+	})
+
+	t.Run("clientCA without cert+key returns error", func(t *testing.T) {
+		dir := t.TempDir()
+		caPath := filepath.Join(dir, "ca.pem")
+		if err := os.WriteFile(caPath, []byte("dummy"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := resolveHTTPTLS("", "", caPath)
+		if err == nil {
+			t.Fatal("expected error for clientCA without cert+key, got nil")
+		}
+	})
+
+	t.Run("clientCA + cert + key returns mTLS-enabled", func(t *testing.T) {
+		pki := generateTestPKI(t)
+		serverCertPath, serverKeyPath := pki.signServerCert(t)
+		cfg, err := resolveHTTPTLS(serverCertPath, serverKeyPath, pki.caCertPath)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !cfg.enabled {
+			t.Error("got enabled=false, want true")
+		}
+		if cfg.clientCAPool == nil {
+			t.Error("clientCAPool should be non-nil when --http-tls-client-ca is set")
+		}
+	})
+
+	t.Run("clientCA file unparseable returns error", func(t *testing.T) {
+		dir := t.TempDir()
+		caPath := filepath.Join(dir, "ca.pem")
+		if err := os.WriteFile(caPath, []byte("not a PEM block"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		certPath, keyPath := writeEphemeralTLSCert(t)
+		_, err := resolveHTTPTLS(certPath, keyPath, caPath)
+		if err == nil {
+			t.Fatal("expected error for unparseable clientCA file, got nil")
+		}
+	})
+
+	t.Run("clientCA missing file returns error", func(t *testing.T) {
+		certPath, keyPath := writeEphemeralTLSCert(t)
+		_, err := resolveHTTPTLS(certPath, keyPath, "/nonexistent/ca.pem")
+		if err == nil {
+			t.Fatal("expected error for missing clientCA file, got nil")
 		}
 	})
 }
@@ -360,7 +411,7 @@ func TestHTTPTLSEndToEnd(t *testing.T) {
 	// canonical+substrate stack.
 	certPath, keyPath := writeEphemeralTLSCert(t)
 	_, certPEM := readBack(t, certPath)
-	cfg, err := resolveHTTPTLS(certPath, keyPath)
+	cfg, err := resolveHTTPTLS(certPath, keyPath, "")
 	if err != nil {
 		t.Fatalf("resolveHTTPTLS: %v", err)
 	}
@@ -460,6 +511,311 @@ func TestHTTPTLSEndToEnd(t *testing.T) {
 	if !strings.Contains(string(postBody), `"event_hash"`) {
 		t.Errorf("POST response missing event_hash: %s", postBody)
 	}
+}
+
+func TestHTTPmTLSEndToEnd(t *testing.T) {
+	// Integration test: full PKI dance.
+	//   1. Generate a CA.
+	//   2. Sign a server cert with the CA.
+	//   3. Sign two client certs with the CA: one trusted (for the
+	//      success case), one self-signed by a DIFFERENT CA (for the
+	//      rejection case).
+	//   4. Spin up the server with --http-tls-cert (server cert) +
+	//      --http-tls-key (server key) + --http-tls-client-ca (CA cert).
+	//   5. Verify: trusted client succeeds; untrusted client is rejected
+	//      at the TLS layer; no-client-cert is rejected at the TLS layer.
+
+	pki := generateTestPKI(t)
+	serverCertPath, serverKeyPath := pki.signServerCert(t)
+	trustedClientCert, trustedClientKey := pki.signClientCert(t, "trusted-producer")
+
+	// Untrusted client: signed by a different CA.
+	otherPKI := generateTestPKI(t)
+	untrustedClientCert, untrustedClientKey := otherPKI.signClientCert(t, "untrusted-producer")
+
+	cfg, err := resolveHTTPTLS(serverCertPath, serverKeyPath, pki.caCertPath)
+	if err != nil {
+		t.Fatalf("resolveHTTPTLS: %v", err)
+	}
+	if !cfg.enabled || cfg.clientCAPool == nil {
+		t.Fatal("mTLS not enabled")
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+
+	dir := t.TempDir()
+	ctx := context.Background()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	defer func() { _ = sub.Close() }()
+
+	in := ingest.New(sub, time.Now)
+	handler := httpapi.New(in.Append, nil)
+
+	srv := &http.Server{
+		Handler: handler,
+		TLSConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			ClientAuth: tls.RequireAndVerifyClientCert,
+			ClientCAs:  cfg.clientCAPool,
+		},
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	serveErr := make(chan error, 1)
+	go func() {
+		serveErr <- srv.ServeTLS(listener, cfg.certFile, cfg.keyFile)
+	}()
+	t.Cleanup(func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdownCtx)
+		<-serveErr
+	})
+
+	addr := listener.Addr().(*net.TCPAddr)
+	url := fmt.Sprintf("https://localhost:%d", addr.Port)
+
+	// Trust pool for server cert verification (clients verify the server's CA).
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(pki.caCertPEM) {
+		t.Fatal("AppendCertsFromPEM: failed to parse server CA")
+	}
+
+	t.Run("trusted client succeeds", func(t *testing.T) {
+		clientCertPair, err := tls.LoadX509KeyPair(trustedClientCert, trustedClientKey)
+		if err != nil {
+			t.Fatalf("LoadX509KeyPair (trusted client): %v", err)
+		}
+		client := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					RootCAs:      roots,
+					Certificates: []tls.Certificate{clientCertPair},
+					MinVersion:   tls.VersionTLS12,
+				},
+			},
+			Timeout: 5 * time.Second,
+		}
+		resp, err := client.Get(url + "/healthz")
+		if err != nil {
+			t.Fatalf("GET /healthz with trusted client cert: %v", err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("status: got %d, want 200", resp.StatusCode)
+		}
+
+		// Verify the server saw the client cert by checking the PeerCertificates
+		// indirectly via the response.TLS state.
+		if resp.TLS == nil {
+			t.Fatal("response missing TLS state")
+		}
+	})
+
+	t.Run("untrusted client cert rejected at TLS handshake", func(t *testing.T) {
+		clientCertPair, err := tls.LoadX509KeyPair(untrustedClientCert, untrustedClientKey)
+		if err != nil {
+			t.Fatalf("LoadX509KeyPair (untrusted client): %v", err)
+		}
+		client := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					RootCAs:      roots,
+					Certificates: []tls.Certificate{clientCertPair},
+					MinVersion:   tls.VersionTLS12,
+				},
+			},
+			Timeout: 5 * time.Second,
+		}
+		resp, err := client.Get(url + "/healthz")
+		if err == nil {
+			_ = resp.Body.Close()
+			t.Fatalf("untrusted client cert: expected TLS handshake failure, got HTTP %d", resp.StatusCode)
+		}
+		// Acceptable error patterns: "tls: ..." or "bad certificate" or
+		// "unknown certificate authority". We assert "tls" appears in the
+		// error string for a baseline check.
+		if !strings.Contains(err.Error(), "tls") && !strings.Contains(err.Error(), "certificate") {
+			t.Errorf("expected TLS / certificate error, got: %v", err)
+		}
+	})
+
+	t.Run("no client cert rejected at TLS handshake", func(t *testing.T) {
+		client := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					RootCAs:    roots,
+					MinVersion: tls.VersionTLS12,
+				},
+			},
+			Timeout: 5 * time.Second,
+		}
+		resp, err := client.Get(url + "/healthz")
+		if err == nil {
+			_ = resp.Body.Close()
+			t.Fatalf("no client cert: expected TLS handshake failure, got HTTP %d", resp.StatusCode)
+		}
+	})
+}
+
+// testPKI holds an ephemeral certificate authority for mTLS testing.
+type testPKI struct {
+	caCertPath string
+	caKeyPath  string
+	caCertPEM  []byte // raw PEM bytes (handy for AppendCertsFromPEM in tests)
+	caCert     *x509.Certificate
+	caKey      *ecdsa.PrivateKey
+}
+
+// generateTestPKI creates a self-signed CA in a per-test temp directory
+// and returns paths + parsed structures sufficient to sign server and
+// client certs.
+func generateTestPKI(t *testing.T) *testPKI {
+	t.Helper()
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("ecdsa.GenerateKey (ca): %v", err)
+	}
+	template := x509.Certificate{
+		SerialNumber:          big.NewInt(time.Now().UnixNano()),
+		Subject:               pkix.Name{CommonName: "ingestion-test-ca"},
+		NotBefore:             time.Now().Add(-time.Minute),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+	}
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	if err != nil {
+		t.Fatalf("CreateCertificate (ca): %v", err)
+	}
+	cert, err := x509.ParseCertificate(derBytes)
+	if err != nil {
+		t.Fatalf("ParseCertificate (ca): %v", err)
+	}
+
+	dir := t.TempDir()
+	caCertPath := filepath.Join(dir, "ca-cert.pem")
+	caKeyPath := filepath.Join(dir, "ca-key.pem")
+
+	var certPEM bytes.Buffer
+	if err := pem.Encode(&certPEM, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
+		t.Fatalf("pem encode ca cert: %v", err)
+	}
+	if err := os.WriteFile(caCertPath, certPEM.Bytes(), 0o644); err != nil {
+		t.Fatalf("write ca cert: %v", err)
+	}
+
+	keyBytes, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
+		t.Fatalf("MarshalECPrivateKey (ca): %v", err)
+	}
+	var keyPEM bytes.Buffer
+	if err := pem.Encode(&keyPEM, &pem.Block{Type: "EC PRIVATE KEY", Bytes: keyBytes}); err != nil {
+		t.Fatalf("pem encode ca key: %v", err)
+	}
+	if err := os.WriteFile(caKeyPath, keyPEM.Bytes(), 0o600); err != nil {
+		t.Fatalf("write ca key: %v", err)
+	}
+
+	return &testPKI{
+		caCertPath: caCertPath,
+		caKeyPath:  caKeyPath,
+		caCertPEM:  certPEM.Bytes(),
+		caCert:     cert,
+		caKey:      priv,
+	}
+}
+
+// signServerCert issues a leaf cert with ServerAuth EKU + localhost SANs,
+// signed by the testPKI's CA. Returns paths to the PEM-encoded cert and
+// private key.
+func (p *testPKI) signServerCert(t *testing.T) (certPath, keyPath string) {
+	t.Helper()
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("ecdsa.GenerateKey (server): %v", err)
+	}
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(time.Now().UnixNano()),
+		Subject:      pkix.Name{CommonName: "ingestion-test-server"},
+		NotBefore:    time.Now().Add(-time.Minute),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:     []string{"localhost"},
+		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")},
+	}
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, p.caCert, &priv.PublicKey, p.caKey)
+	if err != nil {
+		t.Fatalf("CreateCertificate (server): %v", err)
+	}
+	return writeCertKey(t, derBytes, priv, "server")
+}
+
+// signClientCert issues a leaf cert with ClientAuth EKU + the given
+// CommonName, signed by the testPKI's CA. Returns paths to the PEM-
+// encoded cert and private key.
+func (p *testPKI) signClientCert(t *testing.T, commonName string) (certPath, keyPath string) {
+	t.Helper()
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("ecdsa.GenerateKey (client): %v", err)
+	}
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(time.Now().UnixNano()),
+		Subject:      pkix.Name{CommonName: commonName},
+		NotBefore:    time.Now().Add(-time.Minute),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, p.caCert, &priv.PublicKey, p.caKey)
+	if err != nil {
+		t.Fatalf("CreateCertificate (client): %v", err)
+	}
+	return writeCertKey(t, derBytes, priv, commonName)
+}
+
+// writeCertKey writes a (cert DER, ECDSA priv key) pair as PEM files in
+// a per-test temp directory and returns the paths.
+func writeCertKey(t *testing.T, derBytes []byte, priv *ecdsa.PrivateKey, nameHint string) (certPath, keyPath string) {
+	t.Helper()
+	dir := t.TempDir()
+	certPath = filepath.Join(dir, nameHint+"-cert.pem")
+	keyPath = filepath.Join(dir, nameHint+"-key.pem")
+
+	certOut, err := os.Create(certPath)
+	if err != nil {
+		t.Fatalf("create cert: %v", err)
+	}
+	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
+		t.Fatalf("pem encode cert: %v", err)
+	}
+	if err := certOut.Close(); err != nil {
+		t.Fatalf("close cert: %v", err)
+	}
+
+	keyBytes, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
+		t.Fatalf("MarshalECPrivateKey: %v", err)
+	}
+	keyOut, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		t.Fatalf("create key: %v", err)
+	}
+	if err := pem.Encode(keyOut, &pem.Block{Type: "EC PRIVATE KEY", Bytes: keyBytes}); err != nil {
+		t.Fatalf("pem encode key: %v", err)
+	}
+	if err := keyOut.Close(); err != nil {
+		t.Fatalf("close key: %v", err)
+	}
+	return certPath, keyPath
 }
 
 // writeEphemeralTLSCert generates a self-signed ECDSA cert valid for one

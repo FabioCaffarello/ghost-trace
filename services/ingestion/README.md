@@ -60,6 +60,17 @@ Then producers may POST to `http://localhost:8080/v1/events` with `Content-Type:
 
 `--http-tls-cert` and `--http-tls-key` MUST both be set or both be empty. When set, the service serves HTTPS via `crypto/tls` with `MinVersion: TLS 1.2` (TLS 1.0/1.1 deprecated per RFC 8996). Both files are stat-checked at startup so misconfiguration fails fast rather than at first connection. ALPN auto-negotiates HTTP/2 when the client supports it (Go stdlib default). Bearer-token auth (next section) composes with TLS: the same `--http-auth-token-file` works under HTTPS. Cert reload on rotation requires a restart at inception phase; an online-reload follow-on is named in [`§0036`](../../docs/charter/decision-log.md) Out of Scope.
 
+**HTTP with mTLS (opt-in; requires TLS):**
+
+```sh
+./bin/ingestion -http :8443 \
+  -http-tls-cert /etc/ghost-trace/server-cert.pem \
+  -http-tls-key /etc/ghost-trace/server-key.pem \
+  -http-tls-client-ca /etc/ghost-trace/client-ca-bundle.pem
+```
+
+`--http-tls-client-ca` enables mutual-TLS authentication: every client MUST present a certificate signed by one of the CAs in the bundle. The server verifies via `tls.RequireAndVerifyClientCert` during the TLS handshake; connections without a valid client cert are rejected at the TLS layer (before any HTTP request is processed — no 401, no response body, just connection close). mTLS provides per-producer identity (the Common Name + SANs in the client cert), useful for multi-producer deployments where bearer tokens alone are insufficient. mTLS COMPOSES with bearer-token auth: when both are configured, BOTH must pass (defense in depth) — the producer presents a valid client cert AND sends `Authorization: Bearer <token>`. The client-CA file is read + parsed at startup; misconfiguration fails fast. Per-client-cert revocation (CRL / OCSP) is not exercised at inception; revoke clients by rotating the CA bundle + restarting the service.
+
 **HTTP with bearer-token authentication (opt-in):**
 
 ```sh
