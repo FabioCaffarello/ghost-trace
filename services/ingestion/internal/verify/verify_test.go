@@ -765,6 +765,137 @@ func TestVerifyWithCatIIIFullLifecyclePlusMerge(t *testing.T) {
 	}
 }
 
+// TestVerifyWithCatIIIAllSixLifecycleOps proves verify passes over
+// a substrate containing ALL SIX Cat III lifecycle event types —
+// formation, promotion, demotion, dissolution, merge, and split
+// (per decision-log §0050 completing the §2.5 lifecycle surface).
+// The substrate-integrity audit is type-agnostic across all Cat III
+// lifecycle operations per Charter §2.5 BC5; this test is the
+// terminal end-to-end coverage of the lifecycle landing arc.
+func TestVerifyWithCatIIIAllSixLifecycleOps(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Close() })
+
+	in := ingest.New(sub, time.Now)
+	for _, item := range []struct {
+		actor string
+		desc  []byte
+	}{
+		{"actor-split-a1", []byte("alpha")},
+		{"actor-split-a2", []byte("alpha")},
+		{"actor-split-b1", []byte("beta")},
+		{"actor-split-b2", []byte("beta")},
+		{"actor-split-g1", []byte("gamma")},
+		{"actor-split-g2", []byte("gamma")},
+	} {
+		decl := &eventsv1.DeclaredSession{DeclaredAt: 1000, ActorRef: item.actor, SessionDescriptor: item.desc}
+		if _, err := in.Append(ctx, decl, decl.DeclaredAt, ingest.Envelope{Channel: "test"}); err != nil {
+			t.Fatalf("Append DeclaredSession %s: %v", item.actor, err)
+		}
+	}
+	if _, err := hypothesis.FormAll(ctx, sub, hypothesis.SessionDescriptorSharedV1{MinClusterSize: 2}, time.Now); err != nil {
+		t.Fatalf("FormAll: %v", err)
+	}
+
+	// Walk the three formations and identify them by descriptor group.
+	var alpha, beta, gamma [32]byte
+	if err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
+		if row.MessageType != "ghosttrace.events.v1.BehavioralClusterFormation" {
+			return nil
+		}
+		payload, err := sub.ReadBlob(ctx, row.EventHash)
+		if err != nil {
+			return err
+		}
+		ev := &eventsv1.BehavioralClusterFormation{}
+		if err := proto.Unmarshal(payload, ev); err != nil {
+			return err
+		}
+		for _, ar := range ev.ActorRefs {
+			if strings.Contains(ar, "-a") {
+				alpha = row.EventHash
+				return nil
+			}
+			if strings.Contains(ar, "-b") {
+				beta = row.EventHash
+				return nil
+			}
+			if strings.Contains(ar, "-g") {
+				gamma = row.EventHash
+				return nil
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("WalkEvents: %v", err)
+	}
+
+	promRep, err := hypothesis.Promote(ctx, sub, hypothesis.PromoteOptions{
+		FormationEventHash: alpha,
+		PromotedAt:         1716120000000000000,
+		CadenceSeconds:     60,
+		Reason:             "integration all-six",
+	}, time.Now)
+	if err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+	var promotionHash [32]byte
+	if raw, err := decodeHex(promRep.PromotionEventHashHex); err == nil {
+		copy(promotionHash[:], raw)
+	} else {
+		t.Fatalf("decode promotion hash: %v", err)
+	}
+	if _, err := hypothesis.Demote(ctx, sub, hypothesis.DemoteOptions{
+		PromotionEventHash: promotionHash,
+		DemotedAt:          1716120120000000000,
+		Reason:             "integration all-six",
+	}, time.Now); err != nil {
+		t.Fatalf("Demote: %v", err)
+	}
+	if _, err := hypothesis.Dissolve(ctx, sub, hypothesis.DissolveOptions{
+		FormationEventHash: alpha,
+		DissolvedAt:        1716120180000000000,
+		Reason:             "integration all-six",
+	}, time.Now); err != nil {
+		t.Fatalf("Dissolve: %v", err)
+	}
+	if _, err := hypothesis.Merge(ctx, sub, hypothesis.MergeOptions{
+		AntecedentAFormationHash: alpha,
+		AntecedentBFormationHash: beta,
+		ProducedFormationHash:    gamma,
+		MergedAt:                 1716120240000000000,
+		Reason:                   "integration all-six",
+	}, time.Now); err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+	if _, err := hypothesis.Split(ctx, sub, hypothesis.SplitOptions{
+		AntecedentFormationHash:  gamma,
+		SuccessorFormationHashes: [][32]byte{alpha, beta},
+		SplitAt:                  1716120300000000000,
+		Reason:                   "integration all-six",
+	}, time.Now); err != nil {
+		t.Fatalf("Split: %v", err)
+	}
+
+	report, err := Verify(ctx, sub, Options{})
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if report.Failed() {
+		t.Errorf("all-six-lifecycle substrate Verify reported failure: %+v", report)
+	}
+	// 6 DeclaredSession + 6 IngestionEvent + 3 Formation + 1 Promotion
+	// + 1 Demotion + 1 Dissolution + 1 Merge + 1 Split = 20.
+	if report.VerifiedCount != 20 {
+		t.Errorf("VerifiedCount: got %d, want 20", report.VerifiedCount)
+	}
+}
+
 func decodeHex(s string) ([]byte, error) {
 	out := make([]byte, len(s)/2)
 	for i := 0; i < len(out); i++ {
