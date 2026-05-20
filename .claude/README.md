@@ -22,8 +22,6 @@ Per-project Claude Code configuration. Currently governs:
 - **Permission posture.** Read tools (`Read`, `Glob`, `Grep`, `WebFetch`) are pre-approved. Writes to `docs/charter/constitutional-charter.md`, `docs/charter/amendments.md`, and `docs/ontology/**` pause for human confirmation (`ask`). `Bash` is `ask`. Other paths inherit non-`ask` behavior. See `CLAUDE.md` §5.4 for rationale.
 - **Claude event hook.** The `Stop` event invokes the shared doc-check script at the end of each turn. See `CLAUDE.md` §5.2 for the three-tier hook architecture.
 
-Deviations from the Phase 2 prompt example are documented at the top of `settings.json`.
-
 ### `skills/`
 
 Skills are directories containing `SKILL.md` and optional `references/` material (per `CLAUDE.md` §5.1). They are grouped into five domains:
