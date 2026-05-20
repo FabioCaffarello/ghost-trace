@@ -91,7 +91,7 @@ Registered formation patterns:
 
 Adding a new formation pattern registers via [`internal/hypothesis`](./internal/hypothesis): implement `FormationPattern` (Signature, Parameters, Form) and wire it into `cmd/form-hypothesis/main.go`'s `resolvePattern`. Patterns that need additional Cat I observations beyond `DeclaredSession` extend the `FormationContext` interface with new typed accessors (the same incremental-extension procedure that [`§0044`](../../docs/charter/decision-log.md) established for Cat II `DerivationContext`).
 
-**Other lifecycle operations** per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness): promotion landed at [`§0046`](../../docs/charter/decision-log.md) via [`cmd/promote-hypothesis`](#promote-hypothesis-cli); demotion at [`§0047`](../../docs/charter/decision-log.md) via [`cmd/demote-hypothesis`](#demote-hypothesis-cli); dissolution at [`§0048`](../../docs/charter/decision-log.md) via [`cmd/dissolve-hypothesis`](#dissolve-hypothesis-cli); merge at [`§0049`](../../docs/charter/decision-log.md) via [`cmd/merge-hypotheses`](#merge-hypotheses-cli). Split remains the final follow-on landing (1 of 6 lifecycle operations outstanding). Per Charter §2.5 BC3, the substrate stores ONLY lifecycle events — the hypothesis's current state is a projection over the operation event chain (projection layer deferred).
+**Other lifecycle operations** per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness): promotion landed at [`§0046`](../../docs/charter/decision-log.md) via [`cmd/promote-hypothesis`](#promote-hypothesis-cli); demotion at [`§0047`](../../docs/charter/decision-log.md) via [`cmd/demote-hypothesis`](#demote-hypothesis-cli); dissolution at [`§0048`](../../docs/charter/decision-log.md) via [`cmd/dissolve-hypothesis`](#dissolve-hypothesis-cli); merge at [`§0049`](../../docs/charter/decision-log.md) via [`cmd/merge-hypotheses`](#merge-hypotheses-cli); split at [`§0050`](../../docs/charter/decision-log.md) via [`cmd/split-hypothesis`](#split-hypothesis-cli). **§2.5 lifecycle surface complete — all 6 of 6 operations now structurally observable.** Per Charter §2.5 BC3, the substrate stores ONLY lifecycle events — the hypothesis's current state is a projection over the operation event chain (projection layer deferred).
 
 ## `promote-hypothesis` CLI
 
@@ -214,6 +214,34 @@ Validates all three supplied hashes resolve to `BehavioralClusterFormation` rows
 | `-reason` | empty | Operator-supplied forensic note; **strongly recommended** — the merge encodes a substantive epistemic claim. |
 
 Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found, target-wrong-type, or identical-antecedents (the §2.5-lifecycle-integrity errors).
+
+## `split-hypothesis` CLI
+
+Operator-invoked tool to record the sixth (and final) Cat III lifecycle operation (per [`§0050`](../../docs/charter/decision-log.md) — `BehavioralClusterSplit`). Split is the **structural inverse of merge** per [`§0049`](../../docs/charter/decision-log.md): merge is 2-to-1 (two antecedents → one produced), split is 1-to-N (one antecedent → multiple successors). Each successor is a separately-committed `BehavioralClusterFormation`, mirroring §0049's Option B so the [`§0045`](../../docs/charter/decision-log.md) invariant (hypothesis identity = formation content-hash) is preserved across all six lifecycle operations. Within-subtype only at this layer; cross-subtype split per [`entity-model.md` §Cross-subtype operations](../../docs/ontology/entity-model.md) remains deferred to `lifecycle-semantics.md` post-Q4 redaction.
+
+```sh
+make split-hypothesis-build                                              # builds ./bin/split-hypothesis
+
+# Split a hypothesis into two (or more) successor hypotheses
+./bin/split-hypothesis \
+  -antecedent-formation-hash <64-hex-chars> \
+  -successor-formation-hash <64-hex-chars> \
+  -successor-formation-hash <64-hex-chars> \
+  -reason "antecedent recognized as containing two distinct phenomena"
+```
+
+Validates the antecedent + every successor hash resolves to a `BehavioralClusterFormation` row (otherwise exits 3 — preserves §2.5-lifecycle-integrity). Commits the `BehavioralClusterSplit` event via `substrate.Append`. The successor set MUST contain at least 2 entries; all entries MUST be byte-distinct from each other AND from the antecedent (otherwise the operation is not a valid partition).
+
+**Successor-order invariance.** Successors form a SET per `lifecycle-semantics.md` line 29; the CLI sorts them ascending before recording so `-successor-formation-hash A -successor-formation-hash B` and `-successor-formation-hash B -successor-formation-hash A` produce a single substrate row (content-hash collision via normalization).
+
+| Option | Default | Notes |
+|---|---|---|
+| `-antecedent-formation-hash` | (required) | Hex-encoded BLAKE3-256 of the `BehavioralClusterFormation` being split. |
+| `-successor-formation-hash` | (required, ≥ 2 invocations) | Hex-encoded BLAKE3-256 of a successor `BehavioralClusterFormation`; repeat the option for each successor. |
+| `-split-at-ns` | 0 (= wall-clock now) | Explicit `split_at` for forensic replay / deterministic test recording. |
+| `-reason` | empty | Operator-supplied forensic note; **strongly recommended** — split encodes a substantive epistemic claim (the antecedent conflated multiple phenomena). |
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found, target-wrong-type, insufficient-successors, or successors-not-distinct (the §2.5-lifecycle-integrity errors).
 
 ## `orphan-cleanup` CLI
 

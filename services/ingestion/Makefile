@@ -20,6 +20,7 @@ help:
 	@echo "  demote-hypothesis-build  go build -trimpath -o $(BIN_DIR)/demote-hypothesis ./cmd/demote-hypothesis"
 	@echo "  dissolve-hypothesis-build  go build -trimpath -o $(BIN_DIR)/dissolve-hypothesis ./cmd/dissolve-hypothesis"
 	@echo "  merge-hypotheses-build  go build -trimpath -o $(BIN_DIR)/merge-hypotheses ./cmd/merge-hypotheses"
+	@echo "  split-hypothesis-build  go build -trimpath -o $(BIN_DIR)/split-hypothesis ./cmd/split-hypothesis"
 	@echo "  test           go test -race ./..."
 	@echo "  golden-corpus  regenerate canonical-corpus golden files (schemas-evolution event)"
 	@echo "  clean          remove $(GEN_OUT) + $(BIN_DIR)"
@@ -46,7 +47,8 @@ generate: $(PROTOC_GEN_GO)
 	  events/v1/behavioral_cluster_promotion.proto \
 	  events/v1/behavioral_cluster_demotion.proto \
 	  events/v1/behavioral_cluster_dissolution.proto \
-	  events/v1/behavioral_cluster_merge.proto
+	  events/v1/behavioral_cluster_merge.proto \
+	  events/v1/behavioral_cluster_split.proto
 
 $(PROTOC_GEN_GO):
 	$(MAKE) tools
@@ -95,6 +97,11 @@ dissolve-hypothesis-build:
 merge-hypotheses-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/merge-hypotheses ./cmd/merge-hypotheses
+
+.PHONY: split-hypothesis-build
+split-hypothesis-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/split-hypothesis ./cmd/split-hypothesis
 
 .PHONY: test
 test:
