@@ -119,6 +119,31 @@ Adding a new AutomationGroup formation pattern: implement `AutomationGroupFormat
 
 Exit code: **0** on success (including zero-newly-formed); **2** on tool/configuration error.
 
+## `promote-automation-group` CLI
+
+Operator-invoked tool to record the **AutomationGroup promotion** lifecycle operation per [`§0057`](../../docs/charter/decision-log.md) — second lifecycle operation of the second Cat III subtype arc. Mirrors [`promote-hypothesis`](#promote-hypothesis-cli) for the AutomationGroup subtype. Same Layer A cadence semantic per [`§0011`](../../docs/charter/decision-log.md).
+
+```sh
+make promote-automation-group-build                                       # builds ./bin/promote-automation-group
+
+# Promote an AutomationGroup formation under a 24h cadence
+./bin/promote-automation-group \
+  -formation-event-hash <64-hex-chars> \
+  -cadence-seconds 86400 \
+  -reason "operational pilot — automation-signature attribution"
+```
+
+Validates the supplied `formation-event-hash` resolves to an `AutomationGroupFormation` row (otherwise exits 3 — preserves §2.5-lifecycle-integrity). Cross-subtype rejection: a `BehavioralClusterFormation` hash returns `ErrTargetWrongType` (exit 3) — the subtype-specific message_type discriminator prevents misclassification.
+
+| Option | Default | Notes |
+|---|---|---|
+| `-formation-event-hash` | (required) | Hex-encoded BLAKE3-256 of the target `AutomationGroupFormation`. |
+| `-cadence-seconds` | 86400 (24h) | Layer A parameter per [`§0011`](../../docs/charter/decision-log.md). |
+| `-promoted-at-ns` | 0 (= wall-clock now) | Explicit `promoted_at` for forensic replay / deterministic test recording. |
+| `-reason` | empty | Operator-supplied forensic note. |
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
+
 ## `promote-hypothesis` CLI
 
 Operator-invoked tool to record the second Cat III lifecycle operation (per [`§0046`](../../docs/charter/decision-log.md) — `BehavioralClusterPromotion`). Promotion transitions a hypothesis from active inference to operational use as enrichment context; per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) + [`decision-log §0011`](../../docs/charter/decision-log.md), the event MUST carry the Layer A cadence parameter governing subsequent demotion-candidacy.

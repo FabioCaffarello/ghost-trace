@@ -2187,6 +2187,51 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0057` — Second-subtype promotion (`AutomationGroupPromotion`) lands; cross-subtype-rejection structurally enforced; sentinel sharing across subtypes verified
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0056`](#0056--second-category-iii-concrete-subtype-automationgroup-formation-lands-second-subtype-lifecycle-arc-opens-typed-subtype-landings-commitment-reaffirmed) opened the second Cat III subtype lifecycle arc (`AutomationGroup`) with the formation step. This entry lands the second lifecycle operation for that subtype (promotion), mirroring §0046's structure for the BehavioralCluster arc. Same Layer A cadence semantic per [`§0011`](#0011--q4-resolution-staged-combination-of-cadence-layer-a--deep-criterion-layer-b-for-demotion-candidacy-layer-b-deferred); Layer B remains deferred until §2.6 redacts.
+
+  One structural observation surfaces in this entry:
+
+  - **Sentinel sharing across subtypes.** §0046 introduced `ErrTargetNotFound` + `ErrTargetWrongType`; §0047 generalized them for operation-agnostic use across the BehavioralCluster lifecycle operations (Promote, Demote, Dissolve). The sentinels are **operation-agnostic** but the wrong-type check is **subtype-specific** — each operator validates against its own subtype's formation message_type constant (`behavioralClusterFormationMessageType` vs the new `automationGroupFormationMessageType`). A cross-subtype invocation (passing a BehavioralClusterFormation hash to PromoteAutomationGroup) correctly returns `ErrTargetWrongType` because the message_type does not match. The sentinel landscape established at §0046+§0047+§0049+§0050 transfers cleanly to the second subtype WITHOUT further generalization — the structural design choice carries forward.
+
+- **Decision:** Land `AutomationGroupPromotion` with three structural moves:
+
+  1. **`AutomationGroupPromotion` Protobuf message** at [`schemas/events/v1/automation_group_promotion.proto`](../../schemas/events/v1/automation_group_promotion.proto). Four fields mirroring §0046's `BehavioralClusterPromotion`: `formation_event_hash`, `promoted_at`, `cadence_seconds` (mandatory per §2.5), `reason` (optional).
+
+  2. **`PromoteAutomationGroup` entry point** at [`services/ingestion/internal/hypothesis/automation_group_promotion.go`](../../services/ingestion/internal/hypothesis/automation_group_promotion.go). Parallel to §0046's `Promote`. New `automationGroupFormationMessageType` constant — the subtype-specific message_type discriminator. Reuses shared `ErrTargetNotFound` + `ErrTargetWrongType` sentinels — the third independent caller of these sentinels (after Promote, Demote, Dissolve, Merge, Split from the BehavioralCluster arc, and now PromoteAutomationGroup).
+
+  3. **`cmd/promote-automation-group` operator interface** at [`services/ingestion/cmd/promote-automation-group/main.go`](../../services/ingestion/cmd/promote-automation-group/main.go). Fourteenth operational binary; ninth substrate-write binary. Mirrors the §0046 CLI shape; exit codes 0/2/3 identical.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. Respects [§2.1](../charter/constitutional-charter.md#21-observational-integrity), [§2.2](../charter/constitutional-charter.md#22-epistemic-separation), [§2.3](../charter/constitutional-charter.md#23-provenance-integrity), [§2.5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness), [§2.5 BC5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) — same surface as §0046 for the second subtype; the constitutional shape transfers cleanly. Respects [`§0045`](#0045--first-category-iii-hypothesis-subtype-behavioralcluster-formation-lands-25-hypothesis-lifecycle-explicitness-structurally-observable) hypothesis-identity invariant — promotion targets the AutomationGroupFormation by its content-hash. Respects [`§0011`](#0011--q4-resolution-staged-combination-of-cadence-layer-a--deep-criterion-layer-b-for-demotion-candidacy-layer-b-deferred) Layer A cadence mandatory; Layer B deferred. Respects [`§0046`](#0046--second-category-iii-lifecycle-event-behavioralclusterpromotion-lands-layer-a-cadence-per-0011-materialized-25-lifecycle-now-plural-observable) + [`§0047`](#0047--third-category-iii-lifecycle-event-behavioralclusterdemotion-lands-promotedemote-loop-closed-0011-layer-a-cadence-gate-operationally-surfaced) sentinel-sharing pattern — the operation-agnostic sentinels accommodate the new subtype-specific caller without modification. Respects [`§0056`](#0056--second-category-iii-concrete-subtype-automationgroup-formation-lands-second-subtype-lifecycle-arc-opens-typed-subtype-landings-commitment-reaffirmed) typed-subtype-landings commitment — `PromoteAutomationGroup` is a structurally-distinct entry point from `Promote`, NOT a generic dispatcher. Canonical vocabulary used as written: promotion, hypothesis, lifecycle event, formation, substrate, AutomationGroup.
+
+- **Consequences:**
+  - [`schemas/events/v1/automation_group_promotion.proto`](../../schemas/events/v1/automation_group_promotion.proto) — new file.
+  - [`services/ingestion/Makefile`](../../services/ingestion/Makefile) — generate target extended; new `promote-automation-group-build` target.
+  - [`services/ingestion/internal/hypothesis/automation_group_promotion.go`](../../services/ingestion/internal/hypothesis/automation_group_promotion.go) — new file. `AutomationGroupPromoteOptions`, `AutomationGroupPromoteReport`, `PromoteAutomationGroup` entry point; new `automationGroupFormationMessageType` constant.
+  - [`services/ingestion/internal/hypothesis/automation_group_promotion_test.go`](../../services/ingestion/internal/hypothesis/automation_group_promotion_test.go) — **8 tests** covering happy-path, idempotency, versioning, non-positive cadence rejection, unknown target, **cross-subtype rejection** (BehavioralClusterFormation hash passed to PromoteAutomationGroup → ErrTargetWrongType), default promoted_at, coexistence with BehavioralClusterPromotion.
+  - [`services/ingestion/cmd/promote-automation-group/main.go`](../../services/ingestion/cmd/promote-automation-group/main.go) — new binary; fourteenth operational CLI; ninth substrate-write binary.
+  - [`services/ingestion/internal/canonical/corpus_test.go`](../../services/ingestion/internal/canonical/corpus_test.go) — `messageFactory` extended with `"automation-group-promotion"`.
+  - [`services/ingestion/internal/canonical/testdata/canonical-corpus/automation-group-promotion-{minimal,typical}.{json,bin,hash}`](../../services/ingestion/internal/canonical/testdata/canonical-corpus/) — **6 new corpus files**.
+  - [`services/ingestion/internal/canonical/testdata/canonical-corpus/README.md`](../../services/ingestion/internal/canonical/testdata/canonical-corpus/README.md) — Status + entries table updated.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — new §`promote-automation-group` CLI section.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0057 (this entry).
+  - **Test count grows.** Combined: **264 tests** (up from 256 at [`§0056`](#0056--second-category-iii-concrete-subtype-automationgroup-formation-lands-second-subtype-lifecycle-arc-opens-typed-subtype-landings-commitment-reaffirmed); +8). All passing under `go test -race ./...`.
+  - **Zero external dependencies added.**
+  - **Fourteenth operational binary lands.** `cmd/` now contains 14 binaries; substrate-write classification grows to 9.
+  - **Cross-subtype rejection is structurally enforced + tested.** `TestPromoteAutomationGroupWrongSubtypeRejected` proves that a `BehavioralClusterFormation` hash passed to `PromoteAutomationGroup` returns `ErrTargetWrongType`. The subtype-specific `automationGroupFormationMessageType` constant is the structural fence; the shared sentinel surface preserves the §0046+§0047 design pattern.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Four remaining AutomationGroup lifecycle operations** — demotion, dissolution, merge, split. Mirror §0047–§0050 respectively. Four follow-on entries to close the second subtype's lifecycle arc.
+    - **Projection layer extension for AutomationGroup** — unchanged from [`§0056`](#0056--second-category-iii-concrete-subtype-automationgroup-formation-lands-second-subtype-lifecycle-arc-opens-typed-subtype-landings-commitment-reaffirmed) carry-forward.
+    - **Cross-subtype merge/split semantics** — unchanged from [`§0049`](#0049--fifth-category-iii-lifecycle-event-behavioralclustermerge-lands-within-subtype-binary-merge-produced-hypothesis-as-separate-formation-structural-choice-5-of-6-lifecycle-operations-now-structurally-observable) + [`§0050`](#0050--sixth-final-category-iii-lifecycle-event-behavioralclustersplit-lands-structural-inverse-of-merge-6-of-6-lifecycle-operations-now-structurally-observable-25-lifecycle-surface-complete) carry-forwards.
+
+- **Supersession:** None. Extends [`§0056`](#0056--second-category-iii-concrete-subtype-automationgroup-formation-lands-second-subtype-lifecycle-arc-opens-typed-subtype-landings-commitment-reaffirmed) with the second lifecycle operation for the second subtype. Shared sentinels accommodate the new caller per the §0046+§0047 design pattern, without further generalization. [`§0022`](#0022--implementation-pivot-22-implementation-against-current-structural-ground-authorized-storage-technology-deferral-reversed-by-authorization) implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
