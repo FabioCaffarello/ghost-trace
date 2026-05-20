@@ -13,6 +13,7 @@ help:
 	@echo "  generate       run protoc to produce $(GEN_OUT)/**/*.pb.go"
 	@echo "  build          go build -trimpath -o $(BIN_DIR)/ingestion ."
 	@echo "  verify-build   go build -trimpath -o $(BIN_DIR)/verify ./cmd/verify"
+	@echo "  orphan-cleanup-build  go build -trimpath -o $(BIN_DIR)/orphan-cleanup ./cmd/orphan-cleanup"
 	@echo "  test           go test -race ./..."
 	@echo "  golden-corpus  regenerate canonical-corpus golden files (schemas-evolution event)"
 	@echo "  clean          remove $(GEN_OUT) + $(BIN_DIR)"
@@ -46,6 +47,11 @@ build:
 verify-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/verify ./cmd/verify
+
+.PHONY: orphan-cleanup-build
+orphan-cleanup-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/orphan-cleanup ./cmd/orphan-cleanup
 
 .PHONY: test
 test:
