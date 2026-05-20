@@ -50,7 +50,7 @@ func TestVerifyHappyPath(t *testing.T) {
 	ctx := context.Background()
 	sub, hashes := newPopulatedSubstrate(t, 3)
 
-	report, err := Verify(ctx, sub)
+	report, err := Verify(ctx, sub, Options{})
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestVerifyDetectsCorruption(t *testing.T) {
 		t.Fatalf("write corrupted blob: %v", err)
 	}
 
-	report, err := Verify(ctx, sub)
+	report, err := Verify(ctx, sub, Options{})
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestVerifyDetectsMissingBlob(t *testing.T) {
 		t.Fatal("no blob file deleted")
 	}
 
-	report, err := Verify(ctx, sub)
+	report, err := Verify(ctx, sub, Options{})
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestVerifyEmptySubstrate(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = sub.Close() })
 
-	report, err := Verify(ctx, sub)
+	report, err := Verify(ctx, sub, Options{})
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
@@ -199,6 +199,85 @@ func TestPopulatedSubstrateHashes(t *testing.T) {
 		if len(h) != 64 {
 			t.Errorf("hash length: got %d, want 64 — %q", len(h), h)
 		}
+	}
+}
+
+func TestVerifyCheckOrphansDetectsOrphan(t *testing.T) {
+	ctx := context.Background()
+	sub, _ := newPopulatedSubstrate(t, 2)
+
+	// Plant an orphan blob: write a file in the blob-store with a
+	// hash that does NOT appear in the events table.
+	orphanContent := []byte("this-blob-has-no-index-row")
+	orphanHash := canonical.Hash(orphanContent)
+	orphanHex := canonical.HashHex(orphanHash)
+	orphanDir := filepath.Join(sub.BlobDir(), orphanHex[:2])
+	if err := os.MkdirAll(orphanDir, 0o755); err != nil {
+		t.Fatalf("mkdir orphan shard: %v", err)
+	}
+	orphanPath := filepath.Join(orphanDir, orphanHex[2:])
+	if err := os.WriteFile(orphanPath, orphanContent, 0o644); err != nil {
+		t.Fatalf("write orphan blob: %v", err)
+	}
+
+	report, err := Verify(ctx, sub, Options{CheckOrphans: true})
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	// Orphans are NOT failures per §0033 + §0040.
+	if report.Failed() {
+		t.Errorf("orphan should not cause Failed(): %+v", report)
+	}
+	if report.OrphanBlobCount != 1 {
+		t.Errorf("OrphanBlobCount: got %d, want 1", report.OrphanBlobCount)
+	}
+	if len(report.OrphanBlobPaths) != 1 {
+		t.Fatalf("OrphanBlobPaths len: got %d, want 1", len(report.OrphanBlobPaths))
+	}
+	if report.OrphanBlobPaths[0] != orphanPath {
+		t.Errorf("OrphanBlobPaths[0]: got %q, want %q", report.OrphanBlobPaths[0], orphanPath)
+	}
+}
+
+func TestVerifyOrphanDetectionDisabledByDefault(t *testing.T) {
+	ctx := context.Background()
+	sub, _ := newPopulatedSubstrate(t, 2)
+
+	// Plant an orphan blob.
+	orphanContent := []byte("orphan-not-checked-when-off")
+	orphanHash := canonical.Hash(orphanContent)
+	orphanHex := canonical.HashHex(orphanHash)
+	orphanDir := filepath.Join(sub.BlobDir(), orphanHex[:2])
+	_ = os.MkdirAll(orphanDir, 0o755)
+	_ = os.WriteFile(filepath.Join(orphanDir, orphanHex[2:]), orphanContent, 0o644)
+
+	// Default Options{CheckOrphans: false} skips the blob-store walk.
+	report, err := Verify(ctx, sub, Options{})
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if report.OrphanBlobCount != 0 {
+		t.Errorf("OrphanBlobCount: got %d, want 0 (orphan-check disabled)", report.OrphanBlobCount)
+	}
+	if report.Failed() {
+		t.Errorf("happy-path with orphan present (and check disabled) should not fail: %+v", report)
+	}
+}
+
+func TestVerifyCheckOrphansHappyPath(t *testing.T) {
+	// No orphans planted; OrphanBlobCount must be 0.
+	ctx := context.Background()
+	sub, _ := newPopulatedSubstrate(t, 3)
+
+	report, err := Verify(ctx, sub, Options{CheckOrphans: true})
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if report.Failed() {
+		t.Errorf("clean substrate should not fail: %+v", report)
+	}
+	if report.OrphanBlobCount != 0 {
+		t.Errorf("OrphanBlobCount: got %d, want 0 (no orphans planted)", report.OrphanBlobCount)
 	}
 }
 

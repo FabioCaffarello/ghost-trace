@@ -26,11 +26,12 @@ Four packages under `internal/`, each consuming a published contract:
 Companion binary at [`cmd/verify`](./cmd/verify) that performs an up-front substrate-integrity check. Discharges the `§0033` `verify` follow-on; see [`§0039`](../../docs/charter/decision-log.md).
 
 ```sh
-make verify-build                                       # builds ./bin/verify
-./bin/verify -db ./ghost-trace.db -blobs ./blobs        # walks events table; verifies every blob
+make verify-build                                                       # builds ./bin/verify
+./bin/verify -db ./ghost-trace.db -blobs ./blobs                        # walks events table; verifies every blob
+./bin/verify -db ./ghost-trace.db -blobs ./blobs -check-orphans         # also reports orphan blobs (informational)
 ```
 
-Walks every events-table row in commit order, recomputes each blob's BLAKE3 hash via `substrate.ReadBlob`, surfaces hash-mismatch + missing-blob failures. Writes structured JSON to stdout + a brief human summary to stderr. Exit code: **0** on pass; **1** on any verification failure; **2** on tool/configuration error (e.g. database open failure). Intended for post-restore verification (per [`§0033` §Restoration Procedure step 3](../../docs/architecture/operational-ops.md)) and periodic substrate-integrity audits.
+Walks every events-table row in commit order, recomputes each blob's BLAKE3 hash via `substrate.ReadBlob`, surfaces hash-mismatch + missing-blob failures. With `-check-orphans` (per [`§0040`](../../docs/charter/decision-log.md)), also walks the blob-store directory + reports blobs whose content-hash does not appear in the events table — orphans are **harmless** at the substrate layer per [`§0033`](../../docs/charter/decision-log.md) (the events table is authoritative); they are reported but do NOT cause non-zero exit. Writes structured JSON to stdout + a brief human summary to stderr. Exit code: **0** on pass (including substrates with orphan blobs); **1** on any §2.1 violation (hash-mismatch or missing-blob); **2** on tool/configuration error. Intended for post-restore verification (per [`§0033` §Restoration Procedure step 3](../../docs/architecture/operational-ops.md)) and periodic substrate-integrity audits.
 
 ## Build Sequence
 

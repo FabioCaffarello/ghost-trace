@@ -1172,6 +1172,58 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0040` — Orphan-blob detection added to verify CLI; §0039 follow-on discharged
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0039`](#0039--verify-cli-tool-added-0033-verify-follow-on-discharged) deferred orphan-blob detection as a follow-on: "Orphan-blob detection — blobs without index rows. Per [`§0033`](#0033--operational-ops-architecture-document-introduced-0027-backup-cadence--vacuum-cadence-open-questions-discharged) §Restoration Procedure: 'Orphans are harmless at the substrate layer (the events table is authoritative); they consume disk space but do not affect §2.1.' Verify does NOT walk the blob-store directory; a separate `orphan-scan` or `--check-orphans` follow-on may add it when operationally needed." This entry adds the `-check-orphans` opt-in command-line option.
+
+- **Decision:** Extend the verify CLI with **opt-in orphan-blob detection** via a `-check-orphans` command-line option (default off). When set, verify performs a second-pass walk of the blob-store directory and reports blobs whose content-hash does not appear in the events table.
+
+  Constitutional shape:
+
+  - Orphans are **informational, not §2.1 violations**. Per [`§0033`](#0033--operational-ops-architecture-document-introduced-0027-backup-cadence--vacuum-cadence-open-questions-discharged) §Restoration Procedure §Orphan-blob handling on restore: "Orphans are harmless at the substrate layer (the events table is authoritative); they consume disk space but do not affect §2.1." Reported orphans do NOT cause `Report.Failed()` to return true; exit code remains 0 even when orphans are present.
+  - Orphan **detection is opt-in** (default off) for two reasons: (1) the second-pass walk adds I/O cost proportional to blob-store size, undesirable for the common audit case; (2) [`§0033`](#0033--operational-ops-architecture-document-introduced-0027-backup-cadence--vacuum-cadence-open-questions-discharged) §Anti-Patterns explicitly forbids automated orphan deletion — surfacing orphans as a non-default operational indicator aligns verify with the forensic-artifact stance.
+  - Operator runs orphan detection when **forensic inspection** is the goal (e.g. after a partial backup, after a crash during ingest, before a substrate-migration). Routine audits run without the option set.
+
+  Implementation shape:
+
+  - **New `substrate.WalkBlobs(ctx, fn)`** — iterates over every file in the blob-store directory matching the convention `<blobDir>/<2-char-prefix>/<62-char-suffix>` (where the concatenated 64 chars decode to a 32-byte hash). Skips temp files (`tmp-blob-*`) + non-conforming filenames silently. Honors `ctx.Err()` between entries.
+  - **`verify.Options.CheckOrphans bool`** — controls the second-pass behavior. `verify.Report` gains `OrphanBlobCount int64` + `OrphanBlobPaths []string`.
+  - **`Verify` function**: when `Options.CheckOrphans` is true, walks blobs after the events-table walk; for each blob, calls `substrate.LookupRow` and records the blob as orphan when the lookup returns `sql.ErrNoRows`.
+  - **CLI option**: `-check-orphans` (default false). Reflected in the structured JSON output as a top-level `orphan_blob` field (+ `orphan_blob_paths` when present). Human summary surfaces orphan count with the explicit `(informational)` marker.
+
+  Test coverage:
+
+  - **`TestVerifyCheckOrphansDetectsOrphan`** — populated substrate + deliberately-planted orphan blob (content-hashed correctly into the `<2>/<62>` blob-path layout); verify with `CheckOrphans: true` reports `OrphanBlobCount=1` + matching path; `Failed()` is false.
+  - **`TestVerifyOrphanDetectionDisabledByDefault`** — orphan planted but `Options{}` default; `OrphanBlobCount=0`; the second-pass walk does not run.
+  - **`TestVerifyCheckOrphansHappyPath`** — clean substrate + `CheckOrphans: true`; no orphans found; no failure.
+  - All existing verify tests updated to the new `Verify(ctx, sub, Options{})` signature.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. Orphan detection is read-only walk + lookup; preserves §2.1 (no mutation). Respects [`§0033`](#0033--operational-ops-architecture-document-introduced-0027-backup-cadence--vacuum-cadence-open-questions-discharged) operational-ops discipline — orphans surfaced as informational, never auto-deleted. Respects [`§0029`](#0029--concurrency-pattern-architecture-document-introduced-0025-modification-5-discharged) concurrency-pattern — `WalkBlobs` does not acquire `writeMu` (filesystem walk + per-row lookups are concurrent-read-safe under WAL). No glossary changes (orphan, blob-store, lookup — operational vocabulary).
+
+- **Consequences:**
+  - [`services/ingestion/internal/substrate/substrate.go`](../../services/ingestion/internal/substrate/substrate.go) — new `WalkBlobs` method; new imports (`encoding/hex`, `io/fs`, `strings`).
+  - [`services/ingestion/internal/verify/verify.go`](../../services/ingestion/internal/verify/verify.go) — `Options{CheckOrphans bool}` parameter; `Report{OrphanBlobCount, OrphanBlobPaths}` fields; `Failed()` semantics unchanged (orphans excluded).
+  - [`services/ingestion/internal/verify/verify_test.go`](../../services/ingestion/internal/verify/verify_test.go) — 3 new tests (orphan-detected, orphan-not-checked-by-default, clean-with-flag) + existing tests updated for new signature.
+  - [`services/ingestion/cmd/verify/main.go`](../../services/ingestion/cmd/verify/main.go) — `-check-orphans` command-line option; structured JSON gains `orphan_blob` + `orphan_blob_paths` fields; human summary surfaces orphan count with `(informational)` marker.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — verify-CLI section extended with the `-check-orphans` usage example + the informational-not-failure semantics.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0040 (this entry).
+  - **Verify package signature change.** `Verify(ctx, sub)` → `Verify(ctx, sub, Options{})`. Contained refactor — only `cmd/verify` and the verify test file invoke it.
+  - **Test count grows.** Combined: **96 tests** across the service (8 main + 5 canonical + 11 substrate + 5 ingest + 22 httpapi + 9 verify [+3 orphan tests]). All passing under `go test -race ./...`.
+  - **Zero external dependencies added.** New imports (`encoding/hex`, `io/fs`, `strings`, `database/sql`) are all Go stdlib.
+  - **`§0039` Open Questions reduces by one.** Orphan-blob detection follow-on closed.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Orphan-blob cleanup CLI** — automatic deletion is explicitly forbidden per [`§0033`](#0033--operational-ops-architecture-document-introduced-0027-backup-cadence--vacuum-cadence-open-questions-discharged) anti-pattern. Operator-invoked cleanup (with confirmation, dry-run support, exclusion list) is a separate operational tool deferred to follow-on work.
+    - **Orphan-row detection** — the inverse case: events-table rows whose `payload_ref` does not resolve to a readable blob. Already covered by the existing `MissingBlobCount` / `MissingBlobHashes` Report fields (those ARE failures, distinct from orphan blobs which are informational).
+    - **Hash-only orphan scan** — walking the blob-store directory + reading filenames is cheaper than the full Verify path (no blob-content read). A `--orphans-only` mode would let operators run a fast orphan inventory without the full hash recomputation. Deferred.
+    - **Orphan-age tracking** — when an orphan was created (file mtime / blob-store transaction journal). Deferred until orphan-cleanup follow-on lands.
+
+- **Supersession:** None. This entry discharges a deferred follow-on from [`§0039`](#0039--verify-cli-tool-added-0033-verify-follow-on-discharged); no prior decision reversed.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

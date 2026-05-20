@@ -39,6 +39,7 @@ func main() {
 func run() error {
 	dbPath := flag.String("db", "./ghost-trace.db", "SQLite primary-event-log path")
 	blobDir := flag.String("blobs", "./blobs", "content-addressed blob-store directory")
+	checkOrphans := flag.Bool("check-orphans", false, "also walk the blob-store directory + report orphan blobs (blobs without index rows). Orphans are harmless per §0033 + §0040; reported but do not cause non-zero exit.")
 	flag.Parse()
 
 	ctx := context.Background()
@@ -48,7 +49,7 @@ func run() error {
 	}
 	defer func() { _ = sub.Close() }()
 
-	report, err := verify.Verify(ctx, sub)
+	report, err := verify.Verify(ctx, sub, verify.Options{CheckOrphans: *checkOrphans})
 	if err != nil {
 		return fmt.Errorf("verify: %w", err)
 	}
@@ -63,11 +64,17 @@ func run() error {
 	// Human summary to stderr.
 	if report.Failed() {
 		fmt.Fprintf(os.Stderr,
-			"verify FAILED: %d rows walked; %d hash-mismatch; %d missing-blob\n",
-			report.VerifiedCount, report.HashMismatchCount, report.MissingBlobCount)
+			"verify FAILED: %d rows walked; %d hash-mismatch; %d missing-blob; %d orphan-blob (informational)\n",
+			report.VerifiedCount, report.HashMismatchCount, report.MissingBlobCount, report.OrphanBlobCount)
 		os.Exit(1)
 	}
-	fmt.Fprintf(os.Stderr, "verify OK: %d rows walked; substrate integrity confirmed\n", report.VerifiedCount)
+	if report.OrphanBlobCount > 0 {
+		fmt.Fprintf(os.Stderr,
+			"verify OK: %d rows walked; %d orphan-blob (informational; not a §2.1 violation per §0033 + §0040)\n",
+			report.VerifiedCount, report.OrphanBlobCount)
+	} else {
+		fmt.Fprintf(os.Stderr, "verify OK: %d rows walked; substrate hash-chain consistent\n", report.VerifiedCount)
+	}
 	return nil
 }
 
@@ -78,9 +85,11 @@ type reportPayload struct {
 	Verified           int64    `json:"verified"`
 	HashMismatch       int64    `json:"hash_mismatch"`
 	MissingBlob        int64    `json:"missing_blob"`
+	OrphanBlob         int64    `json:"orphan_blob"`
 	Passed             bool     `json:"passed"`
 	HashMismatchHashes []string `json:"hash_mismatch_hashes,omitempty"`
 	MissingBlobHashes  []string `json:"missing_blob_hashes,omitempty"`
+	OrphanBlobPaths    []string `json:"orphan_blob_paths,omitempty"`
 }
 
 func buildPayload(r verify.Report) reportPayload {
@@ -88,8 +97,10 @@ func buildPayload(r verify.Report) reportPayload {
 		Verified:           r.VerifiedCount,
 		HashMismatch:       r.HashMismatchCount,
 		MissingBlob:        r.MissingBlobCount,
+		OrphanBlob:         r.OrphanBlobCount,
 		Passed:             !r.Failed(),
 		HashMismatchHashes: r.HashMismatchHashes,
 		MissingBlobHashes:  r.MissingBlobHashes,
+		OrphanBlobPaths:    r.OrphanBlobPaths,
 	}
 }
