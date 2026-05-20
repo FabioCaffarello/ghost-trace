@@ -144,6 +144,29 @@ Validates the supplied `formation-event-hash` resolves to an `AutomationGroupFor
 
 Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
 
+## `demote-automation-group` CLI
+
+Operator-invoked tool to record the **AutomationGroup demotion** lifecycle operation per [`§0058`](../../docs/charter/decision-log.md) — third lifecycle operation of the second Cat III subtype arc. Mirrors [`demote-hypothesis`](#demote-hypothesis-cli). Same Layer A cadence semantic per [`§0011`](../../docs/charter/decision-log.md).
+
+```sh
+make demote-automation-group-build                                        # builds ./bin/demote-automation-group
+
+# Demote a specific AutomationGroup promotion event
+./bin/demote-automation-group \
+  -promotion-event-hash <64-hex-chars> \
+  -reason "operational cycle close"
+```
+
+Validates the supplied `promotion-event-hash` resolves to an `AutomationGroupPromotion` row (otherwise exits 3). Per §0011 Layer A is a CANDIDACY gate, NOT a hard barrier — the substrate accepts the demotion regardless of whether the cadence has elapsed; the structured output surfaces `cadence_satisfied` + `cadence_elapsed_seconds`.
+
+| Option | Default | Notes |
+|---|---|---|
+| `-promotion-event-hash` | (required) | Hex-encoded BLAKE3-256 of the target `AutomationGroupPromotion`. |
+| `-demoted-at-ns` | 0 (= wall-clock now) | Explicit `demoted_at` for forensic replay. |
+| `-reason` | empty | Operator-supplied forensic note; **strongly recommended** when demoting within the cadence window. |
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
+
 ## `promote-hypothesis` CLI
 
 Operator-invoked tool to record the second Cat III lifecycle operation (per [`§0046`](../../docs/charter/decision-log.md) — `BehavioralClusterPromotion`). Promotion transitions a hypothesis from active inference to operational use as enrichment context; per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) + [`decision-log §0011`](../../docs/charter/decision-log.md), the event MUST carry the Layer A cadence parameter governing subsequent demotion-candidacy.

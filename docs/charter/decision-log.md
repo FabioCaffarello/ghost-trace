@@ -2232,6 +2232,40 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0058` — Second-subtype demotion (`AutomationGroupDemotion`) lands; promote/demote loop closed for second subtype
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0057`](#0057--second-subtype-promotion-automationgrouppromotion-lands-cross-subtype-rejection-structurally-enforced-sentinel-sharing-across-subtypes-verified) landed AutomationGroup promotion. This entry lands AutomationGroup demotion (mirrors §0047 for the BehavioralCluster arc), closing the promote/demote loop for the second subtype. The structural shape (subtype-specific promotion message_type discriminator + shared sentinels + cadence-satisfied report boolean) transfers cleanly from §0047 — no design decisions surface in this entry beyond the mechanical extension.
+
+- **Decision:** Land `AutomationGroupDemotion` with three structural moves mirroring §0047 + §0057:
+
+  1. **`AutomationGroupDemotion` Protobuf message** at [`schemas/events/v1/automation_group_demotion.proto`](../../schemas/events/v1/automation_group_demotion.proto). Three fields: `promotion_event_hash`, `demoted_at`, `reason`. Same shape as §0047's `BehavioralClusterDemotion`.
+
+  2. **`DemoteAutomationGroup` entry point** at [`services/ingestion/internal/hypothesis/automation_group_demotion.go`](../../services/ingestion/internal/hypothesis/automation_group_demotion.go). Parallel to §0047's `Demote`. New `automationGroupPromotionMessageType` constant — the subtype-specific promotion-message_type discriminator. Reuses shared `ErrTargetNotFound` + `ErrTargetWrongType` sentinels (fourth and fifth callers across the codebase: Promote, Demote, Dissolve, Merge, Split from BC arc + PromoteAutomationGroup from §0057 + DemoteAutomationGroup from this entry). Cadence-satisfied report boolean computed identically to §0047 (elapsed_seconds = (demoted_at - promotion.promoted_at) / 1e9).
+
+  3. **`cmd/demote-automation-group` operator interface** at [`services/ingestion/cmd/demote-automation-group/main.go`](../../services/ingestion/cmd/demote-automation-group/main.go). Fifteenth operational binary; tenth substrate-write binary. Mirrors §0047 CLI shape; exit codes 0/2/3 identical.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. Respects §2.1, §2.2, §2.3, §2.5, §2.5 BC3 (no denormalized formation_event_hash on demotion; chain reconstruction via promotion), §2.5 BC5 (demotion event IS a Cat I record). Respects §0011 Layer A cadence semantic (candidacy gate, not hard barrier). Respects §0046+§0047 sentinel-sharing pattern. Respects §0056 typed-subtype-landings commitment. Cross-subtype rejection tested at `TestDemoteAutomationGroupRejectsCrossSubtypePromotion` (BehavioralClusterPromotion hash → ErrTargetWrongType). Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`schemas/events/v1/automation_group_demotion.proto`](../../schemas/events/v1/automation_group_demotion.proto) — new file.
+  - [`services/ingestion/internal/hypothesis/automation_group_demotion.go`](../../services/ingestion/internal/hypothesis/automation_group_demotion.go) — new file. `AutomationGroupDemoteOptions`, `AutomationGroupDemoteReport`, `DemoteAutomationGroup`. New `automationGroupPromotionMessageType` constant.
+  - [`services/ingestion/internal/hypothesis/automation_group_demotion_test.go`](../../services/ingestion/internal/hypothesis/automation_group_demotion_test.go) — **7 tests** covering cadence-satisfied happy-path, cadence-unsatisfied early-demote, idempotency, unknown target, formation-hash rejection (wrong-type for the right subtype), cross-subtype promotion rejection, default demoted_at.
+  - [`services/ingestion/cmd/demote-automation-group/main.go`](../../services/ingestion/cmd/demote-automation-group/main.go) — new binary; fifteenth operational CLI; tenth substrate-write.
+  - Makefile, canonical corpus (minimal + typical), service README, decision-log §0058 (this entry).
+  - **Test count grows.** Combined: **271 tests** (up from 264 at [`§0057`](#0057--second-subtype-promotion-automationgrouppromotion-lands-cross-subtype-rejection-structurally-enforced-sentinel-sharing-across-subtypes-verified); +7).
+  - **Promote/demote loop closed for the second subtype.** Operator can now form → promote → demote an AutomationGroup, mirroring the §0047 closure for BehavioralCluster.
+  - **Sentinel sharing pattern scales to its third subtype-specific caller.** `automationGroupPromotionMessageType` constant joins `behavioralClusterFormationMessageType`, `behavioralClusterPromotionMessageType`, `automationGroupFormationMessageType` as the per-subtype discriminator landscape. The shared sentinels (ErrTargetNotFound, ErrTargetWrongType) accommodate all five subtype-specific operators without modification.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Three remaining AutomationGroup lifecycle operations** — dissolution (§0059), merge (§0060), split (§0061).
+    - **Projection layer extension for AutomationGroup** — unchanged from §0056 carry-forward.
+
+- **Supersession:** None. Extends [`§0057`](#0057--second-subtype-promotion-automationgrouppromotion-lands-cross-subtype-rejection-structurally-enforced-sentinel-sharing-across-subtypes-verified); promote/demote loop now closed for second subtype. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
