@@ -155,6 +155,34 @@ Operators may demote within the cadence window (Layer A unsatisfied) when operat
 
 Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
 
+## `dissolve-hypothesis` CLI
+
+Operator-invoked tool to record the fourth Cat III lifecycle operation (per [`§0048`](../../docs/charter/decision-log.md) — `BehavioralClusterDissolution`). Dissolution recognizes that the underlying phenomenon the hypothesis claimed to track no longer corresponds to anything — distinct from demotion per glossary + [`lifecycle-semantics.md`](../../docs/ontology/lifecycle-semantics.md) line 36: demotion withdraws OPERATIONAL USE; dissolution recognizes NON-EXISTENCE. The two operations are not interchangeable.
+
+```sh
+make dissolve-hypothesis-build                                          # builds ./bin/dissolve-hypothesis
+
+# Dissolve a formation (may or may not have been promoted)
+./bin/dissolve-hypothesis \
+  -formation-event-hash <64-hex-chars> \
+  -reason "phenomenon recognized as non-existent"
+
+# Forensic-replay friendly form with explicit dissolved_at
+./bin/dissolve-hypothesis -formation-event-hash <hash> -dissolved-at-ns 1716120180000000000
+```
+
+Validates the supplied `formation-event-hash` resolves to a `BehavioralClusterFormation` row in the substrate (otherwise exits 3 — preserves §2.5-lifecycle-integrity: dissolution references only formations, never promotions or demotions). Commits the `BehavioralClusterDissolution` event via `substrate.Append`.
+
+Dissolution may be invoked regardless of whether the hypothesis was ever promoted. A formation that was never admitted to operational use can still be recognized as not corresponding to any phenomenon; the substrate accepts the discrete lifecycle event regardless of intermediate state. The projection layer reconstructs the full chain per §2.5 BC3.
+
+| Option | Default | Notes |
+|---|---|---|
+| `-formation-event-hash` | (required) | Hex-encoded BLAKE3-256 of the target `BehavioralClusterFormation`. |
+| `-dissolved-at-ns` | 0 (= wall-clock now) | Explicit `dissolved_at` for forensic replay / deterministic test recording. |
+| `-reason` | empty | Operator-supplied forensic note; **strongly recommended** — dissolution is the terminal lifecycle operation on a hypothesis, and the absence of a reason removes the only record of the underlying judgment. |
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
+
 ## `orphan-cleanup` CLI
 
 Operator-invoked tool to delete orphan blobs (per [`§0041`](../../docs/charter/decision-log.md)). Per [`§0033` Anti-Patterns](../../docs/architecture/operational-ops.md), orphan deletion MUST be operator-invoked with explicit confirmation; this tool implements that discipline.
