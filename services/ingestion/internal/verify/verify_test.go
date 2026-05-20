@@ -281,6 +281,42 @@ func TestVerifyCheckOrphansHappyPath(t *testing.T) {
 	}
 }
 
+// TestVerifyHeterogeneousCatITypes proves verify walks a substrate
+// containing multiple Cat I primary-observation types (per decision-log
+// §0042) and reports success. The substrate's hash-chain consistency
+// is type-agnostic; verify recomputes hashes per the canonical-
+// serialization-contract for each row regardless of message_type.
+func TestVerifyHeterogeneousCatITypes(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Close() })
+
+	in := ingest.New(sub, time.Now)
+	decl := &eventsv1.DeclaredSession{DeclaredAt: 1000, ActorRef: "het-decl", SessionDescriptor: []byte("s")}
+	if _, err := in.Append(ctx, decl, decl.DeclaredAt, ingest.Envelope{Channel: "test"}); err != nil {
+		t.Fatalf("Append DeclaredSession: %v", err)
+	}
+	netEvt := &eventsv1.NetworkEvent{ObservedAt: 1001, ActorRef: "het-net", EndpointRef: "10.0.0.1:80", EventDescriptor: []byte("f")}
+	if _, err := in.Append(ctx, netEvt, netEvt.ObservedAt, ingest.Envelope{Channel: "test"}); err != nil {
+		t.Fatalf("Append NetworkEvent: %v", err)
+	}
+
+	report, err := Verify(ctx, sub, Options{})
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if report.Failed() {
+		t.Errorf("heterogeneous substrate Verify reported failure: %+v", report)
+	}
+	if report.VerifiedCount != 4 {
+		t.Errorf("VerifiedCount: got %d, want 4 (2 primary + 2 enrichment)", report.VerifiedCount)
+	}
+}
+
 // Sanity: every proto.Message field on the test message round-trips
 // through canonical.Marshal without error.
 func TestMessageRoundtrip(t *testing.T) {

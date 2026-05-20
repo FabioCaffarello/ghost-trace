@@ -10,14 +10,14 @@ Skeleton. First commit producing executable code per [`decision-log §0027`](../
 
 ## Architecture
 
-**Provenance**: every primary observation commits paired with an `IngestionEvent` enrichment per [`§0038`](../../docs/charter/decision-log.md). The pair captures **what** the producer reported (the `DeclaredSession`) AND **how** the service received it (channel — `stdin`/`http`/`https`/`https+mtls` — plus, when delivered over mTLS, the verified peer-certificate's Common Name + SANs + SHA-256 fingerprint). The two events commit atomically via `substrate.AppendPair` (single SQL transaction). The pairing is by reference: each `IngestionEvent.primary_event_hash` carries the content-hash of its paired observation.
+**Provenance**: every primary observation commits paired with an `IngestionEvent` enrichment per [`§0038`](../../docs/charter/decision-log.md). The pair captures **what** the producer reported (one of the registered Cat I primary-observation types — see §[Category I message types](#category-i-message-types) below) AND **how** the service received it (channel — `stdin`/`http`/`https`/`https+mtls` — plus, when delivered over mTLS, the verified peer-certificate's Common Name + SANs + SHA-256 fingerprint). The two events commit atomically via `substrate.AppendPair` (single SQL transaction). The pairing is by reference: each `IngestionEvent.primary_event_hash` carries the content-hash of its paired observation.
 
 Four packages under `internal/`, each consuming a published contract:
 
 - [`internal/canonical`](./internal/canonical) — implements [`docs/architecture/canonical-serialization-contract.md`](../../docs/architecture/canonical-serialization-contract.md). Single `Marshal` + `Hash` + `HashHex` entry points; service code MUST NOT call `proto.Marshal` directly.
 - [`internal/substrate`](./internal/substrate) — implements the [`§0027`](../../docs/charter/decision-log.md) SQLite + content-addressed blob-store substrate. Single `Append` entry point + `writeMu` mutex per [`docs/architecture/concurrency-pattern.md`](../../docs/architecture/concurrency-pattern.md) §Substrate-Writer Serialization. PRAGMA `journal_mode=WAL` + `synchronous=FULL` per [`§0027`](../../docs/charter/decision-log.md) Proposal item 1. Hash-verification on every blob-read path per [`§0027`](../../docs/charter/decision-log.md) AP5.
 - [`internal/ingest`](./internal/ingest) — composes `canonical` + `substrate` into a typed `Append(ctx, msg, eventTime)` boundary. The single per-process write entry point.
-- [`internal/httpapi`](./internal/httpapi) — minimum-viable HTTP interface (`POST /v1/events` accepting `application/x-protobuf`; `GET /healthz`). Same error classification as the stdin worker: recoverable → 4xx + JSON body; unrecoverable (substrate §2.1 violations) → 500 + JSON body + signal the service-level fatal channel per [`§0032`](../../docs/charter/decision-log.md).
+- [`internal/httpapi`](./internal/httpapi) — minimum-viable HTTP interface (`POST /v1/events/{type}/{type}` accepting `application/x-protobuf`; `GET /healthz`). The `{type}` segment selects a registered Cat I message type via `ingest.LookupURLPath` (per [`§0042`](../../docs/charter/decision-log.md)). Same error classification as the stdin worker: recoverable → 4xx + JSON body; unrecoverable (substrate §2.1 violations) → 500 + JSON body + signal the service-level fatal channel per [`§0032`](../../docs/charter/decision-log.md).
 
 `main.go` orchestrates up to four goroutines via `errgroup` per [`concurrency-pattern.md`](../../docs/architecture/concurrency-pattern.md): the stdin worker (always), the HTTP server (when `--http` is set), an HTTP-graceful-shutdown coordinator, and a fatal-coordinator that propagates HTTP-side unrecoverable errors back through errgroup. Shutdown coordinated via `signal.NotifyContext`.
 
@@ -65,13 +65,24 @@ Safety belts (each independently configurable):
 
 Writes structured JSON to stdout (records of what was examined / preserved / deleted) + a brief human summary to stderr. Exit code: **0** on success (including dry-run); **2** on tool / configuration error (e.g. missing `-confirm` when not dry-run).
 
+## Category I message types
+
+Registered Cat I primary-observation types accepted by the ingestion pipeline (per [`§0042`](../../docs/charter/decision-log.md) — second Cat I type added). The dispatch registry at [`internal/ingest/dispatch.go`](./internal/ingest/dispatch.go) binds each type to its HTTP URL path + stdin envelope type identifier + event-time accessor. Adding a new type extends the registry, the corpus factory, the Makefile generate target, and lands a `.proto` under [`schemas/events/v1/`](../../schemas/events/v1/).
+
+| Type | HTTP path | stdin `type` identifier | Event-time field | Producer class |
+|---|---|---|---|---|
+| `DeclaredSession` | `/v1/events/declared-session` | `declared_session` | `declared_at` | Client SDK (session-end report) |
+| `NetworkEvent` | `/v1/events/network-event` | `network_event` | `observed_at` | Infrastructure collector (flow record / IDS event / packet summary) |
+
+The substrate stores all types in the same events table with the `message_type` column carrying the Protobuf descriptor's full name (e.g. `ghosttrace.events.v1.DeclaredSession`, `ghosttrace.events.v1.NetworkEvent`). Verify + orphan-cleanup are type-agnostic and operate over heterogeneous-type substrates without change.
+
 ## Build Sequence
 
 Generated Protobuf bindings are NOT committed per [`§0024`](../../docs/charter/decision-log.md) AP3 ("Generated code is build output, not source"). First build sequence:
 
 ```sh
 make tools     # installs protoc-gen-go locally (per internal/tools/tools.go pin)
-make generate  # runs protoc against ../../schemas/events/declared_session.proto
+make generate  # runs protoc against ../../schemas/events/v1/*.proto (every registered Cat I type + IngestionEvent)
 make test      # go test -race ./...
 make build     # go build -trimpath -o bin/ingestion .
 ```
@@ -83,10 +94,12 @@ Subsequent builds skip `make tools` unless `protoc-gen-go` is missing or out of 
 **Stdin/stdout (default):**
 
 ```sh
-echo "<base64-encoded-Protobuf-DeclaredSession>" | ./bin/ingestion -db ./ghost-trace.db -blobs ./blobs
+# Wire shape per line: {"type":"<type-id>","payload_b64":"<base64-proto>"}
+echo '{"type":"declared_session","payload_b64":"<base64-Proto-DeclaredSession>"}' | ./bin/ingestion -db ./ghost-trace.db -blobs ./blobs
+echo '{"type":"network_event","payload_b64":"<base64-Proto-NetworkEvent>"}'      | ./bin/ingestion -db ./ghost-trace.db -blobs ./blobs
 ```
 
-Each input line produces one output line (JSON object).
+Each input line is a JSON envelope where `type` selects a registered Cat I type (see §[Category I message types](#category-i-message-types) for the registered identifiers) and `payload_b64` is the base64-encoded canonical-Protobuf payload. Each input line produces one output line (JSON `confirmation` on success; `ingestError` on recoverable failure — envelope decode, unknown type, base64 decode, proto unmarshal). Unrecoverable substrate violations terminate the worker.
 
 **HTTP (opt-in via `--http`):**
 
@@ -94,7 +107,18 @@ Each input line produces one output line (JSON object).
 ./bin/ingestion -db ./ghost-trace.db -blobs ./blobs -http :8080
 ```
 
-Then producers may POST to `http://localhost:8080/v1/events` with `Content-Type: application/x-protobuf` and a Protobuf-marshaled `DeclaredSession` body. The response is `200 OK` + JSON `confirmation` on success, `400 Bad Request` + JSON `ingestError` on recoverable input failures, `500 Internal Server Error` + JSON `ingestError` on unrecoverable substrate violations (which also trigger service shutdown). `GET /healthz` returns `200 OK` + `{"status":"ok"}`. The stdin worker runs simultaneously; both channels share the same single-writer mutex per [`concurrency-pattern.md`](../../docs/architecture/concurrency-pattern.md) §Substrate-Writer Serialization.
+Producers POST to `http://localhost:8080/v1/events/<type>` with `Content-Type: application/x-protobuf` and a Protobuf-marshaled body of the corresponding type:
+
+```sh
+curl -sS -X POST --data-binary @declared-session.bin \
+  -H 'Content-Type: application/x-protobuf' \
+  http://localhost:8080/v1/events/declared-session
+curl -sS -X POST --data-binary @network-event.bin \
+  -H 'Content-Type: application/x-protobuf' \
+  http://localhost:8080/v1/events/network-event
+```
+
+The response is `200 OK` + JSON `confirmation` on success; `400 Bad Request` + JSON `ingestError` on recoverable input failures; `404 Not Found` + JSON `ingestError` (with the known-types list) when `<type>` is unregistered or the path is the bare `/v1/events`; `500 Internal Server Error` + JSON `ingestError` on unrecoverable substrate violations (which also trigger service shutdown). `GET /healthz` returns `200 OK` + `{"status":"ok"}`. The stdin worker runs simultaneously; both channels share the same single-writer mutex per [`concurrency-pattern.md`](../../docs/architecture/concurrency-pattern.md) §Substrate-Writer Serialization.
 
 **HTTP with TLS termination (opt-in):**
 
@@ -129,7 +153,7 @@ chmod 0600 /etc/ghost-trace/ingestion.token
 ./bin/ingestion -http :8080 -http-auth-token "dev-secret"
 ```
 
-Producers MUST send `Authorization: Bearer <token>` with every `POST /v1/events`. Missing or wrong tokens return `401 Unauthorized` + JSON `ingestError` + `WWW-Authenticate: Bearer realm="ghost-trace-ingestion"`. Token comparison uses constant-time equality (`crypto/subtle.ConstantTimeCompare`); a length-mismatch leak channel exists but is acceptable at inception per [`§0035`](../../docs/charter/decision-log.md). `/healthz` is exempt from auth (orchestrator-friendly liveness probing); unknown paths return `401` (not `404`) when auth is configured, so the path structure is not leaked. Bearer tokens transmit credentials in plaintext on the wire — production deployments SHOULD also terminate TLS via reverse proxy (or a follow-on TLS RFC).
+Producers MUST send `Authorization: Bearer <token>` with every `POST /v1/events/{type}`. Missing or wrong tokens return `401 Unauthorized` + JSON `ingestError` + `WWW-Authenticate: Bearer realm="ghost-trace-ingestion"`. Token comparison uses constant-time equality (`crypto/subtle.ConstantTimeCompare`); a length-mismatch leak channel exists but is acceptable at inception per [`§0035`](../../docs/charter/decision-log.md). `/healthz` is exempt from auth (orchestrator-friendly liveness probing); unknown paths return `401` (not `404`) when auth is configured, so the path structure is not leaked. Bearer tokens transmit credentials in plaintext on the wire — production deployments SHOULD also terminate TLS via reverse proxy (or a follow-on TLS RFC).
 
 Signals (SIGINT, SIGTERM) trigger graceful shutdown via context cancellation; in-flight HTTP requests drain up to a 10-second grace window before the server returns from `Shutdown`.
 
@@ -138,8 +162,8 @@ Signals (SIGINT, SIGTERM) trigger graceful shutdown via context cancellation; in
 Per the original constitutional placeholder ([decision-log §0022](../../docs/charter/decision-log.md) implementation pivot):
 
 - **Idempotent commitment** — a producer retry produces no duplicate records in the events table. Enforced by `INSERT OR IGNORE` on `event_hash BLOB PRIMARY KEY` per [`§0027`](../../docs/charter/decision-log.md) AP6 + content-addressing.
-- **Producer-time preservation** — `event_time` column records the producer's `DeclaredSession.declared_at`; `committed_at` column records the system's commit time.
-- **Source attribution** — `actor_ref` field per [`§0023`](../../docs/charter/decision-log.md) Q2 Identity tiers resolution (inception-phase single-tier).
+- **Producer-time preservation** — `event_time` column records the producer-reported time, accessed per type via the dispatch registry (`DeclaredSession.declared_at`, `NetworkEvent.observed_at`); `committed_at` column records the system's commit time.
+- **Source attribution** — `actor_ref` field per [`§0023`](../../docs/charter/decision-log.md) Q2 Identity tiers resolution (inception-phase single-tier); optional on collector-reported types where attribution may be absent at collection time.
 - **Schema validation** — `canonical.Marshal` uses `AllowPartial: false` rejecting messages missing required fields; `proto.Unmarshal` rejects ill-formed wire bytes.
 
 ## Constitutional + Architecture Anchors
@@ -153,8 +177,8 @@ Per the original constitutional placeholder ([decision-log §0022](../../docs/ch
 
 Per skeleton-status discipline, the following are deferred to follow-on commits:
 
-- ~~HTTP interface~~ **partially discharged at [`decision-log §0034`](../../docs/charter/decision-log.md).** `POST /v1/events` + `GET /healthz` implemented in [`internal/httpapi`](./internal/httpapi); opt-in via `--http :8080`. gRPC remains deferred per [`§0025`](../../docs/charter/decision-log.md) Open Questions; HTTP authentication, rate limiting, and TLS termination are out of scope (reverse-proxy concern at inception).
+- ~~HTTP interface~~ **partially discharged at [`decision-log §0034`](../../docs/charter/decision-log.md).** `POST /v1/events/{type}` + `GET /healthz` implemented in [`internal/httpapi`](./internal/httpapi); opt-in via `--http :8080`. gRPC remains deferred per [`§0025`](../../docs/charter/decision-log.md) Open Questions; HTTP authentication, rate limiting, and TLS termination are out of scope (reverse-proxy concern at inception).
 - **Backup/recovery automation.** Manual `.backup` + `rsync` per [`§0027`](../../docs/charter/decision-log.md) Proposal item 5; ordering matters (blob-store first, then SQLite).
 - ~~Canonical-corpus population.~~ **Discharged at [`decision-log §0031`](../../docs/charter/decision-log.md).** Two corpus entries cover `DeclaredSession`; discovery-based test + `-update` regeneration via `make golden-corpus`; CI golden-file gate operational.
 - ~~Unrecoverable-error shutdown escalation.~~ **Discharged at [`decision-log §0032`](../../docs/charter/decision-log.md).** `readLoop` classifies errors via `isUnrecoverable`; substrate §2.1-violation errors (`substrate.ErrHashMismatch`, `substrate.ErrBlobCollision`) terminate the worker, propagate through errgroup, and trigger `main()` to write a structured fatal record to stderr + exit non-zero. Recoverable errors (bad input) still emit per-message JSON entries to stdout and continue processing. Tested in `main_test.go` (6 tests; both paths exercised).
-- **Multiple Category I message types.** Only `DeclaredSession` defined initially; additional types (network-level events, fingerprint snapshots) added under ordinary RFC/PR discipline as their schemas land.
+- ~~Multiple Category I message types.~~ **Partially discharged at [`decision-log §0042`](../../docs/charter/decision-log.md).** Second Cat I type (`NetworkEvent`) added; dispatch registry at [`internal/ingest/dispatch.go`](./internal/ingest/dispatch.go) makes the addition mechanical (see §[Category I message types](#category-i-message-types)). Additional types (fingerprint snapshots, external authoritative state changes) extend the registry as their schemas land.

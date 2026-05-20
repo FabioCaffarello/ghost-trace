@@ -2,10 +2,11 @@
 // ingestion service. It composes the same canonical + substrate stack
 // the stdin worker uses, exposed over a minimum-viable HTTP surface:
 //
-//   - POST /v1/events  — accepts application/x-protobuf body; returns
-//     200 with JSON confirmation on success, 400 on recoverable input
-//     failure, 500 on unrecoverable substrate error (and signals the
-//     service-level fatal channel for shutdown escalation).
+//   - POST /v1/events/{type} — accepts application/x-protobuf body;
+//     dispatches on {type} via ingest.LookupURLPath; returns 200 with
+//     JSON confirmation on success, 400 on recoverable input failure,
+//     404 on unknown type, 500 on unrecoverable substrate error (and
+//     signals the service-level fatal channel for shutdown escalation).
 //   - GET  /healthz    — liveness probe; returns 200 + {"status":"ok"}.
 //
 // All other paths return 404; non-matching methods return 405.
@@ -33,10 +34,14 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
+
+// eventsPathPrefix is the routing prefix for typed primary-observation
+// ingestion. Trailing segment selects the message type via
+// ingest.LookupURLPath.
+const eventsPathPrefix = "/v1/events/"
 
 // AppendFunc is the handler's dependency on the ingestion pipeline.
 // Implemented in production by ingest.Ingester.Append; injectable in
@@ -79,7 +84,7 @@ type Handler struct {
 type Option func(*Handler)
 
 // WithAuthToken enables bearer-token authentication on protected
-// endpoints. /v1/events requires `Authorization: Bearer <token>` with
+// endpoints. /v1/events/{type} requires `Authorization: Bearer <token>` with
 // constant-time-compared <token>. /healthz remains unauthenticated for
 // liveness probes. Empty token disables authentication (default).
 //
@@ -134,11 +139,18 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch r.URL.Path {
-	case "/v1/events":
-		h.handleEvents(w, r)
-	case "/healthz":
+	switch {
+	case r.URL.Path == "/healthz":
 		h.handleHealthz(w, r)
+	case r.URL.Path == "/v1/events" || r.URL.Path == "/v1/events/":
+		// Untyped path: surface the dispatch contract rather than 404
+		// so producers running against pre-dispatch wire shape see a
+		// clear migration hint.
+		writeIngestError(w, http.StatusNotFound,
+			fmt.Sprintf("message type required; POST to /v1/events/<type> where <type> is one of: %s",
+				strings.Join(ingest.KnownURLPaths(), ", ")))
+	case strings.HasPrefix(r.URL.Path, eventsPathPrefix):
+		h.handleEvents(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -266,6 +278,21 @@ func (h *Handler) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	typePath := strings.TrimPrefix(r.URL.Path, eventsPathPrefix)
+	if typePath == "" || strings.ContainsRune(typePath, '/') {
+		writeIngestError(w, http.StatusNotFound,
+			fmt.Sprintf("message type %q not registered; POST to /v1/events/<type> where <type> is one of: %s",
+				typePath, strings.Join(ingest.KnownURLPaths(), ", ")))
+		return
+	}
+	desc, ok := ingest.LookupURLPath(typePath)
+	if !ok {
+		writeIngestError(w, http.StatusNotFound,
+			fmt.Sprintf("message type %q not registered; known types: %s",
+				typePath, strings.Join(ingest.KnownURLPaths(), ", ")))
+		return
+	}
+
 	// Content-Type validation. Inception phase supports only
 	// application/x-protobuf to match the canonical-serialization-
 	// contract wire shape. JSON-wrapped base64 input is the stdin
@@ -290,14 +317,14 @@ func (h *Handler) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg := &eventsv1.DeclaredSession{}
+	msg := desc.New()
 	if err := proto.Unmarshal(payload, msg); err != nil {
 		writeIngestError(w, http.StatusBadRequest, fmt.Sprintf("proto unmarshal: %v", err))
 		return
 	}
 
 	env := envelopeForRequest(r)
-	rep, err := h.doAppend(r.Context(), msg, msg.DeclaredAt, env)
+	rep, err := h.doAppend(r.Context(), msg, desc.EventTime(msg), env)
 	if err != nil {
 		if isUnrecoverable(err) {
 			// Write a 500 with a structured error body, then signal

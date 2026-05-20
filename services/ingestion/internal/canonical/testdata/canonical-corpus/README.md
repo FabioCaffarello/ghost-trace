@@ -4,7 +4,7 @@ Golden-file corpus per [`docs/architecture/canonical-serialization-contract.md`]
 
 ## Status
 
-Active. CI golden-file gate operationalized as of [`decision-log §0031`](../../../../../../docs/charter/decision-log.md). Two corpus entries cover the [`DeclaredSession`](../../../../../../schemas/events/v1/declared_session.proto) Cat I type (no `oneof` branches; three non-trivial fields all exercised).
+Active. CI golden-file gate operationalized as of [`decision-log §0031`](../../../../../../docs/charter/decision-log.md). Coverage extended to a second Cat I type ([`NetworkEvent`](../../../../../../schemas/events/v1/network_event.proto)) at [`decision-log §0042`](../../../../../../docs/charter/decision-log.md); the corpus now exercises both registered Cat I primary-observation types plus the `IngestionEvent` enrichment.
 
 ## Layout
 
@@ -22,6 +22,9 @@ The stem-name prefix selects the Protobuf message type via the `messageFactory` 
 |---|---|---|
 | `declared-session-minimal` | all proto3 defaults (`{}`) | Exercises proto3 default-elision; canonical bytes are zero-length. Hash is the BLAKE3 digest of empty input (`af1349b9...`). |
 | `declared-session-typical` | typical production-shaped values | Exercises all three `DeclaredSession` fields: `declared_at` non-zero int64, `actor_ref` non-empty string, `session_descriptor` non-empty bytes. |
+| `ingestion-event-mtls` | mTLS-enriched ingestion event | Exercises the `IngestionEvent` enrichment with verified client identity (CN + SANs + SHA-256). |
+| `network-event-minimal` | all proto3 defaults (`{}`) | Mirrors `declared-session-minimal` for the second Cat I type; canonical bytes are zero-length; hash is the BLAKE3 digest of empty input. |
+| `network-event-typical` | typical collector-shaped values | Exercises all four `NetworkEvent` fields: `observed_at` non-zero int64, `actor_ref` non-empty string, `endpoint_ref` non-empty string, `event_descriptor` non-empty bytes. |
 
 ## Regeneration
 

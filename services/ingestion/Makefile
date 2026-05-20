@@ -33,7 +33,8 @@ generate: $(PROTOC_GEN_GO)
 	  --go_out=$(GEN_OUT) \
 	  --go_opt=paths=source_relative \
 	  events/v1/declared_session.proto \
-	  events/v1/ingestion_event.proto
+	  events/v1/ingestion_event.proto \
+	  events/v1/network_event.proto
 
 $(PROTOC_GEN_GO):
 	$(MAKE) tools
