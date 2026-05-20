@@ -50,6 +50,16 @@ Each input line produces one output line (JSON object).
 
 Then producers may POST to `http://localhost:8080/v1/events` with `Content-Type: application/x-protobuf` and a Protobuf-marshaled `DeclaredSession` body. The response is `200 OK` + JSON `confirmation` on success, `400 Bad Request` + JSON `ingestError` on recoverable input failures, `500 Internal Server Error` + JSON `ingestError` on unrecoverable substrate violations (which also trigger service shutdown). `GET /healthz` returns `200 OK` + `{"status":"ok"}`. The stdin worker runs simultaneously; both channels share the same single-writer mutex per [`concurrency-pattern.md`](../../docs/architecture/concurrency-pattern.md) §Substrate-Writer Serialization.
 
+**HTTP with TLS termination (opt-in):**
+
+```sh
+./bin/ingestion -http :8443 \
+  -http-tls-cert /etc/ghost-trace/cert.pem \
+  -http-tls-key /etc/ghost-trace/key.pem
+```
+
+`--http-tls-cert` and `--http-tls-key` MUST both be set or both be empty. When set, the service serves HTTPS via `crypto/tls` with `MinVersion: TLS 1.2` (TLS 1.0/1.1 deprecated per RFC 8996). Both files are stat-checked at startup so misconfiguration fails fast rather than at first connection. ALPN auto-negotiates HTTP/2 when the client supports it (Go stdlib default). Bearer-token auth (next section) composes with TLS: the same `--http-auth-token-file` works under HTTPS. Cert reload on rotation requires a restart at inception phase; an online-reload follow-on is named in [`§0036`](../../docs/charter/decision-log.md) Out of Scope.
+
 **HTTP with bearer-token authentication (opt-in):**
 
 ```sh

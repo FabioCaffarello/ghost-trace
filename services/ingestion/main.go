@@ -14,6 +14,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -61,6 +62,8 @@ func run() error {
 	httpAddr := flag.String("http", "", "HTTP listen address (e.g. :8080); empty disables the HTTP server")
 	httpAuthToken := flag.String("http-auth-token", "", "bearer token for HTTP authentication (inline; prefer --http-auth-token-file for production). Empty disables auth (default).")
 	httpAuthTokenFile := flag.String("http-auth-token-file", "", "path to a file containing the bearer token (single line; trailing whitespace trimmed). Takes precedence over --http-auth-token.")
+	httpTLSCert := flag.String("http-tls-cert", "", "path to PEM-encoded TLS certificate (server cert + optional intermediate chain). Required with --http-tls-key.")
+	httpTLSKey := flag.String("http-tls-key", "", "path to PEM-encoded TLS private key. Required with --http-tls-cert.")
 	flag.Parse()
 
 	// Root context cancellable on SIGINT / SIGTERM per concurrency-pattern §Context Propagation.
@@ -100,6 +103,10 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("resolve HTTP auth token: %w", err)
 		}
+		tlsCfg, err := resolveHTTPTLS(*httpTLSCert, *httpTLSKey)
+		if err != nil {
+			return fmt.Errorf("resolve HTTP TLS config: %w", err)
+		}
 		var handlerOpts []httpapi.Option
 		if token != "" {
 			handlerOpts = append(handlerOpts, httpapi.WithAuthToken(token))
@@ -110,9 +117,22 @@ func run() error {
 			Handler:           handler,
 			ReadHeaderTimeout: 10 * time.Second,
 		}
+		if tlsCfg.enabled {
+			// MinVersion floor at TLS 1.2 per modern best practice. TLS 1.0
+			// and 1.1 are widely deprecated (RFC 8996 marks them historic).
+			// Operators wanting TLS 1.3-only may add a follow-on flag; the
+			// floor here protects against accidental weak-protocol exposure.
+			srv.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+		}
 		g.Go(func() error {
-			if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				return fmt.Errorf("http listen: %w", err)
+			var listenErr error
+			if tlsCfg.enabled {
+				listenErr = srv.ListenAndServeTLS(tlsCfg.certFile, tlsCfg.keyFile)
+			} else {
+				listenErr = srv.ListenAndServe()
+			}
+			if listenErr != nil && !errors.Is(listenErr, http.ErrServerClosed) {
+				return fmt.Errorf("http listen: %w", listenErr)
 			}
 			return nil
 		})
@@ -137,6 +157,39 @@ func run() error {
 		return fmt.Errorf("worker terminated: %w", err)
 	}
 	return nil
+}
+
+// httpTLS captures the resolved TLS configuration for the HTTP server.
+type httpTLS struct {
+	certFile string
+	keyFile  string
+	enabled  bool
+}
+
+// resolveHTTPTLS validates the cert + key flags. Both MUST be set or
+// both MUST be empty; the mixed case is a configuration error (one
+// implies the other is required). Both paths are checked for
+// readability eagerly so misconfiguration fails at startup rather than
+// at first connection attempt.
+//
+// When both empty: TLS disabled (plain HTTP via ListenAndServe).
+// When both set:   TLS enabled  (HTTPS via ListenAndServeTLS).
+func resolveHTTPTLS(certFile, keyFile string) (httpTLS, error) {
+	switch {
+	case certFile == "" && keyFile == "":
+		return httpTLS{enabled: false}, nil
+	case certFile == "" || keyFile == "":
+		return httpTLS{}, fmt.Errorf("--http-tls-cert and --http-tls-key must both be set or both be empty (got cert=%q, key=%q)", certFile, keyFile)
+	}
+	// Eager-readability check: surface mis-paths at startup, not on
+	// first connection.
+	if _, err := os.Stat(certFile); err != nil {
+		return httpTLS{}, fmt.Errorf("stat cert file %q: %w", certFile, err)
+	}
+	if _, err := os.Stat(keyFile); err != nil {
+		return httpTLS{}, fmt.Errorf("stat key file %q: %w", keyFile, err)
+	}
+	return httpTLS{certFile: certFile, keyFile: keyFile, enabled: true}, nil
 }
 
 // resolveAuthToken returns the effective bearer token for the HTTP

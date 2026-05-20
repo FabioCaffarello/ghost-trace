@@ -969,6 +969,51 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0036` — TLS termination added to ingestion HTTP interface; §0035 TLS-deferred discharged
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0035`](#0035--bearer-token-authentication-added-to-ingestion-http-interface-0034-auth-deferred-discharged) introduced bearer-token authentication for the HTTP interface and noted: "Bearer tokens transmit credentials in plaintext on the wire — production deployments SHOULD also terminate TLS via reverse proxy (or a follow-on TLS RFC)." Out of Scope at §0035: "TLS termination — reverse-proxy concern. A follow-on TLS RFC may add native TLS to the service when the operational pressure justifies it." This entry adds in-process TLS termination, satisfying the follow-on. Reverse-proxy deployments remain supported (plain HTTP behind the proxy); direct-to-internet deployments without a proxy now have first-class TLS without standing up additional infrastructure.
+
+- **Decision:** Add **server-side TLS termination** to the HTTP interface via two new command-line options. mTLS (client certificate verification) remains deferred per [`§0035`](#0035--bearer-token-authentication-added-to-ingestion-http-interface-0034-auth-deferred-discharged) admissible-but-deferred rationale.
+
+  Implementation shape:
+
+  - **`--http-tls-cert <path>`** and **`--http-tls-key <path>`** — PEM-encoded certificate (with optional intermediate chain) and PEM-encoded private key. Both MUST be set or both MUST be empty; the mixed case is a startup-time configuration error.
+  - **Eager stat-check** at startup. Misconfigured paths fail at process start, not at first connection. (`os.Stat` on both files in `resolveHTTPTLS`.)
+  - **`MinVersion: tls.VersionTLS12`** floor in `tls.Config`. TLS 1.0 and 1.1 are widely deprecated (RFC 8996 marks them historic). Operators wanting TLS 1.3-only may add a follow-on option; the floor here protects against accidental weak-protocol exposure.
+  - **`srv.ListenAndServeTLS(certFile, keyFile)`** replaces `srv.ListenAndServe()` when TLS is enabled. The branch is at the goroutine level (no separate code path for graceful shutdown — `srv.Shutdown` works identically for both modes).
+  - **ALPN HTTP/2 auto-negotiation** via Go stdlib default. Producers may use HTTP/1.1 or HTTP/2 transparently; the service handler is protocol-agnostic.
+  - **TLS composes with bearer-token auth**. Operators may run TLS alone, auth alone, both, or neither. The four combinations are tested as part of the broader test suite (TLS end-to-end exercises the no-auth path; existing auth tests exercise the no-TLS path; combined coverage emerges by composition).
+
+  Test coverage:
+
+  - **`TestResolveHTTPTLS`** / 6 subtests — flag-validation truth table: both empty; cert without key (error); key without cert (error); missing cert file (error); missing key file (error); both present (enabled with paths preserved).
+  - **`TestHTTPTLSEndToEnd`** — integration test: writes ephemeral self-signed ECDSA P-256 cert + key files to a temp dir (`writeEphemeralTLSCert` helper; valid for 1 hour; localhost + 127.0.0.1 + ::1 SANs); constructs a real `http.Server` with the production `tls.Config`; serves on a random ephemeral port (`net.Listen("tcp", "127.0.0.1:0")` for port-assignment); makes HTTPS requests with a client that trusts only the ephemeral cert; verifies (a) `/healthz` succeeds over TLS, (b) negotiated TLS version is ≥ 1.2, (c) `/v1/events` POST with a Protobuf payload succeeds, (d) response carries a confirmation event_hash. The integration test exercises the full ingestion stack (canonical + substrate + ingest + httpapi handler) end-to-end under HTTPS.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. TLS is a transport-layer concern; no §2.1/§2.2/§2.3/§2.5 commitment is affected. Respects [§4 frozen v0.2](../charter/constitutional-charter.md#4-constitutional-design-rule) — the TLS-enabled predicate is mechanically falsifiable (`resolveHTTPTLS` returns a deterministic outcome on the cross-product of option presence × file existence; test coverage exhausts the truth table). Respects [`§0029`](#0029--concurrency-pattern-architecture-document-introduced-0025-modification-5-discharged) concurrency-pattern — the TLS path inherits the existing graceful-shutdown coordinator goroutine; `srv.Shutdown` works identically for plain HTTP and HTTPS. No glossary changes (TLS vocabulary — PEM, ALPN, MinVersion — is technology vocabulary).
+
+- **Consequences:**
+  - [`services/ingestion/main.go`](../../services/ingestion/main.go) — `--http-tls-cert` + `--http-tls-key` command-line options; `resolveHTTPTLS(certFile, keyFile) (httpTLS, error)` helper with both-or-neither validation + eager stat-check; HTTP-server goroutine branches between `ListenAndServeTLS` and `ListenAndServe` based on `httpTLS.enabled`; `tls.Config{MinVersion: VersionTLS12}` set when TLS is enabled.
+  - [`services/ingestion/main_test.go`](../../services/ingestion/main_test.go) — `TestResolveHTTPTLS` (6 subtests) + `TestHTTPTLSEndToEnd` integration test + `writeEphemeralTLSCert` helper (generates self-signed ECDSA P-256 cert valid for 1 hour with localhost + 127.0.0.1 + ::1 SANs).
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — Run section extended with the TLS deployment example; notes ALPN HTTP/2 auto-negotiation, restart-on-rotate at inception, TLS+auth composition.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0036 (this entry) records the addition.
+  - **§0035 TLS-deferred follow-on discharged.** The §0035 Decision Out-of-Scope item "TLS termination — reverse-proxy concern. A follow-on TLS RFC may add native TLS to the service when the operational pressure justifies it." is satisfied.
+  - **Test count grows.** Combined: **45 tests** across main (8; +TestResolveHTTPTLS + TestHTTPTLSEndToEnd), canonical (5), substrate (6), ingest (3), httpapi (20). All passing under `go test -race ./...`.
+  - **Zero external dependencies added.** `crypto/tls`, `crypto/x509`, `crypto/ecdsa`, `crypto/elliptic`, `crypto/rand`, `encoding/pem`, `math/big` are Go stdlib.
+  - **Out of scope at this layer (carry-forwards).**
+    - **mTLS** (client certificate verification) — admissible-but-deferred per [`§0035`](#0035--bearer-token-authentication-added-to-ingestion-http-interface-0034-auth-deferred-discharged) rationale. Reversal triggers when per-producer identity becomes load-bearing or when bearer-token security model proves insufficient.
+    - **Online cert reload** — current restart-on-rotate is operationally acceptable at inception. A follow-on may add SIGHUP-triggered reload or filesystem-watch when the operational cost of restart becomes significant.
+    - **Automatic cert provisioning** (ACME / Let's Encrypt) — operator-managed cert files at inception. ACME integration is a separate concern coupled to deployment-tier automation.
+    - **Cipher-suite policy override** — Go stdlib defaults are reasonable for inception. Future operators may want stricter (e.g., AEAD-only) policies; a `--http-tls-min-version` or similar option may follow when the need surfaces.
+    - **TLS 1.3-only mode** — current floor is TLS 1.2. A `--http-tls-min-version` option (with values `1.2` / `1.3`) may follow if operators want a stricter floor.
+    - **Reverse-proxy-via-X-Forwarded-Proto support** — when running behind a TLS-terminating proxy, the service receives plain HTTP. Proper `X-Forwarded-Proto` handling (for logging, redirect-to-HTTPS responses, etc.) is a separate concern not exercised at inception.
+
+- **Supersession:** None. This entry discharges a [`§0035`](#0035--bearer-token-authentication-added-to-ingestion-http-interface-0034-auth-deferred-discharged) deferred follow-on; no prior decision reversed.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
