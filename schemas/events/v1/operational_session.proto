@@ -1,0 +1,71 @@
+// Category II operational construct per Charter §2.2 + entity-model.md
+// §Category II + decision-log §0015 (Q1 resolution — OperationalSession
+// is the canonical Cat II construct, derived deterministically from
+// DeclaredSession + other Cat I inputs under a versioned operational
+// definition). Encoded under the canonical-serialization-contract at
+// docs/architecture/canonical-serialization-contract.md.
+//
+// Identity composition per entity-model.md §Category II Structural
+// properties: an OperationalSession's identity composes
+// (definition_version, definition_parameters, source_event_hash). Re-
+// derivation under a NEW (definition_version, definition_parameters)
+// tuple produces a NEW record; the prior derivation is preserved.
+// Identity-tier (actor_ref) defaults to the source DeclaredSession's
+// per entity-model.md line 36.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// OperationalSession is the system's reading of where a session
+// operationally was, derived from a DeclaredSession under a versioned
+// operational definition. The boundary may diverge from the source
+// DeclaredSession's declared_at; the divergence is the structural
+// signal per Charter §2.2 + entity-model.md §Category II.
+message OperationalSession {
+  // definition_version is the stable identifier of the operational
+  // definition that produced this construct. First version:
+  // "padded-v1". Versioning is explicit per entity-model.md line 46
+  // ("Definitions are versioned. The definition that produced a
+  // construct is part of its identity.").
+  string definition_version = 1;
+
+  // definition_parameters is the canonical-form string representation
+  // of the parameters the operational definition was invoked under.
+  // Part of identity per entity-model.md line 44 ("Identity composes
+  // the definition reference, its parameters, and its time scope.").
+  // Encoding contract: lowercase key=value pairs separated by
+  // semicolons, sorted by key (e.g. "pad_seconds=300"). The
+  // canonical-form discipline is necessary so that re-derivation under
+  // logically-identical parameters produces a content-hash-identical
+  // record.
+  string definition_parameters = 2;
+
+  // source_event_hash is the BLAKE3-256 content hash of the source
+  // DeclaredSession. Provenance reference per Charter §2.3 (Provenance
+  // Integrity, frozen v0.4). The reverse direction
+  // (DeclaredSession → OperationalSessions derived from it) is
+  // recovered by index lookup at read time.
+  bytes source_event_hash = 3;
+
+  // actor_ref is the single-tier actor identity reference per
+  // decision-log §0023. Defaults to the source DeclaredSession's
+  // actor_ref per entity-model.md line 36 (identity-tier consistency
+  // rule); the operational definition may override when the
+  // operational reading differs from the declared.
+  string actor_ref = 4;
+
+  // operational_start_at is the operational-definition-derived start
+  // time as Unix nanoseconds. May differ from the source
+  // DeclaredSession's declared_at per entity-model.md line 34
+  // ("OperationalSession may diverge from its source DeclaredSession
+  // in boundary timing").
+  int64 operational_start_at = 5;
+
+  // operational_end_at is the operational-definition-derived end
+  // time as Unix nanoseconds. May differ from any time on the source
+  // DeclaredSession; the divergence is the structural signal
+  // (per entity-model.md line 34).
+  int64 operational_end_at = 6;
+}

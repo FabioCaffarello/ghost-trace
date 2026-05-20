@@ -33,6 +33,33 @@ make verify-build                                                       # builds
 
 Walks every events-table row in commit order, recomputes each blob's BLAKE3 hash via `substrate.ReadBlob`, surfaces hash-mismatch + missing-blob failures. With `-check-orphans` (per [`§0040`](../../docs/charter/decision-log.md)), also walks the blob-store directory + reports blobs whose content-hash does not appear in the events table — orphans are **harmless** at the substrate layer per [`§0033`](../../docs/charter/decision-log.md) (the events table is authoritative); they are reported but do NOT cause non-zero exit. Writes structured JSON to stdout + a brief human summary to stderr. Exit code: **0** on pass (including substrates with orphan blobs); **1** on any §2.1 violation (hash-mismatch or missing-blob); **2** on tool/configuration error. Intended for post-restore verification (per [`§0033` §Restoration Procedure step 3](../../docs/architecture/operational-ops.md)) and periodic substrate-integrity audits.
 
+## `derive-operational-session` CLI
+
+Operator-invoked tool to derive Category II [`OperationalSession`](../../schemas/events/v1/operational_session.proto) constructs from every `DeclaredSession` in the substrate under a versioned operational definition (per [`§0043`](../../docs/charter/decision-log.md) — first Cat II construct landing).
+
+```sh
+make derive-build                                                       # builds ./bin/derive-operational-session
+
+# Run the default padded-v1 definition (pad_seconds=300)
+./bin/derive-operational-session -db ./ghost-trace.db -blobs ./blobs
+
+# Override the padding parameter — produces a NEW set of OperationalSession
+# records alongside the prior derivations (versioning per entity-model.md line 45)
+./bin/derive-operational-session -db ./ghost-trace.db -blobs ./blobs -pad-seconds 600
+```
+
+Walks every `DeclaredSession` row in the substrate via `substrate.WalkEvents`, applies the operational definition deterministically (per [Charter §2.2](../../docs/charter/constitutional-charter.md#22-epistemic-separation) Category II requirement), and commits each `OperationalSession` to the same events table via `substrate.Append` (acquires `writeMu` per [`concurrency-pattern.md`](../../docs/architecture/concurrency-pattern.md) §Substrate-Writer Serialization). Re-running with an identical `(definition_version, definition_parameters)` tuple is a no-op (content-hash collision → `INSERT OR IGNORE`); re-running with a NEW tuple produces NEW records and preserves the prior ones per [`entity-model.md` §Category II](../../docs/ontology/entity-model.md) line 45.
+
+Writes structured JSON to stdout (`definition_version`, `definition_parameters`, `examined`, `newly_derived`, `already_derived`) + a brief human summary to stderr. Exit code: **0** on success (including zero-newly-derived); **2** on tool/configuration error.
+
+Registered operational definitions:
+
+| Version | Parameters | Boundary derivation |
+|---|---|---|
+| `padded-v1` | `pad_seconds=<int>` (default 300) | `operational_start_at = declared_at`; `operational_end_at = declared_at + pad_seconds`. Minimal canonical example; exercises all Cat II structural mechanisms (deterministic derivation, identity-via-version, provenance, boundary divergence). |
+
+Adding a new operational definition registers via [`internal/derivation`](./internal/derivation): implement `OperationalDefinition` (Version, Parameters, Derive) and wire it into `cmd/derive-operational-session/main.go`'s `resolveDefinition`.
+
 ## `orphan-cleanup` CLI
 
 Operator-invoked tool to delete orphan blobs (per [`§0041`](../../docs/charter/decision-log.md)). Per [`§0033` Anti-Patterns](../../docs/architecture/operational-ops.md), orphan deletion MUST be operator-invoked with explicit confirmation; this tool implements that discipline.
@@ -75,6 +102,8 @@ Registered Cat I primary-observation types accepted by the ingestion pipeline (p
 | `NetworkEvent` | `/v1/events/network-event` | `network_event` | `observed_at` | Infrastructure collector (flow record / IDS event / packet summary) |
 
 The substrate stores all types in the same events table with the `message_type` column carrying the Protobuf descriptor's full name (e.g. `ghosttrace.events.v1.DeclaredSession`, `ghosttrace.events.v1.NetworkEvent`). Verify + orphan-cleanup are type-agnostic and operate over heterogeneous-type substrates without change.
+
+Category II `OperationalSession` records also live in the same events table — substrate immutability (Charter §2.1) applies to Cat II per [`entity-model.md` §Category II](../../docs/ontology/entity-model.md). Derivation is operator-invoked via [`cmd/derive-operational-session`](#derive-operational-session-cli); see that section for the registered operational definitions.
 
 ## Build Sequence
 
