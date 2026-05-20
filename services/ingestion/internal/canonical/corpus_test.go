@@ -36,6 +36,7 @@ var messageFactory = map[string]func() proto.Message{
 	"operational-session":          func() proto.Message { return &eventsv1.OperationalSession{} },
 	"behavioral-cluster-formation": func() proto.Message { return &eventsv1.BehavioralClusterFormation{} },
 	"behavioral-cluster-promotion": func() proto.Message { return &eventsv1.BehavioralClusterPromotion{} },
+	"behavioral-cluster-demotion":  func() proto.Message { return &eventsv1.BehavioralClusterDemotion{} },
 }
 
 // TestCanonicalCorpus is the CI golden-file gate per

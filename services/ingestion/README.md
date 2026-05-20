@@ -122,6 +122,39 @@ Validates the supplied `formation-event-hash` resolves to a `BehavioralClusterFo
 
 Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type (the two §2.5-integrity errors).
 
+## `demote-hypothesis` CLI
+
+Operator-invoked tool to record the third Cat III lifecycle operation (per [`§0047`](../../docs/charter/decision-log.md) — `BehavioralClusterDemotion`). Demotion ends the operational use of a specific promotion event, closing the promote/demote loop per Charter §1 + §2.5.
+
+```sh
+make demote-hypothesis-build                                            # builds ./bin/demote-hypothesis
+
+# Demote a specific promotion event (promotion hash from promote-hypothesis output)
+./bin/demote-hypothesis \
+  -promotion-event-hash <64-hex-chars> \
+  -reason "scheduled rollover"
+
+# Forensic-replay friendly form with explicit demoted_at
+./bin/demote-hypothesis -promotion-event-hash <hash> -demoted-at-ns 1716120120000000000
+```
+
+Validates the supplied `promotion-event-hash` resolves to a `BehavioralClusterPromotion` row in the substrate (otherwise exits 3 — preserves §2.5-lifecycle-integrity: demotion references only promotions, never formations or observations). Commits the `BehavioralClusterDemotion` event via `substrate.Append`.
+
+Per [`§0011`](../../docs/charter/decision-log.md) Layer A is a CANDIDACY gate, NOT a hard barrier. The CLI records demotion regardless of whether `cadence_seconds` has elapsed; the structured output surfaces:
+
+- `cadence_satisfied` — `true` when `demoted_at - promotion.promoted_at >= promotion.cadence_seconds * 1e9`
+- `cadence_elapsed_seconds` — actual elapsed seconds (negative if demoted_at precedes promoted_at)
+
+Operators may demote within the cadence window (Layer A unsatisfied) when operational urgency or future Layer B criteria justify; the `reason` field is the only record of why the candidacy gate was bypassed and is strongly recommended in that case.
+
+| Option | Default | Notes |
+|---|---|---|
+| `-promotion-event-hash` | (required) | Hex-encoded BLAKE3-256 of the target `BehavioralClusterPromotion`. |
+| `-demoted-at-ns` | 0 (= wall-clock now) | Explicit `demoted_at` for forensic replay / deterministic test recording. |
+| `-reason` | empty | Operator-supplied forensic note; **strongly recommended** when demoting within the cadence window. |
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
+
 ## `orphan-cleanup` CLI
 
 Operator-invoked tool to delete orphan blobs (per [`§0041`](../../docs/charter/decision-log.md)). Per [`§0033` Anti-Patterns](../../docs/architecture/operational-ops.md), orphan deletion MUST be operator-invoked with explicit confirmation; this tool implements that discipline.
