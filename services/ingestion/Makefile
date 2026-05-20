@@ -18,6 +18,7 @@ help:
 	@echo "  form-hypothesis-build  go build -trimpath -o $(BIN_DIR)/form-hypothesis ./cmd/form-hypothesis"
 	@echo "  promote-hypothesis-build  go build -trimpath -o $(BIN_DIR)/promote-hypothesis ./cmd/promote-hypothesis"
 	@echo "  demote-hypothesis-build  go build -trimpath -o $(BIN_DIR)/demote-hypothesis ./cmd/demote-hypothesis"
+	@echo "  dissolve-hypothesis-build  go build -trimpath -o $(BIN_DIR)/dissolve-hypothesis ./cmd/dissolve-hypothesis"
 	@echo "  test           go test -race ./..."
 	@echo "  golden-corpus  regenerate canonical-corpus golden files (schemas-evolution event)"
 	@echo "  clean          remove $(GEN_OUT) + $(BIN_DIR)"
@@ -42,7 +43,8 @@ generate: $(PROTOC_GEN_GO)
 	  events/v1/operational_session.proto \
 	  events/v1/behavioral_cluster_formation.proto \
 	  events/v1/behavioral_cluster_promotion.proto \
-	  events/v1/behavioral_cluster_demotion.proto
+	  events/v1/behavioral_cluster_demotion.proto \
+	  events/v1/behavioral_cluster_dissolution.proto
 
 $(PROTOC_GEN_GO):
 	$(MAKE) tools
@@ -81,6 +83,11 @@ promote-hypothesis-build:
 demote-hypothesis-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/demote-hypothesis ./cmd/demote-hypothesis
+
+.PHONY: dissolve-hypothesis-build
+dissolve-hypothesis-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/dissolve-hypothesis ./cmd/dissolve-hypothesis
 
 .PHONY: test
 test:
