@@ -33,6 +33,38 @@ make verify-build                                                       # builds
 
 Walks every events-table row in commit order, recomputes each blob's BLAKE3 hash via `substrate.ReadBlob`, surfaces hash-mismatch + missing-blob failures. With `-check-orphans` (per [`§0040`](../../docs/charter/decision-log.md)), also walks the blob-store directory + reports blobs whose content-hash does not appear in the events table — orphans are **harmless** at the substrate layer per [`§0033`](../../docs/charter/decision-log.md) (the events table is authoritative); they are reported but do NOT cause non-zero exit. Writes structured JSON to stdout + a brief human summary to stderr. Exit code: **0** on pass (including substrates with orphan blobs); **1** on any §2.1 violation (hash-mismatch or missing-blob); **2** on tool/configuration error. Intended for post-restore verification (per [`§0033` §Restoration Procedure step 3](../../docs/architecture/operational-ops.md)) and periodic substrate-integrity audits.
 
+## `orphan-cleanup` CLI
+
+Operator-invoked tool to delete orphan blobs (per [`§0041`](../../docs/charter/decision-log.md)). Per [`§0033` Anti-Patterns](../../docs/architecture/operational-ops.md), orphan deletion MUST be operator-invoked with explicit confirmation; this tool implements that discipline.
+
+```sh
+make orphan-cleanup-build                                                    # builds ./bin/orphan-cleanup
+
+# Dry-run (default; safe; reports what WOULD be deleted)
+./bin/orphan-cleanup -db ./ghost-trace.db -blobs ./blobs
+
+# Confirmed deletion (requires both -dry-run=false AND -confirm)
+./bin/orphan-cleanup -db ./ghost-trace.db -blobs ./blobs -dry-run=false -confirm
+
+# With exclusion list (one hex hash per line; # comments allowed)
+./bin/orphan-cleanup -dry-run=false -confirm -exclude ./preserve-these.txt
+
+# Override default safety belts
+./bin/orphan-cleanup -dry-run=false -confirm -keep-newer-than 1h -max-deletions 100
+```
+
+Safety belts (each independently configurable):
+
+| Belt | Default | Override |
+|---|---|---|
+| Dry-run by default | `-dry-run=true` | explicit `-dry-run=false` required |
+| Explicit confirmation | required when not dry-run | `-confirm` (or tool refuses with exit 2) |
+| Age floor | `-keep-newer-than 24h` | `-keep-newer-than 0` disables; any duration |
+| Per-invocation cap | `-max-deletions 1000` | `-max-deletions 0` disables |
+| Exclusion list | none | `-exclude <path>` (one hash hex per line; `#` comments) |
+
+Writes structured JSON to stdout (records of what was examined / preserved / deleted) + a brief human summary to stderr. Exit code: **0** on success (including dry-run); **2** on tool / configuration error (e.g. missing `-confirm` when not dry-run).
+
 ## Build Sequence
 
 Generated Protobuf bindings are NOT committed per [`§0024`](../../docs/charter/decision-log.md) AP3 ("Generated code is build output, not source"). First build sequence:

@@ -1224,6 +1224,58 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0041` — Orphan-blob cleanup CLI added with operator-confirmation discipline; §0040 follow-on discharged
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0040`](#0040--orphan-blob-detection-added-to-verify-cli-0039-follow-on-discharged) added opt-in orphan-blob DETECTION but explicitly deferred orphan deletion: "`§0033` anti-pattern forbids automated deletion. Operator-invoked cleanup (with confirmation, dry-run support, exclusion list) is a separate operational tool deferred to follow-on work." [`§0033`](#0033--operational-ops-architecture-document-introduced-0027-backup-cadence--vacuum-cadence-open-questions-discharged) §Anti-Patterns codified the constraint: "Orphans are forensic artifacts at restore time; their presence indicates either a pre-backup ingest failure (legitimate; the blob was written, the index row was not) or a post-restore inspection opportunity. Automated deletion forfeits both. Detectable: orphan-deletion code paths SHOULD only run as operator-invoked separate operations." This entry adds the operator-invoked cleanup CLI with five independent safety belts.
+
+- **Decision:** Add **`orphan-cleanup`** as a third binary under the ingestion service module. The tool implements five independent safety belts that satisfy the [`§0033`](#0033--operational-ops-architecture-document-introduced-0027-backup-cadence--vacuum-cadence-open-questions-discharged) operator-invoked-only constraint structurally rather than procedurally:
+
+  1. **Dry-run by default.** `-dry-run` defaults to **true**. The default invocation reports what WOULD be deleted without touching the filesystem. Operator must explicitly pass `-dry-run=false` to enable deletion.
+
+  2. **Explicit confirmation required.** When `-dry-run=false` is set, `-confirm` is REQUIRED. Running with `-dry-run=false` alone aborts at startup with exit code 2 + a clear error message. The two-option requirement prevents accidental deletion via copy-paste of a partial command-line.
+
+  3. **Age floor.** `-keep-newer-than` defaults to **24h**. Orphans whose file mtime is more recent than the floor are preserved, protecting against deletion of recently-orphaned blobs (e.g. an orphan created by a crashed ingest that the operator has not yet investigated). Operator may set `-keep-newer-than=0` to disable.
+
+  4. **Per-invocation cap.** `-max-deletions` defaults to **1000**. Bounded blast radius limits the damage from a misconfigured invocation. Operator may set `-max-deletions=0` to disable.
+
+  5. **Exclusion list.** `-exclude <path>` accepts a file of orphan hashes (one lowercase-hex hash per line; `#` comments + blank lines allowed) to preserve as forensic artifacts. Operator-managed.
+
+  Output: structured JSON to stdout (forensic record: examined / orphans-found / dry-run state / deleted records / preserved-by-each-filter records) + a brief human summary to stderr. Exit code: **0** on success (including dry-run); **2** on tool / configuration error.
+
+  Implementation shape:
+
+  - **`internal/orphan` package** with `Cleanup(ctx, sub, Options) (Report, error)`. The package implements the filter logic + (when `DryRun=false`) the deletions. The package does NOT implement the `-confirm` belt; that's CLI-layer (the package can be invoked from tests + future tooling without disabling the operator-confirmation guard).
+  - **`cmd/orphan-cleanup/main.go`** thin wrapper. Adds the `-confirm` belt + structured JSON output + human summary.
+  - **No new substrate primitives needed.** Reuses `substrate.WalkBlobs` (added at [`§0040`](#0040--orphan-blob-detection-added-to-verify-cli-0039-follow-on-discharged)) + `substrate.LookupRow`.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. Respects [`§0033`](#0033--operational-ops-architecture-document-introduced-0027-backup-cadence--vacuum-cadence-open-questions-discharged) §Anti-Patterns ("Deleting orphan blobs as part of automated restore. Automated deletion forfeits both [legitimate-failure and post-restore-inspection interpretations]") — orphan deletion remains operator-invoked-only with five structural safety belts. Respects [`§0029`](#0029--concurrency-pattern-architecture-document-introduced-0025-modification-5-discharged) concurrency-pattern — cleanup deletes orphan blobs without acquiring `writeMu`. Orphans have no events-table reference; deleting them does not race with substrate.Append's writeBlob (the substrate's write-temp-then-rename pattern is content-addressed-idempotent + safe under concurrent orphan deletion). Respects [§2.1](../charter/constitutional-charter.md#21-observational-integrity) — deleting orphans (which have no index row) cannot violate substrate-immutability of indexed records; the events table remains authoritative + unchanged. No glossary changes (orphan, cleanup, dry-run, exclusion — operational vocabulary).
+
+- **Consequences:**
+  - [`services/ingestion/internal/orphan/cleanup.go`](../../services/ingestion/internal/orphan/cleanup.go) — new package with `Cleanup(ctx, sub, Options) (Report, error)`; `Options{DryRun, ExcludedHashes, KeepNewerThan, MaxDeletions, Now}`; `Report{Examined, OrphansFound, Deleted, PreservedByExclude, PreservedByAge, PreservedByMax}`; `DeletionRecord{Hash, Path, Bytes}`.
+  - [`services/ingestion/internal/orphan/cleanup_test.go`](../../services/ingestion/internal/orphan/cleanup_test.go) — 8 tests covering dry-run-does-not-delete; confirmed-deletion; exclusion-list-preserves; age-filter-preserves (fresh vs old via `os.Chtimes`); max-deletions-cap; skips-non-orphans; empty-substrate; dry-run-respects-all-filters.
+  - [`services/ingestion/cmd/orphan-cleanup/main.go`](../../services/ingestion/cmd/orphan-cleanup/main.go) — new binary; structured JSON output; human summary; `-confirm` safety belt + the four package-level belts.
+  - [`services/ingestion/Makefile`](../../services/ingestion/Makefile) — new `orphan-cleanup-build` target.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — new §`orphan-cleanup` CLI section with deployment examples + safety-belt table.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0041 (this entry).
+  - **Third binary in the service.** `cmd/` now contains: `verify` (substrate audit; §0039), `orphan-cleanup` (orphan deletion; this entry). The `cmd/<name>/main.go` pattern continues to scale; future per-service operational tooling lands the same way.
+  - **Test count grows.** Combined: **104 tests** across the service (8 main + 5 canonical + 11 substrate + 5 ingest + 22 httpapi + 9 verify + 8 orphan + helpers). All passing under `go test -race ./...`.
+  - **Zero external dependencies added.**
+  - **`§0040` Out of Scope reduces by one.** Orphan-blob cleanup CLI follow-on closed.
+  - **Verified safety belt at the CLI layer.** Smoke test: invoking with `-dry-run=false` without `-confirm` returns exit code 2 + "refusing to delete without -confirm" error.
+
+  - **Out of scope at this layer (carry-forwards).**
+    - **Empty-shard-directory cleanup** — after deleting all orphans in a shard, the `<2-char-prefix>` directory may become empty. The current tool does NOT remove empty shard directories (avoids race with concurrent Append's writeBlob shard-create). Operator-invoked cleanup of empty directories is a separate (negligible) operational concern.
+    - **Multi-orphan-transactional deletion** — current tool deletes orphans one at a time. A truly-atomic batch deletion (all-or-nothing under crash) would require a journal file; not warranted at inception (each blob deletion is independent + idempotent on retry).
+    - **Cross-substrate consistency check** — for deployments running multiple ingestion substrates (when [`§0027`](#0027--inception-phase-storage-technology-selection-sqlite--content-addressed-blob-store-on-local-filesystem-adopted-third-and-final-technology-rfc-per-0022-pivot--0003-fully-discharged) R-store-3 fires), an orphan blob on substrate A may have an index row on substrate B. Single-substrate cleanup at inception is sufficient; multi-substrate orphan checks deferred.
+    - **Orphan-blob journal** — deleted-orphan record persisted for forensic replay. Current report is in-memory + stdout; a write-to-disk journal of deletions would survive process exit. Deferred until operational evidence justifies.
+
+- **Supersession:** None. This entry discharges a deferred follow-on from [`§0040`](#0040--orphan-blob-detection-added-to-verify-cli-0039-follow-on-discharged); no prior decision reversed.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
