@@ -663,6 +663,39 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0028` — Canonical-serialization-contract architecture document introduced; §0024 AP5 step (b) discharged
+
+- **Status:** accepted.
+- **Date:** 2026-05-19.
+
+- **Context:** [`§0024`](#0024--schemas-technology-selection-protocol-buffers-proto3-adopted-first-technology-rfc-per-0022-pivot) AP5 mitigation step (b) named a separate architecture document specifying "the canonical-serialization contract … the proto3 spec version + the library version that produces the canonical bytes." [`§0027`](#0027--inception-phase-storage-technology-selection-sqlite--content-addressed-blob-store-on-local-filesystem-adopted-third-and-final-technology-rfc-per-0022-pivot--0003-fully-discharged) Consequences enumerated this document among six anticipated follow-ons after the technology-selection trio. This entry records the document's creation and the operational commitments it codifies.
+
+- **Decision:** [`docs/architecture/canonical-serialization-contract.md`](../architecture/canonical-serialization-contract.md) is introduced as the first non-scaffold architecture document. It specifies:
+
+  1. **Serialization stack.** `google.golang.org/protobuf` (v2 module; v1 forbidden); canonical marshal call `proto.MarshalOptions{Deterministic: true, AllowPartial: false, UseCachedSize: false}.Marshal(msg)`; `map<K, V>` ban per [`§0024`](#0024--schemas-technology-selection-protocol-buffers-proto3-adopted-first-technology-rfc-per-0022-pivot) AP6.
+  2. **Hash stack.** BLAKE3 256-bit digest via `lukechampine.com/blake3` (`blake3.Sum256(canonicalBytes)`); canonical-load-bearing encoding is lowercase hex (`fmt.Sprintf("%x", h)`).
+  3. **Schemas-evolution event boundary.** Library upgrades that may alter canonical-serialization behavior, `.proto` structural changes, and `protoc-gen-go` plugin upgrades are schemas-evolution events; mechanically distinguishable via the CI golden-file gate.
+  4. **CI golden-file gate.** Golden corpus at `services/<service>/testdata/canonical-corpus/`; pairs each representative message instance with expected canonical bytes + expected hash; mismatch fails CI; regeneration is explicit + committed alongside the schemas-evolution commit that produces it.
+  5. **Upgrade discipline.** Five-step procedure (survey, predict, run, reconcile, commit, inform downstream).
+  6. **Four anti-patterns** (marshalling outside canonical procedure; hash against non-canonical bytes; golden-file mismatch tolerated; hash encoded non-canonically in canonical contexts).
+
+  Specific library versions are NOT pinned in this document; version pinning happens in `go.mod` when the ingestion service skeleton begins. This document specifies the libraries by module name + the procedure for pinning + the upgrade discipline.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. The document operationalizes existing commitments ([`§0024`](#0024--schemas-technology-selection-protocol-buffers-proto3-adopted-first-technology-rfc-per-0022-pivot) AP5, [`§0027`](#0027--inception-phase-storage-technology-selection-sqlite--content-addressed-blob-store-on-local-filesystem-adopted-third-and-final-technology-rfc-per-0022-pivot--0003-fully-discharged) AP6) into a single architectural reference. Subordinate to the Charter and Ontology per [`docs/architecture/README.md`](../architecture/README.md) Subordination clause. The document IS the falsifiability predicate for [§2.1](../charter/constitutional-charter.md#21-observational-integrity) at the substrate; without it, "content-hash recomputation on read fails to match stored identifier" (Charter §2.1 AP language) would lack a concrete predicate. No glossary changes — `canonical serialization`, `content-addressable identifier`, `golden corpus` are technology vocabulary consistent with prior usage in [`§0024`](#0024--schemas-technology-selection-protocol-buffers-proto3-adopted-first-technology-rfc-per-0022-pivot) / [`§0027`](#0027--inception-phase-storage-technology-selection-sqlite--content-addressed-blob-store-on-local-filesystem-adopted-third-and-final-technology-rfc-per-0022-pivot--0003-fully-discharged).
+
+- **Consequences:**
+  - [`docs/architecture/canonical-serialization-contract.md`](../architecture/canonical-serialization-contract.md) created.
+  - [`docs/architecture/README.md`](../architecture/README.md) Document Family list extended; Status section refreshed to reflect that the Ontology has stabilized, three technology RFCs have landed, and the first non-scaffold architecture document exists.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0028 (this entry) records introduction.
+  - **[`§0024`](#0024--schemas-technology-selection-protocol-buffers-proto3-adopted-first-technology-rfc-per-0022-pivot) AP5 step (b) fully discharged.** The other AP5 steps remain operational: step (a) pinned-library-version is enacted in `go.mod` when the ingestion service skeleton begins; step (c) library-upgrade-as-schemas-evolution-event is now operationalized via the boundary specified in this document; step (d) CI golden-file gate is specified here, enacted when the first service's `testdata/canonical-corpus/` is populated.
+  - **First non-scaffold architecture document.** Sets a precedent for the format of subsequent architecture documents that consume technology-selection commitments (e.g. concurrency-pattern document per [`§0025`](#0025--implementation-language-selection-go-adopted-second-technology-rfc-per-0022-pivot) modification 5).
+  - **Service skeleton work unblocked.** The ingestion service skeleton (the originally-proposed work per the pivot brief) can now reference this document as the canonical-serialization spec; the service's `testdata/canonical-corpus/` and the marshalling call sites are committed against this contract.
+  - **Follow-on document trail.** Five of the six follow-on architecture documents named in [`§0027`](#0027--inception-phase-storage-technology-selection-sqlite--content-addressed-blob-store-on-local-filesystem-adopted-third-and-final-technology-rfc-per-0022-pivot--0003-fully-discharged) Consequences remain anticipated: schemas-evolution-discipline RFC; concurrency-pattern document; module-organization RFC; operational-ops document; module-proxy commitment Open Question. Opened as concrete questions surface.
+
+- **Supersession:** None. This entry adds an artifact and discharges step (b) of an existing commitment; no prior decision is reversed or modified.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
