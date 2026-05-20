@@ -91,7 +91,33 @@ Registered formation patterns:
 
 Adding a new formation pattern registers via [`internal/hypothesis`](./internal/hypothesis): implement `FormationPattern` (Signature, Parameters, Form) and wire it into `cmd/form-hypothesis/main.go`'s `resolvePattern`. Patterns that need additional Cat I observations beyond `DeclaredSession` extend the `FormationContext` interface with new typed accessors (the same incremental-extension procedure that [`§0044`](../../docs/charter/decision-log.md) established for Cat II `DerivationContext`).
 
-**Other lifecycle operations** per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness): promotion landed at [`§0046`](../../docs/charter/decision-log.md) via [`cmd/promote-hypothesis`](#promote-hypothesis-cli); demotion at [`§0047`](../../docs/charter/decision-log.md) via [`cmd/demote-hypothesis`](#demote-hypothesis-cli); dissolution at [`§0048`](../../docs/charter/decision-log.md) via [`cmd/dissolve-hypothesis`](#dissolve-hypothesis-cli); merge at [`§0049`](../../docs/charter/decision-log.md) via [`cmd/merge-hypotheses`](#merge-hypotheses-cli); split at [`§0050`](../../docs/charter/decision-log.md) via [`cmd/split-hypothesis`](#split-hypothesis-cli). **§2.5 lifecycle surface complete — all 6 of 6 operations now structurally observable.** Per Charter §2.5 BC3, the substrate stores ONLY lifecycle events — the hypothesis's current state is a projection over the operation event chain (projection layer deferred).
+**Other lifecycle operations** per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness): promotion landed at [`§0046`](../../docs/charter/decision-log.md) via [`cmd/promote-hypothesis`](#promote-hypothesis-cli); demotion at [`§0047`](../../docs/charter/decision-log.md) via [`cmd/demote-hypothesis`](#demote-hypothesis-cli); dissolution at [`§0048`](../../docs/charter/decision-log.md) via [`cmd/dissolve-hypothesis`](#dissolve-hypothesis-cli); merge at [`§0049`](../../docs/charter/decision-log.md) via [`cmd/merge-hypotheses`](#merge-hypotheses-cli); split at [`§0050`](../../docs/charter/decision-log.md) via [`cmd/split-hypothesis`](#split-hypothesis-cli). **§2.5 lifecycle surface complete for BehavioralCluster — all 6 of 6 operations now structurally observable.** The SECOND Cat III concrete subtype (`AutomationGroup`) opens its lifecycle arc at [`§0056`](../../docs/charter/decision-log.md) with [`cmd/form-automation-group`](#form-automation-group-cli) below; the remaining five lifecycle operations for AutomationGroup are follow-on landings. Per Charter §2.5 BC3, the substrate stores ONLY lifecycle events — the hypothesis's current state is a projection over the operation event chain (per [`§0051`](../../docs/charter/decision-log.md)+).
+
+## `form-automation-group` CLI
+
+Operator-invoked tool to form `AutomationGroup` hypotheses — the **second Category III concrete subtype** per [`§0056`](../../docs/charter/decision-log.md). Mirrors [`form-hypothesis`](#form-hypothesis-cli) for the new subtype's formation step. Distinct subtype identity per [entity-model.md §Category III](../../docs/ontology/entity-model.md): an AutomationGroup is "a set of actors whose behavioral patterns match a signature of automated (non-human) operation" — the inference is about operation CHARACTER (automated), NOT shared operatorship (which is the BehavioralCluster inference).
+
+```sh
+make form-automation-group-build                                          # builds ./bin/form-automation-group
+
+# Default uniform-cadence-v1 pattern (5 min observations, CoV ≤ 0.15)
+./bin/form-automation-group -db ./ghost-trace.db -blobs ./blobs
+
+# Stricter threshold + larger observation requirement
+./bin/form-automation-group -min-observation-count 10 -max-cov-threshold 0.05
+```
+
+The CLI walks every `DeclaredSession`, applies the formation pattern, and commits each resulting `AutomationGroupFormation` event via `substrate.Append`. Same idempotency + versioning semantics as `form-hypothesis` per §0045.
+
+Registered formation patterns:
+
+| Signature | Parameters | Inference |
+|---|---|---|
+| `uniform-cadence-v1` | `min_observation_count=<int>` (default 5), `max_cov_threshold=<float>` (default 0.15) | Groups `DeclaredSession` rows by `actor_ref`; emits one `AutomationGroupFormation` per actor whose inter-event-delta coefficient-of-variation falls within the threshold (signature of mechanical / non-human cadence). Single-actor groups at this layer; multi-actor signature-matching is a follow-on. |
+
+Adding a new AutomationGroup formation pattern: implement `AutomationGroupFormationPattern` in [`internal/hypothesis`](./internal/hypothesis), register it in `cmd/form-automation-group/main.go`'s `resolvePattern`. Same incremental-extension pathway as §0045 + §0044.
+
+Exit code: **0** on success (including zero-newly-formed); **2** on tool/configuration error.
 
 ## `promote-hypothesis` CLI
 

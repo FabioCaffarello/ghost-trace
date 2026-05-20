@@ -896,6 +896,65 @@ func TestVerifyWithCatIIIAllSixLifecycleOps(t *testing.T) {
 	}
 }
 
+// TestVerifyWithSecondCatIIISubtype proves verify reports success
+// over a substrate containing the SECOND Cat III concrete subtype
+// formation event (`AutomationGroupFormation`) alongside the first
+// subtype's formation. The substrate-integrity audit is type-
+// agnostic across all Cat III subtypes per Charter §2.5 BC5
+// (lifecycle events are Cat I records). Tests the §0056 second-
+// subtype landing's interaction with the existing verify pathway.
+func TestVerifyWithSecondCatIIISubtype(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Close() })
+
+	in := ingest.New(sub, time.Now)
+	// Five uniform-cadence sessions for an automation-group formation.
+	for i, declaredAt := range []int64{1000, 2000, 3000, 4000, 5000} {
+		decl := &eventsv1.DeclaredSession{
+			DeclaredAt:        declaredAt,
+			ActorRef:          "bot-actor",
+			SessionDescriptor: []byte("bot-desc-" + string(rune('a'+i))),
+		}
+		if _, err := in.Append(ctx, decl, decl.DeclaredAt, ingest.Envelope{Channel: "test"}); err != nil {
+			t.Fatalf("Append %d: %v", i, err)
+		}
+	}
+	if _, err := hypothesis.FormAutomationGroupAll(ctx, sub,
+		hypothesis.UniformCadenceV1{MinObservationCount: 5, MaxCoVThreshold: 0.15},
+		time.Now); err != nil {
+		t.Fatalf("FormAutomationGroupAll: %v", err)
+	}
+
+	report, err := Verify(ctx, sub, Options{})
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if report.Failed() {
+		t.Errorf("substrate with second-subtype Cat III Verify reported failure: %+v", report)
+	}
+	// 5 DeclaredSession + 5 IngestionEvent + 1 AutomationGroupFormation = 11.
+	if report.VerifiedCount != 11 {
+		t.Errorf("VerifiedCount: got %d, want 11", report.VerifiedCount)
+	}
+	// Confirm the AutomationGroupFormation row is present.
+	typeCounts := map[string]int{}
+	if err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
+		typeCounts[row.MessageType]++
+		return nil
+	}); err != nil {
+		t.Fatalf("WalkEvents: %v", err)
+	}
+	if typeCounts["ghosttrace.events.v1.AutomationGroupFormation"] != 1 {
+		t.Errorf("AutomationGroupFormation count: got %d, want 1",
+			typeCounts["ghosttrace.events.v1.AutomationGroupFormation"])
+	}
+}
+
 func decodeHex(s string) ([]byte, error) {
 	out := make([]byte, len(s)/2)
 	for i := 0; i < len(out); i++ {
