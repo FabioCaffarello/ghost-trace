@@ -1,6 +1,6 @@
 # RFC — Architecture: Inception-phase storage technology selection
 
-- **Status:** draft
+- **Status:** discussion
 - **Authors:** committee
 - **Date:** 2026-05-19
 - **Type:** architecture
@@ -132,6 +132,7 @@ By analogy to Charter [§2.1](../../charter/constitutional-charter.md#21-observa
 - [`docs/rfcs/draft/architecture-implementation-language-selection.md`](./architecture-implementation-language-selection.md) (accepted at [`§0025`](../../charter/decision-log.md)).
 - [`docs/architecture/storage-model.md`](../../architecture/storage-model.md) (Tiers 0–2 architecture; this RFC selects the inception-phase Tier 1 substrate).
 - [`.claude/CLAUDE.md`](../../../.claude/CLAUDE.md) §6.4 (implementation gate, cleared at [`§0022`](../../charter/decision-log.md)).
+- [`docs/rfcs/discussion/storage-technology-selection-evidence.md`](../discussion/storage-technology-selection-evidence.md) — discussion-phase evidence file (six numbered findings, recommendation with eight proposed modifications, four reversal conditions including R-store-4 surfaced in discussion).
 
 ## Decision Record
 
