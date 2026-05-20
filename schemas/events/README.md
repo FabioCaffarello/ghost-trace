@@ -4,7 +4,7 @@ Schemas for Category I records — observations committed to the primary event l
 
 ## Status
 
-Not yet defined. Awaiting Ontology stabilization and schema technology selection.
+Active. Schemas technology selected per [`decision-log §0024`](../../docs/charter/decision-log.md): Protocol Buffers (proto3). Schemas versioned per Protobuf convention (`v1/` subdirectory). First schema landed: [`v1/declared_session.proto`](./v1/declared_session.proto) per [`decision-log §0030`](../../docs/charter/decision-log.md) ingestion service skeleton.
 
 ## Required Properties
 

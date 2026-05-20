@@ -1,0 +1,12 @@
+# Generated Protobuf bindings — per decision-log §0024 AP3 (generated
+# code is build output, not source). Regenerate via `make generate`.
+internal/genproto/
+
+# Build output.
+bin/
+
+# Runtime substrate files — not committed; runtime-only.
+ghost-trace.db
+ghost-trace.db-wal
+ghost-trace.db-shm
+blobs/
