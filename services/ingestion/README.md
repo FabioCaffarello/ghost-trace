@@ -91,7 +91,7 @@ Registered formation patterns:
 
 Adding a new formation pattern registers via [`internal/hypothesis`](./internal/hypothesis): implement `FormationPattern` (Signature, Parameters, Form) and wire it into `cmd/form-hypothesis/main.go`'s `resolvePattern`. Patterns that need additional Cat I observations beyond `DeclaredSession` extend the `FormationContext` interface with new typed accessors (the same incremental-extension procedure that [`§0044`](../../docs/charter/decision-log.md) established for Cat II `DerivationContext`).
 
-**Other lifecycle operations** per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness): promotion landed at [`§0046`](../../docs/charter/decision-log.md) via [`cmd/promote-hypothesis`](#promote-hypothesis-cli); demotion at [`§0047`](../../docs/charter/decision-log.md) via [`cmd/demote-hypothesis`](#demote-hypothesis-cli); dissolution at [`§0048`](../../docs/charter/decision-log.md) via [`cmd/dissolve-hypothesis`](#dissolve-hypothesis-cli); merge at [`§0049`](../../docs/charter/decision-log.md) via [`cmd/merge-hypotheses`](#merge-hypotheses-cli); split at [`§0050`](../../docs/charter/decision-log.md) via [`cmd/split-hypothesis`](#split-hypothesis-cli). **§2.5 lifecycle surface complete for BehavioralCluster — all 6 of 6 operations now structurally observable.** The SECOND Cat III concrete subtype (`AutomationGroup`) opens its lifecycle arc at [`§0056`](../../docs/charter/decision-log.md) with [`cmd/form-automation-group`](#form-automation-group-cli) below; the remaining five lifecycle operations for AutomationGroup are follow-on landings. Per Charter §2.5 BC3, the substrate stores ONLY lifecycle events — the hypothesis's current state is a projection over the operation event chain (per [`§0051`](../../docs/charter/decision-log.md)+).
+**Other lifecycle operations** per [Charter §2.5](../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness): promotion landed at [`§0046`](../../docs/charter/decision-log.md) via [`cmd/promote-hypothesis`](#promote-hypothesis-cli); demotion at [`§0047`](../../docs/charter/decision-log.md) via [`cmd/demote-hypothesis`](#demote-hypothesis-cli); dissolution at [`§0048`](../../docs/charter/decision-log.md) via [`cmd/dissolve-hypothesis`](#dissolve-hypothesis-cli); merge at [`§0049`](../../docs/charter/decision-log.md) via [`cmd/merge-hypotheses`](#merge-hypotheses-cli); split at [`§0050`](../../docs/charter/decision-log.md) via [`cmd/split-hypothesis`](#split-hypothesis-cli). **§2.5 lifecycle surface complete for BehavioralCluster** — all 6 of 6 operations structurally observable. The SECOND Cat III concrete subtype (`AutomationGroup`) lifecycle arc landed across [`§0056`](../../docs/charter/decision-log.md)–[`§0061`](../../docs/charter/decision-log.md) via `form-automation-group` / `promote-automation-group` / `demote-automation-group` / `dissolve-automation-group` / `merge-automation-groups` / `split-automation-group` — **§2.5 lifecycle surface complete for AutomationGroup too**. Per Charter §2.5 BC3, the substrate stores ONLY lifecycle events — the hypothesis's current state is a projection over the operation event chain (per [`§0051`](../../docs/charter/decision-log.md)+).
 
 ## `form-automation-group` CLI
 
@@ -207,6 +207,24 @@ make merge-automation-groups-build                                        # buil
 Symmetric (argument order invariant): ascending-sort of antecedent hashes before recording. Validates all three hashes resolve to AutomationGroupFormation rows; identical antecedents return `ErrMergeAntecedentsIdentical` (exit 3). Mirrors §0049 Option B: the produced hypothesis identity is a separately-committed `AutomationGroupFormation`.
 
 Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found, target-wrong-type, or identical-antecedents.
+
+## `split-automation-group` CLI
+
+Operator-invoked tool to record the **AutomationGroup split** lifecycle operation per [`§0061`](../../docs/charter/decision-log.md) — **sixth (final) lifecycle operation of the second Cat III subtype arc**. Mirrors [`split-hypothesis`](#split-hypothesis-cli). Within-subtype only.
+
+```sh
+make split-automation-group-build                                         # builds ./bin/split-automation-group
+
+./bin/split-automation-group \
+  -antecedent-formation-hash <64-hex-chars> \
+  -successor-formation-hash <64-hex-chars> \
+  -successor-formation-hash <64-hex-chars> \
+  -reason "antecedent conflated two automation signatures"
+```
+
+Successors form a SET (ascending-sort idempotency per §0050). Cardinality MUST be ≥ 2; all entries MUST be byte-distinct from each other AND from the antecedent. Closes the second-subtype lifecycle arc.
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found, target-wrong-type, insufficient-successors, or successors-not-distinct.
 
 ## `promote-hypothesis` CLI
 
