@@ -273,6 +273,39 @@ Output is structured JSON describing the projection: `formation_event_hash`, `st
 
 Exit codes: **0** success; **2** tool/configuration error; **3** formation-not-found or target-not-formation.
 
+## `list-hypotheses` CLI
+
+Second binary in the **read-only** classification (per [`§0052`](../../docs/charter/decision-log.md)). Discharges the §0051 named carry-forward "Multi-hypothesis aggregate queries". Returns the projection summary for EVERY `BehavioralClusterFormation` in the substrate, with optional state filtering and paging.
+
+```sh
+make list-hypotheses-build                                               # builds ./bin/list-hypotheses
+
+# Every hypothesis in the substrate, with its projected state
+./bin/list-hypotheses -db ./ghost-trace.db -blobs ./blobs
+
+# Filter to currently-promoted hypotheses
+./bin/list-hypotheses -state promoted
+
+# Page through results
+./bin/list-hypotheses -limit 50 -offset 100
+```
+
+Output is a JSON ARRAY where each element shares the structure of `hypothesis-state`'s single-projection output (formation hash, state, optional per-lifecycle-type payloads, lifecycle event count).
+
+**Single linear walk over the substrate** (per `projection.ProjectAll`) regardless of formation count: pass one collects formations + promotions; pass two dispatches demotions/dissolutions/merges/splits against the per-formation projections. Linear in substrate size, NOT in formation-count × substrate-size.
+
+**Deterministic ordering**: ascending lex order of formation event hash (the content-hash). Substrate-position-independent — repeated calls against the same substrate return projections in the same order regardless of commit order.
+
+| Option | Default | Notes |
+|---|---|---|
+| `-state` | empty | Filter by projected state: one of `forming`, `promoted`, `demoted`, `dissolved`, `merged_into`, `split_into`. Empty = no filter. |
+| `-limit` | 0 | Cap the number of projections returned. 0 = unbounded. |
+| `-offset` | 0 | Skip the first N projections (after state filtering, after ordering). |
+
+Exit codes: **0** success (including empty results); **2** tool/configuration error (e.g. invalid `-state` value).
+
+**Scope at this layer (per §0052):** Limit/Offset paging is sufficient for inception-phase substrate sizes. Cursor-based paging (resumable across substrate growth between calls) is deferred until operational pressure surfaces.
+
 ## `orphan-cleanup` CLI
 
 Operator-invoked tool to delete orphan blobs (per [`§0041`](../../docs/charter/decision-log.md)). Per [`§0033` Anti-Patterns](../../docs/architecture/operational-ops.md), orphan deletion MUST be operator-invoked with explicit confirmation; this tool implements that discipline.
