@@ -1387,6 +1387,59 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0044` — Second operational definition (`inactivity-window-v1`); `DerivationContext` interface; §0042 + §0043 composition proven
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0043`](#0043--first-category-ii-operational-construct-operationalsession-lands-padded-v1-canonical-operational-definition-internalderivation--cmdderive-operational-session-introduced) landed the first Cat II construct with the minimal `padded-v1` operational definition — sufficient to prove every Cat II structural mechanism (determinism, versioning, provenance, boundary divergence) but contrived: the boundary derived from a single `DeclaredSession` alone. [`§0042`](#0042--second-category-i-message-type-networkevent-added-polymorphic-dispatch-registry-0030-follow-on-partially-discharged) added `NetworkEvent` as the second Cat I type but no operational definition consumed it. The two threads had not been composed: §0043's claim that "sophisticated definitions extend the same `OperationalDefinition` pathway mechanically" was unfalsified. This entry composes them by landing `inactivity-window-v1`, the canonical multi-Cat-I-input operational definition from [`entity-model.md` line 39](../ontology/entity-model.md) ("events from one actor within a 30-minute inactivity window").
+
+- **Decision:** Land `inactivity-window-v1` + extend the `OperationalDefinition` contract with `DerivationContext` for typed access to additional Cat I observations. Three structural moves:
+
+  1. **`DerivationContext` interface** at [`services/ingestion/internal/derivation/derivation.go`](../../services/ingestion/internal/derivation/derivation.go). Provides typed accessors to additional Cat I observations a definition may consult while deriving a single `OperationalSession`. First accessor: `NetworkEventsForActor(actorRef string) []*eventsv1.NetworkEvent` returning the per-actor list sorted ascending by `observed_at`. New typed accessors are added here as new operational definitions require new Cat I observation types — the same five-step extensibility procedure that §0042 established for adding Cat I types and §0043 established for adding operational definitions.
+
+  2. **`OperationalDefinition.Derive` signature extended** to take `(source, sourceHash, dctx DerivationContext)`. Backward-equivalent change for `padded-v1` (the definition ignores `dctx`); admits multi-input definitions like `inactivity-window-v1`. The `DeriveAll` walker now runs in two passes: pass 1 pre-collects every `NetworkEvent` grouped by `actor_ref` (each group sorted by `observed_at`) into a `walkerContext` that implements `DerivationContext`; pass 2 walks `DeclaredSession` rows and derives via the supplied context. Pre-collection is O(N) once per `DeriveAll` invocation; per-derivation lookup is O(1) map access. Determinism is preserved: the same substrate state + the same definition parameters produces an identical `OperationalSession`.
+
+  3. **`inactivity-window-v1` operational definition** at [`services/ingestion/internal/derivation/inactivity_window_v1.go`](../../services/ingestion/internal/derivation/inactivity_window_v1.go). Boundary algorithm (deterministic):
+
+     - `lastObserved := source.declared_at`.
+     - For each `NetworkEvent` with matching `actor_ref` + `observed_at ≥ declared_at`, in `observed_at`-ascending order:
+       - if `observed_at - lastObserved ≤ InactivitySeconds * 1e9`: `lastObserved = observed_at`.
+       - else: stop (the gap exceeded the window; the operational session ended).
+     - `operational_end_at = lastObserved + InactivitySeconds * 1e9`.
+
+     Parameters: `inactivity_seconds=<int>` (default 1800 = 30 min, matching the entity-model.md canonical example). Identity-tier (`actor_ref`) inherits from source per entity-model.md line 36. When no NetworkEvents match the actor (anonymous-collector case or no events yet), the derivation falls back to `lastObserved = declared_at`, equivalent in shape to a padded boundary but identity-distinct from any `padded-v1` derivation (different `definition_version`).
+
+  Determinism caveat made explicit: `inactivity-window-v1` outputs depend on the substrate's `NetworkEvent` set at derivation time. New NetworkEvents arriving AFTER a derivation produce a DIFFERENT (newly-content-hashed) `OperationalSession` on re-derivation; the prior record is preserved per [entity-model.md line 45](../ontology/entity-model.md). This is the §0043 versioning principle applied to input-set changes, not just parameter changes: the substrate accumulates the operational record across both axes.
+
+  Operator interface: `cmd/derive-operational-session` extended with a `-inactivity-seconds` command-line option + registry entry. Invocation: `./bin/derive-operational-session -definition-version inactivity-window-v1 -inactivity-seconds 1800`.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. Respects [§2.1](../charter/constitutional-charter.md#21-observational-integrity) — `inactivity-window-v1` does not mutate any Cat I record; it reads NetworkEvents + DeclaredSessions + writes OperationalSessions, all under content-addressed-immutability. Respects [§2.2](../charter/constitutional-charter.md#22-epistemic-separation) — deterministic derivation per Cat II requirement; the boundary algorithm is total over its inputs (no randomness, no time-of-day dependence, no global state). Respects [§2.3](../charter/constitutional-charter.md#23-provenance-integrity) — the OperationalSession's `source_event_hash` continues to reference the source `DeclaredSession`; the contributing NetworkEvents are recoverable by index lookup on `actor_ref` + `observed_at` range over the substrate. Respects [`§0029`](#0029--concurrency-pattern-architecture-document-introduced-0025-modification-5-discharged) — the two-pass walker reads via `WalkEvents` (no `writeMu`) + writes via `substrate.Append` (acquires `writeMu`). Respects [`§0043`](#0043--first-category-ii-operational-construct-operationalsession-lands-padded-v1-canonical-operational-definition-internalderivation--cmdderive-operational-session-introduced) — the `OperationalDefinition` contract evolution is contained (one package, one consumer); the §0043 `padded-v1` behavior is preserved under the extended signature. No new canonical vocabulary introduced (inactivity, window, gap are operational vocabulary; not Charter-level concepts).
+
+- **Consequences:**
+  - [`services/ingestion/internal/derivation/derivation.go`](../../services/ingestion/internal/derivation/derivation.go) — `DerivationContext` interface added; `OperationalDefinition.Derive` signature extended; `DeriveAll` runs in two passes (NetworkEvent pre-collection + derivation pass) via the new `walkerContext` type.
+  - [`services/ingestion/internal/derivation/padded_v1.go`](../../services/ingestion/internal/derivation/padded_v1.go) — `Derive` signature updated; behavior unchanged (ignores `dctx`).
+  - [`services/ingestion/internal/derivation/inactivity_window_v1.go`](../../services/ingestion/internal/derivation/inactivity_window_v1.go) — new file. Second canonical operational definition.
+  - [`services/ingestion/internal/derivation/inactivity_window_v1_test.go`](../../services/ingestion/internal/derivation/inactivity_window_v1_test.go) — 8 tests covering determinism, boundary extension, gap behavior, no-events fallback, cross-actor isolation, pre-session event exclusion, versioning under changed parameters, and full DeriveAll integration over a substrate with mixed DeclaredSession + NetworkEvent rows.
+  - [`services/ingestion/internal/derivation/derivation_test.go`](../../services/ingestion/internal/derivation/derivation_test.go) — existing test `PaddedV1.Derive` call sites updated for the extended signature (pass `nil` `DerivationContext`); semantics unchanged.
+  - [`services/ingestion/cmd/derive-operational-session/main.go`](../../services/ingestion/cmd/derive-operational-session/main.go) — `-inactivity-seconds` command-line option added; `resolveDefinition` extended with the `inactivity-window-v1` registry entry.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — derive CLI usage example extended; registered-definitions table extended with the new row.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0044 (this entry).
+  - **Test count grows.** Combined: **133 tests** across the service (up from 125 at [`§0043`](#0043--first-category-ii-operational-construct-operationalsession-lands-padded-v1-canonical-operational-definition-internalderivation--cmdderive-operational-session-introduced); +8 inactivity-window-v1 tests). All passing under `go test -race ./...`.
+  - **Zero external dependencies added.**
+  - **§0042 + §0043 composition is now structurally proven.** The integration test (`TestDeriveAllInactivityWindowV1Integration`) populates a substrate with a `DeclaredSession` + two `NetworkEvent` rows, runs `DeriveAll` with `inactivity-window-v1`, and asserts the resulting `OperationalSession`'s boundary reflects only the first network event (the second exceeds the inactivity window). Both Cat I types from §0042 and the Cat II derivation pathway from §0043 are exercised by a single end-to-end path.
+  - **Smoke test of binary.** `bin/derive-operational-session -definition-version inactivity-window-v1 -inactivity-seconds 1800 -db /tmp/empty.db -blobs /tmp/empty-blobs` emits `{"definition_version":"inactivity-window-v1","definition_parameters":"inactivity_seconds=1800","examined":0,"newly_derived":0,"already_derived":0}` and exits 0 — confirmed at commit time.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Identity-tier override** — per [`entity-model.md` line 36](../ontology/entity-model.md), the operational definition MAY override `actor_ref` when the operational reading differs from the declared. Neither `padded-v1` nor `inactivity-window-v1` overrides; an override-capable definition is deferred.
+    - **Cross-type input expansion** — `DerivationContext` currently exposes only `NetworkEventsForActor`. Future definitions consuming fingerprint snapshots or external authoritative state changes will extend the interface with new typed accessors. Deferred until those Cat I types exist.
+    - **DerivationContext caching across DeriveAll invocations** — pass-1 re-collects NetworkEvents on every invocation. Caching across runs is operationally attractive for large substrates but requires substrate-change-detection machinery. Deferred until empirical pressure justifies.
+    - **Streaming derivation** — current `DeriveAll` buffers the full NetworkEvent index in memory. For very large substrates a streaming approach (window of recent NetworkEvents) would reduce memory pressure. Deferred.
+    - **Cat III hypothesis types** — the next constitutional move. Charter §2.5 (frozen) defines six lifecycle operations; implementing a Cat III subtype is multi-landing work. The Cat II pathway is now consolidated, reducing risk for the Cat III move.
+
+- **Supersession:** None. This entry extends the [`§0043`](#0043--first-category-ii-operational-construct-operationalsession-lands-padded-v1-canonical-operational-definition-internalderivation--cmdderive-operational-session-introduced) `OperationalDefinition` contract (additive change to `Derive`'s signature; backward-equivalent for `padded-v1`); no prior decision reversed.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

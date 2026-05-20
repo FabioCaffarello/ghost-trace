@@ -42,9 +42,10 @@ func run() error {
 	blobDir := flag.String("blobs", "./blobs", "content-addressed blob-store directory")
 	definitionVersion := flag.String("definition-version", derivation.PaddedV1Version, "operational-definition version identifier")
 	padSeconds := flag.Int64("pad-seconds", 300, "padded-v1 boundary-padding parameter (seconds added to declared_at to derive operational_end_at)")
+	inactivitySeconds := flag.Int64("inactivity-seconds", 1800, "inactivity-window-v1 boundary parameter (seconds of no NetworkEvent activity that ends the operational session)")
 	flag.Parse()
 
-	def, err := resolveDefinition(*definitionVersion, *padSeconds)
+	def, err := resolveDefinition(*definitionVersion, *padSeconds, *inactivitySeconds)
 	if err != nil {
 		return err
 	}
@@ -81,12 +82,15 @@ func run() error {
 
 // resolveDefinition selects an OperationalDefinition by version
 // identifier + binds its parameters. New definitions register here.
-func resolveDefinition(version string, padSeconds int64) (derivation.OperationalDefinition, error) {
+func resolveDefinition(version string, padSeconds, inactivitySeconds int64) (derivation.OperationalDefinition, error) {
 	switch version {
 	case derivation.PaddedV1Version:
 		return derivation.PaddedV1{PadSeconds: padSeconds}, nil
+	case derivation.InactivityWindowV1Version:
+		return derivation.InactivityWindowV1{InactivitySeconds: inactivitySeconds}, nil
 	default:
-		return nil, fmt.Errorf("unknown definition-version %q; known versions: %s", version, derivation.PaddedV1Version)
+		return nil, fmt.Errorf("unknown definition-version %q; known versions: %s, %s",
+			version, derivation.PaddedV1Version, derivation.InactivityWindowV1Version)
 	}
 }
 

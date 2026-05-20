@@ -46,6 +46,9 @@ make derive-build                                                       # builds
 # Override the padding parameter — produces a NEW set of OperationalSession
 # records alongside the prior derivations (versioning per entity-model.md line 45)
 ./bin/derive-operational-session -db ./ghost-trace.db -blobs ./blobs -pad-seconds 600
+
+# Run the inactivity-window-v1 definition (consumes NetworkEvents per actor)
+./bin/derive-operational-session -definition-version inactivity-window-v1 -inactivity-seconds 1800
 ```
 
 Walks every `DeclaredSession` row in the substrate via `substrate.WalkEvents`, applies the operational definition deterministically (per [Charter §2.2](../../docs/charter/constitutional-charter.md#22-epistemic-separation) Category II requirement), and commits each `OperationalSession` to the same events table via `substrate.Append` (acquires `writeMu` per [`concurrency-pattern.md`](../../docs/architecture/concurrency-pattern.md) §Substrate-Writer Serialization). Re-running with an identical `(definition_version, definition_parameters)` tuple is a no-op (content-hash collision → `INSERT OR IGNORE`); re-running with a NEW tuple produces NEW records and preserves the prior ones per [`entity-model.md` §Category II](../../docs/ontology/entity-model.md) line 45.
@@ -57,8 +60,9 @@ Registered operational definitions:
 | Version | Parameters | Boundary derivation |
 |---|---|---|
 | `padded-v1` | `pad_seconds=<int>` (default 300) | `operational_start_at = declared_at`; `operational_end_at = declared_at + pad_seconds`. Minimal canonical example; exercises all Cat II structural mechanisms (deterministic derivation, identity-via-version, provenance, boundary divergence). |
+| `inactivity-window-v1` | `inactivity_seconds=<int>` (default 1800) | `operational_start_at = declared_at`; the boundary extends past consecutive `NetworkEvent` rows for the same `actor_ref` (each within `inactivity_seconds` of the prior event) until a gap exceeds the window. `operational_end_at = lastObserved + inactivity_seconds`. Multi-Cat-I-input definition (per [`§0044`](../../docs/charter/decision-log.md)); composes the [`§0042`](../../docs/charter/decision-log.md) `NetworkEvent` Cat I type with the [`§0043`](../../docs/charter/decision-log.md) derivation pathway. Mirrors the canonical example at [`entity-model.md` line 39](../../docs/ontology/entity-model.md). |
 
-Adding a new operational definition registers via [`internal/derivation`](./internal/derivation): implement `OperationalDefinition` (Version, Parameters, Derive) and wire it into `cmd/derive-operational-session/main.go`'s `resolveDefinition`.
+Adding a new operational definition registers via [`internal/derivation`](./internal/derivation): implement `OperationalDefinition` (Version, Parameters, Derive) and wire it into `cmd/derive-operational-session/main.go`'s `resolveDefinition`. Definitions that need additional Cat I observations beyond the source `DeclaredSession` consult the `DerivationContext` passed to `Derive` (per [`§0044`](../../docs/charter/decision-log.md)).
 
 ## `orphan-cleanup` CLI
 

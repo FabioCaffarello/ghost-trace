@@ -82,11 +82,11 @@ func TestPaddedV1Deterministic(t *testing.T) {
 	}
 	def := PaddedV1{PadSeconds: 300}
 
-	out1 := def.Derive(source, [32]byte{})
+	out1 := def.Derive(source, [32]byte{}, nil)
 	out1.DefinitionVersion = def.Version()
 	out1.DefinitionParameters = def.Parameters()
 
-	out2 := def.Derive(source, [32]byte{})
+	out2 := def.Derive(source, [32]byte{}, nil)
 	out2.DefinitionVersion = def.Version()
 	out2.DefinitionParameters = def.Parameters()
 
@@ -107,7 +107,7 @@ func TestPaddedV1BoundaryDivergence(t *testing.T) {
 	source := &eventsv1.DeclaredSession{DeclaredAt: 1716120000000000000, ActorRef: "actor-divergence"}
 	def := PaddedV1{PadSeconds: 300}
 
-	out := def.Derive(source, [32]byte{})
+	out := def.Derive(source, [32]byte{}, nil)
 	if out.OperationalStartAt != source.DeclaredAt {
 		t.Errorf("operational_start_at: got %d, want %d (=declared_at)", out.OperationalStartAt, source.DeclaredAt)
 	}
@@ -123,7 +123,7 @@ func TestPaddedV1BoundaryDivergence(t *testing.T) {
 func TestPaddedV1ActorRefInherits(t *testing.T) {
 	source := &eventsv1.DeclaredSession{DeclaredAt: 1, ActorRef: "actor-inherits"}
 	def := PaddedV1{PadSeconds: 1}
-	out := def.Derive(source, [32]byte{})
+	out := def.Derive(source, [32]byte{}, nil)
 	if out.ActorRef != source.ActorRef {
 		t.Errorf("actor_ref: got %q, want %q (inheritance per entity-model.md line 36)", out.ActorRef, source.ActorRef)
 	}

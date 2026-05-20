@@ -44,8 +44,9 @@ func (p PaddedV1) Parameters() string {
 
 // Derive implements OperationalDefinition. operational_start_at copies
 // the source's declared_at; operational_end_at adds PadSeconds in
-// nanoseconds.
-func (p PaddedV1) Derive(source *eventsv1.DeclaredSession, _ [32]byte) *eventsv1.OperationalSession {
+// nanoseconds. PaddedV1 ignores DerivationContext — it derives from
+// the source DeclaredSession alone.
+func (p PaddedV1) Derive(source *eventsv1.DeclaredSession, _ [32]byte, _ DerivationContext) *eventsv1.OperationalSession {
 	padNanos := p.PadSeconds * int64(time.Second)
 	return &eventsv1.OperationalSession{
 		ActorRef:           source.GetActorRef(),

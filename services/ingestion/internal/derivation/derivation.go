@@ -32,6 +32,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -47,11 +48,51 @@ import (
 // Cat I rows, OperationalSession rows from prior derivations).
 const declaredSessionMessageType = "ghosttrace.events.v1.DeclaredSession"
 
+// networkEventMessageType is the substrate's message_type
+// discriminator for NetworkEvent rows. Used by the walker's first
+// pass to pre-collect events for the DerivationContext.
+const networkEventMessageType = "ghosttrace.events.v1.NetworkEvent"
+
+// walkerContext implements DerivationContext over a pre-collected
+// index of NetworkEvents keyed by actor_ref, each sub-slice sorted
+// ascending by observed_at. Populated during the walker's first pass.
+type walkerContext struct {
+	networkEventsByActor map[string][]*eventsv1.NetworkEvent
+}
+
+// NetworkEventsForActor implements DerivationContext.
+func (w *walkerContext) NetworkEventsForActor(actorRef string) []*eventsv1.NetworkEvent {
+	if actorRef == "" {
+		return nil
+	}
+	return w.networkEventsByActor[actorRef]
+}
+
+// DerivationContext provides typed access to additional Cat I
+// observations an operational definition may consult while deriving
+// a single OperationalSession. The walker (DeriveAll) implements this
+// interface by pre-collecting the relevant Cat I rows in a first pass;
+// definitions query it during the second pass to obtain inputs beyond
+// the source DeclaredSession.
+//
+// New typed accessors are added here as new operational definitions
+// require new Cat I observation types. The contract is read-only
+// (definitions MUST NOT mutate the returned slices).
+type DerivationContext interface {
+	// NetworkEventsForActor returns every NetworkEvent in the
+	// substrate whose actor_ref matches actorRef, sorted ascending by
+	// observed_at. Empty actorRef returns the empty slice (the
+	// unattributed-collector case has no actor-bound network events
+	// to associate with a DeclaredSession). The returned slice is
+	// shared with the walker and MUST NOT be mutated.
+	NetworkEventsForActor(actorRef string) []*eventsv1.NetworkEvent
+}
+
 // OperationalDefinition is the deterministic-derivation contract.
-// Implementations MUST be deterministic with respect to the source +
-// the Parameters they encode; the test suite at
-// derivation_test.go#TestDeriveDeterminism enforces this structurally
-// by recomputing twice and comparing content-hashes.
+// Implementations MUST be deterministic with respect to (source,
+// dctx-state, Parameters); the test suite at
+// derivation_test.go#TestPaddedV1Deterministic enforces this
+// structurally by recomputing twice and comparing content-hashes.
 type OperationalDefinition interface {
 	// Version is the stable identifier of this operational definition
 	// (e.g. "padded-v1"). Part of the produced OperationalSession's
@@ -68,12 +109,14 @@ type OperationalDefinition interface {
 	Parameters() string
 
 	// Derive produces the OperationalSession for the given source
-	// DeclaredSession + its source_event_hash. The output's
-	// definition_version + definition_parameters fields are set by
-	// the caller (DeriveAll); the implementation populates the
+	// DeclaredSession + its source_event_hash, consulting dctx for any
+	// additional Cat I observations the definition requires (e.g.
+	// NetworkEvents for the inactivity-window definition). The
+	// output's definition_version + definition_parameters fields are
+	// set by the caller (DeriveAll); the implementation populates the
 	// derivation-specific fields (operational_start_at,
 	// operational_end_at, actor_ref).
-	Derive(source *eventsv1.DeclaredSession, sourceHash [32]byte) *eventsv1.OperationalSession
+	Derive(source *eventsv1.DeclaredSession, sourceHash [32]byte, dctx DerivationContext) *eventsv1.OperationalSession
 }
 
 // Report is the per-DeriveAll outcome. Examined counts every
@@ -106,6 +149,37 @@ func DeriveAll(ctx context.Context, sub *substrate.Substrate, def OperationalDef
 		now = time.Now
 	}
 
+	// Pass 1: pre-collect every NetworkEvent grouped by actor_ref,
+	// each group sorted ascending by observed_at. This makes
+	// DerivationContext.NetworkEventsForActor O(1); the cost is one
+	// extra substrate walk.
+	dctx := &walkerContext{networkEventsByActor: map[string][]*eventsv1.NetworkEvent{}}
+	if err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
+		if row.MessageType != networkEventMessageType {
+			return nil
+		}
+		payload, err := sub.ReadBlob(ctx, row.EventHash)
+		if err != nil {
+			return fmt.Errorf("read network event %x: %w", row.EventHash, err)
+		}
+		ne := &eventsv1.NetworkEvent{}
+		if err := proto.Unmarshal(payload, ne); err != nil {
+			return fmt.Errorf("unmarshal network event %x: %w", row.EventHash, err)
+		}
+		if actor := ne.GetActorRef(); actor != "" {
+			dctx.networkEventsByActor[actor] = append(dctx.networkEventsByActor[actor], ne)
+		}
+		return nil
+	}); err != nil {
+		return Report{}, fmt.Errorf("derivation.DeriveAll: collect network events: %w", err)
+	}
+	for actor := range dctx.networkEventsByActor {
+		evts := dctx.networkEventsByActor[actor]
+		sort.SliceStable(evts, func(i, j int) bool { return evts[i].GetObservedAt() < evts[j].GetObservedAt() })
+		dctx.networkEventsByActor[actor] = evts
+	}
+
+	// Pass 2: walk DeclaredSession rows and derive.
 	var rep Report
 	walkErr := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
 		if row.MessageType != declaredSessionMessageType {
@@ -122,7 +196,7 @@ func DeriveAll(ctx context.Context, sub *substrate.Substrate, def OperationalDef
 			return fmt.Errorf("unmarshal source %x: %w", row.EventHash, err)
 		}
 
-		derived := def.Derive(source, row.EventHash)
+		derived := def.Derive(source, row.EventHash, dctx)
 		derived.DefinitionVersion = def.Version()
 		derived.DefinitionParameters = def.Parameters()
 		derived.SourceEventHash = row.EventHash[:]
