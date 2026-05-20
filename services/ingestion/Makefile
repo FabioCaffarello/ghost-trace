@@ -9,11 +9,12 @@ BIN_DIR     := bin
 .PHONY: help
 help:
 	@echo "Targets:"
-	@echo "  tools     install protoc-gen-go locally per tools.go pin"
-	@echo "  generate  run protoc to produce $(GEN_OUT)/**/*.pb.go"
-	@echo "  build     go build -trimpath -o $(BIN_DIR)/ingestion ."
-	@echo "  test      go test -race ./..."
-	@echo "  clean     remove $(GEN_OUT) + $(BIN_DIR)"
+	@echo "  tools          install protoc-gen-go locally per tools.go pin"
+	@echo "  generate       run protoc to produce $(GEN_OUT)/**/*.pb.go"
+	@echo "  build          go build -trimpath -o $(BIN_DIR)/ingestion ."
+	@echo "  test           go test -race ./..."
+	@echo "  golden-corpus  regenerate canonical-corpus golden files (schemas-evolution event)"
+	@echo "  clean          remove $(GEN_OUT) + $(BIN_DIR)"
 	@echo ""
 	@echo "Typical first build: make tools && make generate && make test"
 
@@ -42,6 +43,10 @@ build:
 .PHONY: test
 test:
 	go test -race ./...
+
+.PHONY: golden-corpus
+golden-corpus:
+	go test ./internal/canonical/ -run TestCanonicalCorpus -update -v
 
 .PHONY: clean
 clean:

@@ -764,6 +764,40 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0031` — Canonical corpus populated; CI golden-file gate operationalized for DeclaredSession
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** The CI golden-file gate per [`docs/architecture/canonical-serialization-contract.md`](../architecture/canonical-serialization-contract.md) §CI Golden-File Gate has been specified since [`§0028`](#0028--canonical-serialization-contract-architecture-document-introduced-0024-ap5-step-b-discharged) but in pre-population scaffold state: the corpus directory existed at `services/ingestion/internal/canonical/testdata/canonical-corpus/` with a README, no golden entries. Per the contract: "the CI gate is operationalized when at least one corpus entry exists." [`§0030`](#0030--ingestion-service-skeleton--first-commit-producing-executable-code-0022-originally-proposed-work-commenced) Out of Scope named corpus population as a follow-on. This entry records the population + gate activation.
+
+- **Decision:** Two corpus entries land for the [`DeclaredSession`](../../schemas/events/v1/declared_session.proto) Cat I type, exercising the full coverage requirement (every non-trivial field; no `oneof` branches in this type):
+
+  1. **`declared-session-minimal`** — all proto3 defaults (`{}`). Exercises proto3 default-elision; canonical bytes are zero-length; hash is the BLAKE3 digest of empty input (`af1349b9...`). Tests that the empty case is itself a discriminable canonical form.
+
+  2. **`declared-session-typical`** — production-shaped values: `declared_at` non-zero int64, `actor_ref` non-empty string, `session_descriptor` non-empty bytes. Canonical bytes are 59 bytes; hash `0bfc6c4f...`.
+
+  Each entry is a triple sharing a stem name: `<name>.json` (human-readable Protobuf-canonical-JSON source), `<name>.bin` (expected canonical bytes), `<name>.hash` (expected BLAKE3 lowercase-hex digest). The discovery-based test at [`services/ingestion/internal/canonical/corpus_test.go`](../../services/ingestion/internal/canonical/corpus_test.go) walks every `.json` under the corpus directory, decodes via `protojson.Unmarshal`, canonical-marshals + hashes via the package pipeline, and compares against the paired `.bin` + `.hash`. Mismatch fails the test — the schemas-evolution indicator.
+
+  Regeneration is explicit via `make golden-corpus` (or `go test ./internal/canonical/ -run TestCanonicalCorpus -update`). Per [`canonical-serialization-contract.md`](../architecture/canonical-serialization-contract.md) §Upgrade Discipline, the five-step procedure (survey → predict → run → reconcile → commit → inform downstream) wraps regeneration; running `-update` without the surrounding discipline defeats the gate.
+
+  `messageFactory` map registers prefix → zero-message-instance binding; longest-prefix-matching resolves corpus names to message types. Adding a new canonical-form-load-bearing type requires registering its factory plus authoring at least one `.json` entry.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. The corpus operationalizes existing commitments ([`§0024`](#0024--schemas-technology-selection-protocol-buffers-proto3-adopted-first-technology-rfc-per-0022-pivot) AP5 mitigation step d; [`§0028`](#0028--canonical-serialization-contract-architecture-document-introduced-0024-ap5-step-b-discharged) §CI Golden-File Gate). Respects [§2.1](../charter/constitutional-charter.md#21-observational-integrity) — the gate is the empirical falsifiability predicate for the canonical-serialization contract that underpins §2.1's content-addressable-identifier mechanism. A library-version drift that silently changes canonical serialization now fails CI rather than silently degrading §2.1's mutation-detection capability. The golden hash for the empty case (`af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262`) is the well-known BLAKE3-256 digest of zero-length input — verifiable externally against the BLAKE3 reference spec; the gate is anchored at a publicly-checkable fixed point. No glossary changes.
+
+- **Consequences:**
+  - [`services/ingestion/internal/canonical/testdata/canonical-corpus/`](../../services/ingestion/internal/canonical/testdata/canonical-corpus/) populated with two entries (six new files: 2 × {`.json`, `.bin`, `.hash`}).
+  - [`services/ingestion/internal/canonical/corpus_test.go`](../../services/ingestion/internal/canonical/corpus_test.go) added — discovery-based test + `-update` switch for regeneration.
+  - [`services/ingestion/Makefile`](../../services/ingestion/Makefile) extended — new `golden-corpus` target.
+  - [`services/ingestion/internal/canonical/testdata/canonical-corpus/README.md`](../../services/ingestion/internal/canonical/testdata/canonical-corpus/README.md) refreshed — Status moved from "pre-population scaffold" to "Active"; layout, current entries, and regeneration procedure documented.
+  - **CI golden-file gate operational.** The `services/ingestion — build + test` CI job introduced at PR #2 (`f64ca44`) now exercises the gate on every push: `go test -race ./...` runs the corpus test as part of the package test suite. A library upgrade or marshalling-pipeline change that alters canonical serialization will fail the job, surfacing the schemas-evolution event mechanically.
+  - **§0024 AP5 mitigation now complete across all four steps.** Step (a) pinned-library-version: enacted in `services/ingestion/go.mod` per [`§0030`](#0030--ingestion-service-skeleton--first-commit-producing-executable-code-0022-originally-proposed-work-commenced). Step (b) canonical-serialization-contract architecture document: discharged at [`§0028`](#0028--canonical-serialization-contract-architecture-document-introduced-0024-ap5-step-b-discharged). Step (c) library-upgrade-as-schemas-evolution: boundary defined in canonical-serialization-contract §Schemas-Evolution Events. Step (d) CI golden-file gate: operationalized by this entry.
+  - **Follow-on work surfaced.** A `regenerate-canonical-corpus.sh` shell wrapper was named in the original corpus README but is not added in this commit — the Makefile target supersedes the need. Additional corpus variants (negative `declared_at`, large `session_descriptor`) may land in follow-on commits when coverage gaps surface empirically. Cross-message-type coverage will grow as additional Cat I / Cat II / Cat III message types are defined.
+
+- **Supersession:** None. This entry discharges step (d) of an existing commitment from [`§0024`](#0024--schemas-technology-selection-protocol-buffers-proto3-adopted-first-technology-rfc-per-0022-pivot) AP5; no prior decision reversed.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
