@@ -2300,6 +2300,45 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0060` — Second-subtype merge (`AutomationGroupMerge`) lands; symmetric-relation idempotency carries forward; ErrMergeAntecedentsIdentical sentinel shared across subtypes
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0059`](#0059--second-subtype-dissolution-automationgroupdissolution-lands-demotiondissolution-distinction-operationally-observable-across-both-subtypes) landed AutomationGroup dissolution. This entry lands AutomationGroup merge (mirrors §0049). Within-subtype only at this layer; cross-subtype merge remains the open Ontology question per Q4 deferral. The structural pattern (Option B from §0049 — produced hypothesis is a separately-committed formation) transfers cleanly across subtypes — preserves the §0045+§0056 hypothesis-identity invariant across the entire lifecycle surface.
+
+  Structural observations in this entry:
+
+  - **`ErrMergeAntecedentsIdentical` sentinel is now subtype-shared.** Introduced at §0049 for BehavioralCluster merge; reused here for AutomationGroup merge without modification. The merge-relation symmetry constraint is operation-agnostic, not subtype-specific.
+  - **Ascending-sort normalization carries forward.** The set-equality idempotency pattern established at §0049 (sort antecedents ascending before recording) applies identically here. `Merge(A, B)` and `Merge(B, A)` produce byte-identical events for AutomationGroup just as they do for BehavioralCluster.
+
+- **Decision:** Land `AutomationGroupMerge` with three structural moves mirroring §0049:
+
+  1. **`AutomationGroupMerge` Protobuf message** at [`schemas/events/v1/automation_group_merge.proto`](../../schemas/events/v1/automation_group_merge.proto). Four fields: `antecedent_formation_event_hashes` (repeated bytes, sorted ascending, length=2), `produced_formation_event_hash`, `merged_at`, `reason`.
+
+  2. **`MergeAutomationGroup` entry point** at [`services/ingestion/internal/hypothesis/automation_group_merge.go`](../../services/ingestion/internal/hypothesis/automation_group_merge.go). Parallel to §0049's `Merge`. Validates all three targets are `AutomationGroupFormation` rows; rejects identical antecedents via shared `ErrMergeAntecedentsIdentical`; sorts antecedents ascending.
+
+  3. **`cmd/merge-automation-groups` operator interface** — seventeenth operational binary; twelfth substrate-write. Mirrors §0049 CLI shape.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1, §2.2, §2.3, §2.5 + §2.5 BC3 + §2.5 BC5. Respects §0045+§0056 hypothesis-identity invariant; respects §0049 Option B structural choice. Respects symmetric-relation idempotency pattern established at §0049. Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`schemas/events/v1/automation_group_merge.proto`](../../schemas/events/v1/automation_group_merge.proto) — new file.
+  - [`services/ingestion/internal/hypothesis/automation_group_merge.go`](../../services/ingestion/internal/hypothesis/automation_group_merge.go) — new file. `AutomationGroupMergeOptions`, `AutomationGroupMergeReport`, `MergeAutomationGroup`. Reuses `ErrTargetNotFound`, `ErrTargetWrongType`, `ErrMergeAntecedentsIdentical` sentinels.
+  - [`services/ingestion/internal/hypothesis/automation_group_merge_test.go`](../../services/ingestion/internal/hypothesis/automation_group_merge_test.go) — **8 tests** covering happy-path, argument-order invariance, identical-antecedents rejection, idempotency, unknown antecedent, wrong-type (promotion hash as antecedent), cross-subtype rejection, default merged_at.
+  - [`services/ingestion/cmd/merge-automation-groups/main.go`](../../services/ingestion/cmd/merge-automation-groups/main.go) — new binary; seventeenth operational CLI; twelfth substrate-write.
+  - Makefile, canonical corpus (minimal + typical), service README, decision-log §0060.
+  - **Test count grows.** Combined: **286 tests** (up from 278 at §0059; +8).
+  - **Sentinel-sharing landscape extends to 4 sentinels across 2 subtypes.** `ErrTargetNotFound`, `ErrTargetWrongType`, `ErrMergeAntecedentsIdentical` shared; per-subtype message_type constants distinguish. Pattern proven across 8 callers (5 BC operators + 3 AG operators + this one = 4 AG operators).
+  - **Out of scope at this layer (carry-forwards).**
+    - **One remaining AutomationGroup lifecycle operation** — split (§0061), the final operation to close the second subtype's arc.
+    - **Projection layer extension for AutomationGroup** — unchanged from §0056 carry-forward.
+    - **Cross-subtype merge** — unchanged from §0049 carry-forward.
+
+- **Supersession:** None. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

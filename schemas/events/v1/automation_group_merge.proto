@@ -1,0 +1,58 @@
+// Category III hypothesis lifecycle event per Charter §2.5 +
+// lifecycle-semantics.md line 28 + decision-log §0060 (this entry —
+// second-subtype merge landing; mirrors §0049 for the
+// AutomationGroup concrete subtype).
+//
+// SCOPE — within-subtype only at this layer. Both antecedents and
+// the produced hypothesis are AutomationGroupFormation events.
+// Cross-subtype merge per entity-model.md §Cross-subtype operations
+// remains deferred to lifecycle-semantics.md post-Q4 redaction.
+//
+// Structural choice (mirrors §0049 Option B): the merge event
+// references TWO antecedent formation hashes + ONE separately-
+// committed produced AutomationGroupFormation hash. This preserves
+// the §0045+§0056 invariant — hypothesis identity IS the formation
+// event's content-hash — so all lifecycle operations target
+// hypotheses through formation hashes uniformly across the second
+// subtype too.
+//
+// Per §2.5 BC3, no denormalized state field. Per §2.5 BC5, the
+// merge event is a Cat I record under §2.1.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// AutomationGroupMerge records the recognition that two
+// AutomationGroup hypotheses describe the same underlying
+// phenomenon.
+message AutomationGroupMerge {
+  // antecedent_formation_event_hashes is the set of BLAKE3-256
+  // content-hashes of the AutomationGroupFormation events
+  // identifying the hypotheses being merged.
+  //
+  // Sorted ASCENDING for content-hash stability — merging
+  // hypotheses A and B in either order MUST produce a byte-
+  // identical merge event (merge is a symmetric relation).
+  //
+  // At this layer length MUST be exactly 2 (within-subtype binary
+  // merge); the repeated cardinality leaves room for future n-ary
+  // or cross-subtype merge.
+  repeated bytes antecedent_formation_event_hashes = 1;
+
+  // produced_formation_event_hash is the BLAKE3-256 content-hash
+  // of a separately-committed AutomationGroupFormation event
+  // representing the merged hypothesis (per §0049 Option B mirrored
+  // here). Subsequent lifecycle operations target this hash, not
+  // the merge event's own hash.
+  bytes produced_formation_event_hash = 2;
+
+  // merged_at is the Unix-nanoseconds time at which the merge
+  // recognition was recorded.
+  int64 merged_at = 3;
+
+  // reason is an operator-supplied free-form note. Optional but
+  // strongly recommended.
+  string reason = 4;
+}
