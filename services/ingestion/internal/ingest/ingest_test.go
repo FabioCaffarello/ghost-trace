@@ -176,6 +176,97 @@ func TestAppendDistinctEnvelopesProduceDistinctEnrichmentHashes(t *testing.T) {
 	}
 }
 
+// TestAppendHeterogeneousCatITypes proves the substrate ingests
+// distinct Cat I message types in the same events table with the
+// message_type discriminator distinguishing them — the structural
+// proof that the ingestion service is a substrate rather than a
+// DeclaredSession-special-case (per decision-log §0042).
+func TestAppendHeterogeneousCatITypes(t *testing.T) {
+	ctx := context.Background()
+	in, sub := newIngester(t)
+
+	decl := &eventsv1.DeclaredSession{
+		DeclaredAt:        1716120000000000000,
+		ActorRef:          "actor-hetero-test",
+		SessionDescriptor: []byte("session"),
+	}
+	if _, err := in.Append(ctx, decl, decl.DeclaredAt, testEnvelope()); err != nil {
+		t.Fatalf("Append DeclaredSession: %v", err)
+	}
+
+	netEvt := &eventsv1.NetworkEvent{
+		ObservedAt:      1716120000000000999,
+		ActorRef:        "actor-hetero-test",
+		EndpointRef:     "10.0.0.1:443",
+		EventDescriptor: []byte("flow"),
+	}
+	if _, err := in.Append(ctx, netEvt, netEvt.ObservedAt, testEnvelope()); err != nil {
+		t.Fatalf("Append NetworkEvent: %v", err)
+	}
+
+	n, err := sub.Count(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 4 {
+		t.Errorf("substrate Count: got %d, want 4 (2 primary + 2 enrichment)", n)
+	}
+
+	typeCounts := map[string]int{}
+	if err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
+		typeCounts[row.MessageType]++
+		return nil
+	}); err != nil {
+		t.Fatalf("WalkEvents: %v", err)
+	}
+	if got := typeCounts["ghosttrace.events.v1.DeclaredSession"]; got != 1 {
+		t.Errorf("DeclaredSession row count: got %d, want 1", got)
+	}
+	if got := typeCounts["ghosttrace.events.v1.NetworkEvent"]; got != 1 {
+		t.Errorf("NetworkEvent row count: got %d, want 1", got)
+	}
+	if got := typeCounts["ghosttrace.events.v1.IngestionEvent"]; got != 2 {
+		t.Errorf("IngestionEvent row count: got %d, want 2 (one per primary)", got)
+	}
+}
+
+// TestRegistryLookupRoundTrip is a sanity check that every registered
+// descriptor is retrievable via both lookup helpers.
+func TestRegistryLookupRoundTrip(t *testing.T) {
+	if len(Registry) < 2 {
+		t.Fatalf("Registry holds fewer than 2 descriptors (got %d); the second-Cat-I-type invariant (decision-log §0042) is not satisfied", len(Registry))
+	}
+	for _, want := range Registry {
+		gotByURL, ok := LookupURLPath(want.URLPath)
+		if !ok {
+			t.Errorf("LookupURLPath(%q) missing", want.URLPath)
+			continue
+		}
+		if gotByURL.StdinType != want.StdinType {
+			t.Errorf("LookupURLPath(%q).StdinType: got %q, want %q", want.URLPath, gotByURL.StdinType, want.StdinType)
+		}
+		gotByStdin, ok := LookupStdinType(want.StdinType)
+		if !ok {
+			t.Errorf("LookupStdinType(%q) missing", want.StdinType)
+			continue
+		}
+		if gotByStdin.URLPath != want.URLPath {
+			t.Errorf("LookupStdinType(%q).URLPath: got %q, want %q", want.StdinType, gotByStdin.URLPath, want.URLPath)
+		}
+		// New() must return a non-nil zero message.
+		if msg := want.New(); msg == nil {
+			t.Errorf("descriptor %q New() returned nil", want.URLPath)
+		}
+	}
+
+	if _, ok := LookupURLPath("nonexistent-type"); ok {
+		t.Errorf("LookupURLPath returned ok=true for unregistered type")
+	}
+	if _, ok := LookupStdinType("nonexistent_type"); ok {
+		t.Errorf("LookupStdinType returned ok=true for unregistered type")
+	}
+}
+
 func TestEnvelopeChannelDefaultsToUnspecified(t *testing.T) {
 	// Empty channel coerces to "unspecified" at commit time so the
 	// IngestionEvent always carries a non-empty channel marker.

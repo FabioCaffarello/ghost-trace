@@ -129,7 +129,7 @@ func TestPostEventsHappyPath(t *testing.T) {
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/x-protobuf")
 
 	h.ServeHTTP(rr, req)
@@ -161,7 +161,7 @@ func TestPostEventsRejectsWrongMethod(t *testing.T) {
 	h := New(doAppend, nil)
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/events", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/events/declared-session", nil)
 	h.ServeHTTP(rr, req)
 
 	if got, want := rr.Code, http.StatusMethodNotAllowed; got != want {
@@ -174,7 +174,7 @@ func TestPostEventsRejectsWrongContentType(t *testing.T) {
 	h := New(doAppend, nil)
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader("plain text"))
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", strings.NewReader("plain text"))
 	req.Header.Set("Content-Type", "text/plain")
 	h.ServeHTTP(rr, req)
 
@@ -188,7 +188,7 @@ func TestPostEventsRejectsEmptyBody(t *testing.T) {
 	h := New(doAppend, nil)
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(""))
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", strings.NewReader(""))
 	req.Header.Set("Content-Type", "application/x-protobuf")
 	h.ServeHTTP(rr, req)
 
@@ -205,7 +205,7 @@ func TestPostEventsRejectsInvalidProtobuf(t *testing.T) {
 	h := New(doAppend, nil)
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader("not-a-protobuf-message"))
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", strings.NewReader("not-a-protobuf-message"))
 	req.Header.Set("Content-Type", "application/x-protobuf")
 	h.ServeHTTP(rr, req)
 
@@ -230,7 +230,7 @@ func TestPostEventsUnrecoverableTriggersFatal(t *testing.T) {
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/x-protobuf")
 	h.ServeHTTP(rr, req)
 
@@ -266,7 +266,7 @@ func TestPostEventsRecoverableErrorReturns400(t *testing.T) {
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/x-protobuf")
 	h.ServeHTTP(rr, req)
 
@@ -288,7 +288,7 @@ func TestPostEventsHashMismatchAlsoUnrecoverable(t *testing.T) {
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/x-protobuf")
 	h.ServeHTTP(rr, req)
 
@@ -316,7 +316,7 @@ func TestRequestBodyLimitEnforced(t *testing.T) {
 		body[i] = 'A'
 	}
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/x-protobuf")
 	h.ServeHTTP(rr, req)
 
@@ -337,7 +337,7 @@ func TestPostEventsNoAuthRequiredByDefault(t *testing.T) {
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/x-protobuf")
 	h.ServeHTTP(rr, req)
 
@@ -352,7 +352,7 @@ func TestPostEventsRequiresAuthWhenConfigured(t *testing.T) {
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/x-protobuf")
 	// No Authorization header.
 	h.ServeHTTP(rr, req)
@@ -374,7 +374,7 @@ func TestPostEventsAuthWrongToken(t *testing.T) {
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/x-protobuf")
 	req.Header.Set("Authorization", "Bearer wrong-token-same-length")
 	h.ServeHTTP(rr, req)
@@ -393,7 +393,7 @@ func TestPostEventsAuthWrongTokenDifferentLength(t *testing.T) {
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/x-protobuf")
 	req.Header.Set("Authorization", "Bearer short")
 	h.ServeHTTP(rr, req)
@@ -409,7 +409,7 @@ func TestPostEventsAuthCorrectToken(t *testing.T) {
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/x-protobuf")
 	req.Header.Set("Authorization", "Bearer secret-token")
 	h.ServeHTTP(rr, req)
@@ -441,7 +441,7 @@ func TestPostEventsAuthBadHeaderFormat(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			payload := encodePayload(t, newTestMsg())
 			rr := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(payload))
+			req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", bytes.NewReader(payload))
 			req.Header.Set("Content-Type", "application/x-protobuf")
 			if tc.header != "" {
 				req.Header.Set("Authorization", tc.header)
@@ -489,7 +489,7 @@ func TestUnknownPathReturns401WhenAuthConfigured(t *testing.T) {
 }
 
 func TestEnvelopeForRequestPlainHTTP(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/v1/events", nil)
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", nil)
 	env := envelopeForRequest(req)
 	if env.Channel != "http" {
 		t.Errorf("Channel: got %q, want %q", env.Channel, "http")
@@ -510,7 +510,7 @@ func TestPostEventsSuccessIncludesIngestionEventHash(t *testing.T) {
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/x-protobuf")
 	h.ServeHTTP(rr, req)
 
@@ -529,6 +529,99 @@ func TestPostEventsSuccessIncludesIngestionEventHash(t *testing.T) {
 	}
 	if conf.EventHash == conf.IngestionEventHash {
 		t.Errorf("event_hash and ingestion_event_hash should differ: %s", conf.EventHash)
+	}
+}
+
+// TestPostNetworkEventHappyPath proves the dispatch routes the
+// second Cat I message type (NetworkEvent) end-to-end through the same
+// pipeline as DeclaredSession, with the type-specific event-time
+// accessor reading from the right field.
+func TestPostNetworkEventHappyPath(t *testing.T) {
+	var capturedType string
+	var capturedEventTime int64
+	doAppend := func(ctx context.Context, msg proto.Message, eventTime int64, env ingest.Envelope) (ingest.AppendReport, error) {
+		capturedType = string(msg.ProtoReflect().Descriptor().FullName())
+		capturedEventTime = eventTime
+		return ingest.AppendReport{
+			EventHashHex:          "00000000000000000000000000000000000000000000000000000000000000aa",
+			IngestionEventHashHex: "00000000000000000000000000000000000000000000000000000000000000bb",
+			PayloadBytes:          16,
+		}, nil
+	}
+	h := New(doAppend, nil)
+
+	netEvt := &eventsv1.NetworkEvent{
+		ObservedAt:      1716120000000000777,
+		ActorRef:        "actor-network-test",
+		EndpointRef:     "10.0.0.42:443",
+		EventDescriptor: []byte("flow-record"),
+	}
+	payload, err := proto.Marshal(netEvt)
+	if err != nil {
+		t.Fatalf("proto.Marshal: %v", err)
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/network-event", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Fatalf("status: got %d, want %d (body: %s)", got, want, rr.Body.String())
+	}
+	if capturedType != "ghosttrace.events.v1.NetworkEvent" {
+		t.Errorf("dispatched type: got %q, want ghosttrace.events.v1.NetworkEvent", capturedType)
+	}
+	if capturedEventTime != netEvt.ObservedAt {
+		t.Errorf("event time: got %d, want %d (NetworkEvent.observed_at)", capturedEventTime, netEvt.ObservedAt)
+	}
+}
+
+// TestPostEventsUnknownTypeReturns404 proves the dispatch rejects
+// unregistered types with a structured 404 that enumerates the known
+// types — the operator-facing migration hint.
+func TestPostEventsUnknownTypeReturns404(t *testing.T) {
+	doAppend, callCount := stubAppendFunc(nil)
+	h := New(doAppend, nil)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/fingerprint-snapshot", bytes.NewReader([]byte("anything")))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusNotFound; got != want {
+		t.Fatalf("status: got %d, want %d (body: %s)", got, want, rr.Body.String())
+	}
+	if *callCount != 0 {
+		t.Errorf("Append should not have been called; got %d calls", *callCount)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "fingerprint-snapshot") {
+		t.Errorf("error body should echo the unknown type: %q", body)
+	}
+	if !strings.Contains(body, "declared-session") || !strings.Contains(body, "network-event") {
+		t.Errorf("error body should enumerate known types: %q", body)
+	}
+}
+
+// TestPostEventsUntypedPathReturns404WithMigrationHint proves the bare
+// /v1/events path is rejected with a structured error that points
+// producers at the new typed path layout.
+func TestPostEventsUntypedPathReturns404WithMigrationHint(t *testing.T) {
+	doAppend, _ := stubAppendFunc(nil)
+	h := New(doAppend, nil)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader([]byte("anything")))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusNotFound; got != want {
+		t.Fatalf("status: got %d, want %d (body: %s)", got, want, rr.Body.String())
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "/v1/events/") {
+		t.Errorf("error body should point at /v1/events/<type>: %q", body)
 	}
 }
 

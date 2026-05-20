@@ -1,0 +1,47 @@
+// Category I primary observation per Charter §2.2 + entity-model.md
+// §Category I (line 17: "Network-level events recorded by infrastructure
+// collectors"). Distinct from DeclaredSession by producer class
+// (infrastructure collector vs. client SDK) and by event scope
+// (per-observation, not session-bounded). Encoded under the
+// canonical-serialization-contract at
+// docs/architecture/canonical-serialization-contract.md.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// NetworkEvent is the collector-reported network-level observation —
+// a flow record, packet summary, or IDS event as captured by an
+// infrastructure collector. The substrate treats the payload as opaque
+// per the same Cat I discipline as DeclaredSession.
+message NetworkEvent {
+  // observed_at is the collector-reported observation time as Unix
+  // nanoseconds since epoch. int64 chosen per decision-log §0024
+  // modification 6 (canonical-form-load-bearing time fields use int64
+  // Unix nanoseconds, not google.protobuf.Timestamp, for content-hash
+  // stability). Parallel to DeclaredSession.declared_at; the rename
+  // (observed_at vs. declared_at) makes the producer-class distinction
+  // visible at the field-name level.
+  int64 observed_at = 1;
+
+  // actor_ref is the single-tier actor identity reference per
+  // decision-log §0023 (Q2 Identity tiers resolution). Optional on
+  // NetworkEvent: not every network observation has a bound actor at
+  // collection time (e.g. anonymous-flow events). Empty string =
+  // unattributed.
+  string actor_ref = 2;
+
+  // endpoint_ref is the network endpoint the observation pertains to,
+  // in opaque string form (e.g. "ip:port", "subnet/mask", or a
+  // collector-specific endpoint identifier). Format negotiated
+  // out-of-band; substrate treats as bytes-equivalent string. Empty
+  // permitted for collector-wide events.
+  string endpoint_ref = 3;
+
+  // event_descriptor is the opaque collector-supplied event payload
+  // (e.g. encoded flow record, IDS alert body, packet summary). Format
+  // negotiated out-of-band; substrate treats as bytes. Parallel to
+  // DeclaredSession.session_descriptor.
+  bytes event_descriptor = 4;
+}

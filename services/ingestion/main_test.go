@@ -55,15 +55,28 @@ func TestIsUnrecoverable(t *testing.T) {
 	}
 }
 
-// encodeLine returns a base64-encoded canonical Protobuf line for msg,
-// suitable for piping into readLoop's reader.
-func encodeLine(t *testing.T, msg proto.Message) string {
+// encodeLine returns a stdin-envelope JSON line for msg, suitable for
+// piping into readLoop's reader. typeTag MUST match a registered
+// ingest.MessageDescriptor.StdinType.
+func encodeLine(t *testing.T, typeTag string, msg proto.Message) string {
 	t.Helper()
 	bin, err := proto.Marshal(msg)
 	if err != nil {
 		t.Fatalf("proto.Marshal: %v", err)
 	}
-	return base64.StdEncoding.EncodeToString(bin)
+	env := stdinEnvelope{Type: typeTag, PayloadB64: base64.StdEncoding.EncodeToString(bin)}
+	out, err := json.Marshal(env)
+	if err != nil {
+		t.Fatalf("json.Marshal envelope: %v", err)
+	}
+	return string(out)
+}
+
+// encodeDeclaredSession is a convenience wrapper for the most common
+// happy-path test (declared-session messages).
+func encodeDeclaredSession(t *testing.T, msg *eventsv1.DeclaredSession) string {
+	t.Helper()
+	return encodeLine(t, "declared_session", msg)
 }
 
 // stubAppendFunc returns an appendFunc that records every call into
@@ -87,7 +100,7 @@ func TestReadLoopHappyPath(t *testing.T) {
 	ctx := context.Background()
 	msg := &eventsv1.DeclaredSession{DeclaredAt: 1, ActorRef: "happy", SessionDescriptor: []byte("x")}
 
-	input := strings.NewReader(encodeLine(t, msg) + "\n")
+	input := strings.NewReader(encodeDeclaredSession(t, msg) + "\n")
 	var output bytes.Buffer
 
 	calls := 0
@@ -108,10 +121,15 @@ func TestReadLoopRecoverableErrorContinues(t *testing.T) {
 	msg := &eventsv1.DeclaredSession{DeclaredAt: 1, ActorRef: "follow-up", SessionDescriptor: []byte("y")}
 
 	// Three input lines:
-	//   1. Invalid base64 → recoverable; emits ingestError, continues.
-	//   2. Valid base64 but invalid Protobuf → recoverable; emits ingestError, continues.
+	//   1. Malformed envelope JSON → recoverable; emits ingestError, continues.
+	//   2. Valid envelope but invalid Protobuf payload → recoverable; emits ingestError, continues.
 	//   3. Valid message → succeeds.
-	input := strings.NewReader("!!!not-base64!!!\n" + base64.StdEncoding.EncodeToString([]byte("not-a-protobuf")) + "\n" + encodeLine(t, msg) + "\n")
+	badProtoEnv := stdinEnvelope{Type: "declared_session", PayloadB64: base64.StdEncoding.EncodeToString([]byte("not-a-protobuf"))}
+	badProtoLine, err := json.Marshal(badProtoEnv)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	input := strings.NewReader("!!!not-json!!!\n" + string(badProtoLine) + "\n" + encodeDeclaredSession(t, msg) + "\n")
 	var output bytes.Buffer
 
 	calls := 0
@@ -153,7 +171,7 @@ func TestReadLoopUnrecoverableErrorTerminates(t *testing.T) {
 	// Two input lines:
 	//   1. First Append returns substrate.ErrBlobCollision (unrecoverable).
 	//   2. Second line never reached — loop terminates on line 1's unrecoverable.
-	input := strings.NewReader(encodeLine(t, msg) + "\n" + encodeLine(t, msg) + "\n")
+	input := strings.NewReader(encodeDeclaredSession(t, msg) + "\n" + encodeDeclaredSession(t, msg) + "\n")
 	var output bytes.Buffer
 
 	calls := 0
@@ -187,7 +205,7 @@ func TestReadLoopHashMismatchAlsoUnrecoverable(t *testing.T) {
 	ctx := context.Background()
 	msg := &eventsv1.DeclaredSession{DeclaredAt: 1, ActorRef: "doomed-2", SessionDescriptor: []byte("z")}
 
-	input := strings.NewReader(encodeLine(t, msg) + "\n")
+	input := strings.NewReader(encodeDeclaredSession(t, msg) + "\n")
 	var output bytes.Buffer
 
 	calls := 0
@@ -199,6 +217,86 @@ func TestReadLoopHashMismatchAlsoUnrecoverable(t *testing.T) {
 	}
 	if !errors.Is(err, substrate.ErrHashMismatch) {
 		t.Fatalf("expected errors.Is(err, substrate.ErrHashMismatch); got: %v", err)
+	}
+}
+
+// TestReadLoopDispatchesNetworkEvent proves stdin routes the second
+// Cat I type through the dispatch registry: the envelope's `type` tag
+// "network_event" selects ingest.MessageDescriptor's NetworkEvent
+// factory, the payload unmarshals into a *NetworkEvent, and the
+// observed_at field reaches the appendFunc as the event-time.
+func TestReadLoopDispatchesNetworkEvent(t *testing.T) {
+	ctx := context.Background()
+	netEvt := &eventsv1.NetworkEvent{
+		ObservedAt:      1716120000000000777,
+		ActorRef:        "actor-stdin-network",
+		EndpointRef:     "192.0.2.10:8080",
+		EventDescriptor: []byte("flow"),
+	}
+	line := encodeLine(t, "network_event", netEvt)
+	input := strings.NewReader(line + "\n")
+
+	var capturedType string
+	var capturedEventTime int64
+	doAppend := func(ctx context.Context, msg proto.Message, eventTime int64, env ingest.Envelope) (ingest.AppendReport, error) {
+		capturedType = string(msg.ProtoReflect().Descriptor().FullName())
+		capturedEventTime = eventTime
+		return ingest.AppendReport{
+			EventHashHex:          "00000000000000000000000000000000000000000000000000000000000000aa",
+			IngestionEventHashHex: "00000000000000000000000000000000000000000000000000000000000000bb",
+			PayloadBytes:          16,
+		}, nil
+	}
+
+	var output bytes.Buffer
+	if err := readLoop(ctx, doAppend, input, &output); err != nil {
+		t.Fatalf("readLoop: %v", err)
+	}
+	if capturedType != "ghosttrace.events.v1.NetworkEvent" {
+		t.Errorf("dispatched type: got %q, want ghosttrace.events.v1.NetworkEvent", capturedType)
+	}
+	if capturedEventTime != netEvt.ObservedAt {
+		t.Errorf("event time: got %d, want %d (NetworkEvent.observed_at)", capturedEventTime, netEvt.ObservedAt)
+	}
+	if !strings.Contains(output.String(), `"event_hash"`) {
+		t.Errorf("expected confirmation JSON in output, got: %s", output.String())
+	}
+}
+
+// TestReadLoopUnknownTypeIsRecoverable proves an envelope with an
+// unregistered type tag does not terminate the loop: it emits a
+// structured ingestError and continues.
+func TestReadLoopUnknownTypeIsRecoverable(t *testing.T) {
+	ctx := context.Background()
+	unknownEnv := stdinEnvelope{Type: "fingerprint_snapshot", PayloadB64: base64.StdEncoding.EncodeToString([]byte("anything"))}
+	unknownLine, err := json.Marshal(unknownEnv)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	goodMsg := &eventsv1.DeclaredSession{DeclaredAt: 1, ActorRef: "after-unknown", SessionDescriptor: []byte("k")}
+	input := strings.NewReader(string(unknownLine) + "\n" + encodeDeclaredSession(t, goodMsg) + "\n")
+
+	calls := 0
+	var output bytes.Buffer
+	if err := readLoop(ctx, stubAppendFunc(nil, &calls), input, &output); err != nil {
+		t.Fatalf("readLoop returned error on unknown-type input: %v", err)
+	}
+	if calls != 1 {
+		t.Errorf("Append calls: got %d, want 1 (only the second line should reach Append)", calls)
+	}
+	lines := strings.Split(strings.TrimRight(output.String(), "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("output line count: got %d, want 2 — %q", len(lines), output.String())
+	}
+	var firstErr ingestError
+	if err := json.Unmarshal([]byte(lines[0]), &firstErr); err != nil {
+		t.Fatalf("line 0 not parseable as ingestError: %v", err)
+	}
+	if !strings.Contains(firstErr.Error, "fingerprint_snapshot") {
+		t.Errorf("error message should echo the unknown type: %q", firstErr.Error)
+	}
+	if !strings.Contains(firstErr.Error, "declared_session") || !strings.Contains(firstErr.Error, "network_event") {
+		t.Errorf("error message should enumerate known types: %q", firstErr.Error)
 	}
 }
 
@@ -493,7 +591,7 @@ func TestHTTPTLSEndToEnd(t *testing.T) {
 		t.Errorf("negotiated TLS version: got 0x%04x, want ≥ 0x%04x (TLS 1.2)", resp.TLS.Version, tls.VersionTLS12)
 	}
 
-	// POST /v1/events round-trip with a valid Protobuf payload.
+	// POST /v1/events/declared-session round-trip with a valid Protobuf payload.
 	msg := &eventsv1.DeclaredSession{
 		DeclaredAt:        1716120000000000000,
 		ActorRef:          "actor-tls-test",
@@ -503,9 +601,9 @@ func TestHTTPTLSEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("proto.Marshal: %v", err)
 	}
-	postResp, err := client.Post(url+"/v1/events", "application/x-protobuf", bytes.NewReader(payload))
+	postResp, err := client.Post(url+"/v1/events/declared-session", "application/x-protobuf", bytes.NewReader(payload))
 	if err != nil {
-		t.Fatalf("POST /v1/events over TLS: %v", err)
+		t.Fatalf("POST /v1/events/declared-session over TLS: %v", err)
 	}
 	postBody, _ := io.ReadAll(postResp.Body)
 	_ = postResp.Body.Close()

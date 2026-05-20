@@ -5,9 +5,12 @@
 // Architecture: docs/architecture/canonical-serialization-contract.md +
 // docs/architecture/concurrency-pattern.md.
 //
-// Inception-phase I/O: reads newline-delimited base64-encoded Protobuf
-// DeclaredSession messages from stdin; writes one-line JSON confirmation
-// per ingested message to stdout. HTTP/gRPC interfaces deferred to a
+// Inception-phase I/O: reads newline-delimited JSON envelope lines from
+// stdin (one per primary observation) and writes one-line JSON
+// confirmation per ingested message to stdout. Each envelope is
+// `{"type":"<type>","payload_b64":"<base64-proto>"}` where <type> is a
+// registered Cat I message type per ingest.Registry (e.g.
+// "declared_session", "network_event"). gRPC interface deferred to a
 // follow-on RFC (per decision-log §0025 Open Questions).
 package main
 
@@ -33,11 +36,18 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 
-	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/httpapi"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
+
+// stdinEnvelope is the per-line wire shape on stdin. `type` selects
+// the Cat I message type via ingest.LookupStdinType; `payload_b64` is
+// the base64-encoded canonical-Protobuf payload.
+type stdinEnvelope struct {
+	Type       string `json:"type"`
+	PayloadB64 string `json:"payload_b64"`
+}
 
 // exitCodeUnrecoverable is the process exit code on unrecoverable
 // errors per docs/architecture/concurrency-pattern.md §Error
@@ -328,15 +338,22 @@ func emitFatal(w io.Writer, err error) {
 	})
 }
 
-// readLoop reads base64-encoded Protobuf DeclaredSession lines from r,
-// ingests each via the appendFunc, writes a one-line JSON confirmation
+// readLoop reads JSON-envelope lines from r, ingests each primary
+// observation via the appendFunc, writes a one-line JSON confirmation
 // (success) or one-line JSON error (recoverable failure) per input line
 // to w.
 //
+// Wire shape: each input line is a JSON object
+// `{"type":"<type>","payload_b64":"<base64-proto>"}` where <type> is a
+// registered Cat I message type per ingest.Registry (e.g.
+// "declared_session", "network_event"). The base64 payload is the
+// canonical-Protobuf encoding of the corresponding message.
+//
 // Error classification per concurrency-pattern §Error Propagation:
-//   - **Recoverable** — bad input (base64 decode failure, proto
-//     unmarshal failure) — emits a JSON ingestError entry to w and
-//     continues processing the next line.
+//   - **Recoverable** — bad input (envelope decode failure, unknown
+//     type, base64 decode failure, proto unmarshal failure) — emits a
+//     JSON ingestError entry to w and continues processing the next
+//     line.
 //   - **Unrecoverable** — substrate §2.1-violation errors
 //     (substrate.ErrHashMismatch, substrate.ErrBlobCollision) —
 //     terminates readLoop with the error; errgroup propagates the
@@ -362,20 +379,31 @@ func readLoop(ctx context.Context, doAppend appendFunc, r io.Reader, w io.Writer
 			continue
 		}
 
-		payload, err := base64.StdEncoding.DecodeString(string(line))
+		var env stdinEnvelope
+		if err := json.Unmarshal(line, &env); err != nil {
+			_ = enc.Encode(ingestError{Error: fmt.Sprintf("envelope decode: %v", err)})
+			continue
+		}
+		desc, ok := ingest.LookupStdinType(env.Type)
+		if !ok {
+			_ = enc.Encode(ingestError{Error: fmt.Sprintf("unknown type %q; known types: %s", env.Type, strings.Join(ingest.KnownStdinTypes(), ", "))})
+			continue
+		}
+
+		payload, err := base64.StdEncoding.DecodeString(env.PayloadB64)
 		if err != nil {
 			_ = enc.Encode(ingestError{Error: fmt.Sprintf("base64 decode: %v", err)})
 			continue
 		}
 
-		msg := &eventsv1.DeclaredSession{}
+		msg := desc.New()
 		if err := proto.Unmarshal(payload, msg); err != nil {
 			_ = enc.Encode(ingestError{Error: fmt.Sprintf("proto unmarshal: %v", err)})
 			continue
 		}
 
-		env := ingest.Envelope{Channel: "stdin", ReceivedAt: time.Now().UnixNano()}
-		rep, err := doAppend(ctx, msg, msg.DeclaredAt, env)
+		ingestEnv := ingest.Envelope{Channel: "stdin", ReceivedAt: time.Now().UnixNano()}
+		rep, err := doAppend(ctx, msg, desc.EventTime(msg), ingestEnv)
 		if err != nil {
 			if isUnrecoverable(err) {
 				return fmt.Errorf("unrecoverable ingest: %w", err)
