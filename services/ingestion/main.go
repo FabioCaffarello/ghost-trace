@@ -15,6 +15,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -64,6 +65,7 @@ func run() error {
 	httpAuthTokenFile := flag.String("http-auth-token-file", "", "path to a file containing the bearer token (single line; trailing whitespace trimmed). Takes precedence over --http-auth-token.")
 	httpTLSCert := flag.String("http-tls-cert", "", "path to PEM-encoded TLS certificate (server cert + optional intermediate chain). Required with --http-tls-key.")
 	httpTLSKey := flag.String("http-tls-key", "", "path to PEM-encoded TLS private key. Required with --http-tls-cert.")
+	httpTLSClientCA := flag.String("http-tls-client-ca", "", "path to PEM-encoded CA bundle used to verify client certificates (enables mTLS). Empty disables client-cert verification. Requires --http-tls-cert + --http-tls-key.")
 	flag.Parse()
 
 	// Root context cancellable on SIGINT / SIGTERM per concurrency-pattern §Context Propagation.
@@ -103,7 +105,7 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("resolve HTTP auth token: %w", err)
 		}
-		tlsCfg, err := resolveHTTPTLS(*httpTLSCert, *httpTLSKey)
+		tlsCfg, err := resolveHTTPTLS(*httpTLSCert, *httpTLSKey, *httpTLSClientCA)
 		if err != nil {
 			return fmt.Errorf("resolve HTTP TLS config: %w", err)
 		}
@@ -120,9 +122,20 @@ func run() error {
 		if tlsCfg.enabled {
 			// MinVersion floor at TLS 1.2 per modern best practice. TLS 1.0
 			// and 1.1 are widely deprecated (RFC 8996 marks them historic).
-			// Operators wanting TLS 1.3-only may add a follow-on flag; the
-			// floor here protects against accidental weak-protocol exposure.
+			// Operators wanting TLS 1.3-only may add a follow-on option;
+			// the floor here protects against accidental weak-protocol
+			// exposure.
 			srv.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+			if tlsCfg.clientCAPool != nil {
+				// mTLS enabled: client MUST present a certificate; server
+				// verifies it against the CA bundle. Connections without
+				// a valid client cert are rejected at the TLS handshake
+				// layer (before any HTTP request is processed). Composes
+				// with bearer-token auth: when both are configured, both
+				// MUST pass.
+				srv.TLSConfig.ClientAuth = tls.RequireAndVerifyClientCert
+				srv.TLSConfig.ClientCAs = tlsCfg.clientCAPool
+			}
 		}
 		g.Go(func() error {
 			var listenErr error
@@ -161,23 +174,29 @@ func run() error {
 
 // httpTLS captures the resolved TLS configuration for the HTTP server.
 type httpTLS struct {
-	certFile string
-	keyFile  string
-	enabled  bool
+	certFile     string
+	keyFile      string
+	clientCAPool *x509.CertPool // non-nil enables mTLS (RequireAndVerifyClientCert)
+	enabled      bool
 }
 
-// resolveHTTPTLS validates the cert + key flags. Both MUST be set or
-// both MUST be empty; the mixed case is a configuration error (one
-// implies the other is required). Both paths are checked for
-// readability eagerly so misconfiguration fails at startup rather than
-// at first connection attempt.
+// resolveHTTPTLS validates the TLS configuration. cert + key follow
+// both-or-neither semantics; clientCAFile (if set) enables mTLS and
+// requires cert + key. All file paths are eagerly stat-checked / parsed
+// so misconfiguration fails at startup rather than at first connection.
 //
-// When both empty: TLS disabled (plain HTTP via ListenAndServe).
-// When both set:   TLS enabled  (HTTPS via ListenAndServeTLS).
-func resolveHTTPTLS(certFile, keyFile string) (httpTLS, error) {
+// Outcomes:
+//   - cert, key, clientCA all empty: TLS disabled.
+//   - cert + key set, clientCA empty: TLS enabled, server-only auth.
+//   - cert + key + clientCA all set: TLS enabled, mTLS (server verifies
+//     client certs against the CA bundle).
+//   - Any other combination: error at startup.
+func resolveHTTPTLS(certFile, keyFile, clientCAFile string) (httpTLS, error) {
 	switch {
-	case certFile == "" && keyFile == "":
+	case certFile == "" && keyFile == "" && clientCAFile == "":
 		return httpTLS{enabled: false}, nil
+	case certFile == "" && keyFile == "" && clientCAFile != "":
+		return httpTLS{}, fmt.Errorf("--http-tls-client-ca requires --http-tls-cert and --http-tls-key")
 	case certFile == "" || keyFile == "":
 		return httpTLS{}, fmt.Errorf("--http-tls-cert and --http-tls-key must both be set or both be empty (got cert=%q, key=%q)", certFile, keyFile)
 	}
@@ -189,7 +208,19 @@ func resolveHTTPTLS(certFile, keyFile string) (httpTLS, error) {
 	if _, err := os.Stat(keyFile); err != nil {
 		return httpTLS{}, fmt.Errorf("stat key file %q: %w", keyFile, err)
 	}
-	return httpTLS{certFile: certFile, keyFile: keyFile, enabled: true}, nil
+	out := httpTLS{certFile: certFile, keyFile: keyFile, enabled: true}
+	if clientCAFile != "" {
+		caBytes, err := os.ReadFile(clientCAFile)
+		if err != nil {
+			return httpTLS{}, fmt.Errorf("read client-CA file %q: %w", clientCAFile, err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(caBytes) {
+			return httpTLS{}, fmt.Errorf("client-CA file %q contains no parseable PEM certificates", clientCAFile)
+		}
+		out.clientCAPool = pool
+	}
+	return out, nil
 }
 
 // resolveAuthToken returns the effective bearer token for the HTTP
