@@ -2266,6 +2266,40 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0059` — Second-subtype dissolution (`AutomationGroupDissolution`) lands; demotion/dissolution distinction operationally observable across both subtypes
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0058`](#0058--second-subtype-demotion-automationgroupdemotion-lands-promotedemote-loop-closed-for-second-subtype) closed the promote/demote loop for the second subtype. This entry lands AutomationGroup dissolution (mirrors §0048 for the BehavioralCluster arc). The demotion/dissolution distinction established at §0048 (demotion withdraws OPERATIONAL USE; dissolution recognizes NON-EXISTENCE) transfers across subtypes — an AutomationGroup may be demoted (cycle close) or dissolved (recognition that no automation signature actually exists, or that the signature was misattributed). Both operations are now operationally observable for both Cat III subtypes implemented to date.
+
+- **Decision:** Land `AutomationGroupDissolution` with three structural moves mirroring §0048:
+
+  1. **`AutomationGroupDissolution` Protobuf message** at [`schemas/events/v1/automation_group_dissolution.proto`](../../schemas/events/v1/automation_group_dissolution.proto). Three fields: `formation_event_hash`, `dissolved_at`, `reason`. Same shape as §0048's `BehavioralClusterDissolution`.
+
+  2. **`DissolveAutomationGroup` entry point** at [`services/ingestion/internal/hypothesis/automation_group_dissolution.go`](../../services/ingestion/internal/hypothesis/automation_group_dissolution.go). Parallel to §0048's `Dissolve`. Targets `AutomationGroupFormation` directly (no two-hop indirection through promotion). Reuses shared `ErrTargetNotFound` + `ErrTargetWrongType` sentinels; reuses the `automationGroupFormationMessageType` constant from §0056.
+
+  3. **`cmd/dissolve-automation-group` operator interface** at [`services/ingestion/cmd/dissolve-automation-group/main.go`](../../services/ingestion/cmd/dissolve-automation-group/main.go). Sixteenth operational binary; eleventh substrate-write binary. Mirrors §0048 CLI shape; exit codes 0/2/3 identical.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1, §2.2, §2.3, §2.5 + §2.5 BC3 + §2.5 BC5. Respects glossary + lifecycle-semantics.md demotion/dissolution distinction. Respects §0045+§0056 hypothesis-identity invariant. Respects §0046+§0047 sentinel-sharing pattern. Respects §0056 typed-subtype-landings commitment. Cross-subtype rejection tested at `TestDissolveAutomationGroupRejectsCrossSubtypeFormation`. Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`schemas/events/v1/automation_group_dissolution.proto`](../../schemas/events/v1/automation_group_dissolution.proto) — new file.
+  - [`services/ingestion/internal/hypothesis/automation_group_dissolution.go`](../../services/ingestion/internal/hypothesis/automation_group_dissolution.go) — new file. `AutomationGroupDissolveOptions`, `AutomationGroupDissolveReport`, `DissolveAutomationGroup`.
+  - [`services/ingestion/internal/hypothesis/automation_group_dissolution_test.go`](../../services/ingestion/internal/hypothesis/automation_group_dissolution_test.go) — **7 tests** covering direct-from-formation dissolution, dissolution after promote/demote, idempotency, unknown target, promotion-hash rejection, cross-subtype formation rejection, default dissolved_at.
+  - [`services/ingestion/cmd/dissolve-automation-group/main.go`](../../services/ingestion/cmd/dissolve-automation-group/main.go) — new binary; sixteenth operational CLI; eleventh substrate-write.
+  - Makefile, canonical corpus (minimal + typical), service README, decision-log §0059 (this entry).
+  - **Test count grows.** Combined: **278 tests** (up from 271 at [`§0058`](#0058--second-subtype-demotion-automationgroupdemotion-lands-promotedemote-loop-closed-for-second-subtype); +7).
+  - **Demotion/dissolution distinction operationally observable across both subtypes.** Until this entry, the distinction could only be exercised in BehavioralCluster's substrate-resident events. Now the substrate may carry both `AutomationGroupDemotion` and `AutomationGroupDissolution` rows against the same hypothesis chain — confirming the §0048 distinction transfers without modification across the §0045+§0056 subtype boundary.
+  - **Sentinel sharing pattern now scales to its 7th caller** (4 BC + 3 AG so far).
+  - **Out of scope at this layer (carry-forwards).**
+    - **Two remaining AutomationGroup lifecycle operations** — merge (§0060), split (§0061).
+    - **Projection layer extension for AutomationGroup** — unchanged from §0056 carry-forward.
+
+- **Supersession:** None. Extends §0058 with the fourth AutomationGroup lifecycle operation. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

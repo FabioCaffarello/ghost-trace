@@ -27,6 +27,7 @@ help:
 	@echo "  form-automation-group-build  go build -trimpath -o $(BIN_DIR)/form-automation-group ./cmd/form-automation-group"
 	@echo "  promote-automation-group-build  go build -trimpath -o $(BIN_DIR)/promote-automation-group ./cmd/promote-automation-group"
 	@echo "  demote-automation-group-build  go build -trimpath -o $(BIN_DIR)/demote-automation-group ./cmd/demote-automation-group"
+	@echo "  dissolve-automation-group-build  go build -trimpath -o $(BIN_DIR)/dissolve-automation-group ./cmd/dissolve-automation-group"
 	@echo "  test           go test -race ./..."
 	@echo "  golden-corpus  regenerate canonical-corpus golden files (schemas-evolution event)"
 	@echo "  clean          remove $(GEN_OUT) + $(BIN_DIR)"
@@ -57,7 +58,8 @@ generate: $(PROTOC_GEN_GO)
 	  events/v1/behavioral_cluster_split.proto \
 	  events/v1/automation_group_formation.proto \
 	  events/v1/automation_group_promotion.proto \
-	  events/v1/automation_group_demotion.proto
+	  events/v1/automation_group_demotion.proto \
+	  events/v1/automation_group_dissolution.proto
 
 $(PROTOC_GEN_GO):
 	$(MAKE) tools
@@ -141,6 +143,11 @@ promote-automation-group-build:
 demote-automation-group-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/demote-automation-group ./cmd/demote-automation-group
+
+.PHONY: dissolve-automation-group-build
+dissolve-automation-group-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/dissolve-automation-group ./cmd/dissolve-automation-group
 
 .PHONY: test
 test:
