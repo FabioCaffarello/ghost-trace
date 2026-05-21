@@ -3206,6 +3206,46 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0082` — HTTP summary endpoint `GET /v1/hypotheses/summary`; three-endpoint HTTP read arc complete
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0080`](#0080--http-projection-read-endpoint-lands-get-v1hypothesesstate-first-read-side-surface-on-the-http-channel) landed the single-projection state endpoint; [`§0081`](#0081--http-list-endpoint-get-v1hypotheses-second-read-side-surface-on-the-http-channel) landed the list endpoint. This entry lands the third — the summary endpoint — closing the three-endpoint HTTP read arc. With this PR, all three projection-read CLI surfaces (`hypothesis-state`, `list-hypotheses`, `summarize-hypotheses`) have HTTP parity.
+
+- **Decision:** Add `GET /v1/hypotheses/summary` to the HTTP interface:
+
+  1. **`handleHypothesisSummary` handler** at [`internal/httpapi/hypotheses_summary.go`](../../services/ingestion/internal/httpapi/hypotheses_summary.go) (new file). Mirrors the `cmd/summarize-hypotheses` aggregation pattern: calls `ListXXX` per subtype with the supplied time-window filter, extracts both `StateCounts` and raw `latencySamples` from each per-formation projection, computes per-subtype aggregates locally, computes the `combined` section from the **union of per-subtype raw samples** (NOT approximated from per-subtype aggregates) per [`§0079`](#0079--per-subtype--combined-latency-aggregates-in-summarize-hypotheses-00530055-latency-histogram-carry-forward-discharged).
+
+  2. **Query-parameter parsing.** `after_ns`, `before_ns` (parsed via §0081's `parseInt64Param`; non-negative; `after_ns ≤ before_ns` invariant when both non-zero). Invalid → 400 with structured `ingestError` body.
+
+  3. **Wire shape.** Mirrors `summarize-hypotheses` CLI exactly: top-level `combined` + four per-subtype sections. Each section embeds `projection.StateCounts` (so `total` + `by_state` appear at the section's parent level) and carries a `latencies` payload with three per-dimension aggregates. Operators get the same response regardless of channel.
+
+  4. **Predictable wire shape.** Every State enum key appears in every `by_state`, even at zero (per [`§0053`](#0053--aggregate-state-counters-countbystate--statecounts-0052-carry-forward-discharged-per-state-count-equivalence-invariant)+[`§0078`](#0078--aggregate-cross-subtype-combined-section-in-summarize-hypotheses-006200690076-carry-forward-discharged) predictable-wire-shape commitment). Every section has a `latencies` payload; zero-sample dimensions emit `sample_count: 0` with the `min_ns` / `p50_ns` / `p90_ns` / `max_ns` fields absent (omitempty under nil pointers).
+
+  5. **Tests** at [`internal/httpapi/hypotheses_summary_test.go`](../../services/ingestion/internal/httpapi/hypotheses_summary_test.go) — **9 tests** covering happy-path BC with full top-level structure verification, every-state-key-present invariant, invalid numeric, negative numeric, after-before validation, non-GET method, substrate-not-configured 503, time-window-excludes-all, and combined-equals-sum-of-per-subtype equivalence invariant.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1 (read-only over immutable substrate), §2.2 (operational summary across subtypes is NOT a category claim), §2.3 (no provenance edges produced), §2.5 + §2.5 BC3 (current state remains a projection — the HTTP endpoint is a thin transport over `ListXXX`), §2.5 BC5. Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`services/ingestion/internal/httpapi/handler.go`](../../services/ingestion/internal/httpapi/handler.go) — ServeHTTP route table extended with `/v1/hypotheses/summary`; package doc updated.
+  - [`services/ingestion/internal/httpapi/hypotheses_summary.go`](../../services/ingestion/internal/httpapi/hypotheses_summary.go) — new file. `handleHypothesisSummary` + aggregation helpers prefixed `summary*` to keep them lexically distinct from the `cmd/summarize-hypotheses` package-local versions (the two implementations share intent + algorithm but no code; httpapi cannot import the cmd-internal helpers).
+  - [`services/ingestion/internal/httpapi/hypotheses_summary_test.go`](../../services/ingestion/internal/httpapi/hypotheses_summary_test.go) — new file; 9 tests.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — `summarize-hypotheses` HTTP endpoint documentation + curl examples; "all three CLI surfaces now have HTTP parity" note.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0082 (this entry).
+  - **Three-endpoint HTTP read arc complete.** With §0080 + §0081 + §0082, the three projection-read CLIs have full HTTP parity. The §0034 HTTP interface that started as write-only (POST /v1/events/*) now carries the full read-side too.
+  - **Code duplication note.** The summary aggregation helpers are duplicated between `cmd/summarize-hypotheses/main.go` (package main; landed at §0078+§0079) and `internal/httpapi/hypotheses_summary.go` (package httpapi; this entry). The two implementations share intent but cannot share code without a refactor to extract the aggregation logic into a third package (e.g. `internal/projection/aggregate`). Deferred: the duplication is bounded (~250 lines each side) and the refactor's blast radius (changing `cmd/summarize-hypotheses` + adding a new package + updating tests) is larger than the present cost. Future entry may consolidate.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Aggregation-helper consolidation** — extract the per-subtype aggregator + percentile-computation into `internal/projection` so both `cmd/summarize-hypotheses` and `internal/httpapi` consume one implementation. Named here for future cleanup.
+    - **Cursor-based pagination** for the list endpoint — unchanged from §0081 carry-forward.
+    - **Streaming / chunked encoding** for very large substrates — unchanged.
+    - **gRPC interface** — unchanged.
+    - **Bucketed histograms (vs current percentile summaries)** — unchanged from §0079 carry-forward.
+
+- **Supersession:** None. Closes the three-endpoint HTTP read arc opened at §0080. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
