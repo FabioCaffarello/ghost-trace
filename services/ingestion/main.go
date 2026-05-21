@@ -123,6 +123,10 @@ func run() error {
 		if token != "" {
 			handlerOpts = append(handlerOpts, httpapi.WithAuthToken(token))
 		}
+		// Per decision-log §0080: enable projection-read endpoints
+		// (GET /v1/hypotheses/state and follow-ons). Same substrate
+		// backs the write side.
+		handlerOpts = append(handlerOpts, httpapi.WithSubstrate(sub))
 		handler := httpapi.New(in.Append, reporter, handlerOpts...)
 		srv := &http.Server{
 			Addr:              *httpAddr,

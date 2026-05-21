@@ -7,6 +7,10 @@
 //     JSON confirmation on success, 400 on recoverable input failure,
 //     404 on unknown type, 500 on unrecoverable substrate error (and
 //     signals the service-level fatal channel for shutdown escalation).
+//   - GET  /v1/hypotheses/state — single-projection projection read
+//     keyed by formation event hash; per decision-log §0080. Mirrors
+//     the cmd/hypothesis-state CLI's wire shape. Subtype auto-detect.
+//     Requires substrate read access (injected via WithSubstrate).
 //   - GET  /healthz    — liveness probe; returns 200 + {"status":"ok"}.
 //
 // All other paths return 404; non-matching methods return 405.
@@ -61,6 +65,12 @@ type Handler struct {
 	doAppend AppendFunc
 	fatal    FatalReporter
 
+	// sub, when non-nil, enables the projection-read endpoints landed
+	// at decision-log §0080+. Nil disables them (the routes return 404
+	// matching the not-configured case rather than 500). Production
+	// main wires the same *substrate.Substrate that backs doAppend.
+	sub *substrate.Substrate
+
 	// requestBodyLimit bounds the body bytes the handler reads per
 	// request. Defends against unbounded-input DoS per
 	// concurrency-pattern §Bounded Concurrency (analogue at the HTTP
@@ -108,6 +118,14 @@ func WithRequestBodyLimit(n int64) Option {
 	return func(h *Handler) { h.requestBodyLimit = n }
 }
 
+// WithSubstrate enables the projection-read endpoints (per §0080+).
+// When nil/unset, the read routes return 404 (the endpoints are
+// effectively not registered). Production main wires the same
+// *substrate.Substrate that backs doAppend.
+func WithSubstrate(sub *substrate.Substrate) Option {
+	return func(h *Handler) { h.sub = sub }
+}
+
 // New constructs a Handler. doAppend MUST NOT be nil. fatal MAY be nil
 // in tests where unrecoverable-error escalation is not exercised; in
 // production main wires a real FatalReporter. Options apply
@@ -151,6 +169,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				strings.Join(ingest.KnownURLPaths(), ", ")))
 	case strings.HasPrefix(r.URL.Path, eventsPathPrefix):
 		h.handleEvents(w, r)
+	case r.URL.Path == "/v1/hypotheses/state":
+		h.handleHypothesisState(w, r)
 	default:
 		http.NotFound(w, r)
 	}
