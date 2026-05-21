@@ -30,6 +30,14 @@ type CoordinationRingPromoteOptions struct {
 
 	// Reason is an operator-supplied free-form note.
 	Reason string
+
+	// Actor is an optional per-actor attribution string. Mirrors
+	// PromoteOptions.Actor per §0097 BehavioralCluster pilot —
+	// extended to CoordinationRing at the §0105 mechanical-replication
+	// landing. When non-empty, PromoteCoordinationRing commits the
+	// CoordinationRingPromotion event paired with an IngestionEvent
+	// via AppendPair. Empty preserves the single-Append path.
+	Actor string
 }
 
 // CoordinationRingPromoteReport is the per-PromoteCoordinationRing
@@ -37,6 +45,10 @@ type CoordinationRingPromoteOptions struct {
 type CoordinationRingPromoteReport struct {
 	PromotionEventHashHex string
 	AlreadyPromoted       bool
+
+	// IngestionEventHashHex is the content-hash (hex) of the paired
+	// IngestionEvent committed when Actor was non-empty.
+	IngestionEventHashHex string
 }
 
 // PromoteCoordinationRing records a CoordinationRingPromotion
@@ -96,19 +108,51 @@ func PromoteCoordinationRing(ctx context.Context, sub *substrate.Substrate, opts
 		return CoordinationRingPromoteReport{}, fmt.Errorf("hypothesis.PromoteCoordinationRing: lookup promotion %s: %w", hex, lookupErr)
 	}
 
+	committedAt := now().UnixNano()
 	promRow := substrate.EventRow{
 		EventHash:   hash,
 		EventTime:   promotedAt,
 		MessageType: string(ev.ProtoReflect().Descriptor().FullName()),
 		PayloadRef:  hex[:2] + "/" + hex[2:],
-		CommittedAt: now().UnixNano(),
+		CommittedAt: committedAt,
 	}
-	if err := sub.Append(ctx, promRow, payload); err != nil {
-		return CoordinationRingPromoteReport{}, fmt.Errorf("hypothesis.PromoteCoordinationRing: append promotion %s: %w", hex, err)
+
+	if opts.Actor == "" {
+		if err := sub.Append(ctx, promRow, payload); err != nil {
+			return CoordinationRingPromoteReport{}, fmt.Errorf("hypothesis.PromoteCoordinationRing: append promotion %s: %w", hex, err)
+		}
+		return CoordinationRingPromoteReport{
+			PromotionEventHashHex: hex,
+			AlreadyPromoted:       alreadyPresent,
+		}, nil
+	}
+
+	ingEv := &eventsv1.IngestionEvent{
+		PrimaryEventHash: hash[:],
+		ReceivedAt:       committedAt,
+		IngestedAt:       committedAt,
+		Channel:          "cli",
+		ClientCommonName: opts.Actor,
+	}
+	ingPayload, ingHash, err := canonical.MarshalAndHash(ingEv)
+	if err != nil {
+		return CoordinationRingPromoteReport{}, fmt.Errorf("hypothesis.PromoteCoordinationRing: marshal ingestion event: %w", err)
+	}
+	ingHex := canonical.HashHex(ingHash)
+	ingRow := substrate.EventRow{
+		EventHash:   ingHash,
+		EventTime:   committedAt,
+		MessageType: string(ingEv.ProtoReflect().Descriptor().FullName()),
+		PayloadRef:  ingHex[:2] + "/" + ingHex[2:],
+		CommittedAt: committedAt,
+	}
+	if err := sub.AppendPair(ctx, promRow, payload, ingRow, ingPayload); err != nil {
+		return CoordinationRingPromoteReport{}, fmt.Errorf("hypothesis.PromoteCoordinationRing: append pair (promotion %s, ingestion %s): %w", hex, ingHex, err)
 	}
 
 	return CoordinationRingPromoteReport{
 		PromotionEventHashHex: hex,
 		AlreadyPromoted:       alreadyPresent,
+		IngestionEventHashHex: ingHex,
 	}, nil
 }

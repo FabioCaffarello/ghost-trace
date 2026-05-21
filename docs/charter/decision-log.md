@@ -4274,6 +4274,50 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0106` — T4 promote replicated across the three remaining subtypes; §0097 Actor pattern extended to all four
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0105`](#0105--t4-pilot-post-v1hypothesesbehavioralclusterpromote-lands-pattern-established-for-the-23-remaining-endpoints) shipped the T4 pilot (`POST /v1/hypotheses/behavioral-cluster/promote`) and locked the wire pattern: proto-body decode → `validatePromoteParams` → `resolveT4Actor` → `hypothesis.Promote*` → JSON response, with shared helpers `decodePromotePayload` + `promoteErrToHTTPStatus`. This entry replicates the pilot across the three remaining subtypes — automation-group, campaign-hypothesis, coordination-ring — completing the `promote` op across all four Cat III subtypes per the suggested cadence from §0105 methodological observation 1 (per-op-across-subtypes).
+
+  The replication uncovered a structural prerequisite: the three remaining subtypes' `Promote*` helpers had no `Actor` field on their `*PromoteOptions` and no `IngestionEventHashHex` on their `*PromoteReport` — the §0097 pilot extension was BehavioralCluster-only. The HTTP T4 cross-tier per-actor-attribution requirement (§0094) is unconditional; running `Promote*` without `Actor` would commit the lifecycle event via `Append` (single-row) instead of `AppendPair` (paired with IngestionEvent), violating the cross-tier requirement structurally.
+
+- **Decision:** Coordinated two-part landing:
+
+  1. **Three new HTTP T4 handlers.** [`services/ingestion/internal/httpapi/lifecycle.go`](../../services/ingestion/internal/httpapi/lifecycle.go) gains `handlePromoteAutomationGroup`, `handlePromoteCampaignHypothesis`, `handlePromoteCoordinationRing` — mechanical replication of `handlePromoteBehavioralCluster` with the subtype-specific proto (`AutomationGroupPromotion` et al.) and helper call (`PromoteAutomationGroup` et al.). The pilot's `handlePromoteBehavioralCluster` was simultaneously refactored to use the same shared helpers (`decodePromotePayload`, `validatePromoteParams`, `promoteErrToHTTPStatus`) — all four handlers now share the helper sleeve introduced by this PR.
+
+  2. **`Actor` + `IngestionEventHashHex` extended to three remaining subtypes.** [`services/ingestion/internal/hypothesis/automation_group_promotion.go`](../../services/ingestion/internal/hypothesis/automation_group_promotion.go), [`campaign_hypothesis_promotion.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_promotion.go), and [`coordination_ring_promotion.go`](../../services/ingestion/internal/hypothesis/coordination_ring_promotion.go) gain the `Actor` field on `*PromoteOptions` + `IngestionEventHashHex` on `*PromoteReport` + the if-Actor-empty-Append-else-AppendPair branch at the end of each `Promote*` function. Mechanical replication of the §0097 BehavioralCluster pilot extension.
+
+  3. **Routing.** [`handler.go`](../../services/ingestion/internal/httpapi/handler.go) `ServeHTTP` dispatches the three new paths; `routeTier` classifies all four promote paths as `TierConstitutionalAct`.
+
+  4. **Tests.** [`services/ingestion/internal/httpapi/lifecycle_test.go`](../../services/ingestion/internal/httpapi/lifecycle_test.go) gains three subtype-specific formation helpers (`formedAutomationGroup`, `formedCampaignHypothesis`, `formedCoordinationRing`) using the public `hypothesis.Form*All` API + each subtype's pattern type (`UniformCadenceV1`, `TemporalDescriptorCohortV1`, `CoOccurrenceWindowV1`). Six new happy-path tests (one per remaining subtype × happy + idempotent for AG) + one cross-subtype-rejection test (BC formation hash in AG endpoint → 404). The existing 13 BC tests exercise the shared validation paths.
+
+  5. **README.** [`services/ingestion/README.md`](../../services/ingestion/README.md) "HTTP T4 constitutional-act endpoints" subsection refactored to list all four promote endpoints + added "Cross-subtype symmetry" paragraph documenting the shared validation + per-actor + error semantics.
+
+- **Constitutional review:** No Charter invariant amended. The HTTP T4 cross-tier per-actor-attribution requirement per [`§0094`](#0094--http-authmodel-evolution-framed-operationtier-classification-recorded-tier-34-advance-deferred-to-followon-rfc) is now satisfied structurally across all four subtypes (not just BehavioralCluster as in §0105). The §2.5 BC5 lifecycle-integrity gate (promotion references only the correctly-typed formation predecessor) is preserved by each subtype's `Promote*` per-message-type check. The §2.1 substrate-immutability + §2.3 provenance + §2.5 lifecycle-event commitments operate through the shared `AppendPair` path for each subtype.
+
+  Falsifiability: every claim in the README + decision-log is testable by mechanical replay of the new lifecycle_test.go tests. The cross-subtype symmetry is exercised by `TestT4PromoteWrongSubtypeFormationHashRejected` (BC formation hash in AG endpoint → 404; §2.5 BC5 cross-subtype rejection). Per-actor attribution across subtypes is exercised by each happy-path test asserting non-empty `IngestionEventHash` in the response.
+
+- **Consequences:**
+  - All four T4 promote endpoints reachable.
+  - **§0098 landing 3 of 3: 4/24 endpoints done.** Remaining: 5 ops × 4 subtypes = 20 endpoints (form/demote/dissolve/merge/split × 4 subtypes).
+  - **§0097 carry-forward DISCHARGED across the four subtypes for the promote op.** [`§0097`](#0097--cli-peractor-attribution-pilot-promotehypothesis-actor-authscope-rfc-open-question-2-partially-discharged) had explicitly named "mechanical extension to the other 23 CLIs" as named follow-on. This PR discharges 3 of those 23 (AG/CH/CR promote on the helper side; CLI extensions remain optional per §0033 local-shell-trust). The other 20 (demote/dissolve/merge/split per subtype + form per subtype) remain on the named-follow-on list.
+  - All four `Promote*` helpers now share the same Options/Report shape (`Actor` + `IngestionEventHashHex`), making future T4 op replication (demote, dissolve, etc.) mechanically uniform — each follows the same Options-with-Actor + Report-with-IngestionEventHashHex shape.
+
+  - **Methodological observation 1 — Cross-subtype symmetry pattern.** When extending a multi-subtype helper family (Promote across BC/AG/CH/CR), the cleanest landing is: (a) extend the helper signature uniformly across all subtypes simultaneously; (b) introduce shared HTTP-layer helpers that work uniformly across the subtype-specific helper calls; (c) replicate handler bodies mechanically with subtype-specific proto + helper-name swap; (d) test happy + idempotent for each subtype + one cross-subtype-rejection test to exercise the §2.5 BC5 wrong-type gate. Total per-subtype handler is ~30 LOC + ~50 LOC tests; the pattern is highly compressible.
+
+  - **Methodological observation 2 — §0097 CLI-side carry-forward STILL pending for the 3 remaining promote subtypes.** This PR extended the §0097 pattern on the HELPER side (Promote* gains Actor support). The CLI side — `promote-automation-group`, `promote-campaign-hypothesis`, `promote-coordination-ring` — does NOT yet expose an `--actor` option. CLI extension is a separate, smaller follow-on (3 file changes to add the `--actor` option wiring). Worth bundling with the next T4 op landing per cadence efficiency.
+
+  - **Carry-forwards:**
+    - **20 remaining T4 endpoints** — demote / dissolve / merge / split × 4 subtypes; form × 4 subtypes (form has divergent shape per §0105).
+    - **CLI `--actor` option for AG/CH/CR promote** — bundle with the next T4 op landing OR ship as a small standalone PR.
+    - **`token_id` field per RFC item 4(b)** — bearer-token actor attribution. Currently `resolveT4Actor` falls back to a literal; future per-tier token files extension supports CN-equivalent attribution for α-only deployments.
+
+- **Supersession:** None. Discharges 3 of the 23 §0097 named follow-on extensions (AG/CH/CR promote-side helper extension); extends [`§0098`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens) landing 3 from 1/24 to 4/24 endpoints.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

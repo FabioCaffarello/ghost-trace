@@ -310,15 +310,16 @@ func routeTier(r *http.Request) Tier {
 	if p == "/v1/admin/orphan-cleanup" {
 		return TierSubstrateAdmin
 	}
-	if p == "/v1/hypotheses/behavioral-cluster/promote" {
+	if p == "/v1/hypotheses/behavioral-cluster/promote" ||
+		p == "/v1/hypotheses/automation-group/promote" ||
+		p == "/v1/hypotheses/campaign-hypothesis/promote" ||
+		p == "/v1/hypotheses/coordination-ring/promote" {
 		return TierConstitutionalAct
 	}
 	// Remaining T4 constitutional-act routes (named follow-on per
-	// §0098 + §0105 pilot): the other 23 endpoints
-	// /v1/hypotheses/<subtype>/{form,demote,dissolve,merge,split}
-	// (with promote landed for BehavioralCluster only) are pre-
-	// positioned here for the mechanical-replication follow-on
-	// landings.
+	// §0098 + §0105 pilot): the other 20 endpoints — promote is
+	// done across all four subtypes; form/demote/dissolve/merge/split
+	// × 4 subtypes remain pre-positioned for follow-on landings.
 	return ""
 }
 
@@ -365,6 +366,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleAdminOrphanCleanup(w, r)
 	case r.URL.Path == "/v1/hypotheses/behavioral-cluster/promote":
 		h.handlePromoteBehavioralCluster(w, r)
+	case r.URL.Path == "/v1/hypotheses/automation-group/promote":
+		h.handlePromoteAutomationGroup(w, r)
+	case r.URL.Path == "/v1/hypotheses/campaign-hypothesis/promote":
+		h.handlePromoteCampaignHypothesis(w, r)
+	case r.URL.Path == "/v1/hypotheses/coordination-ring/promote":
+		h.handlePromoteCoordinationRing(w, r)
 	default:
 		http.NotFound(w, r)
 	}

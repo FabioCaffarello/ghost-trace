@@ -64,41 +64,14 @@ type promoteResponse struct {
 // non-POST. 415 wrong Content-Type. 500 on substrate failure. 503
 // when the handler was constructed without WithSubstrate.
 func (h *Handler) handlePromoteBehavioralCluster(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeIngestError(w, http.StatusMethodNotAllowed, "method not allowed; POST required")
-		return
-	}
-	if h.sub == nil {
-		writeIngestError(w, http.StatusServiceUnavailable, "substrate access not configured (WithSubstrate)")
-		return
-	}
-	if ct := r.Header.Get("Content-Type"); ct != "application/x-protobuf" {
-		writeIngestError(w, http.StatusUnsupportedMediaType, fmt.Sprintf("Content-Type must be application/x-protobuf (got %q)", ct))
-		return
-	}
-
-	body, err := io.ReadAll(io.LimitReader(r.Body, h.requestBodyLimit+1))
-	if err != nil {
-		writeIngestError(w, http.StatusBadRequest, fmt.Sprintf("read body: %v", err))
-		return
-	}
-	if int64(len(body)) > h.requestBodyLimit {
-		writeIngestError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("request body exceeds %d-byte limit", h.requestBodyLimit))
-		return
-	}
-
 	var msg eventsv1.BehavioralClusterPromotion
-	if err := proto.Unmarshal(body, &msg); err != nil {
-		writeIngestError(w, http.StatusBadRequest, fmt.Sprintf("decode BehavioralClusterPromotion: %v", err))
+	status, errMsg, _, ok := h.decodePromotePayload(r, &msg)
+	if !ok {
+		writeIngestError(w, status, errMsg)
 		return
 	}
-
-	if len(msg.GetFormationEventHash()) != 32 {
-		writeIngestError(w, http.StatusBadRequest, fmt.Sprintf("formation_event_hash must be 32 bytes (got %d)", len(msg.GetFormationEventHash())))
-		return
-	}
-	if msg.GetCadenceSeconds() <= 0 {
-		writeIngestError(w, http.StatusBadRequest, fmt.Sprintf("cadence_seconds must be positive (got %d)", msg.GetCadenceSeconds()))
+	if s, m, ok := validatePromoteParams(msg.GetFormationEventHash(), msg.GetCadenceSeconds()); !ok {
+		writeIngestError(w, s, m)
 		return
 	}
 
@@ -106,30 +79,21 @@ func (h *Handler) handlePromoteBehavioralCluster(w http.ResponseWriter, r *http.
 	copy(formationHash[:], msg.GetFormationEventHash())
 
 	env := envelopeForRequest(r)
-	actor := resolveT4Actor(env, TierConstitutionalAct)
-
 	opts := hypothesis.PromoteOptions{
 		FormationEventHash: formationHash,
 		PromotedAt:         msg.GetPromotedAt(),
 		CadenceSeconds:     msg.GetCadenceSeconds(),
 		Reason:             msg.GetReason(),
-		Actor:              actor,
+		Actor:              resolveT4Actor(env, TierConstitutionalAct),
 	}
 
 	report, err := hypothesis.Promote(r.Context(), h.sub, opts, time.Now)
 	if err != nil {
-		switch {
-		case errIs(err, hypothesis.ErrTargetNotFound):
-			writeIngestError(w, http.StatusNotFound, fmt.Sprintf("formation event hash not found: %x", formationHash))
-			return
-		case errIs(err, hypothesis.ErrTargetWrongType):
-			writeIngestError(w, http.StatusNotFound, fmt.Sprintf("formation event hash resolves to wrong type: %x", formationHash))
-			return
-		}
-		if h.fatal != nil {
+		s, m := promoteErrToHTTPStatus(err, formationHash)
+		if s == http.StatusInternalServerError && h.fatal != nil {
 			h.fatal.ReportFatal(fmt.Errorf("T4 promote-behavioral-cluster: %w", err))
 		}
-		writeIngestError(w, http.StatusInternalServerError, fmt.Sprintf("promote: %v", err))
+		writeIngestError(w, s, m)
 		return
 	}
 
@@ -180,4 +144,195 @@ func errIs(err, target error) bool {
 		cur = un.Unwrap()
 	}
 	return false
+}
+
+// decodePromotePayload reads + length-limits the request body and
+// unmarshals it into msg under the §0034 canonical-serialization-
+// contract enforcement (application/x-protobuf required; 413 when
+// body exceeds requestBodyLimit). Returns a non-nil error message
+// string when validation fails; the caller writes the HTTP error.
+// Shared across the four per-subtype promote handlers per §0105
+// pilot-then-replicate pattern.
+func (h *Handler) decodePromotePayload(r *http.Request, msg proto.Message) (status int, errMsg string, body []byte, ok bool) {
+	if r.Method != http.MethodPost {
+		return http.StatusMethodNotAllowed, "method not allowed; POST required", nil, false
+	}
+	if h.sub == nil {
+		return http.StatusServiceUnavailable, "substrate access not configured (WithSubstrate)", nil, false
+	}
+	if ct := r.Header.Get("Content-Type"); ct != "application/x-protobuf" {
+		return http.StatusUnsupportedMediaType, fmt.Sprintf("Content-Type must be application/x-protobuf (got %q)", ct), nil, false
+	}
+	b, err := io.ReadAll(io.LimitReader(r.Body, h.requestBodyLimit+1))
+	if err != nil {
+		return http.StatusBadRequest, fmt.Sprintf("read body: %v", err), nil, false
+	}
+	if int64(len(b)) > h.requestBodyLimit {
+		return http.StatusRequestEntityTooLarge, fmt.Sprintf("request body exceeds %d-byte limit", h.requestBodyLimit), nil, false
+	}
+	if err := proto.Unmarshal(b, msg); err != nil {
+		return http.StatusBadRequest, fmt.Sprintf("decode payload: %v", err), nil, false
+	}
+	return 0, "", b, true
+}
+
+// validatePromoteParams enforces the shared validation gate across
+// the four per-subtype promote handlers: 32-byte formation hash +
+// positive cadence_seconds. Returns (status, msg, ok=false) on
+// failure; otherwise (_, _, ok=true).
+func validatePromoteParams(formationHash []byte, cadenceSeconds int64) (int, string, bool) {
+	if len(formationHash) != 32 {
+		return http.StatusBadRequest, fmt.Sprintf("formation_event_hash must be 32 bytes (got %d)", len(formationHash)), false
+	}
+	if cadenceSeconds <= 0 {
+		return http.StatusBadRequest, fmt.Sprintf("cadence_seconds must be positive (got %d)", cadenceSeconds), false
+	}
+	return 0, "", true
+}
+
+// promoteErrToHTTPStatus maps a hypothesis.Promote* error to its HTTP
+// status + body message. Shared across the four per-subtype promote
+// handlers per §0105 pilot-then-replicate pattern.
+func promoteErrToHTTPStatus(err error, formationHash [32]byte) (int, string) {
+	switch {
+	case errIs(err, hypothesis.ErrTargetNotFound):
+		return http.StatusNotFound, fmt.Sprintf("formation event hash not found: %x", formationHash)
+	case errIs(err, hypothesis.ErrTargetWrongType):
+		return http.StatusNotFound, fmt.Sprintf("formation event hash resolves to wrong type: %x", formationHash)
+	}
+	return http.StatusInternalServerError, fmt.Sprintf("promote: %v", err)
+}
+
+// handlePromoteAutomationGroup implements POST
+// /v1/hypotheses/automation-group/promote. Per §0105 pilot-then-
+// replicate pattern: mechanical replication of handlePromoteBehavioral
+// Cluster with AutomationGroupPromotion proto + hypothesis.Promote
+// AutomationGroup helper.
+func (h *Handler) handlePromoteAutomationGroup(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.AutomationGroupPromotion
+	status, errMsg, _, ok := h.decodePromotePayload(r, &msg)
+	if !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	if s, m, ok := validatePromoteParams(msg.GetFormationEventHash(), msg.GetCadenceSeconds()); !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+
+	var formationHash [32]byte
+	copy(formationHash[:], msg.GetFormationEventHash())
+
+	env := envelopeForRequest(r)
+	opts := hypothesis.AutomationGroupPromoteOptions{
+		FormationEventHash: formationHash,
+		PromotedAt:         msg.GetPromotedAt(),
+		CadenceSeconds:     msg.GetCadenceSeconds(),
+		Reason:             msg.GetReason(),
+		Actor:              resolveT4Actor(env, TierConstitutionalAct),
+	}
+
+	report, err := hypothesis.PromoteAutomationGroup(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		s, m := promoteErrToHTTPStatus(err, formationHash)
+		if s == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 promote-automation-group: %w", err))
+		}
+		writeIngestError(w, s, m)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, promoteResponse{
+		PromotionEventHash: report.PromotionEventHashHex,
+		IngestionEventHash: report.IngestionEventHashHex,
+		AlreadyPromoted:    report.AlreadyPromoted,
+	})
+}
+
+// handlePromoteCampaignHypothesis implements POST
+// /v1/hypotheses/campaign-hypothesis/promote per §0105 pilot-then-
+// replicate pattern.
+func (h *Handler) handlePromoteCampaignHypothesis(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.CampaignHypothesisPromotion
+	status, errMsg, _, ok := h.decodePromotePayload(r, &msg)
+	if !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	if s, m, ok := validatePromoteParams(msg.GetFormationEventHash(), msg.GetCadenceSeconds()); !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+
+	var formationHash [32]byte
+	copy(formationHash[:], msg.GetFormationEventHash())
+
+	env := envelopeForRequest(r)
+	opts := hypothesis.CampaignHypothesisPromoteOptions{
+		FormationEventHash: formationHash,
+		PromotedAt:         msg.GetPromotedAt(),
+		CadenceSeconds:     msg.GetCadenceSeconds(),
+		Reason:             msg.GetReason(),
+		Actor:              resolveT4Actor(env, TierConstitutionalAct),
+	}
+
+	report, err := hypothesis.PromoteCampaignHypothesis(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		s, m := promoteErrToHTTPStatus(err, formationHash)
+		if s == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 promote-campaign-hypothesis: %w", err))
+		}
+		writeIngestError(w, s, m)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, promoteResponse{
+		PromotionEventHash: report.PromotionEventHashHex,
+		IngestionEventHash: report.IngestionEventHashHex,
+		AlreadyPromoted:    report.AlreadyPromoted,
+	})
+}
+
+// handlePromoteCoordinationRing implements POST
+// /v1/hypotheses/coordination-ring/promote per §0105 pilot-then-
+// replicate pattern.
+func (h *Handler) handlePromoteCoordinationRing(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.CoordinationRingPromotion
+	status, errMsg, _, ok := h.decodePromotePayload(r, &msg)
+	if !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	if s, m, ok := validatePromoteParams(msg.GetFormationEventHash(), msg.GetCadenceSeconds()); !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+
+	var formationHash [32]byte
+	copy(formationHash[:], msg.GetFormationEventHash())
+
+	env := envelopeForRequest(r)
+	opts := hypothesis.CoordinationRingPromoteOptions{
+		FormationEventHash: formationHash,
+		PromotedAt:         msg.GetPromotedAt(),
+		CadenceSeconds:     msg.GetCadenceSeconds(),
+		Reason:             msg.GetReason(),
+		Actor:              resolveT4Actor(env, TierConstitutionalAct),
+	}
+
+	report, err := hypothesis.PromoteCoordinationRing(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		s, m := promoteErrToHTTPStatus(err, formationHash)
+		if s == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 promote-coordination-ring: %w", err))
+		}
+		writeIngestError(w, s, m)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, promoteResponse{
+		PromotionEventHash: report.PromotionEventHashHex,
+		IngestionEventHash: report.IngestionEventHashHex,
+		AlreadyPromoted:    report.AlreadyPromoted,
+	})
 }
