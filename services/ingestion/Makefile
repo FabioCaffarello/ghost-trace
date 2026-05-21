@@ -43,6 +43,7 @@ help:
 	@echo "  merge-coordination-rings-build  go build -trimpath -o $(BIN_DIR)/merge-coordination-rings ./cmd/merge-coordination-rings"
 	@echo "  split-coordination-ring-build  go build -trimpath -o $(BIN_DIR)/split-coordination-ring ./cmd/split-coordination-ring"
 	@echo "  replay-operational-session-build  go build -trimpath -o $(BIN_DIR)/replay-operational-session ./cmd/replay-operational-session"
+	@echo "  replay-all-operational-sessions-build  go build -trimpath -o $(BIN_DIR)/replay-all-operational-sessions ./cmd/replay-all-operational-sessions"
 	@echo "  test           go test -race ./..."
 	@echo "  golden-corpus  regenerate canonical-corpus golden files (schemas-evolution event)"
 	@echo "  clean          remove $(GEN_OUT) + $(BIN_DIR)"
@@ -252,6 +253,11 @@ split-coordination-ring-build:
 replay-operational-session-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/replay-operational-session ./cmd/replay-operational-session
+
+.PHONY: replay-all-operational-sessions-build
+replay-all-operational-sessions-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/replay-all-operational-sessions ./cmd/replay-all-operational-sessions
 
 .PHONY: test
 test:

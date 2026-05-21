@@ -3334,6 +3334,49 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0085` — Substrate-wide batch Phase 1 replay; §0084-named carry-forward discharged
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0084`](#0084--first-phase-1-replay-tool-lands-deterministic-operationalsession-re-derivation-verified) landed the per-target replay tool + named "substrate-wide replay scan" as a deferred carry-forward — a tool that replays *every* OperationalSession and reports aggregate counts. This entry discharges that carry-forward.
+
+  The per-target tool is sufficient for operator-driven investigation of a single record; the substrate-wide tool is sufficient for periodic audit ("does every OS in this substrate still replay cleanly?"). The two tools share the replay logic via the `internal/replay` package; the batch tool adds an iteration + aggregation layer.
+
+- **Decision:** Land batch Phase 1 replay with two structural moves:
+
+  1. **`ReplayAllOperationalSessions` entry point** at [`services/ingestion/internal/replay/replay_all.go`](../../services/ingestion/internal/replay/replay_all.go) (new file). Walks every OperationalSession in the substrate, replays each, aggregates outcomes into a `BatchReplayReport` with per-outcome counts (`Total`, `Matched`, `Drifted`, `Errored`) + per-non-match-record entry lists (`Drift`, `Errors`). Pre-collects the `DerivationContext` ONCE (cost: 1 substrate walk + 1 sort-per-actor) and reuses it across all per-target replays — the naive call-the-per-target-CLI-in-a-loop approach would re-collect the context N times.
+
+  2. **`cmd/replay-all-operational-sessions` operator interface** at [`services/ingestion/cmd/replay-all-operational-sessions/main.go`](../../services/ingestion/cmd/replay-all-operational-sessions/main.go) (new file). 32nd operational binary; 4th substrate-audit/maintenance. Four exit codes: **0** = every record matched; **1** = drift detected for at least one record; **2** = config error; **3** = precondition error for at least one record (no drift). Drift takes precedence over error when both are non-zero (drift indicates a more serious condition).
+
+  3. **Outcome categorization.** Three `BatchReplayOutcome` constants — `OutcomeMatch`, `OutcomeDrift`, `OutcomeError` — distinguish the three terminal states. `Outcome="match"` (re-derivation byte-identical); `Outcome="drift"` (re-derivation completed but hash differs); `Outcome="error"` (replay couldn't complete due to precondition failure). The distinction is the same as the per-target CLI's exit-code semantic, generalized to a per-record outcome string.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1 (read-only over immutable substrate; no records committed; the originally-committed OperationalSessions remain authoritative). Respects §2.2 (the report categorizes per-record outcomes via projection-time logic, NOT by writing new Cat II records). Respects §2.5 (no lifecycle events touched). Canonical vocabulary used as written. The drift outcome is a §2.1-observability concern (operationally meaningful but does NOT violate §2.1: the substrate records themselves remain immutable; the derivation implementation has changed since commit).
+
+- **Consequences:**
+  - [`services/ingestion/internal/replay/replay_all.go`](../../services/ingestion/internal/replay/replay_all.go) — new file. `BatchReplayOutcome` enum, `BatchReplayEntry` + `BatchReplayReport` types, `ReplayAllOperationalSessions` entry point, internal `replayOneFromRow` helper that mirrors per-target replay logic using the supplied (pre-collected) `DerivationContext`.
+  - [`services/ingestion/internal/replay/replay_all_test.go`](../../services/ingestion/internal/replay/replay_all_test.go) — new file. **5 tests** covering empty substrate (zero counts), all-match population, mixed-population (1 valid OS + 1 hand-injected OS with unknown definition_version → 1 matched + 1 errored), skip-non-OS-records (the OS-walk filters by message_type), and the sum invariant `Total == Matched + Drifted + Errored`.
+  - [`services/ingestion/cmd/replay-all-operational-sessions/main.go`](../../services/ingestion/cmd/replay-all-operational-sessions/main.go) — new binary; 32nd CLI; 4th substrate-audit/maintenance.
+  - [`services/ingestion/Makefile`](../../services/ingestion/Makefile) — help echo + PHONY target.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — new `replay-all-operational-sessions` CLI section with exit-code semantic explained + JSON output example.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0085 (this entry).
+  - **§0084 "substrate-wide replay scan" carry-forward discharged.** Operators can now audit the entire substrate's Phase 1 replay contract in a single command.
+  - **32nd operational binary; 4th substrate-audit/maintenance.** `cmd/` now contains 32 binaries across three classifications:
+    - substrate-write (25): unchanged from §0084.
+    - **substrate-audit/maintenance (4):** `verify`, `orphan-cleanup`, `replay-operational-session`, **`replay-all-operational-sessions`** (new).
+    - projection-read (3): unchanged.
+  - **Performance shape.** Substrate walks: 2 (DerivationContext pre-collection + the OS-iteration walk) + 1 source-lookup per OperationalSession. The naive "call per-target CLI in a loop" approach would do 2N+ walks for N records. The pre-collection optimization is operationally meaningful for substrates with many OS records.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Per-target CLI re-export of BatchReplayEntry shape** — the per-target CLI emits its own JSON shape (different field names); operators that want consistent output across the two CLIs would benefit from a shared output shape. Deferred until pressure surfaces.
+    - **Streaming output** — the current implementation buffers the full report before encoding; for substrates with millions of OS records a streaming output would be a future optimization.
+    - **Per-subtype filtering** — currently the batch CLI replays every OS unconditionally. A future `--definition-version` filter would let operators audit drift in a specific definition's records.
+    - **HTTP batch-replay endpoint** — unchanged from §0084 carry-forward.
+    - **Phase 2/3/4 replay** — unchanged from §0084 deferral.
+
+- **Supersession:** None. Discharges a UX carry-forward named at §0084. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
