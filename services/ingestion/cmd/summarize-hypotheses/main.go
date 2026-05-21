@@ -80,10 +80,18 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	chCounts, err := projection.CountCampaignHypothesesByState(ctx, sub, projection.CampaignHypothesisListOptions{
+		TimeAfterNs:  *afterNs,
+		TimeBeforeNs: *beforeNs,
+	})
+	if err != nil {
+		return err
+	}
 
 	output := perSubtype{
-		BehavioralCluster: bcCounts,
-		AutomationGroup:   agCounts,
+		BehavioralCluster:   bcCounts,
+		AutomationGroup:     agCounts,
+		CampaignHypothesis:  chCounts,
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
@@ -92,13 +100,14 @@ func run() error {
 	}
 
 	fmt.Fprintf(os.Stderr,
-		"summarize-hypotheses: bc_total=%d ag_total=%d after_ns=%d before_ns=%d\n",
-		bcCounts.Total, agCounts.Total,
+		"summarize-hypotheses: bc_total=%d ag_total=%d ch_total=%d after_ns=%d before_ns=%d\n",
+		bcCounts.Total, agCounts.Total, chCounts.Total,
 		*afterNs, *beforeNs)
 	return nil
 }
 
 type perSubtype struct {
-	BehavioralCluster projection.StateCounts `json:"behavioral_cluster"`
-	AutomationGroup   projection.StateCounts `json:"automation_group"`
+	BehavioralCluster  projection.StateCounts `json:"behavioral_cluster"`
+	AutomationGroup    projection.StateCounts `json:"automation_group"`
+	CampaignHypothesis projection.StateCounts `json:"campaign_hypothesis"`
 }

@@ -2668,6 +2668,60 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0069` — Projection layer extended to CampaignHypothesis; typed-subtype-landings discipline now validated across THREE subtypes at both write and read surfaces
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0068`](#0068--sixth-final-campaignhypothesis-lifecycle-operation-campaignhypothesissplit-lands-third-subtype-25-lifecycle-surface-complete-typed-subtype-landings-commitment-fully-validated-across-three-subtypes) closed the CampaignHypothesis write surface (6 of 6 lifecycle operations). The §0063–§0068 arc each carried a "Projection layer extension for CampaignHypothesis" carry-forward — the third subtype's read-side surface had no `hypothesis-state`/`list-hypotheses`/`summarize-hypotheses` coverage. This entry closes that gap, mirroring §0062's discharge of the equivalent §0056-arc carry-forward.
+
+  One structural confirmation closes this entry:
+
+  - **§0062's parallel-per-subtype projection discipline transfers cleanly to the event-centric subtype.** The CampaignHypothesis projection structure carries the same lifecycle event pointer set + same State enum + same precedence rules + same latency derivation as BC and AG. The event-centric/actor-centric distinction lives in the FORMATION shape; the projection's lifecycle dimensions are subtype-agnostic. The parallel-types approach therefore avoids any genuine interface-unification pressure even across the event-centric boundary — the duplication remains structurally honest.
+
+- **Decision:** Extend the projection layer for CampaignHypothesis with parallel per-subtype types + functions, plus cross-subtype CLI dispatch:
+
+  1. **`CampaignHypothesisProjection` struct** at [`services/ingestion/internal/projection/campaign_hypothesis.go`](../../services/ingestion/internal/projection/campaign_hypothesis.go). Mirrors `HypothesisProjection` + `AutomationGroupProjection` with CH-typed lifecycle event pointers. Reuses the shared `State` enum + `LifecycleEntry` types. Six new CH-subtype `campaignHypothesisXxxMessageType` constants.
+
+  2. **`ProjectCampaignHypothesis`** at the same file. Two-pass walk parallel to §0051+§0062. Validates the formation row's message_type is `CampaignHypothesisFormation`; cross-subtype rejection structurally enforced.
+
+  3. **`computeCampaignHypothesisState`** + **`computeCampaignHypothesisLatencies`** at the same file. Same precedence rules + latency-derivation patterns.
+
+  4. **`ProjectAllCampaignHypotheses`** + **`ListCampaignHypotheses`** + **`CountCampaignHypothesesByState`** at [`services/ingestion/internal/projection/campaign_hypothesis_list.go`](../../services/ingestion/internal/projection/campaign_hypothesis_list.go). New `CampaignHypothesisListOptions` struct parallel to `ListOptions` + `AutomationGroupListOptions`.
+
+  5. **CLI dispatch** extended in [`cmd/hypothesis-state`](../../services/ingestion/cmd/hypothesis-state/main.go), [`cmd/list-hypotheses`](../../services/ingestion/cmd/list-hypotheses/main.go), and [`cmd/summarize-hypotheses`](../../services/ingestion/cmd/summarize-hypotheses/main.go):
+     - `hypothesis-state`: new `CampaignHypothesisFormation` case in the auto-dispatch switch.
+     - `list-hypotheses`: `-subtype` validator accepts `campaign_hypothesis`; new CH aggregation branch.
+     - `summarize-hypotheses`: emits a third per-subtype section (`campaign_hypothesis`).
+
+  6. **Tests** at [`internal/projection/campaign_hypothesis_test.go`](../../services/ingestion/internal/projection/campaign_hypothesis_test.go) — **9 tests** covering forming/promoted/dissolved states, unknown formation, cross-subtype rejection (BC formation hash → `ErrTargetNotFormation`), list ordering, count-equivalent-to-list-filter, ProjectAll-equivalent-to-ProjectCampaignHypothesis, latency derivation.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1 (read-only over immutable substrate), §2.2 (`State` is operational summary across subtypes, NOT a category claim), §2.3 (projection entries reference producing lifecycle events by content-hash), §2.5 + §2.5 BC3 + §2.5 BC5. Respects §0045+§0056+§0063 hypothesis-identity invariant — CampaignHypothesisProjection always anchors at a CampaignHypothesisFormation hash. Respects §0056+§0062 typed-subtype-landings + parallel-per-subtype-projection commitments. Cross-subtype rejection structurally enforced via per-subtype message_type discriminators in `ProjectHypothesis`, `ProjectAutomationGroup`, and `ProjectCampaignHypothesis`. Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`services/ingestion/internal/projection/campaign_hypothesis.go`](../../services/ingestion/internal/projection/campaign_hypothesis.go) — new file. `CampaignHypothesisProjection`, `ProjectCampaignHypothesis`, `computeCampaignHypothesisState`, `computeCampaignHypothesisLatencies`, 6 CH message_type constants.
+  - [`services/ingestion/internal/projection/campaign_hypothesis_list.go`](../../services/ingestion/internal/projection/campaign_hypothesis_list.go) — new file. `CampaignHypothesisListOptions`, `ProjectAllCampaignHypotheses`, `ListCampaignHypotheses`, `CountCampaignHypothesesByState`.
+  - [`services/ingestion/internal/projection/campaign_hypothesis_test.go`](../../services/ingestion/internal/projection/campaign_hypothesis_test.go) — 9 tests as enumerated.
+  - [`services/ingestion/cmd/hypothesis-state/main.go`](../../services/ingestion/cmd/hypothesis-state/main.go) — CH dispatch + `buildCHOutput`.
+  - [`services/ingestion/cmd/list-hypotheses/main.go`](../../services/ingestion/cmd/list-hypotheses/main.go) — CH branch + `buildCHEntry` + `-subtype` validator.
+  - [`services/ingestion/cmd/summarize-hypotheses/main.go`](../../services/ingestion/cmd/summarize-hypotheses/main.go) — third CH section in JSON output.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — three read-CLI sections updated.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0069 (this entry).
+  - **§0063+§0064+§0065+§0066+§0067+§0068 carry-forward fully discharged.** "Projection layer extension for CampaignHypothesis" named at every §0063-arc entry is now landed. Operators can use the three read CLIs against CampaignHypothesis formations.
+  - **Equivalence invariant family extends to third subtype.** Two new invariants tested:
+    - `ProjectAllCampaignHypotheses[hash]` byte-equal to `ProjectCampaignHypothesis(sameHash)` (mirrors §0052 + §0062 invariant)
+    - For every State `s`, `CountCampaignHypothesesByState.ByState[s]` equals `len(ListCampaignHypotheses{StateFilter: s})` (mirrors §0053 + §0062 invariant)
+  - **Typed-subtype-landings discipline now spans THREE subtypes across BOTH writer and reader surfaces.** §0056 + §0063 established it at write; §0062 + §0069 extend it to read. Three complete arcs (BC: §0045–§0050+§0051–§0055, AG: §0056–§0061+§0062, CH: §0063–§0068+§0069) validate the parallel-types approach.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Final Cat III subtype** — `CoordinationRing` (pairwise relations per §0010). Same parallel-types template applies; deferred until operator pressure surfaces.
+    - **Per-subtype CLI binaries** — unchanged from §0062 carry-forward.
+    - **Cross-subtype provenance queries** — unchanged from §0062 carry-forward.
+    - **Aggregate cross-subtype counters/histograms** — unchanged from §0062 carry-forward; `summarize-hypotheses` now emits three per-subtype sections without a top-level combined sum.
+
+- **Supersession:** None. Extends the projection layer (§0051–§0055 + §0062) to the third subtype following the parallel-per-subtype-projection discipline established at §0062. The §0063+§0064+§0065+§0066+§0067+§0068 "Projection layer extension for CampaignHypothesis" carry-forward is fully discharged. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
