@@ -2438,6 +2438,51 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0063` — Third Cat III concrete subtype (`CampaignHypothesis`) formation lands; first event-centric subtype; third subtype lifecycle arc opens
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** Two Cat III subtypes are now landed end-to-end: `BehavioralCluster` (§0045–§0050 + §0051–§0055) and `AutomationGroup` (§0056–§0061 + §0062). Per [`entity-model.md` Category III](../ontology/entity-model.md) two subtypes remain unlanded: `CoordinationRing` (pairwise relations — new structural shape) and `CampaignHypothesis` (set of EVENTS — different referent vs the BC/AG actor-set shape). This entry opens the third subtype's lifecycle arc with `CampaignHypothesisFormation`. CoordinationRing remains deferred until the pairwise-relation structural commitment justifies the work.
+
+  Two structural observations close this entry:
+
+  - **First event-centric Cat III subtype.** Both BC (§0045) and AG (§0056) reference an `actor_refs` field for membership and a separate `source_event_hashes` field for observational provenance. CampaignHypothesis's membership IS its source observations — the events are the campaign. The proto omits `actor_refs`; `source_event_hashes` serves dual purpose (membership + provenance per §2.3). This is the first structural shape change at the formation level across subtypes — confirms the typed-subtype-landings discipline accommodates genuine subtype divergence, not just label changes.
+  - **CoordinationRing deferral.** Per entity-model.md: "Subtype-specific surface includes pairwise relationship records and temporal alignment references." Pairwise records require a new entity shape (edge-list or matrix representation) the existing repeated-bytes pattern can't carry without further structural decision. Deferred until operator pressure surfaces a concrete CoordinationRing inference pattern.
+
+- **Decision:** Land `CampaignHypothesisFormation` with four structural moves:
+
+  1. **`CampaignHypothesisFormation` Protobuf message** at [`schemas/events/v1/campaign_hypothesis_formation.proto`](../../schemas/events/v1/campaign_hypothesis_formation.proto). FIVE fields (vs §0045/§0056's six): `pattern_signature`, `pattern_parameters`, `formation_at`, `confidence`, `source_event_hashes`. No `actor_refs` — the inference is event-centric.
+
+  2. **`FormCampaignHypothesisAll` + `CampaignHypothesisFormationPattern` interface** at [`services/ingestion/internal/hypothesis/campaign_hypothesis_formation.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_formation.go). Parallel to §0045 + §0056 — the typed-subtype-landings pattern carries forward.
+
+  3. **`temporal-descriptor-cohort-v1` formation pattern** at [`services/ingestion/internal/hypothesis/temporal_descriptor_cohort_v1.go`](../../services/ingestion/internal/hypothesis/temporal_descriptor_cohort_v1.go). Algorithm: group DeclaredSessions by session_descriptor; within each group, scan chronologically and emit one CampaignHypothesisFormation per cohort of ≥ MinCampaignSize events where consecutive events are within MaxIntraEventGapSeconds. Confidence placeholder mirrors §0045 + §0056.
+
+  4. **`cmd/form-campaign-hypothesis`** — 19th operational binary; 14th substrate-write.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1, §2.2, §2.3 (provenance via source_event_hashes serving dual purpose for event-centric subtype), §2.5 + §2.5 BC5. Respects §0045+§0056 hypothesis-identity invariant. Respects entity-model.md typed-subtype-landings commitment — `CampaignHypothesis` is structurally-distinct; the proto omits `actor_refs` (genuine shape divergence, not naming). Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`schemas/events/v1/campaign_hypothesis_formation.proto`](../../schemas/events/v1/campaign_hypothesis_formation.proto) — new file. Five fields; no `actor_refs`.
+  - [`services/ingestion/internal/hypothesis/campaign_hypothesis_formation.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_formation.go) — new file. Parallel surface.
+  - [`services/ingestion/internal/hypothesis/temporal_descriptor_cohort_v1.go`](../../services/ingestion/internal/hypothesis/temporal_descriptor_cohort_v1.go) — new file. First canonical pattern.
+  - [`services/ingestion/internal/hypothesis/campaign_hypothesis_formation_test.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_formation_test.go) — **8 tests** covering happy-path, gap-break splitting, idempotency, versioning, empty substrate, formation_at = max(declared_at), three-subtype coexistence, sorted source_event_hashes.
+  - [`services/ingestion/cmd/form-campaign-hypothesis/main.go`](../../services/ingestion/cmd/form-campaign-hypothesis/main.go) — new binary.
+  - Makefile, canonical corpus + corpus README, service README, decision-log §0063.
+  - **Test count grows.** Combined: **313 tests** (up from 305 at §0062; +8).
+  - **Zero external dependencies added.**
+  - **19th operational binary lands.** Three subtypes now have formation CLIs (`form-hypothesis` for BC, `form-automation-group` for AG, `form-campaign-hypothesis` for CH).
+  - **Typed-subtype-landings discipline survives genuine structural divergence.** §0056 established it across identical-wire-shape subtypes; this entry validates the pattern accommodates a subtype with structurally DIFFERENT wire shape (no `actor_refs`).
+  - **Out of scope at this layer (carry-forwards).**
+    - **Five remaining CampaignHypothesis lifecycle operations** — promotion, demotion, dissolution, merge, split. Note: merge + split for event-centric subtype require structural consideration (event-set partition semantics vs actor-set). Deferred.
+    - **Projection layer extension for CampaignHypothesis** — `internal/projection` currently knows BC + AG. Extension follows §0062 parallel-per-subtype template.
+    - **CoordinationRing subtype** — pairwise-relations structural commitment deferred.
+    - **Cross-subtype operations** — unchanged.
+
+- **Supersession:** None. Opens the third Cat III subtype lifecycle arc. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

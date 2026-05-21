@@ -30,6 +30,7 @@ help:
 	@echo "  dissolve-automation-group-build  go build -trimpath -o $(BIN_DIR)/dissolve-automation-group ./cmd/dissolve-automation-group"
 	@echo "  merge-automation-groups-build  go build -trimpath -o $(BIN_DIR)/merge-automation-groups ./cmd/merge-automation-groups"
 	@echo "  split-automation-group-build  go build -trimpath -o $(BIN_DIR)/split-automation-group ./cmd/split-automation-group"
+	@echo "  form-campaign-hypothesis-build  go build -trimpath -o $(BIN_DIR)/form-campaign-hypothesis ./cmd/form-campaign-hypothesis"
 	@echo "  test           go test -race ./..."
 	@echo "  golden-corpus  regenerate canonical-corpus golden files (schemas-evolution event)"
 	@echo "  clean          remove $(GEN_OUT) + $(BIN_DIR)"
@@ -63,7 +64,8 @@ generate: $(PROTOC_GEN_GO)
 	  events/v1/automation_group_demotion.proto \
 	  events/v1/automation_group_dissolution.proto \
 	  events/v1/automation_group_merge.proto \
-	  events/v1/automation_group_split.proto
+	  events/v1/automation_group_split.proto \
+	  events/v1/campaign_hypothesis_formation.proto
 
 $(PROTOC_GEN_GO):
 	$(MAKE) tools
@@ -162,6 +164,11 @@ merge-automation-groups-build:
 split-automation-group-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/split-automation-group ./cmd/split-automation-group
+
+.PHONY: form-campaign-hypothesis-build
+form-campaign-hypothesis-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/form-campaign-hypothesis ./cmd/form-campaign-hypothesis
 
 .PHONY: test
 test:
