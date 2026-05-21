@@ -2483,6 +2483,41 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0064` — Third-subtype promotion (`CampaignHypothesisPromotion`) lands; sentinel-sharing landscape spans all three subtypes
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0063`](#0063--third-cat-iii-concrete-subtype-campaignhypothesis-formation-lands-first-event-centric-subtype-third-subtype-lifecycle-arc-opens) opened the third Cat III subtype lifecycle arc with `CampaignHypothesisFormation`. This entry lands `CampaignHypothesisPromotion` — mechanical replay of §0046 (BC) + §0057 (AG) for the third subtype. Same Layer A cadence semantic per §0011; Layer B deferred. The structural shape transfers cleanly across the event-centric subtype despite the wire-shape divergence at formation — promotion targets the formation by content-hash, and that mechanism is subtype-agnostic.
+
+- **Decision:** Land `CampaignHypothesisPromotion` with three structural moves:
+
+  1. **`CampaignHypothesisPromotion` Protobuf message** at [`schemas/events/v1/campaign_hypothesis_promotion.proto`](../../schemas/events/v1/campaign_hypothesis_promotion.proto). Four fields mirroring §0046's `BehavioralClusterPromotion` and §0057's `AutomationGroupPromotion`.
+
+  2. **`PromoteCampaignHypothesis` entry point** at [`services/ingestion/internal/hypothesis/campaign_hypothesis_promotion.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_promotion.go). New `campaignHypothesisFormationMessageType` constant. Reuses shared `ErrTargetNotFound` + `ErrTargetWrongType` sentinels (now sixth and seventh callers across the codebase, spanning all three subtypes).
+
+  3. **`cmd/promote-campaign-hypothesis`** — 20th operational binary; 15th substrate-write.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1, §2.2, §2.3, §2.5 + §2.5 BC5. Respects §0045+§0056+§0063 hypothesis-identity invariant. Respects §0011 Layer A cadence mandatory. Respects §0046+§0047 sentinel-sharing pattern (now confirmed across THREE subtypes — the design pattern scales). Respects entity-model.md typed-subtype-landings commitment. Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`schemas/events/v1/campaign_hypothesis_promotion.proto`](../../schemas/events/v1/campaign_hypothesis_promotion.proto) — new file.
+  - [`services/ingestion/internal/hypothesis/campaign_hypothesis_promotion.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_promotion.go) — new file.
+  - [`services/ingestion/internal/hypothesis/campaign_hypothesis_promotion_test.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_promotion_test.go) — **8 tests** covering happy-path, idempotency, versioning, non-positive cadence rejection, unknown target, cross-subtype rejection (BC and AG), default promoted_at.
+  - [`services/ingestion/cmd/promote-campaign-hypothesis/main.go`](../../services/ingestion/cmd/promote-campaign-hypothesis/main.go) — new binary; 20th operational CLI; 15th substrate-write.
+  - Makefile, canonical corpus, corpus README, service README, decision-log §0064.
+  - **Test count grows.** Combined: **321 tests** (up from 313 at §0063; +8).
+  - **Sentinel-sharing landscape now spans ALL THREE subtypes.** The `ErrTargetNotFound` + `ErrTargetWrongType` sentinels established at §0046 + generalized at §0047 are now consumed by promotion operators across BC, AG, and CH. The pattern (operation-agnostic sentinels + subtype-specific message_type discriminators) is fully validated across the three-subtype landscape.
+  - **20th operational binary.** Substrate-write classification grows to 15.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Four remaining CampaignHypothesis lifecycle operations** — demotion, dissolution, merge, split.
+    - **Projection extension for CampaignHypothesis** — unchanged from §0063 carry-forward.
+    - **Cross-subtype operations** — unchanged.
+
+- **Supersession:** None. Extends §0063 with the second lifecycle operation for the third subtype. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

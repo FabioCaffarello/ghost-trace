@@ -1,0 +1,37 @@
+// Category III hypothesis lifecycle event per Charter §2.5 +
+// decision-log §0011 (Layer A cadence mandatory) + decision-log
+// §0064 (this entry — third-subtype promotion landing; mirrors
+// §0046 for BehavioralCluster and §0057 for AutomationGroup).
+//
+// Per Charter §2.5 BC5, CampaignHypothesisPromotion is a Cat I
+// record committed under §2.1 immutability.
+//
+// The promoted hypothesis is identified by formation_event_hash —
+// the content-hash of the originating CampaignHypothesisFormation
+// event (per §0045+§0056+§0063 — hypothesis identity IS the
+// formation event's content-hash, invariant transferring across
+// all three subtypes).
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// CampaignHypothesisPromotion records the transition of a
+// CampaignHypothesis from active inference to operational use as
+// enrichment context.
+message CampaignHypothesisPromotion {
+  // formation_event_hash is the BLAKE3-256 content-hash of the
+  // originating CampaignHypothesisFormation event.
+  bytes formation_event_hash = 1;
+
+  // promoted_at is the Unix-nanoseconds time from which the
+  // Layer A cadence gate is measured (per §0011).
+  int64 promoted_at = 2;
+
+  // cadence_seconds is the Layer A parameter (per §0011). MANDATORY.
+  int64 cadence_seconds = 3;
+
+  // reason is an operator-supplied free-form note. Optional.
+  string reason = 4;
+}
