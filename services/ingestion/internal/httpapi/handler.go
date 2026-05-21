@@ -19,6 +19,19 @@
 //     aggregates across all four subtypes with combined section;
 //     per decision-log §0082. Mirrors the cmd/summarize-hypotheses
 //     CLI's wire shape. Requires substrate read access.
+//   - GET  /v1/replay/operational-session — Phase 1 replay verifying
+//     deterministic re-derivation of a Cat II OperationalSession; per
+//     decision-log §0091. Mirrors cmd/replay-operational-session.
+//   - GET  /v1/replay/operational-sessions — Phase 1 substrate-wide
+//     batch replay; per §0091. Mirrors cmd/replay-all-operational-
+//     sessions.
+//   - GET  /v1/replay/formation — Phase 3 reconstructive replay of a
+//     Cat III formation (subtype auto-detected from the row's
+//     message_type); per §0091. Consolidates §0086-§0089's four
+//     per-subtype CLIs into one auto-detect endpoint.
+//   - GET  /v1/replay/formations — Phase 3 substrate-wide batch
+//     replay across all four Cat III subtypes; per §0091. Mirrors
+//     cmd/replay-all-formations.
 //   - GET  /healthz    — liveness probe; returns 200 + {"status":"ok"}.
 //
 // All other paths return 404; non-matching methods return 405.
@@ -183,6 +196,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleHypothesisList(w, r)
 	case r.URL.Path == "/v1/hypotheses/summary":
 		h.handleHypothesisSummary(w, r)
+	case r.URL.Path == "/v1/replay/operational-session":
+		h.handleReplayOperationalSession(w, r)
+	case r.URL.Path == "/v1/replay/operational-sessions":
+		h.handleReplayAllOperationalSessions(w, r)
+	case r.URL.Path == "/v1/replay/formation":
+		h.handleReplayFormation(w, r)
+	case r.URL.Path == "/v1/replay/formations":
+		h.handleReplayAllFormations(w, r)
 	default:
 		http.NotFound(w, r)
 	}

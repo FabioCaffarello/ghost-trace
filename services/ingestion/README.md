@@ -1089,7 +1089,28 @@ curl -sS -H "Authorization: Bearer $TOKEN" \
   "http://localhost:8080/v1/hypotheses/summary?after_ns=1700000000000000000&before_ns=1800000000000000000"
 ```
 
-**All three CLI surfaces now have HTTP parity.** `hypothesis-state` (§0080), `list-hypotheses` (§0081), and `summarize-hypotheses` (§0082) are reachable over HTTP with the same wire shapes as their CLI counterparts.
+**All three projection CLI surfaces now have HTTP parity.** `hypothesis-state` (§0080), `list-hypotheses` (§0081), and `summarize-hypotheses` (§0082) are reachable over HTTP with the same wire shapes as their CLI counterparts.
+
+### HTTP replay endpoints
+
+Per [`§0091`](../../docs/charter/decision-log.md), the HTTP interface gains four replay endpoints mirroring the seven replay CLIs (per-target Phase 3 across BC/AG/CH/CR is consolidated into one auto-detect endpoint):
+
+- **`GET /v1/replay/operational-session?target_event_hash=<hex>`** — Phase 1 deterministic re-derivation of a single OperationalSession; mirrors `cmd/replay-operational-session` (§0084).
+- **`GET /v1/replay/operational-sessions`** — Phase 1 substrate-wide batch; mirrors `cmd/replay-all-operational-sessions` (§0085).
+- **`GET /v1/replay/formation?target_event_hash=<hex>`** — Phase 3 reconstructive replay of a Cat III formation. Subtype auto-detected from the substrate row's `message_type`; dispatches to the appropriate per-subtype replay function. Consolidates §0086–§0089's four per-subtype CLIs.
+- **`GET /v1/replay/formations[?subtype=...]`** — Phase 3 substrate-wide batch; mirrors `cmd/replay-all-formations` (§0090). Optional `subtype` filter narrows to one Cat III subtype.
+
+Auth + TLS infrastructure from §0034–§0038 covers all four endpoints without extension; when `WithAuthToken` is configured the replay endpoints require `Authorization: Bearer <token>` the same way the projection-read endpoints do.
+
+Response codes:
+
+- **200** — replay completed. JSON body carries the `match` boolean (Phase 1 + Phase 3 per-target) or per-subtype `BatchReplayReport` sections (the two batch endpoints).
+- **400** — invalid query parameter (missing `target_event_hash`, malformed hex, unknown `subtype`).
+- **404** — target-not-found, target-wrong-type, pattern/definition unknown, parameter mismatch, source-not-found (consolidates the §0084 + §0086-§0089 sentinel errors).
+- **405** — non-GET.
+- **503** — substrate not configured.
+
+Note: HTTP responses do NOT distinguish drift (match=false) from precondition-failure via status codes — operators detect drift by reading the `match` boolean in the body. The CLIs use exit codes 1 vs 3 for this distinction; the HTTP shape uses 200 with `match: false` for drift and 404 for precondition errors. JSON wire shapes mirror the CLI outputs.
 
 ## Required Properties
 

@@ -3581,6 +3581,43 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0091` — HTTP replay endpoints; §0084 + §0086–§0089 + §0090 HTTP carry-forwards discharged
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0080`](#0080--http-projection-read-endpoint-lands-get-v1hypothesesstate-first-read-side-surface-on-the-http-channel)+[`§0081`](#0081--http-list-endpoint-get-v1hypotheses-second-read-side-surface-on-the-http-channel)+[`§0082`](#0082--http-summary-endpoint-get-v1hypothesessummary-three-endpoint-http-read-arc-complete) gave the projection-read CLIs HTTP parity. Each replay entry from [`§0084`](#0084--first-phase-1-replay-tool-lands-deterministic-operationalsession-re-derivation-verified) onward carried "HTTP replay endpoint" as a deferred carry-forward. This entry discharges all of them together: four HTTP endpoints mirroring the seven replay CLIs (per-target Phase 3 consolidated into one auto-detect endpoint).
+
+  The consolidation is meaningful: §0086-§0089 landed four per-subtype CLIs because operators invoke them knowing which subtype hash they have. For HTTP, auto-detect via the substrate row's `message_type` is operationally cleaner — the client supplies a hash, the server figures out the subtype. This is the same pattern §0080 used for the projection-state read endpoint.
+
+- **Decision:** Land four HTTP replay endpoints with two structural moves:
+
+  1. **`handleReplay*` handlers** at [`services/ingestion/internal/httpapi/replay.go`](../../services/ingestion/internal/httpapi/replay.go) (new file). Four handlers + three payload types + `parseTargetEventHash` query-parsing helper + `writeReplayError` sentinel-to-404 mapping helper. Wire shapes mirror the CLIs exactly except the per-target Phase 3 handler unifies into a single `formationPayload` with a `subtype` field.
+
+  2. **`/v1/replay/*` route additions** at [`services/ingestion/internal/httpapi/handler.go`](../../services/ingestion/internal/httpapi/handler.go). Four new cases in `ServeHTTP`. Auth + TLS infrastructure from §0034-§0038 covers all four without extension.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1 (read-only over immutable substrate), §2.2 (replay verdict is operational, NOT a category claim), §2.5 + §2.5 BC3 + §2.5 BC5. Same constitutional shape as §0080-§0082 (HTTP is a thin transport over the existing read-layer functions). Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`services/ingestion/internal/httpapi/replay.go`](../../services/ingestion/internal/httpapi/replay.go) — new file. Four `handleReplay*` handlers + payload types + helpers.
+  - [`services/ingestion/internal/httpapi/replay_test.go`](../../services/ingestion/internal/httpapi/replay_test.go) — new file. **13 tests** covering: per-target OS happy path, missing param, unknown target; OS batch happy path; Phase 3 per-target happy path BC; Phase 3 per-target auto-detects AG subtype; non-formation rejection; Phase 3 batch happy path + subtype filter + invalid subtype; substrate-not-configured across all four endpoints; non-GET rejection across all four; auth-required.
+  - [`services/ingestion/internal/httpapi/handler.go`](../../services/ingestion/internal/httpapi/handler.go) — package doc updated; four new route cases.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — new "HTTP replay endpoints" subsection.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0091 (this entry).
+  - **§0084 + §0086 + §0087 + §0088 + §0089 + §0090 "HTTP replay endpoint" carry-forwards all discharged.** Six entries' worth of named carry-forwards close in one PR.
+  - **Phase 3 auto-detect endpoint consolidates four CLIs into one.** `GET /v1/replay/formation?target_event_hash=<hex>` works regardless of whether the target is a BC, AG, CH, or CR formation. The handler dispatches by `message_type` (same pattern as §0080's hypothesis-state).
+  - **Drift vs precondition-failure HTTP semantic.** The CLIs distinguish via exit codes 1 (drift) vs 3 (precondition); HTTP uses 200 with `match: false` for drift and 404 for precondition errors. Documented in the README's note. Operators inspect the `match` boolean in the body to detect drift.
+  - **All operational read-side surfaces now have HTTP parity.** Three projection-read CLIs (§0080-§0082) + seven replay CLIs (§0084 + §0085 + §0086-§0089 + §0090) → ten CLIs total, all reachable via four projection endpoints + four replay endpoints = eight HTTP routes. The CLI/HTTP gap is closed for all current read-side tools.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Phase 3 batch-replay performance optimization** — unchanged from §0090 carry-forward.
+    - **Lifecycle-event Phase 3 replay** — unchanged.
+    - **gRPC interface** — unchanged.
+    - **Phase 2 + Phase 4** — unchanged.
+
+- **Supersession:** None. Discharges the HTTP-replay-endpoint carry-forward from six prior entries in one bundled landing. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
