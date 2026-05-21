@@ -867,6 +867,69 @@ func TestT4DemoteRejectsBadHashLength(t *testing.T) {
 	}
 }
 
+// T4 split tests per §0110.
+
+func TestT4SplitBehavioralClusterHappyPath(t *testing.T) {
+	sub, antecedent, succ1, succ2 := threeFormedBC(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.BehavioralClusterSplit{
+		AntecedentFormationEventHash:  antecedent[:],
+		SuccessorFormationEventHashes: [][]byte{succ1[:], succ2[:]},
+		SplitAt:                       600000,
+		Reason:                        "T4 split test",
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/behavioral-cluster/split", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Fatalf("status: got %d, want %d; body=%s", got, want, rr.Body.String())
+	}
+	var out splitResponse
+	_ = json.Unmarshal(rr.Body.Bytes(), &out)
+	if out.SplitEventHash == "" || out.IngestionEventHash == "" {
+		t.Errorf("hashes: split=%q ingestion=%q", out.SplitEventHash, out.IngestionEventHash)
+	}
+}
+
+func TestT4SplitRejectsInsufficientSuccessors(t *testing.T) {
+	sub, antecedent, succ1, _ := threeFormedBC(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.BehavioralClusterSplit{
+		AntecedentFormationEventHash:  antecedent[:],
+		SuccessorFormationEventHashes: [][]byte{succ1[:]}, // only 1
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/behavioral-cluster/split", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusBadRequest; got != want {
+		t.Errorf("status: got %d, want %d", got, want)
+	}
+}
+
+func TestT4SplitRejectsAntecedentInSuccessors(t *testing.T) {
+	sub, antecedent, succ1, _ := threeFormedBC(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.BehavioralClusterSplit{
+		AntecedentFormationEventHash:  antecedent[:],
+		SuccessorFormationEventHashes: [][]byte{antecedent[:], succ1[:]}, // antecedent reused
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/behavioral-cluster/split", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusBadRequest; got != want {
+		t.Errorf("status: got %d, want %d", got, want)
+	}
+}
+
 // T4 merge tests per §0109.
 
 // threeFormedBC forms three distinct BehavioralCluster hypotheses

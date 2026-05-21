@@ -4436,6 +4436,43 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0110` — T4 split replicated across all four subtypes; set-relation idempotency surface preserved (§0098 20/24)
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0109`](#0109--t4-merge-replicated-across-all-four-subtypes-symmetricrelation-idempotency-surface-preserved-0098-1624) shipped merge across all 4 subtypes. This entry continues the per-op-across-subtypes cadence with split. Split's wire shape: 1 antecedent hash + N (≥ 2) successor hashes. Set-relation idempotency via ascending-sort normalization per [`§0050`](#0050--mergesplit-design-options-deferred-pending-q4--q5-resolution) (successors form a SET, not a sequence).
+
+- **Decision:** Coordinated two-part landing parallel to §0107–§0109:
+
+  1. **Four `Split*` helpers extended with `Actor` + `IngestionEventHashHex`.** BC `Split` + `SplitAutomationGroup` / `SplitCampaignHypothesis` / `SplitCoordinationRing` gain the §0097-equivalent extension.
+
+  2. **Four new HTTP T4 split handlers.** [`lifecycle.go`](../../services/ingestion/internal/httpapi/lifecycle.go) gains `handleSplit{BehavioralCluster,AutomationGroup,CampaignHypothesis,CoordinationRing}` + 3 shared split helpers (`decodeSplitPayload`, `validateSplitParams`, `splitErrToHTTPStatus`) + `splitResponse` JSON shape. `validateSplitParams` enforces 32-byte antecedent + ≥ 2 32-byte successor hashes. `splitErrToHTTPStatus` maps `ErrSplitInsufficientSuccessors` + `ErrSplitSuccessorsNotDistinct` to 400 (in addition to `ErrTargetNotFound` / `ErrTargetWrongType` → 404).
+
+  3. **Tests.** Three new tests: BC split happy-path (uses `threeFormedBC` from §0109 — antecedent + 2 successors); rejection on insufficient successors (400); rejection on antecedent-in-successors (400).
+
+  4. **README.** T4 subsection extended with the four split endpoints + set-relation idempotency note + validation rules.
+
+- **Constitutional review:** No Charter invariant amended. The §2.5 BC5 lifecycle-integrity gate (split references the antecedent + all successors as `<Subtype>Formation` of the matching subtype) is preserved by each subtype's `Split*` per-message-type checks. The set-relation idempotency per §0050 (ascending-sort normalization → invariant content-hash under successor enumeration order) is preserved unchanged.
+
+  Falsifiability: every claim in the README + decision-log is testable by mechanical replay. Set-relation idempotency is exercised structurally by the existing `hypothesis.Split*` package tests; the HTTP T4 layer inherits the property by delegation.
+
+- **Consequences:**
+  - All four T4 split endpoints reachable.
+  - **§0098 landing 3/3: 20/24 T4 endpoints done.** Remaining: 4 — form × 4 subtypes (divergent shape per §0105 — pattern-based, not target-hash-based).
+  - **§0097 carry-forward EXTENDED to split helpers across all 4 subtypes.** All 20 promote/demote/dissolve/merge/split helpers across the 4 subtypes now share Options-with-Actor + Report-with-IngestionEventHashHex shape.
+
+  - **Methodological observation 1 — Per-op-across-subtypes cadence validated at five ops.** Promote + demote + dissolve + merge + split confirm the pattern across structurally distinct wire shapes (1-hash, 3-hash, N+1-hash). Form (remaining) is the most divergent: pattern-based, not target-hash-based; its handler shape will not reuse the merge/split helpers.
+
+  - **Carry-forwards:**
+    - **4 remaining T4 endpoints** — form × 4 subtypes. Form is pattern-based; the handler shape will diverge significantly from the target-hash-based ops shipped so far.
+    - **§0097 CLI-side carry-forward** — net accumulated: 19 CLIs pending `--actor` (3 promote AG/CH/CR + 4 demote + 4 dissolve + 4 merge + 4 split).
+    - **`token_id` field per RFC item 4(b)** — unchanged.
+
+- **Supersession:** None. Extends [`§0098`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens) landing 3 from 16/24 to 20/24 endpoints (83% of T4).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

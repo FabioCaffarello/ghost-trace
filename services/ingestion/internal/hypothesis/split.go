@@ -65,6 +65,9 @@ type SplitOptions struct {
 	// recognition that the antecedent hypothesis contained multiple
 	// distinct phenomena. Optional but strongly recommended.
 	Reason string
+
+	// Actor per §0110 — non-empty triggers AppendPair.
+	Actor string
 }
 
 // SplitReport is the per-Split outcome.
@@ -77,6 +80,9 @@ type SplitReport struct {
 	// already in the substrate (content-hash collision). False when
 	// this Split invocation committed a new row.
 	AlreadySplit bool
+
+	// IngestionEventHashHex non-empty when Actor was supplied.
+	IngestionEventHashHex string
 }
 
 // Split records a BehavioralClusterSplit lifecycle event recognizing
@@ -180,19 +186,51 @@ func Split(ctx context.Context, sub *substrate.Substrate, opts SplitOptions, now
 		return SplitReport{}, fmt.Errorf("hypothesis.Split: lookup split %s: %w", hex, lookupErr)
 	}
 
+	committedAt := now().UnixNano()
 	splitRow := substrate.EventRow{
 		EventHash:   hash,
 		EventTime:   splitAt,
 		MessageType: string(ev.ProtoReflect().Descriptor().FullName()),
 		PayloadRef:  hex[:2] + "/" + hex[2:],
-		CommittedAt: now().UnixNano(),
+		CommittedAt: committedAt,
 	}
-	if err := sub.Append(ctx, splitRow, payload); err != nil {
-		return SplitReport{}, fmt.Errorf("hypothesis.Split: append split %s: %w", hex, err)
+
+	if opts.Actor == "" {
+		if err := sub.Append(ctx, splitRow, payload); err != nil {
+			return SplitReport{}, fmt.Errorf("hypothesis.Split: append split %s: %w", hex, err)
+		}
+		return SplitReport{
+			SplitEventHashHex: hex,
+			AlreadySplit:      alreadyPresent,
+		}, nil
+	}
+
+	ingEv := &eventsv1.IngestionEvent{
+		PrimaryEventHash: hash[:],
+		ReceivedAt:       committedAt,
+		IngestedAt:       committedAt,
+		Channel:          "cli",
+		ClientCommonName: opts.Actor,
+	}
+	ingPayload, ingHash, err := canonical.MarshalAndHash(ingEv)
+	if err != nil {
+		return SplitReport{}, fmt.Errorf("hypothesis.Split: marshal ingestion event: %w", err)
+	}
+	ingHex := canonical.HashHex(ingHash)
+	ingRow := substrate.EventRow{
+		EventHash:   ingHash,
+		EventTime:   committedAt,
+		MessageType: string(ingEv.ProtoReflect().Descriptor().FullName()),
+		PayloadRef:  ingHex[:2] + "/" + ingHex[2:],
+		CommittedAt: committedAt,
+	}
+	if err := sub.AppendPair(ctx, splitRow, payload, ingRow, ingPayload); err != nil {
+		return SplitReport{}, fmt.Errorf("hypothesis.Split: append pair (split %s, ingestion %s): %w", hex, ingHex, err)
 	}
 
 	return SplitReport{
-		SplitEventHashHex: hex,
-		AlreadySplit:      alreadyPresent,
+		SplitEventHashHex:     hex,
+		AlreadySplit:          alreadyPresent,
+		IngestionEventHashHex: ingHex,
 	}, nil
 }
