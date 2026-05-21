@@ -4594,6 +4594,21 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0116` — §0097 CLI-side extension: split-* (BC + AG + CH + CR) gain --actor option
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** Continues per-op-across-subtypes CLI cadence. Helper-side per [`§0110`](#0110--t4-split-replicated-across-all-four-subtypes-setrelation-idempotency-surface-preserved-0098-2024).
+
+- **Decision:** All 4 split CLIs gain `--actor` matching the established pattern.
+
+- **Consequences:** **§0097 CLI-side: 20/24 done (83%).** Remaining: 4 form CLIs.
+
+- **Supersession:** None. Partial discharge of [`§0097`](#0097--cli-peractor-attribution-pilot-promotehypothesis-actor-authscope-rfc-open-question-2-partially-discharged) (4 more → 4 remaining).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
