@@ -783,6 +783,45 @@ The two failure modes are structurally distinct: exit 1 means replay ran and the
 
 **Scope:** this is Phase 1 replay over the only Cat II type committed today. Cat III hypothesis replay is Phase 3 reconstructive replay per [`replay-model.md`](../../docs/architecture/replay-model.md) L25-28 and is out of scope.
 
+## `replay-all-operational-sessions` CLI
+
+Substrate-wide batch Phase 1 replay per [`§0085`](../../docs/charter/decision-log.md). Walks every `OperationalSession` in the substrate, re-derives each from its declared source, and reports aggregate match/drift/error counts. Pre-collects the `DerivationContext` once and reuses it across all per-target replays (cost: substrate walks = 2 + 1 lookup-per-record; vs N+1 walks if the per-target CLI were called naively in a loop).
+
+```sh
+make replay-all-operational-sessions-build                                 # builds ./bin/replay-all-operational-sessions
+
+./bin/replay-all-operational-sessions -db ./ghost-trace.db -blobs ./blobs
+```
+
+Output is structured JSON with `total`, `matched`, `drifted`, `errored` counts + optional `drift` and `errors` arrays listing the non-matching entries:
+
+```json
+{
+  "total": 42,
+  "matched": 41,
+  "drifted": 0,
+  "errored": 1,
+  "errors": [
+    {
+      "target_event_hash": "<hex>",
+      "outcome": "error",
+      "reason": "replay: source observation not found: <hex>"
+    }
+  ]
+}
+```
+
+Invariant: `total == matched + drifted + errored`.
+
+Exit codes:
+
+- **0** — every OperationalSession matched (`matched == total`).
+- **1** — at least one drift detected (`drifted > 0`). Phase 1 contract violated for at least one record; the originally-committed records remain authoritative per §2.1 but the derivation implementation has changed since commit. Investigate the implementation.
+- **2** — tool/configuration error.
+- **3** — at least one record errored (`errored > 0` AND no drift). A precondition failed (missing source, unknown definition version, etc.). Investigate substrate consistency.
+
+When both drift and errors are non-zero, exit **1** takes precedence (drift is the stronger signal).
+
 ## `orphan-cleanup` CLI
 
 Operator-invoked tool to delete orphan blobs (per [`§0041`](../../docs/charter/decision-log.md)). Per [`§0033` Anti-Patterns](../../docs/architecture/operational-ops.md), orphan deletion MUST be operator-invoked with explicit confirmation; this tool implements that discipline.
