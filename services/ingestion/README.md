@@ -212,6 +212,24 @@ Symmetric (ascending-sort of antecedents). Validates all three hashes resolve to
 
 Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found, target-wrong-type, or identical-antecedents.
 
+## `split-campaign-hypothesis` CLI
+
+Operator-invoked tool to record the **CampaignHypothesis split** lifecycle operation per [`§0068`](../../docs/charter/decision-log.md) — **sixth (final) lifecycle operation of the third Cat III subtype arc**. Mirrors [`split-automation-group`](#split-automation-group-cli) and [`split-hypothesis`](#split-hypothesis-cli). Within-subtype only.
+
+```sh
+make split-campaign-hypothesis-build                                       # builds ./bin/split-campaign-hypothesis
+
+./bin/split-campaign-hypothesis \
+  -antecedent-formation-hash <64-hex-chars> \
+  -successor-formation-hash <64-hex-chars> \
+  -successor-formation-hash <64-hex-chars> \
+  -reason "antecedent campaign conflated two distinct operations"
+```
+
+Successors form a SET (ascending-sort idempotency per §0050). Cardinality MUST be ≥ 2; all entries MUST be byte-distinct from each other AND from the antecedent. Closes the third-subtype lifecycle arc — **§2.5 lifecycle surface complete for CampaignHypothesis too** (6 of 6 ops landed: formation, promotion, demotion, dissolution, merge, split).
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found, target-wrong-type, insufficient-successors, or successors-not-distinct.
+
 ## `promote-automation-group` CLI
 
 Operator-invoked tool to record the **AutomationGroup promotion** lifecycle operation per [`§0057`](../../docs/charter/decision-log.md) — second lifecycle operation of the second Cat III subtype arc. Mirrors [`promote-hypothesis`](#promote-hypothesis-cli) for the AutomationGroup subtype. Same Layer A cadence semantic per [`§0011`](../../docs/charter/decision-log.md).

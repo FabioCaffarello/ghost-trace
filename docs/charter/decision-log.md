@@ -2624,6 +2624,50 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0068` — Sixth (final) CampaignHypothesis lifecycle operation (`CampaignHypothesisSplit`) lands; third-subtype §2.5 lifecycle surface complete; typed-subtype-landings commitment fully validated across THREE subtypes
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0067`](#0067--third-subtype-merge-campaignhypothesismerge-lands-0049-option-b--symmetric-relation-idempotency-transfer-to-event-centric-subtype) landed CampaignHypothesis merge. This entry lands CampaignHypothesis split — the **sixth (final) lifecycle operation** of the third Cat III subtype arc opened at [`§0063`](#0063--third-cat-iii-concrete-subtype-campaignhypothesis-formation-lands-first-event-centric-subtype-third-subtype-lifecycle-arc-opens). The §2.5 lifecycle surface is now complete for ALL THREE Cat III concrete subtypes implemented to date (BehavioralCluster via §0045–§0050; AutomationGroup via §0056–§0061; CampaignHypothesis via §0063–§0068).
+
+  Three structural observations close this entry:
+
+  - **§0050 + §0061 split wire shape transfers cleanly across the event-centric/actor-centric boundary.** The split event references one antecedent formation hash + N ≥ 2 successor formation hashes. The subtype distinction (events vs actors) lives in the FORMATION shape, not in the split event. The §0049 Option B / §0050 set-equality idempotency (successors ascending-sorted before recording) applies identically. This mirrors the §0067 resolution for merge: the lifecycle event shape is subtype-agnostic; the inference-process operational convention (computing each successor's event set as a partition of the antecedent's event set for event-centric subtypes) lives at the operational layer.
+  - **Sentinel-sharing pattern fully validated across all three subtypes.** All five cross-cutting sentinels (`ErrTargetNotFound`, `ErrTargetWrongType`, `ErrMergeAntecedentsIdentical`, `ErrSplitInsufficientSuccessors`, `ErrSplitSuccessorsNotDistinct`) are shared by all three subtypes' operators without modification. Operation-agnostic sentinels + subtype-specific message_type discriminators scale structurally — same as carried forward at §0061.
+  - **Typed-subtype-landings commitment fully validated across three subtypes.** The §0045+§0050+§0056+§0061+§0063 commitment (each Cat III subtype gets its own subtype-specific lifecycle event types + entry points, NOT a uniform abstract surface) has now been carried through 18 PRs across three complete lifecycle arcs (6 per subtype × 3 subtypes). The duplication is bounded and structurally meaningful — the wire types remain distinct (subtype distinction recorded by the message_type discriminator), and the event-centric variant (§0063) integrates with the actor-centric pattern (§0045+§0056) without forcing either to compromise.
+
+- **Decision:** Land `CampaignHypothesisSplit` with three structural moves mirroring §0050+§0061:
+
+  1. **`CampaignHypothesisSplit` Protobuf message** at [`schemas/events/v1/campaign_hypothesis_split.proto`](../../schemas/events/v1/campaign_hypothesis_split.proto). Four fields mirroring §0050+§0061: `antecedent_formation_event_hash` (single bytes), `successor_formation_event_hashes` (repeated bytes, sorted ascending, len ≥ 2), `split_at`, `reason`.
+
+  2. **`SplitCampaignHypothesis` entry point** at [`services/ingestion/internal/hypothesis/campaign_hypothesis_split.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_split.go). Parallel to §0050+§0061. Reuses shared `ErrTargetNotFound` + `ErrTargetWrongType` + `ErrSplitInsufficientSuccessors` + `ErrSplitSuccessorsNotDistinct` sentinels; validates antecedent + every successor resolves to `CampaignHypothesisFormation`; sorts successors ascending (set-equality idempotency).
+
+  3. **`cmd/split-campaign-hypothesis` operator interface** — 24th operational binary; 19th substrate-write.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1, §2.2, §2.3, §2.5 + §2.5 BC3 + §2.5 BC5. Respects §0045+§0056+§0063 hypothesis-identity invariant. Respects §0050 structural-inverse-of-merge pattern + §0049+§0050 set-equality idempotency. Respects entity-model.md §Cross-subtype operations deferral. Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`schemas/events/v1/campaign_hypothesis_split.proto`](../../schemas/events/v1/campaign_hypothesis_split.proto) — new file.
+  - [`services/ingestion/internal/hypothesis/campaign_hypothesis_split.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_split.go) — new file.
+  - [`services/ingestion/internal/hypothesis/campaign_hypothesis_split_test.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_split_test.go) — **8 tests** covering happy-path, successor-order invariance, insufficient successors, duplicate successors, antecedent-equals-successor, idempotency, unknown antecedent, default split_at, and a terminal **all-six-CH-lifecycle-ops-in-substrate** test proving all six CampaignHypothesis lifecycle event types coexist in a single substrate.
+  - [`services/ingestion/cmd/split-campaign-hypothesis/main.go`](../../services/ingestion/cmd/split-campaign-hypothesis/main.go) — new binary; 24th operational CLI; 19th substrate-write.
+  - Makefile, canonical corpus (minimal + typical), corpus README, service README, decision-log §0068.
+  - **§2.5 lifecycle surface complete for CampaignHypothesis.** All six lifecycle operations (formation, promotion, demotion, dissolution, merge, split) are now operationally observable for the third concrete Cat III subtype. The §0063 typed-subtype-landings + event-centric-formation commitments are validated across 6 PRs covering the full arc.
+  - **24th operational binary lands; 19th substrate-write.** `cmd/` now contains 24 binaries across three classifications:
+    - substrate-write (19): all 6 BC lifecycle operators + all 6 AG lifecycle operators + all 6 CH lifecycle operators + `derive-operational-session`.
+    - substrate-audit/maintenance (2): `verify`, `orphan-cleanup`.
+    - projection-read (3): `hypothesis-state`, `list-hypotheses`, `summarize-hypotheses`.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Projection layer extension for CampaignHypothesis** — unchanged from §0063 carry-forward. `internal/projection` still does NOT cover CampaignHypothesis; CH projections still error. Natural §0069 candidate (mirrors §0062's AG extension).
+    - **Final Cat III subtype** — `CoordinationRing` (introduces pairwise relations per [`§0010`](#0010--q2-resolution-category-iii-as-abstract-type-with-four-concrete-subtypes-behavioralcluster-coordinationring-campaignhypothesis-automationgroup-with-typed-subtype-specific-landings)) remains unlanded. Same 6-PR template applies; deferred until operator pressure surfaces.
+    - **Cross-subtype operations** — unchanged from §0049+§0050+§0067 carry-forwards.
+    - **Layer B deep-criterion** — unchanged from §0047 carry-forward; blocked on §2.6 redaction.
+
+- **Supersession:** None. Closes the third Cat III subtype's lifecycle arc opened at §0063. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
