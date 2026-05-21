@@ -1,6 +1,6 @@
 # RFC — Architecture: HTTP auth-scope model (T3/T4 unblock)
 
-- **Status:** discussion
+- **Status:** accepted
 - **Authors:** committee
 - **Date:** 2026-05-21
 - **Type:** architecture
@@ -116,4 +116,20 @@ Three alternatives evaluated; two retained as composable; one rejected.
 
 ## Decision Record
 
-Pending. On acceptance, this RFC is recorded in [`docs/charter/decision-log.md`](../../charter/decision-log.md) and the [`§0094`](../../charter/decision-log.md) "Auth-model wire-format RFC" carry-forward is discharged.
+Resolved at [`decision-log §0098`](../../charter/decision-log.md): **α (multi-token files mapped to tier scopes) composed with γ (mTLS cert subject-name-to-scope mapping)** adopted as the HTTP auth-scope wire format. The discussion-phase recommendation is adopted **unmodified** — no committee extensions; the three structural moves in §Proposal stand as written (multi-tier token files; handler-side tier dispatch; mTLS subject-to-scope mapping as optional γ upgrade) along with the four refinements that landed during the discussion-phase discipline pass (per [`§0097`](../../charter/decision-log.md) precedent — though §0097 was a separate code landing, not part of this RFC's content): Q1 phrasing precision (lifecycle events are Cat I per §2.5 BC5); T3 OrphanCleanupAudit introduction (orphan-cleanup commits no substrate record today; HTTP T3 introduces a new Cat I proto committed via AppendPair BEFORE blob deletion); AP2 split by tier; Open Question 4 added (CLI orphan-cleanup symmetry).
+
+Per [`§0094`](../../charter/decision-log.md): the "Auth-model wire-format RFC" carry-forward is discharged. T3 + T4 HTTP work proceeds under ordinary RFC/PR discipline against the selected wire format.
+
+### Reversal conditions
+
+The selection stands subject to four named reversal conditions; any single condition firing triggers a follow-on RFC reconsidering the selection in scope.
+
+- **R-auth-1 — JWT-warranted token-revocation pressure (β reversal).** Per §Alternatives: when token revocation becomes load-bearing (long-lived JWTs across a federated operator surface). Trigger: explicit RFC characterizing the revocation requirement that file-based multi-token rotation cannot meet. Reversal scope: replace α (or add JWT as a peer mechanism) for token issuance + scope claims; γ unaffected.
+
+- **R-auth-2 — HMAC-warranted replay-resistance pressure (δ reversal).** Per §Alternatives: when persistent attackers with packet capture become operationally relevant. Trigger: explicit RFC characterizing the replay-attack pressure that bearer-token-over-TLS cannot meet. Reversal scope: add δ as per-request signing layer; α + γ unaffected as authentication mechanisms (HMAC is signature, not authentication).
+
+- **R-auth-3 — `cli_actor` proto split (Proposal item 3 reversal trigger).** Per [`§0097`](../../charter/decision-log.md) + this RFC's Proposal item 3: a consumer needs to distinguish mTLS-CN from CLI-actor at read time AND the `channel` discriminator is insufficient. Trigger: explicit RFC characterizing the read-time consumer that cannot disambiguate via `channel`. Reversal scope: proto change adding a distinct `cli_actor` field; α + γ runtime mechanisms unaffected.
+
+- **R-auth-4 — CLI orphan-cleanup symmetry (Open Question 4 reversal).** When the local-shell-trust asymmetry between HTTP T3 (commits OrphanCleanupAudit) and CLI orphan-cleanup (commits no audit) becomes operationally untenable — typically when CLI invocations in production cron jobs require forensic-record symmetry with HTTP. Trigger: explicit RFC extending audit-on-commit to CLI orphan-cleanup. Reversal scope: extends T3 mechanism to a second channel; wire-format selection unaffected.
+
+No reversal condition fires at acceptance. The three named follow-on landings (per [`§0098`](../../charter/decision-log.md) Consequences) — multi-tier token plumbing; T3 OrphanCleanupAudit endpoint; T4 24 lifecycle endpoints — ship under ordinary PR discipline.

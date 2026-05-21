@@ -3918,6 +3918,51 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0098` — HTTP auth-scope RFC accepted as-is; α+γ adopted; §0094 wire-format carry-forward discharged; T3+T4 implementation arc opens
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** The HTTP auth-scope RFC at [`docs/rfcs/draft/architecture-http-auth-scope-model.md`](../rfcs/draft/architecture-http-auth-scope-model.md) was authored at [`§0069`](#0069--projection-layer-extended-to-campaignhypothesis-typed-subtype-landings-discipline-now-validated-across-three-subtypes-at-both-write-and-read-surfaces) — actually, the RFC was authored as a follow-up to the [`§0094`](#0094--http-authmodel-evolution-framed-operationtier-classification-recorded-tier-34-advance-deferred-to-followon-rfc) framing at PR #69 and moved to `Status: discussion` after applying the three rfc-author §3 discipline skills at PR #70 (per [rfc-author skill](../../.claude/skills/workflow/rfc-author/SKILL.md) §3: falsifiability-check + epistemic-separator + ambiguity-reducer). The discipline pass surfaced one substantive refinement (T3 OrphanCleanupAudit) plus three minor (Q1 phrasing precision; AP2 tier-split; Open Question 4 addition).
+
+  The discussion phase has been brief — single-author committee review with the rfc-author discipline applied. Sufficient surface to accept under ordinary RFC discipline per [`§0026`](#0026--rfc-procedure-codification-filenamebased-referencing-numberingwithrename-rejected) (filename-based referencing; acceptance updates Status field + populates Decision Record; no file rename).
+
+- **Decision:** Accept the RFC **as-is** — discussion-phase content adopted unmodified. Two structural moves:
+
+  1. **RFC `Status:` flipped + `Decision Record` populated** at [`docs/rfcs/draft/architecture-http-auth-scope-model.md`](../rfcs/draft/architecture-http-auth-scope-model.md). The Decision Record records: (a) the selection (α composed with γ); (b) zero committee extensions (discussion-phase content adopted unmodified); (c) four reversal conditions (R-auth-1 JWT pressure → β; R-auth-2 HMAC pressure → δ; R-auth-3 `cli_actor` proto split per [`§0097`](#0097--cli-perator-attribution-pilot-promote-hypothesis-actor-auth-scope-rfc-open-question-2-partially-discharged); R-auth-4 CLI orphan-cleanup symmetry per Open Question 4).
+
+  2. **[`§0094`](#0094--http-authmodel-evolution-framed-operationtier-classification-recorded-tier-34-advance-deferred-to-followon-rfc) "Auth-model wire-format RFC" carry-forward DISCHARGED.** The wire format is α + γ; subsequent T3 + T4 implementation work proceeds against this selection.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. The RFC's Q1–Q6 pre-authorship analysis (verbatim in its §Constitutional Review) confirms: no §2.1/§2.2/§2.3/§2.5 commitment affected; no glossary redefinition; no implicit Ontology-question resolution; no Charter amendment required; no new invariant introduced; falsifiable-by-deletion (without the RFC, T3/T4 cannot be exposed over HTTP). Acceptance is mechanical under [`§0026`](#0026--rfc-procedure-codification-filenamebased-referencing-numberingwithrename-rejected) — Status field change + Decision Record population + this decision-log entry.
+
+  The accepted wire format imposes one cross-tier obligation that this entry surfaces as Charter-anchored: **per-actor attribution on T3 + T4 substrate writes** is load-bearing under §2.5 BC5 + §2.3 (the [`§0038`](#0038--ingestionevent-enrichment--mtls-client-identity-threaded-into-ingestion-provenance-0037-clientidentity-followon-discharged) precedent extended to lifecycle-event pairs per [`§0094`](#0094--http-authmodel-evolution-framed-operationtier-classification-recorded-tier-34-advance-deferred-to-followon-rfc)'s cross-tier requirement). The follow-on PRs MUST commit attribution alongside the substrate-mutating record; absence is a §2.3 violation in HTTP-channel writes (CLI-channel attribution remains operator opt-in per [`§0097`](#0097--cli-perator-attribution-pilot-promote-hypothesis-actor-auth-scope-rfc-open-question-2-partially-discharged) and the RFC's Open Question 2 framing).
+
+  Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`docs/rfcs/draft/architecture-http-auth-scope-model.md`](../rfcs/draft/architecture-http-auth-scope-model.md) — `Status:` flipped from `discussion` to `accepted`; `Decision Record` section populated (selection statement; zero committee extensions; four reversal conditions R-auth-1 through R-auth-4).
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0098 (this entry).
+  - **[`§0094`](#0094--http-authmodel-evolution-framed-operationtier-classification-recorded-tier-34-advance-deferred-to-followon-rfc) "Auth-model wire-format RFC" carry-forward DISCHARGED.** No subsequent entry needs to mention this carry-forward.
+  - **T3 + T4 implementation arc OPENS.** Three named follow-on landings, each shipping under ordinary RFC/PR discipline:
+    1. **Multi-tier token plumbing** — `httpapi.WithAuthTierToken(tier, token)` option + `--http-auth-{producer,operator-read,substrate-admin,constitutional-act}-token-file` CLI options + handler-side tier dispatch + per-route tier annotation + handler-construction validation. Backward compatible with [`§0035`](#0035--bearertoken-authentication-added-to-ingestion-http-interface-0034-authdeferred-discharged) single-token. First landing of the arc; foundational for T3 + T4.
+    2. **T3 `POST /v1/admin/orphan-cleanup` endpoint** — mirrors [`cmd/orphan-cleanup`](../../services/ingestion/cmd/orphan-cleanup/) safety belts (dry-run + confirm + keep-newer-than + max-deletions). Introduces new Cat I proto `OrphanCleanupAudit` committed via [`§0038`](#0038--ingestionevent-enrichment--mtls-client-identity-threaded-into-ingestion-provenance-0037-clientidentity-followon-discharged) `AppendPair` BEFORE blob deletion (audit-first ordering; hash list IS the recovery contract). First new Cat I proto since [`§0042`](#0042--registry-driven-cati-types-stdin-dispatch-on-message_type-0030-additional-cati-types-discharged)-era `NetworkEvent`.
+    3. **T4 24 lifecycle endpoints** — `POST /v1/hypotheses/<subtype>/{form,promote,demote,dissolve,merge,split}` for the 4 Cat III subtypes. Each accepts `application/x-protobuf` with the canonical-serialization-contract enforcement [`§0034`](#0034--http-interface-added-to-ingestion-service-post-v1events--get-healthz-0030-httpgrpc-item-partially-discharged) introduced. Per-actor attribution via the IngestionEvent pair (mTLS subject under γ; bearer-token `token_id` under α; fallback `unattributed-token-<tier>` literal at discouraged-but-permitted).
+  - **Cadence for follow-ons.** No fixed cadence — landings ship as operator pressure warrants OR as the implementation surface compounds. The multi-tier token plumbing is structurally first; T3 + T4 build on it.
+  - **Auth-scope RFC's Open Question 2 retains [`§0097`](#0097--cli-perator-attribution-pilot-promote-hypothesis-actor-auth-scope-rfc-open-question-2-partially-discharged) partial-discharge status.** Mechanical extension to the other 23 CLIs remains demand-driven per [`§0097`](#0097--cli-perator-attribution-pilot-promote-hypothesis-actor-auth-scope-rfc-open-question-2-partially-discharged).
+  - **First architecture RFC accepted post-implementation-pivot.** The four prior architecture RFCs ([`§0024`](#0024--schemastechnology-selection-protocol-buffers-proto3-adopted-first-technology-rfc-per-0022-pivot) schemas; [`§0025`](#0025--implementation-language-selection-go-adopted-second-technology-rfc-per-0022-pivot) language; [`§0027`](#0027--inception-phase-storage-technology-selection-sqlite--content-addressed-blob-store-on-local-filesystem-adopted-third-and-final-technology-rfc-per-0022-pivot--0003-fully-discharged) storage; [`§0033`](#0033--operational-ops-architecture-document-introduced-0027-backup-cadence--vacuum-cadence-open-questions-discharged) operational-ops) were inception-phase technology selections; this is the first capability-extension architecture RFC accepted under the established RFC procedure. Procedural precedent: discussion-phase content adopted as-is is a valid outcome (not every RFC requires committee extensions). The rfc-author §3 discipline skills did the redaction work in the discussion phase rather than at acceptance.
+  - **Open RFC count drops to zero.** No other RFC is currently in `Status: discussion`. Future RFCs follow the same lifecycle (draft → discussion-with-rfc-author-§3-discipline → acceptance).
+  - **Out of scope at this layer (carry-forwards).**
+    - **Multi-tier token plumbing PR.** Named follow-on; first T3+T4 arc landing.
+    - **T3 OrphanCleanupAudit endpoint PR.** Named follow-on; depends on multi-tier token plumbing for the T3 token wiring.
+    - **T4 24 lifecycle endpoint PRs.** Named follow-on; depend on multi-tier token plumbing for the T4 token wiring.
+    - **CLI per-actor attribution mechanical extension** ([`§0097`](#0097--cli-perator-attribution-pilot-promote-hypothesis-actor-auth-scope-rfc-open-question-2-partially-discharged) carry-forward) — demand-driven; not bundled with HTTP arc.
+    - **Token rotation under multi-tier** (RFC Open Question 1) — orthogonal; deferred per [`§0035`](#0035--bearertoken-authentication-added-to-ingestion-http-interface-0034-authdeferred-discharged) carry-forward.
+    - **`cli_actor` proto split** (R-auth-3) — reversal-conditional; triggers when consumers need to disambiguate at read time.
+
+- **Supersession:** None. Accepts the [`docs/rfcs/draft/architecture-http-auth-scope-model.md`](../rfcs/draft/architecture-http-auth-scope-model.md) RFC as-is; discharges [`§0094`](#0094--http-authmodel-evolution-framed-operationtier-classification-recorded-tier-34-advance-deferred-to-followon-rfc)'s "Auth-model wire-format RFC" carry-forward. [`§0022`](#0022--implementation-pivot-64-amendment--0003-reversal-authorization--2426-posture-shift) implementation-gate criteria continue to be satisfied; T3 + T4 implementation arc opens.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
