@@ -3006,6 +3006,46 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0077` — §2.4 / §2.6 empirical-pressure assessment recorded; assessment-only, no redaction resumption
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** Per the [`§0022`](#0022--implementation-pivot-64-amendment--0003-reversal-authorization--2426-posture-shift) v0.4.2 amendment, §2.4 (Inferential Influence Disclosure) and §2.6 (Evidential Independence Integrity) are in `pending — empirical pressure phase`: redaction resumes when implementation work surfaces concrete questions the Charter does not already answer. With the §0070–§0076 sequence closing the entire Category III implementation surface (all four §0010 Q2-resolved subtypes; 6 lifecycle ops × 4 subtypes; projection layer parity), the empirical-pressure phase has accumulated enough surface for an honest assessment. This entry records the assessment.
+
+- **Decision:** Produce an assessment-only document at [`docs/charter/empirical-pressure-2-4-2-6.md`](./empirical-pressure-2-4-2-6.md). The document:
+
+  1. Inventories the implementation surface that is now load-bearing for §2.4 / §2.6 redaction (placeholder `confidence` field across 4 subtypes; promotion events carrying Layer A `cadence_seconds`; no `influenced_by` wire shape committed; merge-produces-separately-committed-formation per §0049 Option B; hypothesis identity = formation event content-hash invariant).
+
+  2. Catalogs concrete questions §2.4 binding text must answer (Q-§2.4-1 through Q-§2.4-6: wire shape; reference target; "formed under influence" trigger; acyclicity; Q5 transitive-half carry-forward; §2.3 BC1 inheritance text).
+
+  3. Catalogs concrete questions §2.6 binding text must answer (Q-§2.6-1 through Q-§2.6-5: paired dimension shape; origin at first commit; independence under merge; independence under split; backward-projection onto already-committed formations).
+
+  4. Catalogs cross-§2.4/§2.6 questions (Q-X1 Layer B activation; Q-X2 independence-confidence constraint relationship; Q-X3 cross-subtype Q4 orthogonality).
+
+  5. Records anchor-inventory pre-Gate status per [`§0014`](#0014--23-redaction-plan-ontology-rfc-q1-before-charter-redaction-q3-subject-ref-polymorphism-and-q2-identity-tiers-assessed-at-23-step-11) lazy methodology applied at the §2.4 pre-Gate level — sole open pre-Gate candidate is `ontology.md` Q5 "transitive?" half (carry-forward from [`§0021`](#0021--omq-3-resolution-substrate-time-generation-candidate--0020-cascade-fully-discharged)).
+
+  The assessment is **non-binding**. It does **not** draft Charter prose for §2.4 or §2.6, does **not** pick answers to the catalogued questions, and does **not** itself trigger redaction resumption. The decision whether to resume committee redaction is reserved.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. No pending-invariant working-stub modified. The assessment document is descriptive surface about the Charter, not Charter content; per [`§0019`](#0019--24-redaction-plan-provenance-model-omq-2-decay-of-influence-opened-as-pre-gate-omq-3--q2--23-bc1-inheritance-assessed-at-24-step-11-layer-b-activation-anticipated) methodology, anchor-inventory documents accumulating empirical evidence ahead of Step 1.1 are within ordinary RFC discipline. Canonical vocabulary used as written. §2.4 + §2.6 status remains `pending — empirical pressure phase`.
+
+- **Consequences:**
+  - [`docs/charter/empirical-pressure-2-4-2-6.md`](./empirical-pressure-2-4-2-6.md) — new file. Structured assessment document; sections 1–7 covering status snapshot, load-bearing implementation surface, §2.4 questions, §2.6 questions, cross-section questions, anchor-inventory pre-Gate status, assessment outcome.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0077 (this entry).
+  - **§2.4 + §2.6 status unchanged.** Both remain `pending — empirical pressure phase`. The assessment confirms the empirical pressure is sufficient *in principle* to trigger redaction resumption (§2.4 strong; §2.6 moderate, downstream of §2.4 per [`§0008`](#0008--redaction-order-for-pending-invariants-25--23--24--26-gate-1-carry-forwards-enacted) order); the actual resumption is a separate committee decision.
+  - **Layer B follow-on RFC** ([`ontology-revision-layer-b-deep-criterion`](../rfcs/draft/ontology-revision-layer-b-deep-criterion.md)) remains on hold per [`§0011`](#0011--q4-resolution-staged-combination-demotion-criterion-layer-a--deferred-layer-b). Its activation predicate (§2.4 + §2.6 frozen) is unchanged.
+  - **Q5 "transitive?" half** carry-forward from [`§0021`](#0021--omq-3-resolution-substrate-time-generation-candidate--0020-cascade-fully-discharged) preserved. The assessment flags it as the sole open §2.4 pre-Gate candidate; assessment at §2.4 Step 1.1 (if redaction resumes) follows the [`§0014`](#0014--23-redaction-plan-ontology-rfc-q1-before-charter-redaction-q3-subject-ref-polymorphism-and-q2-identity-tiers-assessed-at-23-step-11) lazy methodology.
+  - **§2.6 redaction order preserved.** Per [`§0008`](#0008--redaction-order-for-pending-invariants-25--23--24--26-gate-1-carry-forwards-enacted), §2.6 follows §2.4. The Q-§2.6-* questions are downstream of §2.4's wire-shape commitments (Q-§2.4-1) and so cannot be answered standalone.
+  - **Methodological observation — empirical-pressure-phase deliverable.** This is the first time the [`§0022`](#0022--implementation-pivot-64-amendment--0003-reversal-authorization--2426-posture-shift) v0.4.2 posture ("redaction resumes when implementation surfaces concrete questions the Charter does not already answer") has been operationalized into a concrete artifact. Pattern: an assessment-only document anchored at the pending-invariant level, structured per [`§0019`](#0019--24-redaction-plan-provenance-model-omq-2-decay-of-influence-opened-as-pre-gate-omq-3--q2--23-bc1-inheritance-assessed-at-24-step-11-layer-b-activation-anticipated) Step 1.1 anchor-inventory shape, is the empirical-pressure-phase's natural artifact. Future pending invariants (e.g. §3 Non-Goals) may follow the same pattern.
+  - **Carry-forwards.**
+    - **Decision whether to resume §2.4 redaction.** Reserved. The assessment provides material for that decision; it does not make it.
+    - **Cross-subtype operations (Q4)** orthogonal to §2.4 / §2.6 per Q-X3 assessment. Unchanged.
+    - **provenance-model OMQ #1 (Granularity of derivation), OMQ #4 (Cross-domain provenance)** remain open per [`§0021`](#0021--omq-3-resolution-substrate-time-generation-candidate--0020-cascade-fully-discharged); neither is a §2.4 blocker per the assessment.
+
+- **Supersession:** None. Extends the [`§0022`](#0022--implementation-pivot-64-amendment--0003-reversal-authorization--2426-posture-shift) empirical-pressure-phase posture with the first concrete assessment artifact. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
