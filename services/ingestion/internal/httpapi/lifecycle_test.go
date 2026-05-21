@@ -867,6 +867,119 @@ func TestT4DemoteRejectsBadHashLength(t *testing.T) {
 	}
 }
 
+// T4 merge tests per §0109.
+
+// threeFormedBC forms three distinct BehavioralCluster hypotheses
+// (different descriptors) in the same substrate; returns their three
+// formation hashes for use as merge antecedents + produced.
+func threeFormedBC(t *testing.T) (*substrate.Substrate, [32]byte, [32]byte, [32]byte) {
+	t.Helper()
+	dir := t.TempDir()
+	ctx := context.Background()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Close() })
+
+	in := ingest.New(sub, time.Now)
+	for i, descriptor := range []string{"merge-a", "merge-b", "merge-produced"} {
+		for k, actor := range []string{"actor-a-" + descriptor, "actor-b-" + descriptor} {
+			msg := &eventsv1.DeclaredSession{
+				DeclaredAt:        int64(1000+i*100) + int64(k),
+				ActorRef:          actor,
+				SessionDescriptor: []byte(descriptor),
+			}
+			if _, err := in.Append(ctx, msg, msg.DeclaredAt, ingest.Envelope{Channel: "test"}); err != nil {
+				t.Fatalf("Append: %v", err)
+			}
+		}
+	}
+
+	rep, err := hypothesis.FormAll(ctx, sub, hypothesis.SessionDescriptorSharedV1{MinClusterSize: 2}, func() time.Time { return time.Unix(0, 100000) })
+	if err != nil {
+		t.Fatalf("FormAll: %v", err)
+	}
+	if rep.NewlyFormed != 3 {
+		t.Fatalf("expected 3 formations; got %d", rep.NewlyFormed)
+	}
+
+	var hashes [3][32]byte
+	idx := 0
+	if err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
+		if row.MessageType == "ghosttrace.events.v1.BehavioralClusterFormation" && idx < 3 {
+			hashes[idx] = row.EventHash
+			idx++
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("WalkEvents: %v", err)
+	}
+	return sub, hashes[0], hashes[1], hashes[2]
+}
+
+func TestT4MergeBehavioralClusterHappyPath(t *testing.T) {
+	sub, a, b, produced := threeFormedBC(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.BehavioralClusterMerge{
+		AntecedentFormationEventHashes: [][]byte{a[:], b[:]},
+		ProducedFormationEventHash:     produced[:],
+		MergedAt:                       500000,
+		Reason:                         "T4 merge test",
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/behavioral-cluster/merge", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Fatalf("status: got %d, want %d; body=%s", got, want, rr.Body.String())
+	}
+	var out mergeResponse
+	_ = json.Unmarshal(rr.Body.Bytes(), &out)
+	if out.MergeEventHash == "" || out.IngestionEventHash == "" {
+		t.Errorf("hashes: merge=%q ingestion=%q", out.MergeEventHash, out.IngestionEventHash)
+	}
+}
+
+func TestT4MergeRejectsIdenticalAntecedents(t *testing.T) {
+	sub, a, _, produced := threeFormedBC(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.BehavioralClusterMerge{
+		AntecedentFormationEventHashes: [][]byte{a[:], a[:]}, // identical
+		ProducedFormationEventHash:     produced[:],
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/behavioral-cluster/merge", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusBadRequest; got != want {
+		t.Errorf("status: got %d, want %d (identical antecedents must 400; body: %s)",
+			got, want, rr.Body.String())
+	}
+}
+
+func TestT4MergeRejectsWrongAntecedentCount(t *testing.T) {
+	sub, a, _, produced := threeFormedBC(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.BehavioralClusterMerge{
+		AntecedentFormationEventHashes: [][]byte{a[:]}, // only 1
+		ProducedFormationEventHash:     produced[:],
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/behavioral-cluster/merge", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusBadRequest; got != want {
+		t.Errorf("status: got %d, want %d", got, want)
+	}
+}
+
 // T4 dissolve tests per §0108.
 
 func TestT4DissolveBehavioralClusterHappyPath(t *testing.T) {

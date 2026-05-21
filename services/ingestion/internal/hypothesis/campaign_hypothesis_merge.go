@@ -22,6 +22,9 @@ type CampaignHypothesisMergeOptions struct {
 	ProducedFormationHash    [32]byte
 	MergedAt                 int64
 	Reason                   string
+
+	// Actor per §0109 — non-empty triggers AppendPair.
+	Actor string
 }
 
 // CampaignHypothesisMergeReport is the per-MergeCampaignHypothesis
@@ -29,6 +32,9 @@ type CampaignHypothesisMergeOptions struct {
 type CampaignHypothesisMergeReport struct {
 	MergeEventHashHex string
 	AlreadyMerged     bool
+
+	// IngestionEventHashHex non-empty when Actor was supplied.
+	IngestionEventHashHex string
 }
 
 // MergeCampaignHypothesis records a CampaignHypothesisMerge
@@ -110,19 +116,51 @@ func MergeCampaignHypothesis(ctx context.Context, sub *substrate.Substrate, opts
 		return CampaignHypothesisMergeReport{}, fmt.Errorf("hypothesis.MergeCampaignHypothesis: lookup merge %s: %w", hex, lookupErr)
 	}
 
+	committedAt := now().UnixNano()
 	mergeRow := substrate.EventRow{
 		EventHash:   hash,
 		EventTime:   mergedAt,
 		MessageType: string(ev.ProtoReflect().Descriptor().FullName()),
 		PayloadRef:  hex[:2] + "/" + hex[2:],
-		CommittedAt: now().UnixNano(),
+		CommittedAt: committedAt,
 	}
-	if err := sub.Append(ctx, mergeRow, payload); err != nil {
-		return CampaignHypothesisMergeReport{}, fmt.Errorf("hypothesis.MergeCampaignHypothesis: append merge %s: %w", hex, err)
+
+	if opts.Actor == "" {
+		if err := sub.Append(ctx, mergeRow, payload); err != nil {
+			return CampaignHypothesisMergeReport{}, fmt.Errorf("hypothesis.MergeCampaignHypothesis: append merge %s: %w", hex, err)
+		}
+		return CampaignHypothesisMergeReport{
+			MergeEventHashHex: hex,
+			AlreadyMerged:     alreadyPresent,
+		}, nil
+	}
+
+	ingEv := &eventsv1.IngestionEvent{
+		PrimaryEventHash: hash[:],
+		ReceivedAt:       committedAt,
+		IngestedAt:       committedAt,
+		Channel:          "cli",
+		ClientCommonName: opts.Actor,
+	}
+	ingPayload, ingHash, err := canonical.MarshalAndHash(ingEv)
+	if err != nil {
+		return CampaignHypothesisMergeReport{}, fmt.Errorf("hypothesis.MergeCampaignHypothesis: marshal ingestion event: %w", err)
+	}
+	ingHex := canonical.HashHex(ingHash)
+	ingRow := substrate.EventRow{
+		EventHash:   ingHash,
+		EventTime:   committedAt,
+		MessageType: string(ingEv.ProtoReflect().Descriptor().FullName()),
+		PayloadRef:  ingHex[:2] + "/" + ingHex[2:],
+		CommittedAt: committedAt,
+	}
+	if err := sub.AppendPair(ctx, mergeRow, payload, ingRow, ingPayload); err != nil {
+		return CampaignHypothesisMergeReport{}, fmt.Errorf("hypothesis.MergeCampaignHypothesis: append pair (merge %s, ingestion %s): %w", hex, ingHex, err)
 	}
 
 	return CampaignHypothesisMergeReport{
-		MergeEventHashHex: hex,
-		AlreadyMerged:     alreadyPresent,
+		MergeEventHashHex:     hex,
+		AlreadyMerged:         alreadyPresent,
+		IngestionEventHashHex: ingHex,
 	}, nil
 }

@@ -321,14 +321,18 @@ func routeTier(r *http.Request) Tier {
 		p == "/v1/hypotheses/behavioral-cluster/dissolve" ||
 		p == "/v1/hypotheses/automation-group/dissolve" ||
 		p == "/v1/hypotheses/campaign-hypothesis/dissolve" ||
-		p == "/v1/hypotheses/coordination-ring/dissolve" {
+		p == "/v1/hypotheses/coordination-ring/dissolve" ||
+		p == "/v1/hypotheses/behavioral-cluster/merge" ||
+		p == "/v1/hypotheses/automation-group/merge" ||
+		p == "/v1/hypotheses/campaign-hypothesis/merge" ||
+		p == "/v1/hypotheses/coordination-ring/merge" {
 		return TierConstitutionalAct
 	}
 	// Remaining T4 constitutional-act routes (named follow-on per
-	// §0098 + §0105 + §0107 + §0108): the other 12 endpoints —
-	// promote + demote + dissolve done across all four subtypes;
-	// merge/split × 4 + form × 4 remain pre-positioned for follow-on
-	// landings.
+	// §0098 + §0105–§0109): the other 8 endpoints —
+	// promote + demote + dissolve + merge done across all four
+	// subtypes; split × 4 + form × 4 remain pre-positioned for
+	// follow-on landings.
 	return ""
 }
 
@@ -397,6 +401,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleDissolveCampaignHypothesis(w, r)
 	case r.URL.Path == "/v1/hypotheses/coordination-ring/dissolve":
 		h.handleDissolveCoordinationRing(w, r)
+	case r.URL.Path == "/v1/hypotheses/behavioral-cluster/merge":
+		h.handleMergeBehavioralCluster(w, r)
+	case r.URL.Path == "/v1/hypotheses/automation-group/merge":
+		h.handleMergeAutomationGroup(w, r)
+	case r.URL.Path == "/v1/hypotheses/campaign-hypothesis/merge":
+		h.handleMergeCampaignHypothesis(w, r)
+	case r.URL.Path == "/v1/hypotheses/coordination-ring/merge":
+		h.handleMergeCoordinationRing(w, r)
 	default:
 		http.NotFound(w, r)
 	}

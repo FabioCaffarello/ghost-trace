@@ -38,6 +38,9 @@ type AutomationGroupMergeOptions struct {
 
 	// Reason is an operator-supplied free-form note. Optional.
 	Reason string
+
+	// Actor per §0109 — non-empty triggers AppendPair.
+	Actor string
 }
 
 // AutomationGroupMergeReport is the per-MergeAutomationGroup
@@ -50,6 +53,9 @@ type AutomationGroupMergeReport struct {
 	// AlreadyMerged is true when an identical merge event was
 	// already in the substrate.
 	AlreadyMerged bool
+
+	// IngestionEventHashHex non-empty when Actor was supplied.
+	IngestionEventHashHex string
 }
 
 // MergeAutomationGroup records an AutomationGroupMerge lifecycle
@@ -134,19 +140,51 @@ func MergeAutomationGroup(ctx context.Context, sub *substrate.Substrate, opts Au
 		return AutomationGroupMergeReport{}, fmt.Errorf("hypothesis.MergeAutomationGroup: lookup merge %s: %w", hex, lookupErr)
 	}
 
+	committedAt := now().UnixNano()
 	mergeRow := substrate.EventRow{
 		EventHash:   hash,
 		EventTime:   mergedAt,
 		MessageType: string(ev.ProtoReflect().Descriptor().FullName()),
 		PayloadRef:  hex[:2] + "/" + hex[2:],
-		CommittedAt: now().UnixNano(),
+		CommittedAt: committedAt,
 	}
-	if err := sub.Append(ctx, mergeRow, payload); err != nil {
-		return AutomationGroupMergeReport{}, fmt.Errorf("hypothesis.MergeAutomationGroup: append merge %s: %w", hex, err)
+
+	if opts.Actor == "" {
+		if err := sub.Append(ctx, mergeRow, payload); err != nil {
+			return AutomationGroupMergeReport{}, fmt.Errorf("hypothesis.MergeAutomationGroup: append merge %s: %w", hex, err)
+		}
+		return AutomationGroupMergeReport{
+			MergeEventHashHex: hex,
+			AlreadyMerged:     alreadyPresent,
+		}, nil
+	}
+
+	ingEv := &eventsv1.IngestionEvent{
+		PrimaryEventHash: hash[:],
+		ReceivedAt:       committedAt,
+		IngestedAt:       committedAt,
+		Channel:          "cli",
+		ClientCommonName: opts.Actor,
+	}
+	ingPayload, ingHash, err := canonical.MarshalAndHash(ingEv)
+	if err != nil {
+		return AutomationGroupMergeReport{}, fmt.Errorf("hypothesis.MergeAutomationGroup: marshal ingestion event: %w", err)
+	}
+	ingHex := canonical.HashHex(ingHash)
+	ingRow := substrate.EventRow{
+		EventHash:   ingHash,
+		EventTime:   committedAt,
+		MessageType: string(ingEv.ProtoReflect().Descriptor().FullName()),
+		PayloadRef:  ingHex[:2] + "/" + ingHex[2:],
+		CommittedAt: committedAt,
+	}
+	if err := sub.AppendPair(ctx, mergeRow, payload, ingRow, ingPayload); err != nil {
+		return AutomationGroupMergeReport{}, fmt.Errorf("hypothesis.MergeAutomationGroup: append pair (merge %s, ingestion %s): %w", hex, ingHex, err)
 	}
 
 	return AutomationGroupMergeReport{
-		MergeEventHashHex: hex,
-		AlreadyMerged:     alreadyPresent,
+		MergeEventHashHex:     hex,
+		AlreadyMerged:         alreadyPresent,
+		IngestionEventHashHex: ingHex,
 	}, nil
 }

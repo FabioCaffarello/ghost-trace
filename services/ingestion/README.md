@@ -1250,6 +1250,15 @@ Per [`§0108`](../../docs/charter/decision-log.md), the dissolve endpoint shippe
 
 Each accepts `application/x-protobuf` with the corresponding `<Subtype>Dissolution` message; commits the dissolution paired with an `IngestionEvent` via `AppendPair`. Dissolution targets the FORMATION hash directly (not promotion) — per `glossary.md` + `lifecycle-semantics.md` line 36, dissolution recognizes NON-EXISTENCE of the underlying phenomenon, distinct from demotion's withdrawal of operational use. A hypothesis may be dissolved directly without intermediate promote/demote (terminal lifecycle operation; substrate accepts the discrete event regardless of intermediate state per §2.5 BC3).
 
+Per [`§0109`](../../docs/charter/decision-log.md), the merge endpoint shipped across all four subtypes:
+
+- `POST /v1/hypotheses/behavioral-cluster/merge`
+- `POST /v1/hypotheses/automation-group/merge`
+- `POST /v1/hypotheses/campaign-hypothesis/merge`
+- `POST /v1/hypotheses/coordination-ring/merge`
+
+Each accepts `application/x-protobuf` with the corresponding `<Subtype>Merge` message: two `antecedent_formation_event_hashes` (must differ) + one `produced_formation_event_hash` (must be a separately-committed `<Subtype>Formation` representing the merged hypothesis). All three hashes must be 32 bytes; all three must resolve to `<Subtype>Formation` rows of the matching subtype. Merge is symmetric: ascending-sort normalization per `hypothesis.Merge*` ensures the merge event's content-hash is invariant under caller argument order. 400 on identical antecedents OR wrong antecedent count OR bad hash lengths; 404 on unknown formation OR cross-subtype formation hash.
+
 Wire shape — request:
 
 ```sh
