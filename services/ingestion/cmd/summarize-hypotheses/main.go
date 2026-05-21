@@ -20,6 +20,9 @@
 // UNION of per-subtype samples — not approximated from the per-subtype
 // aggregates — so combined percentiles are exact.
 //
+// Per §0083, the aggregation helpers live in internal/projection
+// and are shared with internal/httpapi/hypotheses_summary.
+//
 // Exit codes: 0 success (including empty substrate); 2 tool/config
 // error.
 package main
@@ -30,7 +33,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"sort"
 
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/projection"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
@@ -98,27 +100,27 @@ func run() error {
 		return err
 	}
 
-	bcAgg := bcAggregate(bcProjs)
-	agAgg := agAggregate(agProjs)
-	chAgg := chAggregate(chProjs)
-	crAgg := crAggregate(crProjs)
+	bcAgg := projection.AggregateBC(bcProjs)
+	agAgg := projection.AggregateAG(agProjs)
+	chAgg := projection.AggregateCH(chProjs)
+	crAgg := projection.AggregateCR(crProjs)
 
-	combinedCounts := combineCounts(
-		bcAgg.counts, agAgg.counts, chAgg.counts, crAgg.counts,
+	combinedCounts := projection.CombineCounts(
+		bcAgg.Counts, agAgg.Counts, chAgg.Counts, crAgg.Counts,
 	)
-	combinedSamples := combineSamples(
-		bcAgg.samples, agAgg.samples, chAgg.samples, crAgg.samples,
+	combinedSamples := projection.CombineLatencySamples(
+		bcAgg.Samples, agAgg.Samples, chAgg.Samples, crAgg.Samples,
 	)
 
 	output := perSubtype{
-		Combined: aggregateSection{
+		Combined: projection.AggregateSection{
 			StateCounts: combinedCounts,
-			Latencies:   aggregateAllLatencies(combinedSamples),
+			Latencies:   projection.AggregateAllLatencies(combinedSamples),
 		},
-		BehavioralCluster:  bcAgg.section(),
-		AutomationGroup:    agAgg.section(),
-		CampaignHypothesis: chAgg.section(),
-		CoordinationRing:   crAgg.section(),
+		BehavioralCluster:  bcAgg.Section(),
+		AutomationGroup:    agAgg.Section(),
+		CampaignHypothesis: chAgg.Section(),
+		CoordinationRing:   crAgg.Section(),
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
@@ -128,237 +130,16 @@ func run() error {
 
 	fmt.Fprintf(os.Stderr,
 		"summarize-hypotheses: combined_total=%d bc_total=%d ag_total=%d ch_total=%d cr_total=%d after_ns=%d before_ns=%d\n",
-		combinedCounts.Total, bcAgg.counts.Total, agAgg.counts.Total,
-		chAgg.counts.Total, crAgg.counts.Total,
+		combinedCounts.Total, bcAgg.Counts.Total, agAgg.Counts.Total,
+		chAgg.Counts.Total, crAgg.Counts.Total,
 		*afterNs, *beforeNs)
 	return nil
 }
 
-// aggregateSection is the wire shape of every per-subtype + combined
-// JSON section. StateCounts is embedded so its `total` + `by_state`
-// fields appear at the parent level; Latencies nests under
-// `latencies`.
-type aggregateSection struct {
-	projection.StateCounts
-	Latencies latencyAggregates `json:"latencies"`
-}
-
-// latencyAggregates is the per-dimension latency aggregation for one
-// section. The three dimensions mirror the per-projection latency
-// fields landed at §0055 across all four subtypes.
-type latencyAggregates struct {
-	FormationToFirstPromotionNs       latencyAggregate `json:"formation_to_first_promotion_ns"`
-	LatestPromotionToLatestDemotionNs latencyAggregate `json:"latest_promotion_to_latest_demotion_ns"`
-	FormationToDissolutionNs          latencyAggregate `json:"formation_to_dissolution_ns"`
-}
-
-// latencyAggregate is the per-dimension percentile summary over the
-// non-nil samples in a projection slice. SampleCount is the number of
-// non-nil latencies contributed; Min/P50/P90/Max are nil when
-// SampleCount is zero.
-//
-// Percentile method: nearest-rank. For a sorted ascending sample
-// slice of length N, P_k is the value at index ceil(k * N / 100) - 1.
-// P50 of [10,20,30,40,50] is 30; P90 of the same is 50. Method is
-// stable + simple + does not interpolate between samples.
-type latencyAggregate struct {
-	SampleCount int    `json:"sample_count"`
-	MinNs       *int64 `json:"min_ns,omitempty"`
-	P50Ns       *int64 `json:"p50_ns,omitempty"`
-	P90Ns       *int64 `json:"p90_ns,omitempty"`
-	MaxNs       *int64 `json:"max_ns,omitempty"`
-}
-
-// latencySamples carries the raw per-formation latency samples
-// extracted from a projection slice. The combined latency aggregate
-// per §0079 is computed from the UNION of per-subtype samples (exact
-// percentiles), not from approximation over per-subtype aggregates.
-type latencySamples struct {
-	FormationToFirstPromotion       []int64
-	LatestPromotionToLatestDemotion []int64
-	FormationToDissolution          []int64
-}
-
-// subtypeAggregate carries both the state counts and the raw latency
-// samples for one subtype, plus a section() helper that emits the
-// JSON wire shape.
-type subtypeAggregate struct {
-	counts  projection.StateCounts
-	samples latencySamples
-}
-
-func (a subtypeAggregate) section() aggregateSection {
-	return aggregateSection{
-		StateCounts: a.counts,
-		Latencies:   aggregateAllLatencies(a.samples),
-	}
-}
-
-func aggregateAllLatencies(s latencySamples) latencyAggregates {
-	return latencyAggregates{
-		FormationToFirstPromotionNs:       aggregateLatencies(s.FormationToFirstPromotion),
-		LatestPromotionToLatestDemotionNs: aggregateLatencies(s.LatestPromotionToLatestDemotion),
-		FormationToDissolutionNs:          aggregateLatencies(s.FormationToDissolution),
-	}
-}
-
-func bcAggregate(projs []projection.HypothesisProjection) subtypeAggregate {
-	a := subtypeAggregate{counts: emptyCounts()}
-	for _, p := range projs {
-		a.counts.Total++
-		a.counts.ByState[p.State]++
-		if p.FormationToFirstPromotionLatencyNs != nil {
-			a.samples.FormationToFirstPromotion = append(a.samples.FormationToFirstPromotion, *p.FormationToFirstPromotionLatencyNs)
-		}
-		if p.LatestPromotionToLatestDemotionLatencyNs != nil {
-			a.samples.LatestPromotionToLatestDemotion = append(a.samples.LatestPromotionToLatestDemotion, *p.LatestPromotionToLatestDemotionLatencyNs)
-		}
-		if p.FormationToDissolutionLatencyNs != nil {
-			a.samples.FormationToDissolution = append(a.samples.FormationToDissolution, *p.FormationToDissolutionLatencyNs)
-		}
-	}
-	return a
-}
-
-func agAggregate(projs []projection.AutomationGroupProjection) subtypeAggregate {
-	a := subtypeAggregate{counts: emptyCounts()}
-	for _, p := range projs {
-		a.counts.Total++
-		a.counts.ByState[p.State]++
-		if p.FormationToFirstPromotionLatencyNs != nil {
-			a.samples.FormationToFirstPromotion = append(a.samples.FormationToFirstPromotion, *p.FormationToFirstPromotionLatencyNs)
-		}
-		if p.LatestPromotionToLatestDemotionLatencyNs != nil {
-			a.samples.LatestPromotionToLatestDemotion = append(a.samples.LatestPromotionToLatestDemotion, *p.LatestPromotionToLatestDemotionLatencyNs)
-		}
-		if p.FormationToDissolutionLatencyNs != nil {
-			a.samples.FormationToDissolution = append(a.samples.FormationToDissolution, *p.FormationToDissolutionLatencyNs)
-		}
-	}
-	return a
-}
-
-func chAggregate(projs []projection.CampaignHypothesisProjection) subtypeAggregate {
-	a := subtypeAggregate{counts: emptyCounts()}
-	for _, p := range projs {
-		a.counts.Total++
-		a.counts.ByState[p.State]++
-		if p.FormationToFirstPromotionLatencyNs != nil {
-			a.samples.FormationToFirstPromotion = append(a.samples.FormationToFirstPromotion, *p.FormationToFirstPromotionLatencyNs)
-		}
-		if p.LatestPromotionToLatestDemotionLatencyNs != nil {
-			a.samples.LatestPromotionToLatestDemotion = append(a.samples.LatestPromotionToLatestDemotion, *p.LatestPromotionToLatestDemotionLatencyNs)
-		}
-		if p.FormationToDissolutionLatencyNs != nil {
-			a.samples.FormationToDissolution = append(a.samples.FormationToDissolution, *p.FormationToDissolutionLatencyNs)
-		}
-	}
-	return a
-}
-
-func crAggregate(projs []projection.CoordinationRingProjection) subtypeAggregate {
-	a := subtypeAggregate{counts: emptyCounts()}
-	for _, p := range projs {
-		a.counts.Total++
-		a.counts.ByState[p.State]++
-		if p.FormationToFirstPromotionLatencyNs != nil {
-			a.samples.FormationToFirstPromotion = append(a.samples.FormationToFirstPromotion, *p.FormationToFirstPromotionLatencyNs)
-		}
-		if p.LatestPromotionToLatestDemotionLatencyNs != nil {
-			a.samples.LatestPromotionToLatestDemotion = append(a.samples.LatestPromotionToLatestDemotion, *p.LatestPromotionToLatestDemotionLatencyNs)
-		}
-		if p.FormationToDissolutionLatencyNs != nil {
-			a.samples.FormationToDissolution = append(a.samples.FormationToDissolution, *p.FormationToDissolutionLatencyNs)
-		}
-	}
-	return a
-}
-
-func emptyCounts() projection.StateCounts {
-	return projection.StateCounts{
-		ByState: map[projection.State]int{
-			projection.StateForming:    0,
-			projection.StatePromoted:   0,
-			projection.StateDemoted:    0,
-			projection.StateDissolved:  0,
-			projection.StateMergedInto: 0,
-			projection.StateSplitInto:  0,
-		},
-	}
-}
-
-// aggregateLatencies returns a nearest-rank percentile summary over
-// the sample slice. Returns sample_count=0 + nil percentile fields
-// when samples is empty.
-func aggregateLatencies(samples []int64) latencyAggregate {
-	if len(samples) == 0 {
-		return latencyAggregate{}
-	}
-	cp := append([]int64(nil), samples...)
-	sort.Slice(cp, func(i, j int) bool { return cp[i] < cp[j] })
-
-	min := cp[0]
-	max := cp[len(cp)-1]
-	p50 := percentileNearestRank(cp, 50)
-	p90 := percentileNearestRank(cp, 90)
-
-	return latencyAggregate{
-		SampleCount: len(cp),
-		MinNs:       &min,
-		P50Ns:       &p50,
-		P90Ns:       &p90,
-		MaxNs:       &max,
-	}
-}
-
-// percentileNearestRank returns the nearest-rank percentile over a
-// pre-sorted ascending slice. Pre-condition: len(sorted) >= 1.
-func percentileNearestRank(sorted []int64, k int) int64 {
-	n := len(sorted)
-	idx := (k*n + 99) / 100 // ceil(k*n/100)
-	idx--
-	if idx < 0 {
-		idx = 0
-	}
-	if idx >= n {
-		idx = n - 1
-	}
-	return sorted[idx]
-}
-
-// combineCounts returns a per-state-aligned sum across all four
-// per-subtype StateCounts. Per §0078: combined.total equals the sum
-// of per-subtype totals; combined.by_state[s] equals the sum of each
-// subtype's by_state[s] for every State.
-func combineCounts(parts ...projection.StateCounts) projection.StateCounts {
-	combined := emptyCounts()
-	for _, p := range parts {
-		combined.Total += p.Total
-		for state, count := range p.ByState {
-			combined.ByState[state] += count
-		}
-	}
-	return combined
-}
-
-// combineSamples returns the union of per-dimension samples across
-// per-subtype latencySamples. The combined latency aggregate is
-// computed from this union (NOT approximated from per-subtype
-// aggregates), so combined percentiles are exact per §0079.
-func combineSamples(parts ...latencySamples) latencySamples {
-	combined := latencySamples{}
-	for _, p := range parts {
-		combined.FormationToFirstPromotion = append(combined.FormationToFirstPromotion, p.FormationToFirstPromotion...)
-		combined.LatestPromotionToLatestDemotion = append(combined.LatestPromotionToLatestDemotion, p.LatestPromotionToLatestDemotion...)
-		combined.FormationToDissolution = append(combined.FormationToDissolution, p.FormationToDissolution...)
-	}
-	return combined
-}
-
 type perSubtype struct {
-	Combined           aggregateSection `json:"combined"`
-	BehavioralCluster  aggregateSection `json:"behavioral_cluster"`
-	AutomationGroup    aggregateSection `json:"automation_group"`
-	CampaignHypothesis aggregateSection `json:"campaign_hypothesis"`
-	CoordinationRing   aggregateSection `json:"coordination_ring"`
+	Combined           projection.AggregateSection `json:"combined"`
+	BehavioralCluster  projection.AggregateSection `json:"behavioral_cluster"`
+	AutomationGroup    projection.AggregateSection `json:"automation_group"`
+	CampaignHypothesis projection.AggregateSection `json:"campaign_hypothesis"`
+	CoordinationRing   projection.AggregateSection `json:"coordination_ring"`
 }

@@ -3246,6 +3246,48 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0083` — Aggregation-helper consolidation; §0082-named carry-forward discharged
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0082`](#0082--http-summary-endpoint-get-v1hypothesessummary-three-endpoint-http-read-arc-complete) named **"aggregation-helper consolidation"** as a future-cleanup carry-forward: the per-subtype aggregator + percentile-computation logic was duplicated between [`cmd/summarize-hypotheses/main.go`](../../services/ingestion/cmd/summarize-hypotheses/main.go) (landed at §0078+§0079) and [`internal/httpapi/hypotheses_summary.go`](../../services/ingestion/internal/httpapi/hypotheses_summary.go) (landed at §0082). The two implementations shared intent + algorithm but no code (~250 LOC each side). This entry consolidates.
+
+- **Decision:** Extract the shared aggregation logic into [`internal/projection/aggregate.go`](../../services/ingestion/internal/projection/aggregate.go) (new file) and refactor both callers to consume it:
+
+  1. **Exported types** in `projection`: `LatencyAggregate`, `LatencyAggregates`, `LatencySamples`, `SubtypeAggregate`, `AggregateSection`. Wire-shape contracts preserved exactly (JSON tags unchanged); `AggregateSection` embeds `StateCounts` so `total` + `by_state` appear at the section's parent level.
+
+  2. **Exported helpers** in `projection`: `AggregateBC`, `AggregateAG`, `AggregateCH`, `AggregateCR` (per-subtype aggregators consuming `ListXXX` outputs); `AggregateLatencies` (nearest-rank percentile summary over a sample slice); `PercentileNearestRank` (the lower-level percentile primitive); `CombineCounts` (§0078 per-state-aligned sum); `CombineLatencySamples` (§0079 union-of-raw-samples for exact combined percentiles); `AggregateAllLatencies` (helper covering the three latency dimensions in one call).
+
+  3. **`SubtypeAggregate.Section()`** convenience method emits the `AggregateSection` wire shape for one subtype.
+
+  4. **Refactor `cmd/summarize-hypotheses/main.go`.** Replaces the package-local aggregation helpers (~250 LOC) with calls into the new `projection.Aggregate*` + `projection.Combine*` API. JSON wire shape byte-identical (smoke-tested against an empty substrate).
+
+  5. **Refactor `internal/httpapi/hypotheses_summary.go`.** Replaces the package-local `summary*` aggregation helpers with the same shared API. Removes the `summary*`-prefixed types that existed only to avoid naming collision with `cmd/summarize-hypotheses` (now obsolete since both callers consume the shared package).
+
+  6. **Move tests.** The 9 aggregation unit tests landed at [`§0079`](#0079--per-subtype--combined-latency-aggregates-in-summarize-hypotheses-00530055-latency-histogram-carry-forward-discharged) (`cmd/summarize-hypotheses/main_test.go`) move to [`internal/projection/aggregate_test.go`](../../services/ingestion/internal/projection/aggregate_test.go), adapted to call the exported function names. The HTTP summary endpoint tests at [`§0082`](#0082--http-summary-endpoint-get-v1hypothesessummary-three-endpoint-http-read-arc-complete) remain as integration tests over the shared logic. `cmd/summarize-hypotheses/` no longer has its own test file (its main.go is now a thin wrapper).
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. The refactor preserves wire shapes exactly — `cmd/summarize-hypotheses` JSON output is byte-identical before and after (verified by smoke-testing the rebuilt binary against an empty substrate); the HTTP `/v1/hypotheses/summary` response is unchanged (verified by the existing 9 HTTP endpoint tests continuing to pass). Respects §2.5 BC3 (current state remains a projection). Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`services/ingestion/internal/projection/aggregate.go`](../../services/ingestion/internal/projection/aggregate.go) — new file. Exported `LatencyAggregate`, `LatencyAggregates`, `LatencySamples`, `SubtypeAggregate`, `AggregateSection` types + `AggregateBC`/`AggregateAG`/`AggregateCH`/`AggregateCR` per-subtype aggregators + `AggregateLatencies` / `PercentileNearestRank` / `CombineCounts` / `CombineLatencySamples` / `AggregateAllLatencies` helpers.
+  - [`services/ingestion/internal/projection/aggregate_test.go`](../../services/ingestion/internal/projection/aggregate_test.go) — new file. 9 unit tests migrated from `cmd/summarize-hypotheses/main_test.go` (now deleted); adapted to call exported function names.
+  - [`services/ingestion/cmd/summarize-hypotheses/main.go`](../../services/ingestion/cmd/summarize-hypotheses/main.go) — refactored. ~250 LOC of package-local aggregation helpers replaced with calls into `projection.*`. Wire shape unchanged.
+  - [`services/ingestion/cmd/summarize-hypotheses/main_test.go`](../../services/ingestion/cmd/summarize-hypotheses/main_test.go) — **deleted**; tests migrated to `internal/projection/aggregate_test.go`.
+  - [`services/ingestion/internal/httpapi/hypotheses_summary.go`](../../services/ingestion/internal/httpapi/hypotheses_summary.go) — refactored. `summary*`-prefixed types removed (they existed only to avoid naming collision with `cmd/summarize-hypotheses`; obsolete now that both consume the shared package). Wire shape unchanged.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0083 (this entry).
+  - **§0082 carry-forward fully discharged.** "Aggregation-helper consolidation" named at §0082 is now landed.
+  - **Single source of truth.** Future changes to the aggregation algorithm (e.g. percentile method, sample-extraction logic) change one place. Both callers see the change through the shared API.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Cursor-based pagination** — unchanged from §0052+§0081.
+    - **Streaming / chunked encoding** — unchanged.
+    - **Bucketed histograms** — unchanged from §0079.
+    - **gRPC interface** — unchanged.
+
+- **Supersession:** None. Discharges a UX-cleanup carry-forward named at §0082. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
