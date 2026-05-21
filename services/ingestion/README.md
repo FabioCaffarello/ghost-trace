@@ -877,6 +877,24 @@ Producers MUST send `Authorization: Bearer <token>` with every `POST /v1/events/
 
 Signals (SIGINT, SIGTERM) trigger graceful shutdown via context cancellation; in-flight HTTP requests drain up to a 10-second grace window before the server returns from `Shutdown`.
 
+### HTTP projection-read endpoints
+
+Per [`§0080`](../../docs/charter/decision-log.md), the HTTP interface gains read-side endpoints exposing the same projection surface that the `hypothesis-state` / `list-hypotheses` / `summarize-hypotheses` CLIs serve. The first endpoint:
+
+- **`GET /v1/hypotheses/state?formation_event_hash=<hex>`** — single-projection read, subtype auto-detected from the formation row's `message_type`. Mirrors `hypothesis-state` CLI wire shape: `subtype`, `formation_event_hash`, `state`, optional `latest_promotion` / `latest_demotion` / `dissolution` / `merged_into` / `split_into` payloads, chronological `lifecycle_history`, and `latencies` (per [`§0055`](../../docs/charter/decision-log.md)).
+
+Response codes: **200** on success; **400** for missing parameter, invalid hex, or wrong hash length; **404** for unknown formation or cross-subtype rejection (target is not a Cat III formation event); **405** for non-GET; **503** if the handler was constructed without `WithSubstrate` (read endpoints disabled). When `WithAuthToken` is configured, the read endpoint requires `Authorization: Bearer <token>` the same way `POST /v1/events/*` does.
+
+Example:
+
+```sh
+curl -sS \
+  -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/v1/hypotheses/state?formation_event_hash=<64-hex-chars>"
+```
+
+`list-hypotheses` and `summarize-hypotheses` equivalent endpoints are follow-on landings (named carry-forward).
+
 ## Required Properties
 
 Per the original constitutional placeholder ([decision-log §0022](../../docs/charter/decision-log.md) implementation pivot):

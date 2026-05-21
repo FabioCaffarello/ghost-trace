@@ -3124,6 +3124,49 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0080` — HTTP projection-read endpoint lands (`GET /v1/hypotheses/state`); first read-side surface on the HTTP channel
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** The HTTP interface introduced at [`§0034`](#0034--http-interface-added-to-ingestion-service-post-v1events--get-healthz-0030-httpgrpc-item-partially-discharged) carries only the write-side (`POST /v1/events/{type}`) and the liveness probe (`GET /healthz`). The projection layer ([`§0051`](#0051--first-projection-layer-landing-hypothesisprojection-single-hypothesis-read-side-materialization-over-the-25-lifecycle-event-chain-charter-25-bc3-deferred-state-read-shape-now-operationally-observable)–[`§0055`](#0055--per-projection-latency-derivation-0053-latency-histogram-carry-forward-partially-discharged-at-the-per-projection-layer) + [`§0062`](#0062--projection-layer-extended-to-automationgroup-parallel-per-subtype-projection-types-per-the-typed-subtype-landings-discipline-cross-subtype-cli-dispatch)+[`§0069`](#0069--projection-layer-extended-to-campaignhypothesis-typed-subtype-landings-discipline-now-validated-across-three-subtypes-at-both-write-and-read-surfaces)+[`§0076`](#0076--projection-layer-extended-to-coordinationring-typed-subtype-landings-discipline-now-validated-across-all-four-subtypes-at-both-write-and-read-surfaces)) has been operator-accessible only via CLI tools (`hypothesis-state`, `list-hypotheses`, `summarize-hypotheses`). This entry opens the HTTP read-side surface with the simplest endpoint — single-projection state by formation hash. Two follow-on endpoints (list, summarize) are named follow-ons.
+
+- **Decision:** Add `GET /v1/hypotheses/state` to the HTTP interface:
+
+  1. **`WithSubstrate(sub)` Option** added to [`internal/httpapi/handler.go`](../../services/ingestion/internal/httpapi/handler.go). Optional dependency on `*substrate.Substrate`; nil disables the projection-read endpoints (the routes return 503 rather than 500, matching "not configured" semantics). Production main wires the same substrate that backs the write-side `AppendFunc`.
+
+  2. **`handleHypothesisState` handler** added to [`internal/httpapi/hypotheses.go`](../../services/ingestion/internal/httpapi/hypotheses.go) (new file). Auto-detects the formation's Cat III subtype via the substrate row's `message_type` and dispatches to the appropriate per-subtype projection — same pattern as the `hypothesis-state` CLI's dispatch (per [`§0062`](#0062--projection-layer-extended-to-automationgroup-parallel-per-subtype-projection-types-per-the-typed-subtype-landings-discipline-cross-subtype-cli-dispatch) + [`§0069`](#0069--projection-layer-extended-to-campaignhypothesis-typed-subtype-landings-discipline-now-validated-across-three-subtypes-at-both-write-and-read-surfaces) + [`§0076`](#0076--projection-layer-extended-to-coordinationring-typed-subtype-landings-discipline-now-validated-across-all-four-subtypes-at-both-write-and-read-surfaces)). Wire shape mirrors the CLI's JSON output; operators get the same response regardless of channel.
+
+  3. **Auth gating** preserved. Per [`§0035`](#0035--bearer-token-authentication-added-to-ingestion-http-interface-0034-auth-deferred-discharged), when `WithAuthToken` is configured the read endpoint requires `Authorization: Bearer <token>` the same as the write endpoint. `/healthz` exemption unchanged.
+
+  4. **Error classification** mirrors the CLI exit-code semantic. Missing/invalid parameter → 400; formation not found OR target-not-formation (cross-subtype rejection) → 404; substrate not configured → 503; non-GET method → 405.
+
+  5. **Service main.go wiring.** `main.go` now passes `httpapi.WithSubstrate(sub)` to `httpapi.New`. The same `*substrate.Substrate` that backs the write side serves read queries — no separate connection or pool.
+
+  6. **Tests** at [`internal/httpapi/hypotheses_test.go`](../../services/ingestion/internal/httpapi/hypotheses_test.go) — **8 tests** covering happy-path BC formation, non-GET rejection, substrate-not-configured 503, missing parameter, invalid hex, wrong hash length, unknown formation, not-a-formation (passing an IngestionEvent hash), and auth-required behavior with three sub-cases (no header, wrong token, correct token).
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1 (read-only over immutable substrate; no mutation), §2.2 (the response surfaces operational state via projection — not as a substrate row; cross-subtype rejection is structurally enforced), §2.3 (no provenance edges produced), §2.5 + §2.5 BC3 (current state remains a projection — the HTTP endpoint is a thin transport over the existing read-layer functions), §2.5 BC5 (lifecycle-event-as-Cat-I-record is preserved — the response references but does not modify substrate rows). Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`services/ingestion/internal/httpapi/handler.go`](../../services/ingestion/internal/httpapi/handler.go) — `sub` field added to `Handler`; `WithSubstrate` Option added; ServeHTTP route table extended with `/v1/hypotheses/state`.
+  - [`services/ingestion/internal/httpapi/hypotheses.go`](../../services/ingestion/internal/httpapi/hypotheses.go) — new file. `handleHypothesisState` + four per-subtype output builders + `writeProjectionError`. Wire shape types (`stateOutput`, `stateLifecycleEntry`, `stateLatencyView`, `promotionView` / `demotionView` / `dissolutionView` / `mergeView` / `splitView`) mirror the `hypothesis-state` CLI output exactly.
+  - [`services/ingestion/internal/httpapi/hypotheses_test.go`](../../services/ingestion/internal/httpapi/hypotheses_test.go) — new file; 8 tests.
+  - [`services/ingestion/main.go`](../../services/ingestion/main.go) — handler options now include `WithSubstrate(sub)`.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — new "HTTP projection-read endpoints" subsection.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0080 (this entry).
+  - **First read-side endpoint on the HTTP channel.** Operators can now query single-projection state over HTTP, parity with the CLI. Auth + TLS infrastructure from §0034–§0038 covers the read endpoint without extension.
+  - **Same-substrate read/write coupling.** The HTTP read endpoint uses the same `*substrate.Substrate` instance as the write side; no separate connection pool or read replica. The substrate's internal concurrency model (single-writer mutex per [`concurrency-pattern.md`](../architecture/concurrency-pattern.md)) accommodates the read endpoint without modification — reads do not acquire `writeMu` and so do not contend with the write path.
+  - **Out of scope at this layer (carry-forwards).**
+    - **List endpoint** — `GET /v1/hypotheses` mirroring `list-hypotheses` CLI. Natural §0081 candidate.
+    - **Summary endpoint** — `GET /v1/hypotheses/summary` mirroring `summarize-hypotheses` CLI. Natural §0082 candidate. Together with the list endpoint, the three CLI surfaces would have HTTP parity.
+    - **Streaming / pagination** — the list endpoint will need to decide between Limit/Offset (mirroring the CLI) and cursor-based pagination. Deferred to §0081.
+    - **Subtype-specific endpoints** — currently the auto-detect dispatch is sufficient; future subtype-specific paths (e.g. `/v1/hypotheses/behavioral-cluster/state`) deferred until pressure surfaces.
+    - **gRPC interface** — unchanged from [`§0034`](#0034--http-interface-added-to-ingestion-service-post-v1events--get-healthz-0030-httpgrpc-item-partially-discharged) carry-forward.
+
+- **Supersession:** None. Extends §0034 with the first projection-read surface on the HTTP channel. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
