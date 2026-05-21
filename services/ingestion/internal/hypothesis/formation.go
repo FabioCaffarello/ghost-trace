@@ -148,8 +148,22 @@ func (w *walkerContext) DeclaredSessions() []SourceDeclaredSession {
 // ingestion service's write path; the substrate serializes all
 // writers per concurrency-pattern.md §Substrate-Writer Serialization.
 func FormAll(ctx context.Context, sub *substrate.Substrate, pattern FormationPattern, now func() time.Time) (Report, error) {
+	return FormAllWithActor(ctx, sub, pattern, now, "")
+}
+
+// FormAllWithActor is FormAll with per-actor attribution. When actor
+// is non-empty, each formed BehavioralClusterFormation event commits
+// paired with an IngestionEvent via substrate.AppendPair (channel=
+// "cli", client_common_name=actor); per-actor attribution lands on
+// the IngestionEvent. Empty actor preserves the FormAll single-Append
+// path (backward compatible).
+//
+// Used by HTTP T4 form endpoint per §0111 (cross-tier per-actor-
+// attribution requirement for HTTP-channel writes per §0094); CLI
+// continues using FormAll (no actor; §0033 local-shell-trust).
+func FormAllWithActor(ctx context.Context, sub *substrate.Substrate, pattern FormationPattern, now func() time.Time, actor string) (Report, error) {
 	if pattern == nil {
-		return Report{}, errors.New("hypothesis.FormAll: pattern must not be nil")
+		return Report{}, errors.New("hypothesis.FormAllWithActor: pattern must not be nil")
 	}
 	if now == nil {
 		now = time.Now
@@ -157,7 +171,7 @@ func FormAll(ctx context.Context, sub *substrate.Substrate, pattern FormationPat
 
 	fctx, err := CollectFormationContextAt(ctx, sub, 0)
 	if err != nil {
-		return Report{}, fmt.Errorf("hypothesis.FormAll: %w", err)
+		return Report{}, fmt.Errorf("hypothesis.FormAllWithActor: %w", err)
 	}
 
 	rep := Report{Examined: int64(len(fctx.DeclaredSessions()))}
@@ -180,15 +194,42 @@ func FormAll(ctx context.Context, sub *substrate.Substrate, pattern FormationPat
 			return rep, fmt.Errorf("lookup formation %s: %w", hex, lookupErr)
 		}
 
+		committedAt := now().UnixNano()
 		row := substrate.EventRow{
 			EventHash:   hash,
 			EventTime:   ev.GetFormationAt(),
 			MessageType: string(ev.ProtoReflect().Descriptor().FullName()),
 			PayloadRef:  hex[:2] + "/" + hex[2:],
-			CommittedAt: now().UnixNano(),
+			CommittedAt: committedAt,
 		}
-		if err := sub.Append(ctx, row, payload); err != nil {
-			return rep, fmt.Errorf("append formation %s: %w", hex, err)
+
+		if actor == "" {
+			if err := sub.Append(ctx, row, payload); err != nil {
+				return rep, fmt.Errorf("append formation %s: %w", hex, err)
+			}
+		} else {
+			ingEv := &eventsv1.IngestionEvent{
+				PrimaryEventHash: hash[:],
+				ReceivedAt:       committedAt,
+				IngestedAt:       committedAt,
+				Channel:          "cli",
+				ClientCommonName: actor,
+			}
+			ingPayload, ingHash, err := canonical.MarshalAndHash(ingEv)
+			if err != nil {
+				return rep, fmt.Errorf("marshal ingestion event: %w", err)
+			}
+			ingHex := canonical.HashHex(ingHash)
+			ingRow := substrate.EventRow{
+				EventHash:   ingHash,
+				EventTime:   committedAt,
+				MessageType: string(ingEv.ProtoReflect().Descriptor().FullName()),
+				PayloadRef:  ingHex[:2] + "/" + ingHex[2:],
+				CommittedAt: committedAt,
+			}
+			if err := sub.AppendPair(ctx, row, payload, ingRow, ingPayload); err != nil {
+				return rep, fmt.Errorf("append pair formation %s + ingestion %s: %w", hex, ingHex, err)
+			}
 		}
 
 		if alreadyPresent {

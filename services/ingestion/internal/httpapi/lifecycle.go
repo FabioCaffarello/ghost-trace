@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -290,6 +291,247 @@ func (h *Handler) handlePromoteCampaignHypothesis(w http.ResponseWriter, r *http
 		PromotionEventHash: report.PromotionEventHashHex,
 		IngestionEventHash: report.IngestionEventHashHex,
 		AlreadyPromoted:    report.AlreadyPromoted,
+	})
+}
+
+// formResponse is the wire-shape of the T4 form endpoints' JSON
+// response. Form is the divergent T4 op: pattern-based, not target-
+// hash-based; one invocation forms zero or more hypotheses. Per
+// §0111.
+type formResponse struct {
+	// Examined is the total DeclaredSession count walked.
+	Examined int64 `json:"examined"`
+
+	// NewlyFormed is the count of new formation events committed by
+	// this invocation.
+	NewlyFormed int64 `json:"newly_formed"`
+
+	// AlreadyFormed is the count of formations whose content-hash was
+	// already in the substrate (idempotent commit per §0027 AP6).
+	AlreadyFormed int64 `json:"already_formed"`
+}
+
+// formCommonGate enforces the shared method + substrate gate across
+// the four T4 form handlers. Form endpoints accept query parameters
+// for pattern config (divergent from other T4 ops which use proto
+// body) — operationally consistent with T3 orphan-cleanup.
+func (h *Handler) formCommonGate(r *http.Request) (int, string, bool) {
+	if r.Method != http.MethodPost {
+		return http.StatusMethodNotAllowed, "method not allowed; POST required", false
+	}
+	if h.sub == nil {
+		return http.StatusServiceUnavailable, "substrate access not configured (WithSubstrate)", false
+	}
+	return 0, "", true
+}
+
+// parseIntQueryParam parses an int query parameter from q.GetXxx;
+// returns the default when absent. Returns an error message string +
+// false on parse failure.
+func parseIntQueryParam(q map[string][]string, key string, def int) (int, string, bool) {
+	raw := ""
+	if vs, ok := q[key]; ok && len(vs) > 0 {
+		raw = vs[0]
+	}
+	if raw == "" {
+		return def, "", true
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Sprintf("%s: %v", key, err), false
+	}
+	return v, "", true
+}
+
+// parseFloatQueryParam mirrors parseIntQueryParam for float64.
+func parseFloatQueryParam(q map[string][]string, key string, def float64) (float64, string, bool) {
+	raw := ""
+	if vs, ok := q[key]; ok && len(vs) > 0 {
+		raw = vs[0]
+	}
+	if raw == "" {
+		return def, "", true
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, fmt.Sprintf("%s: %v", key, err), false
+	}
+	return v, "", true
+}
+
+// handleFormBehavioralCluster implements POST
+// /v1/hypotheses/behavioral-cluster/form per §0111. Query parameters:
+//   - min_cluster_size (int, required, ≥ 2): SessionDescriptorSharedV1
+//     pattern config.
+func (h *Handler) handleFormBehavioralCluster(w http.ResponseWriter, r *http.Request) {
+	if status, errMsg, ok := h.formCommonGate(r); !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	q := r.URL.Query()
+	minClusterSize, em, ok := parseIntQueryParam(q, "min_cluster_size", 0)
+	if !ok {
+		writeIngestError(w, http.StatusBadRequest, em)
+		return
+	}
+	if minClusterSize < 2 {
+		writeIngestError(w, http.StatusBadRequest, fmt.Sprintf("min_cluster_size must be ≥ 2 (got %d)", minClusterSize))
+		return
+	}
+	env := envelopeForRequest(r)
+	rep, err := hypothesis.FormAllWithActor(r.Context(), h.sub,
+		hypothesis.SessionDescriptorSharedV1{MinClusterSize: int64(minClusterSize)},
+		time.Now, resolveT4Actor(env, TierConstitutionalAct))
+	if err != nil {
+		if h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 form-behavioral-cluster: %w", err))
+		}
+		writeIngestError(w, http.StatusInternalServerError, fmt.Sprintf("form: %v", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, formResponse{
+		Examined:      rep.Examined,
+		NewlyFormed:   rep.NewlyFormed,
+		AlreadyFormed: rep.AlreadyFormed,
+	})
+}
+
+// handleFormAutomationGroup implements POST
+// /v1/hypotheses/automation-group/form per §0111. Query parameters:
+//   - min_observation_count (int, ≥ 2): UniformCadenceV1 config.
+//   - max_co_v_threshold (float, ≥ 0): UniformCadenceV1 config.
+func (h *Handler) handleFormAutomationGroup(w http.ResponseWriter, r *http.Request) {
+	if status, errMsg, ok := h.formCommonGate(r); !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	q := r.URL.Query()
+	minObsCount, em, ok := parseIntQueryParam(q, "min_observation_count", 0)
+	if !ok {
+		writeIngestError(w, http.StatusBadRequest, em)
+		return
+	}
+	if minObsCount < 2 {
+		writeIngestError(w, http.StatusBadRequest, fmt.Sprintf("min_observation_count must be ≥ 2 (got %d)", minObsCount))
+		return
+	}
+	maxCoV, em, ok := parseFloatQueryParam(q, "max_co_v_threshold", 0)
+	if !ok {
+		writeIngestError(w, http.StatusBadRequest, em)
+		return
+	}
+	if maxCoV < 0 {
+		writeIngestError(w, http.StatusBadRequest, fmt.Sprintf("max_co_v_threshold must be ≥ 0 (got %f)", maxCoV))
+		return
+	}
+	env := envelopeForRequest(r)
+	rep, err := hypothesis.FormAutomationGroupAllWithActor(r.Context(), h.sub,
+		hypothesis.UniformCadenceV1{MinObservationCount: int64(minObsCount), MaxCoVThreshold: maxCoV},
+		time.Now, resolveT4Actor(env, TierConstitutionalAct))
+	if err != nil {
+		if h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 form-automation-group: %w", err))
+		}
+		writeIngestError(w, http.StatusInternalServerError, fmt.Sprintf("form: %v", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, formResponse{
+		Examined:      rep.Examined,
+		NewlyFormed:   rep.NewlyFormed,
+		AlreadyFormed: rep.AlreadyFormed,
+	})
+}
+
+// handleFormCampaignHypothesis implements POST
+// /v1/hypotheses/campaign-hypothesis/form per §0111. Query parameters:
+//   - min_campaign_size (int, ≥ 2): TemporalDescriptorCohortV1 config.
+//   - max_intra_event_gap_seconds (int, ≥ 0): TemporalDescriptorCohortV1
+//     config.
+func (h *Handler) handleFormCampaignHypothesis(w http.ResponseWriter, r *http.Request) {
+	if status, errMsg, ok := h.formCommonGate(r); !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	q := r.URL.Query()
+	minSize, em, ok := parseIntQueryParam(q, "min_campaign_size", 0)
+	if !ok {
+		writeIngestError(w, http.StatusBadRequest, em)
+		return
+	}
+	if minSize < 2 {
+		writeIngestError(w, http.StatusBadRequest, fmt.Sprintf("min_campaign_size must be ≥ 2 (got %d)", minSize))
+		return
+	}
+	maxGap, em, ok := parseIntQueryParam(q, "max_intra_event_gap_seconds", 0)
+	if !ok {
+		writeIngestError(w, http.StatusBadRequest, em)
+		return
+	}
+	if maxGap < 0 {
+		writeIngestError(w, http.StatusBadRequest, fmt.Sprintf("max_intra_event_gap_seconds must be ≥ 0 (got %d)", maxGap))
+		return
+	}
+	env := envelopeForRequest(r)
+	rep, err := hypothesis.FormCampaignHypothesisAllWithActor(r.Context(), h.sub,
+		hypothesis.TemporalDescriptorCohortV1{MinCampaignSize: int64(minSize), MaxIntraEventGapSeconds: int64(maxGap)},
+		time.Now, resolveT4Actor(env, TierConstitutionalAct))
+	if err != nil {
+		if h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 form-campaign-hypothesis: %w", err))
+		}
+		writeIngestError(w, http.StatusInternalServerError, fmt.Sprintf("form: %v", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, formResponse{
+		Examined:      rep.Examined,
+		NewlyFormed:   rep.NewlyFormed,
+		AlreadyFormed: rep.AlreadyFormed,
+	})
+}
+
+// handleFormCoordinationRing implements POST
+// /v1/hypotheses/coordination-ring/form per §0111. Query parameters:
+//   - min_edge_support (int, ≥ 2): CoOccurrenceWindowV1 config.
+//   - max_window_seconds (int, ≥ 0): CoOccurrenceWindowV1 config.
+func (h *Handler) handleFormCoordinationRing(w http.ResponseWriter, r *http.Request) {
+	if status, errMsg, ok := h.formCommonGate(r); !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	q := r.URL.Query()
+	minEdgeSupport, em, ok := parseIntQueryParam(q, "min_edge_support", 0)
+	if !ok {
+		writeIngestError(w, http.StatusBadRequest, em)
+		return
+	}
+	if minEdgeSupport < 2 {
+		writeIngestError(w, http.StatusBadRequest, fmt.Sprintf("min_edge_support must be ≥ 2 (got %d)", minEdgeSupport))
+		return
+	}
+	maxWindow, em, ok := parseIntQueryParam(q, "max_window_seconds", 0)
+	if !ok {
+		writeIngestError(w, http.StatusBadRequest, em)
+		return
+	}
+	if maxWindow < 0 {
+		writeIngestError(w, http.StatusBadRequest, fmt.Sprintf("max_window_seconds must be ≥ 0 (got %d)", maxWindow))
+		return
+	}
+	env := envelopeForRequest(r)
+	rep, err := hypothesis.FormCoordinationRingAllWithActor(r.Context(), h.sub,
+		hypothesis.CoOccurrenceWindowV1{MinEdgeSupport: int64(minEdgeSupport), MaxWindowSeconds: int64(maxWindow)},
+		time.Now, resolveT4Actor(env, TierConstitutionalAct))
+	if err != nil {
+		if h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 form-coordination-ring: %w", err))
+		}
+		writeIngestError(w, http.StatusInternalServerError, fmt.Sprintf("form: %v", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, formResponse{
+		Examined:      rep.Examined,
+		NewlyFormed:   rep.NewlyFormed,
+		AlreadyFormed: rep.AlreadyFormed,
 	})
 }
 

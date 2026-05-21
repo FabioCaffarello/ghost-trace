@@ -1268,6 +1268,15 @@ Per [`§0110`](../../docs/charter/decision-log.md), the split endpoint shipped a
 
 Each accepts `application/x-protobuf` with the corresponding `<Subtype>Split` message: one `antecedent_formation_event_hash` + N (≥ 2) `successor_formation_event_hashes`. All hashes must be 32 bytes; all must resolve to `<Subtype>Formation` rows of the matching subtype; successors must be byte-distinct from each other AND from the antecedent. Split is a set relation: ascending-sort normalization per `hypothesis.Split*` ensures the split event's content-hash is invariant under successor enumeration order. 400 on insufficient successors / antecedent-in-successors / bad hash lengths; 404 on unknown formation OR cross-subtype formation hash.
 
+Per [`§0111`](../../docs/charter/decision-log.md), the form endpoint shipped across all four subtypes — **completing the §0098 T4 24-endpoint arc 24/24**:
+
+- `POST /v1/hypotheses/behavioral-cluster/form?min_cluster_size=N`
+- `POST /v1/hypotheses/automation-group/form?min_observation_count=N&max_co_v_threshold=F`
+- `POST /v1/hypotheses/campaign-hypothesis/form?min_campaign_size=N&max_intra_event_gap_seconds=N`
+- `POST /v1/hypotheses/coordination-ring/form?min_edge_support=N&max_window_seconds=N`
+
+Form is the divergent T4 op: pattern-based, not target-hash-based. Each invocation walks the substrate's DeclaredSessions and forms zero or more hypotheses per the pattern config (passed via query parameters — operationally consistent with T3 orphan-cleanup, divergent from the other 20 T4 endpoints' proto-body shape; documented in §0111). Response: `{examined, newly_formed, already_formed}` JSON counts. Each formed event commits paired with an `IngestionEvent` via `AppendPair` per the cross-tier per-actor-attribution requirement (Actor is HTTP-channel-resolved per `resolveT4Actor`). Idempotent: re-running with the same pattern + substrate state produces zero new rows per §0027 AP6 content-hash immutability.
+
 Wire shape — request:
 
 ```sh

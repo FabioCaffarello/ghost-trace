@@ -754,8 +754,10 @@ func TestRouteTierClassification(t *testing.T) {
 		{"/v1/hypotheses/automation-group/split", TierConstitutionalAct},
 		{"/v1/hypotheses/campaign-hypothesis/split", TierConstitutionalAct},
 		{"/v1/hypotheses/coordination-ring/split", TierConstitutionalAct},
-		// Form not yet implemented; unclassified.
-		{"/v1/hypotheses/coordination-ring/form", ""},
+		{"/v1/hypotheses/behavioral-cluster/form", TierConstitutionalAct},
+		{"/v1/hypotheses/automation-group/form", TierConstitutionalAct},
+		{"/v1/hypotheses/campaign-hypothesis/form", TierConstitutionalAct},
+		{"/v1/hypotheses/coordination-ring/form", TierConstitutionalAct},
 		{"/some-random-path", ""},
 	}
 	for _, c := range cases {

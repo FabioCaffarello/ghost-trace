@@ -76,8 +76,14 @@ func (w *coordinationRingWalkerContext) DeclaredSessions() []SourceDeclaredSessi
 // substrate.Append. Idempotency + concurrency model identical to
 // §0045+§0056+§0063 formation entry points.
 func FormCoordinationRingAll(ctx context.Context, sub *substrate.Substrate, pattern CoordinationRingFormationPattern, now func() time.Time) (CoordinationRingReport, error) {
+	return FormCoordinationRingAllWithActor(ctx, sub, pattern, now, "")
+}
+
+// FormCoordinationRingAllWithActor is FormCoordinationRingAll with
+// per-actor attribution per §0111 T4 form landing.
+func FormCoordinationRingAllWithActor(ctx context.Context, sub *substrate.Substrate, pattern CoordinationRingFormationPattern, now func() time.Time, actor string) (CoordinationRingReport, error) {
 	if pattern == nil {
-		return CoordinationRingReport{}, errors.New("hypothesis.FormCoordinationRingAll: pattern must not be nil")
+		return CoordinationRingReport{}, errors.New("hypothesis.FormCoordinationRingAllWithActor: pattern must not be nil")
 	}
 	if now == nil {
 		now = time.Now
@@ -122,15 +128,42 @@ func FormCoordinationRingAll(ctx context.Context, sub *substrate.Substrate, patt
 			return rep, fmt.Errorf("lookup formation %s: %w", hex, lookupErr)
 		}
 
+		committedAt := now().UnixNano()
 		row := substrate.EventRow{
 			EventHash:   hash,
 			EventTime:   ev.GetFormationAt(),
 			MessageType: string(ev.ProtoReflect().Descriptor().FullName()),
 			PayloadRef:  hex[:2] + "/" + hex[2:],
-			CommittedAt: now().UnixNano(),
+			CommittedAt: committedAt,
 		}
-		if err := sub.Append(ctx, row, payload); err != nil {
-			return rep, fmt.Errorf("append formation %s: %w", hex, err)
+
+		if actor == "" {
+			if err := sub.Append(ctx, row, payload); err != nil {
+				return rep, fmt.Errorf("append formation %s: %w", hex, err)
+			}
+		} else {
+			ingEv := &eventsv1.IngestionEvent{
+				PrimaryEventHash: hash[:],
+				ReceivedAt:       committedAt,
+				IngestedAt:       committedAt,
+				Channel:          "cli",
+				ClientCommonName: actor,
+			}
+			ingPayload, ingHash, err := canonical.MarshalAndHash(ingEv)
+			if err != nil {
+				return rep, fmt.Errorf("marshal ingestion event: %w", err)
+			}
+			ingHex := canonical.HashHex(ingHash)
+			ingRow := substrate.EventRow{
+				EventHash:   ingHash,
+				EventTime:   committedAt,
+				MessageType: string(ingEv.ProtoReflect().Descriptor().FullName()),
+				PayloadRef:  ingHex[:2] + "/" + ingHex[2:],
+				CommittedAt: committedAt,
+			}
+			if err := sub.AppendPair(ctx, row, payload, ingRow, ingPayload); err != nil {
+				return rep, fmt.Errorf("append pair formation %s + ingestion %s: %w", hex, ingHex, err)
+			}
 		}
 
 		if alreadyPresent {

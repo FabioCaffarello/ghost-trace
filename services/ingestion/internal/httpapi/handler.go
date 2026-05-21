@@ -329,12 +329,15 @@ func routeTier(r *http.Request) Tier {
 		p == "/v1/hypotheses/behavioral-cluster/split" ||
 		p == "/v1/hypotheses/automation-group/split" ||
 		p == "/v1/hypotheses/campaign-hypothesis/split" ||
-		p == "/v1/hypotheses/coordination-ring/split" {
+		p == "/v1/hypotheses/coordination-ring/split" ||
+		p == "/v1/hypotheses/behavioral-cluster/form" ||
+		p == "/v1/hypotheses/automation-group/form" ||
+		p == "/v1/hypotheses/campaign-hypothesis/form" ||
+		p == "/v1/hypotheses/coordination-ring/form" {
 		return TierConstitutionalAct
 	}
-	// Remaining T4 constitutional-act routes (named follow-on per
-	// §0098 + §0105–§0110): the other 4 endpoints — form × 4
-	// (divergent shape: pattern-based, not target-hash-based).
+	// All 24 T4 routes shipped per §0098 + §0105–§0111. No further
+	// T4 expansion is pre-positioned at this layer.
 	return ""
 }
 
@@ -419,6 +422,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleSplitCampaignHypothesis(w, r)
 	case r.URL.Path == "/v1/hypotheses/coordination-ring/split":
 		h.handleSplitCoordinationRing(w, r)
+	case r.URL.Path == "/v1/hypotheses/behavioral-cluster/form":
+		h.handleFormBehavioralCluster(w, r)
+	case r.URL.Path == "/v1/hypotheses/automation-group/form":
+		h.handleFormAutomationGroup(w, r)
+	case r.URL.Path == "/v1/hypotheses/campaign-hypothesis/form":
+		h.handleFormCampaignHypothesis(w, r)
+	case r.URL.Path == "/v1/hypotheses/coordination-ring/form":
+		h.handleFormCoordinationRing(w, r)
 	default:
 		http.NotFound(w, r)
 	}
