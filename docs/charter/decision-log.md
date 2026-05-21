@@ -4521,6 +4521,27 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0112` — §0097 CLI-side extension: promote-* CLIs for AG/CH/CR gain --actor option
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0097`](#0097--cli-peractor-attribution-pilot-promotehypothesis-actor-authscope-rfc-open-question-2-partially-discharged) piloted CLI per-actor attribution on `promote-hypothesis` (BehavioralCluster). [`§0106`](#0106--t4-promote-replicated-across-the-three-remaining-subtypes-0097-actor-pattern-extended-to-all-four) extended the Actor field to the helper-side `PromoteAutomationGroup` / `PromoteCampaignHypothesis` / `PromoteCoordinationRing` functions but flagged the CLI-side `--actor` wiring as still pending. This entry ships that CLI-side wiring.
+
+- **Decision:** [`cmd/promote-automation-group/main.go`](../../services/ingestion/cmd/promote-automation-group/main.go), [`cmd/promote-campaign-hypothesis/main.go`](../../services/ingestion/cmd/promote-campaign-hypothesis/main.go), and [`cmd/promote-coordination-ring/main.go`](../../services/ingestion/cmd/promote-coordination-ring/main.go) each gain an `--actor` option (matching `promote-hypothesis`'s shape per §0097): when non-empty, the promotion commits paired with an `IngestionEvent` via `substrate.AppendPair`. Empty preserves the single-`Append` path (backward compatible). Stderr summary line and JSON payload extended with `IngestionEventHashHex` field (omitempty in JSON when no actor was supplied).
+
+- **Constitutional review:** No Charter invariant amended. Pure-wiring extension of an already-frozen helper-side pattern per [`§0106`](#0106--t4-promote-replicated-across-the-three-remaining-subtypes-0097-actor-pattern-extended-to-all-four). The §0033 local-shell-trust assumption remains unchanged (CLI per-actor attribution is operator opt-in per [`§0097`](#0097--cli-peractor-attribution-pilot-promotehypothesis-actor-authscope-rfc-open-question-2-partially-discharged) Open Question 2 — the CLI operator is trusted by virtue of local shell access; `--actor` is for forensic record only, not authorization).
+
+- **Consequences:**
+  - 3 promote CLIs (AG/CH/CR) now support `--actor`; the §0097 pilot pattern is now complete across all 4 subtypes for the promote op.
+  - **§0097 CLI-side carry-forward partially discharged:** 3 of 23 pending CLIs done. Remaining: 4 demote + 4 dissolve + 4 merge + 4 split + 4 form = 20 CLIs. Pure-wiring; same pattern repeats mechanically.
+
+  - **Methodological observation 1 — Helper-then-CLI cadence empirically validated.** [`§0106`](#0106--t4-promote-replicated-across-the-three-remaining-subtypes-0097-actor-pattern-extended-to-all-four) shipped the helper-side Actor extension; this entry ships the matching CLI wiring. Pattern: ship the helper-side first (HTTP T4 depends on it); follow with CLI-side as pure-wiring closure. The two-step cadence is structurally tractable because the helper signature change is invisible to CLI callers that pass `Actor: ""` (backward-compatible default).
+
+- **Supersession:** None. Partial discharge of [`§0097`](#0097--cli-peractor-attribution-pilot-promotehypothesis-actor-authscope-rfc-open-question-2-partially-discharged) Open Question 2 CLI-extension carry-forward (3 of 23 CLIs).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
