@@ -195,6 +195,28 @@ Validates the supplied `formation-event-hash` resolves to a `CoordinationRingFor
 
 Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
 
+## `demote-coordination-ring` CLI
+
+Operator-invoked tool to record the **CoordinationRing demotion** lifecycle operation per [`§0072`](../../docs/charter/decision-log.md) — third lifecycle operation of the fourth Cat III subtype arc. Mirrors `demote-hypothesis` (BC), `demote-automation-group` (AG), `demote-campaign-hypothesis` (CH).
+
+```sh
+make demote-coordination-ring-build                                        # builds ./bin/demote-coordination-ring
+
+./bin/demote-coordination-ring \
+  -promotion-event-hash <64-hex-chars> \
+  -reason "operational cycle close"
+```
+
+Validates the supplied `promotion-event-hash` resolves to a `CoordinationRingPromotion` row (otherwise exits 3). Per §0011 Layer A is a CANDIDACY gate, NOT a hard barrier — the substrate accepts the demotion regardless of whether the cadence has elapsed; the structured output surfaces `cadence_satisfied` + `cadence_elapsed_seconds`.
+
+| Option | Default | Notes |
+|---|---|---|
+| `-promotion-event-hash` | (required) | Hex-encoded BLAKE3-256 of the target `CoordinationRingPromotion`. |
+| `-demoted-at-ns` | 0 (= wall-clock now) | Explicit `demoted_at` for forensic replay. |
+| `-reason` | empty | Operator-supplied forensic note; **strongly recommended** when demoting within the cadence window. |
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
+
 ## `promote-campaign-hypothesis` CLI
 
 Operator-invoked tool to record the **CampaignHypothesis promotion** lifecycle operation per [`§0064`](../../docs/charter/decision-log.md) — second lifecycle operation of the third Cat III subtype arc. Mirrors `promote-hypothesis` (BC) and `promote-automation-group` (AG).
