@@ -217,6 +217,28 @@ Validates the supplied `promotion-event-hash` resolves to a `CoordinationRingPro
 
 Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
 
+## `dissolve-coordination-ring` CLI
+
+Operator-invoked tool to record the **CoordinationRing dissolution** lifecycle operation per [`§0073`](../../docs/charter/decision-log.md) — fourth lifecycle operation of the fourth Cat III subtype arc. Mirrors `dissolve-hypothesis` (BC), `dissolve-automation-group` (AG), `dissolve-campaign-hypothesis` (CH). Per glossary, dissolution is DISTINGUISHED from demotion: demotion withdraws OPERATIONAL USE; dissolution recognizes NON-EXISTENCE.
+
+```sh
+make dissolve-coordination-ring-build                                      # builds ./bin/dissolve-coordination-ring
+
+./bin/dissolve-coordination-ring \
+  -formation-event-hash <64-hex-chars> \
+  -reason "interaction pattern was collection-bias artifact"
+```
+
+Validates the supplied `formation-event-hash` resolves to a `CoordinationRingFormation` row (otherwise exits 3). May be invoked regardless of whether the hypothesis was ever promoted.
+
+| Option | Default | Notes |
+|---|---|---|
+| `-formation-event-hash` | (required) | Hex-encoded BLAKE3-256 of the target `CoordinationRingFormation`. |
+| `-dissolved-at-ns` | 0 (= wall-clock now) | Explicit `dissolved_at` for forensic replay. |
+| `-reason` | empty | **Strongly recommended** — dissolution is the terminal lifecycle operation. |
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
+
 ## `promote-campaign-hypothesis` CLI
 
 Operator-invoked tool to record the **CampaignHypothesis promotion** lifecycle operation per [`§0064`](../../docs/charter/decision-log.md) — second lifecycle operation of the third Cat III subtype arc. Mirrors `promote-hypothesis` (BC) and `promote-automation-group` (AG).
