@@ -40,6 +40,7 @@ help:
 	@echo "  promote-coordination-ring-build  go build -trimpath -o $(BIN_DIR)/promote-coordination-ring ./cmd/promote-coordination-ring"
 	@echo "  demote-coordination-ring-build  go build -trimpath -o $(BIN_DIR)/demote-coordination-ring ./cmd/demote-coordination-ring"
 	@echo "  dissolve-coordination-ring-build  go build -trimpath -o $(BIN_DIR)/dissolve-coordination-ring ./cmd/dissolve-coordination-ring"
+	@echo "  merge-coordination-rings-build  go build -trimpath -o $(BIN_DIR)/merge-coordination-rings ./cmd/merge-coordination-rings"
 	@echo "  test           go test -race ./..."
 	@echo "  golden-corpus  regenerate canonical-corpus golden files (schemas-evolution event)"
 	@echo "  clean          remove $(GEN_OUT) + $(BIN_DIR)"
@@ -83,7 +84,8 @@ generate: $(PROTOC_GEN_GO)
 	  events/v1/coordination_ring_formation.proto \
 	  events/v1/coordination_ring_promotion.proto \
 	  events/v1/coordination_ring_demotion.proto \
-	  events/v1/coordination_ring_dissolution.proto
+	  events/v1/coordination_ring_dissolution.proto \
+	  events/v1/coordination_ring_merge.proto
 
 $(PROTOC_GEN_GO):
 	$(MAKE) tools
@@ -232,6 +234,11 @@ demote-coordination-ring-build:
 dissolve-coordination-ring-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/dissolve-coordination-ring ./cmd/dissolve-coordination-ring
+
+.PHONY: merge-coordination-rings-build
+merge-coordination-rings-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/merge-coordination-rings ./cmd/merge-coordination-rings
 
 .PHONY: test
 test:

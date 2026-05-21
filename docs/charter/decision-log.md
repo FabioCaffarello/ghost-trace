@@ -2870,6 +2870,41 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0074` — Fourth-subtype merge (`CoordinationRingMerge`) lands; §0049 Option B + symmetric-relation idempotency transfer to interaction-centric subtype
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0073`](#0073--fourth-subtype-dissolution-coordinationringdissolution-lands-demotiondissolution-distinction-observable-across-all-four-subtypes) closed dissolution for the fourth subtype. This entry lands merge — fifth lifecycle op of the fourth subtype arc. Mirrors §0049 BC + §0060 AG + §0067 CH.
+
+  The §0067 resolution carried forward: the merge wire shape transfers cleanly across subtype variations (actor-set BC/AG, event-set CH, edge-list CR). The interaction-centric distinction lives in the FORMATION shape; the merge event references antecedent + produced formations by content-hash regardless of subtype shape. Operational convention: the produced ring's `interactions` field typically carries the union of antecedents' edges, but that's an inference-process detail, not a wire-shape requirement.
+
+- **Decision:** Land `CoordinationRingMerge` with three structural moves mirroring §0067:
+
+  1. **`CoordinationRingMerge` Protobuf message** at [`schemas/events/v1/coordination_ring_merge.proto`](../../schemas/events/v1/coordination_ring_merge.proto). Four fields identical to §0067's shape (only documented subtype identity differs).
+
+  2. **`MergeCoordinationRing` entry point** at [`services/ingestion/internal/hypothesis/coordination_ring_merge.go`](../../services/ingestion/internal/hypothesis/coordination_ring_merge.go). Symmetric ascending-sort of antecedents. Reuses shared `ErrTargetNotFound` + `ErrTargetWrongType` + `ErrMergeAntecedentsIdentical` sentinels.
+
+  3. **`cmd/merge-coordination-rings`** — 29th operational binary; 24th substrate-write.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1, §2.2, §2.3, §2.5 + §2.5 BC3 + §2.5 BC5. Respects §0045+§0056+§0063+§0070 hypothesis-identity invariant. Respects §0049 Option B (produced is a separately-committed formation) + symmetric-relation idempotency pattern. Respects entity-model.md §Cross-subtype operations deferral. Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`schemas/events/v1/coordination_ring_merge.proto`](../../schemas/events/v1/coordination_ring_merge.proto) — new file.
+  - [`services/ingestion/internal/hypothesis/coordination_ring_merge.go`](../../services/ingestion/internal/hypothesis/coordination_ring_merge.go) — new file.
+  - [`services/ingestion/internal/hypothesis/coordination_ring_merge_test.go`](../../services/ingestion/internal/hypothesis/coordination_ring_merge_test.go) — **7 tests** covering happy-path, argument-order invariance, identical-antecedents rejection, idempotency, unknown antecedent, cross-substrate rejection, default `merged_at`.
+  - [`services/ingestion/cmd/merge-coordination-rings/main.go`](../../services/ingestion/cmd/merge-coordination-rings/main.go) — new binary; 29th CLI; 24th substrate-write.
+  - Makefile, canonical corpus, corpus README, service README, decision-log §0074.
+  - **§0067 carry-forward fully closed for fourth subtype.** Merge wire shape transfers cleanly across all four Cat III subtypes regardless of formation-shape variation (actor-set BC/AG, event-set CH, edge-list CR).
+  - **Out of scope at this layer (carry-forwards).**
+    - **Final CoordinationRing lifecycle operation** — split (§0075). Same structural transfer expected as for merge.
+    - **Projection layer extension for CoordinationRing** — unchanged from §0070 carry-forward.
+    - **Cross-subtype operations** — unchanged.
+
+- **Supersession:** None. Extends §0073 with the fifth CoordinationRing lifecycle operation. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

@@ -56,6 +56,7 @@ var messageFactory = map[string]func() proto.Message{
 	"coordination-ring-promotion":   func() proto.Message { return &eventsv1.CoordinationRingPromotion{} },
 	"coordination-ring-demotion":    func() proto.Message { return &eventsv1.CoordinationRingDemotion{} },
 	"coordination-ring-dissolution": func() proto.Message { return &eventsv1.CoordinationRingDissolution{} },
+	"coordination-ring-merge":       func() proto.Message { return &eventsv1.CoordinationRingMerge{} },
 }
 
 // TestCanonicalCorpus is the CI golden-file gate per
