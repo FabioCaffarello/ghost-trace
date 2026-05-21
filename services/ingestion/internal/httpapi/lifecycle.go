@@ -293,6 +293,212 @@ func (h *Handler) handlePromoteCampaignHypothesis(w http.ResponseWriter, r *http
 	})
 }
 
+// splitResponse is the wire-shape of the T4 split endpoints' JSON
+// response. Split identity: antecedent hash + N successor hashes;
+// response surfaces the split event hash + idempotency + ingestion
+// event hash. Per §0110.
+type splitResponse struct {
+	SplitEventHash     string `json:"split_event_hash"`
+	IngestionEventHash string `json:"ingestion_event_hash"`
+	AlreadySplit       bool   `json:"already_split"`
+}
+
+func (h *Handler) decodeSplitPayload(r *http.Request, msg proto.Message) (int, string, bool) {
+	if r.Method != http.MethodPost {
+		return http.StatusMethodNotAllowed, "method not allowed; POST required", false
+	}
+	if h.sub == nil {
+		return http.StatusServiceUnavailable, "substrate access not configured (WithSubstrate)", false
+	}
+	if ct := r.Header.Get("Content-Type"); ct != "application/x-protobuf" {
+		return http.StatusUnsupportedMediaType, fmt.Sprintf("Content-Type must be application/x-protobuf (got %q)", ct), false
+	}
+	b, err := io.ReadAll(io.LimitReader(r.Body, h.requestBodyLimit+1))
+	if err != nil {
+		return http.StatusBadRequest, fmt.Sprintf("read body: %v", err), false
+	}
+	if int64(len(b)) > h.requestBodyLimit {
+		return http.StatusRequestEntityTooLarge, fmt.Sprintf("request body exceeds %d-byte limit", h.requestBodyLimit), false
+	}
+	if err := proto.Unmarshal(b, msg); err != nil {
+		return http.StatusBadRequest, fmt.Sprintf("decode payload: %v", err), false
+	}
+	return 0, "", true
+}
+
+func validateSplitParams(antecedent []byte, successors [][]byte) (int, string, [32]byte, [][32]byte, bool) {
+	var a [32]byte
+	if len(antecedent) != 32 {
+		return http.StatusBadRequest, fmt.Sprintf("antecedent_formation_event_hash must be 32 bytes (got %d)", len(antecedent)), a, nil, false
+	}
+	if len(successors) < 2 {
+		return http.StatusBadRequest, fmt.Sprintf("successor_formation_event_hashes must have at least 2 entries (got %d)", len(successors)), a, nil, false
+	}
+	out := make([][32]byte, len(successors))
+	for i, succ := range successors {
+		if len(succ) != 32 {
+			return http.StatusBadRequest, fmt.Sprintf("successor[%d] must be 32 bytes (got %d)", i, len(succ)), a, nil, false
+		}
+		copy(out[i][:], succ)
+	}
+	copy(a[:], antecedent)
+	return 0, "", a, out, true
+}
+
+func splitErrToHTTPStatus(err error) (int, string) {
+	switch {
+	case errIs(err, hypothesis.ErrSplitInsufficientSuccessors):
+		return http.StatusBadRequest, fmt.Sprintf("split: %v", err)
+	case errIs(err, hypothesis.ErrSplitSuccessorsNotDistinct):
+		return http.StatusBadRequest, fmt.Sprintf("split: %v", err)
+	case errIs(err, hypothesis.ErrTargetNotFound):
+		return http.StatusNotFound, fmt.Sprintf("split: target not found: %v", err)
+	case errIs(err, hypothesis.ErrTargetWrongType):
+		return http.StatusNotFound, fmt.Sprintf("split: target wrong type: %v", err)
+	}
+	return http.StatusInternalServerError, fmt.Sprintf("split: %v", err)
+}
+
+func (h *Handler) handleSplitBehavioralCluster(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.BehavioralClusterSplit
+	if status, errMsg, ok := h.decodeSplitPayload(r, &msg); !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	s, m, a, succs, ok := validateSplitParams(msg.GetAntecedentFormationEventHash(), msg.GetSuccessorFormationEventHashes())
+	if !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+	env := envelopeForRequest(r)
+	opts := hypothesis.SplitOptions{
+		AntecedentFormationHash:  a,
+		SuccessorFormationHashes: succs,
+		SplitAt:                  msg.GetSplitAt(),
+		Reason:                   msg.GetReason(),
+		Actor:                    resolveT4Actor(env, TierConstitutionalAct),
+	}
+	report, err := hypothesis.Split(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		st, mm := splitErrToHTTPStatus(err)
+		if st == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 split-behavioral-cluster: %w", err))
+		}
+		writeIngestError(w, st, mm)
+		return
+	}
+	writeJSON(w, http.StatusOK, splitResponse{
+		SplitEventHash:     report.SplitEventHashHex,
+		IngestionEventHash: report.IngestionEventHashHex,
+		AlreadySplit:       report.AlreadySplit,
+	})
+}
+
+func (h *Handler) handleSplitAutomationGroup(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.AutomationGroupSplit
+	if status, errMsg, ok := h.decodeSplitPayload(r, &msg); !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	s, m, a, succs, ok := validateSplitParams(msg.GetAntecedentFormationEventHash(), msg.GetSuccessorFormationEventHashes())
+	if !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+	env := envelopeForRequest(r)
+	opts := hypothesis.AutomationGroupSplitOptions{
+		AntecedentFormationHash:  a,
+		SuccessorFormationHashes: succs,
+		SplitAt:                  msg.GetSplitAt(),
+		Reason:                   msg.GetReason(),
+		Actor:                    resolveT4Actor(env, TierConstitutionalAct),
+	}
+	report, err := hypothesis.SplitAutomationGroup(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		st, mm := splitErrToHTTPStatus(err)
+		if st == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 split-automation-group: %w", err))
+		}
+		writeIngestError(w, st, mm)
+		return
+	}
+	writeJSON(w, http.StatusOK, splitResponse{
+		SplitEventHash:     report.SplitEventHashHex,
+		IngestionEventHash: report.IngestionEventHashHex,
+		AlreadySplit:       report.AlreadySplit,
+	})
+}
+
+func (h *Handler) handleSplitCampaignHypothesis(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.CampaignHypothesisSplit
+	if status, errMsg, ok := h.decodeSplitPayload(r, &msg); !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	s, m, a, succs, ok := validateSplitParams(msg.GetAntecedentFormationEventHash(), msg.GetSuccessorFormationEventHashes())
+	if !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+	env := envelopeForRequest(r)
+	opts := hypothesis.CampaignHypothesisSplitOptions{
+		AntecedentFormationHash:  a,
+		SuccessorFormationHashes: succs,
+		SplitAt:                  msg.GetSplitAt(),
+		Reason:                   msg.GetReason(),
+		Actor:                    resolveT4Actor(env, TierConstitutionalAct),
+	}
+	report, err := hypothesis.SplitCampaignHypothesis(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		st, mm := splitErrToHTTPStatus(err)
+		if st == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 split-campaign-hypothesis: %w", err))
+		}
+		writeIngestError(w, st, mm)
+		return
+	}
+	writeJSON(w, http.StatusOK, splitResponse{
+		SplitEventHash:     report.SplitEventHashHex,
+		IngestionEventHash: report.IngestionEventHashHex,
+		AlreadySplit:       report.AlreadySplit,
+	})
+}
+
+func (h *Handler) handleSplitCoordinationRing(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.CoordinationRingSplit
+	if status, errMsg, ok := h.decodeSplitPayload(r, &msg); !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	s, m, a, succs, ok := validateSplitParams(msg.GetAntecedentFormationEventHash(), msg.GetSuccessorFormationEventHashes())
+	if !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+	env := envelopeForRequest(r)
+	opts := hypothesis.CoordinationRingSplitOptions{
+		AntecedentFormationHash:  a,
+		SuccessorFormationHashes: succs,
+		SplitAt:                  msg.GetSplitAt(),
+		Reason:                   msg.GetReason(),
+		Actor:                    resolveT4Actor(env, TierConstitutionalAct),
+	}
+	report, err := hypothesis.SplitCoordinationRing(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		st, mm := splitErrToHTTPStatus(err)
+		if st == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 split-coordination-ring: %w", err))
+		}
+		writeIngestError(w, st, mm)
+		return
+	}
+	writeJSON(w, http.StatusOK, splitResponse{
+		SplitEventHash:     report.SplitEventHashHex,
+		IngestionEventHash: report.IngestionEventHashHex,
+		AlreadySplit:       report.AlreadySplit,
+	})
+}
+
 // mergeResponse is the wire-shape of the T4 merge endpoints' JSON
 // response. Merge identity carries the two antecedent hashes + the
 // produced formation hash; the response surfaces the merge event hash

@@ -22,6 +22,9 @@ type CampaignHypothesisSplitOptions struct {
 	SuccessorFormationHashes [][32]byte
 	SplitAt                  int64
 	Reason                   string
+
+	// Actor per §0110 — non-empty triggers AppendPair.
+	Actor string
 }
 
 // CampaignHypothesisSplitReport is the per-SplitCampaignHypothesis
@@ -29,6 +32,9 @@ type CampaignHypothesisSplitOptions struct {
 type CampaignHypothesisSplitReport struct {
 	SplitEventHashHex string
 	AlreadySplit      bool
+
+	// IngestionEventHashHex non-empty when Actor was supplied.
+	IngestionEventHashHex string
 }
 
 // SplitCampaignHypothesis records a CampaignHypothesisSplit
@@ -120,19 +126,51 @@ func SplitCampaignHypothesis(ctx context.Context, sub *substrate.Substrate, opts
 		return CampaignHypothesisSplitReport{}, fmt.Errorf("hypothesis.SplitCampaignHypothesis: lookup split %s: %w", hex, lookupErr)
 	}
 
+	committedAt := now().UnixNano()
 	splitRow := substrate.EventRow{
 		EventHash:   hash,
 		EventTime:   splitAt,
 		MessageType: string(ev.ProtoReflect().Descriptor().FullName()),
 		PayloadRef:  hex[:2] + "/" + hex[2:],
-		CommittedAt: now().UnixNano(),
+		CommittedAt: committedAt,
 	}
-	if err := sub.Append(ctx, splitRow, payload); err != nil {
-		return CampaignHypothesisSplitReport{}, fmt.Errorf("hypothesis.SplitCampaignHypothesis: append split %s: %w", hex, err)
+
+	if opts.Actor == "" {
+		if err := sub.Append(ctx, splitRow, payload); err != nil {
+			return CampaignHypothesisSplitReport{}, fmt.Errorf("hypothesis.SplitCampaignHypothesis: append split %s: %w", hex, err)
+		}
+		return CampaignHypothesisSplitReport{
+			SplitEventHashHex: hex,
+			AlreadySplit:      alreadyPresent,
+		}, nil
+	}
+
+	ingEv := &eventsv1.IngestionEvent{
+		PrimaryEventHash: hash[:],
+		ReceivedAt:       committedAt,
+		IngestedAt:       committedAt,
+		Channel:          "cli",
+		ClientCommonName: opts.Actor,
+	}
+	ingPayload, ingHash, err := canonical.MarshalAndHash(ingEv)
+	if err != nil {
+		return CampaignHypothesisSplitReport{}, fmt.Errorf("hypothesis.SplitCampaignHypothesis: marshal ingestion event: %w", err)
+	}
+	ingHex := canonical.HashHex(ingHash)
+	ingRow := substrate.EventRow{
+		EventHash:   ingHash,
+		EventTime:   committedAt,
+		MessageType: string(ingEv.ProtoReflect().Descriptor().FullName()),
+		PayloadRef:  ingHex[:2] + "/" + ingHex[2:],
+		CommittedAt: committedAt,
+	}
+	if err := sub.AppendPair(ctx, splitRow, payload, ingRow, ingPayload); err != nil {
+		return CampaignHypothesisSplitReport{}, fmt.Errorf("hypothesis.SplitCampaignHypothesis: append pair (split %s, ingestion %s): %w", hex, ingHex, err)
 	}
 
 	return CampaignHypothesisSplitReport{
-		SplitEventHashHex: hex,
-		AlreadySplit:      alreadyPresent,
+		SplitEventHashHex:     hex,
+		AlreadySplit:          alreadyPresent,
+		IngestionEventHashHex: ingHex,
 	}, nil
 }

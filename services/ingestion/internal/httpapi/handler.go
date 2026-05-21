@@ -325,14 +325,16 @@ func routeTier(r *http.Request) Tier {
 		p == "/v1/hypotheses/behavioral-cluster/merge" ||
 		p == "/v1/hypotheses/automation-group/merge" ||
 		p == "/v1/hypotheses/campaign-hypothesis/merge" ||
-		p == "/v1/hypotheses/coordination-ring/merge" {
+		p == "/v1/hypotheses/coordination-ring/merge" ||
+		p == "/v1/hypotheses/behavioral-cluster/split" ||
+		p == "/v1/hypotheses/automation-group/split" ||
+		p == "/v1/hypotheses/campaign-hypothesis/split" ||
+		p == "/v1/hypotheses/coordination-ring/split" {
 		return TierConstitutionalAct
 	}
 	// Remaining T4 constitutional-act routes (named follow-on per
-	// §0098 + §0105–§0109): the other 8 endpoints —
-	// promote + demote + dissolve + merge done across all four
-	// subtypes; split × 4 + form × 4 remain pre-positioned for
-	// follow-on landings.
+	// §0098 + §0105–§0110): the other 4 endpoints — form × 4
+	// (divergent shape: pattern-based, not target-hash-based).
 	return ""
 }
 
@@ -409,6 +411,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleMergeCampaignHypothesis(w, r)
 	case r.URL.Path == "/v1/hypotheses/coordination-ring/merge":
 		h.handleMergeCoordinationRing(w, r)
+	case r.URL.Path == "/v1/hypotheses/behavioral-cluster/split":
+		h.handleSplitBehavioralCluster(w, r)
+	case r.URL.Path == "/v1/hypotheses/automation-group/split":
+		h.handleSplitAutomationGroup(w, r)
+	case r.URL.Path == "/v1/hypotheses/campaign-hypothesis/split":
+		h.handleSplitCampaignHypothesis(w, r)
+	case r.URL.Path == "/v1/hypotheses/coordination-ring/split":
+		h.handleSplitCoordinationRing(w, r)
 	default:
 		http.NotFound(w, r)
 	}

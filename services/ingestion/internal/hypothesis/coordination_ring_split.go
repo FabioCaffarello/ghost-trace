@@ -21,6 +21,9 @@ type CoordinationRingSplitOptions struct {
 	SuccessorFormationHashes [][32]byte
 	SplitAt                  int64
 	Reason                   string
+
+	// Actor per §0110 — non-empty triggers AppendPair.
+	Actor string
 }
 
 // CoordinationRingSplitReport is the per-SplitCoordinationRing
@@ -28,6 +31,9 @@ type CoordinationRingSplitOptions struct {
 type CoordinationRingSplitReport struct {
 	SplitEventHashHex string
 	AlreadySplit      bool
+
+	// IngestionEventHashHex non-empty when Actor was supplied.
+	IngestionEventHashHex string
 }
 
 // SplitCoordinationRing records a CoordinationRingSplit lifecycle
@@ -118,19 +124,51 @@ func SplitCoordinationRing(ctx context.Context, sub *substrate.Substrate, opts C
 		return CoordinationRingSplitReport{}, fmt.Errorf("hypothesis.SplitCoordinationRing: lookup split %s: %w", hex, lookupErr)
 	}
 
+	committedAt := now().UnixNano()
 	splitRow := substrate.EventRow{
 		EventHash:   hash,
 		EventTime:   splitAt,
 		MessageType: string(ev.ProtoReflect().Descriptor().FullName()),
 		PayloadRef:  hex[:2] + "/" + hex[2:],
-		CommittedAt: now().UnixNano(),
+		CommittedAt: committedAt,
 	}
-	if err := sub.Append(ctx, splitRow, payload); err != nil {
-		return CoordinationRingSplitReport{}, fmt.Errorf("hypothesis.SplitCoordinationRing: append split %s: %w", hex, err)
+
+	if opts.Actor == "" {
+		if err := sub.Append(ctx, splitRow, payload); err != nil {
+			return CoordinationRingSplitReport{}, fmt.Errorf("hypothesis.SplitCoordinationRing: append split %s: %w", hex, err)
+		}
+		return CoordinationRingSplitReport{
+			SplitEventHashHex: hex,
+			AlreadySplit:      alreadyPresent,
+		}, nil
+	}
+
+	ingEv := &eventsv1.IngestionEvent{
+		PrimaryEventHash: hash[:],
+		ReceivedAt:       committedAt,
+		IngestedAt:       committedAt,
+		Channel:          "cli",
+		ClientCommonName: opts.Actor,
+	}
+	ingPayload, ingHash, err := canonical.MarshalAndHash(ingEv)
+	if err != nil {
+		return CoordinationRingSplitReport{}, fmt.Errorf("hypothesis.SplitCoordinationRing: marshal ingestion event: %w", err)
+	}
+	ingHex := canonical.HashHex(ingHash)
+	ingRow := substrate.EventRow{
+		EventHash:   ingHash,
+		EventTime:   committedAt,
+		MessageType: string(ingEv.ProtoReflect().Descriptor().FullName()),
+		PayloadRef:  ingHex[:2] + "/" + ingHex[2:],
+		CommittedAt: committedAt,
+	}
+	if err := sub.AppendPair(ctx, splitRow, payload, ingRow, ingPayload); err != nil {
+		return CoordinationRingSplitReport{}, fmt.Errorf("hypothesis.SplitCoordinationRing: append pair (split %s, ingestion %s): %w", hex, ingHex, err)
 	}
 
 	return CoordinationRingSplitReport{
-		SplitEventHashHex: hex,
-		AlreadySplit:      alreadyPresent,
+		SplitEventHashHex:     hex,
+		AlreadySplit:          alreadyPresent,
+		IngestionEventHashHex: ingHex,
 	}, nil
 }

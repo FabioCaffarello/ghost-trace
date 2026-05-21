@@ -1259,6 +1259,15 @@ Per [`§0109`](../../docs/charter/decision-log.md), the merge endpoint shipped a
 
 Each accepts `application/x-protobuf` with the corresponding `<Subtype>Merge` message: two `antecedent_formation_event_hashes` (must differ) + one `produced_formation_event_hash` (must be a separately-committed `<Subtype>Formation` representing the merged hypothesis). All three hashes must be 32 bytes; all three must resolve to `<Subtype>Formation` rows of the matching subtype. Merge is symmetric: ascending-sort normalization per `hypothesis.Merge*` ensures the merge event's content-hash is invariant under caller argument order. 400 on identical antecedents OR wrong antecedent count OR bad hash lengths; 404 on unknown formation OR cross-subtype formation hash.
 
+Per [`§0110`](../../docs/charter/decision-log.md), the split endpoint shipped across all four subtypes:
+
+- `POST /v1/hypotheses/behavioral-cluster/split`
+- `POST /v1/hypotheses/automation-group/split`
+- `POST /v1/hypotheses/campaign-hypothesis/split`
+- `POST /v1/hypotheses/coordination-ring/split`
+
+Each accepts `application/x-protobuf` with the corresponding `<Subtype>Split` message: one `antecedent_formation_event_hash` + N (≥ 2) `successor_formation_event_hashes`. All hashes must be 32 bytes; all must resolve to `<Subtype>Formation` rows of the matching subtype; successors must be byte-distinct from each other AND from the antecedent. Split is a set relation: ascending-sort normalization per `hypothesis.Split*` ensures the split event's content-hash is invariant under successor enumeration order. 400 on insufficient successors / antecedent-in-successors / bad hash lengths; 404 on unknown formation OR cross-subtype formation hash.
+
 Wire shape — request:
 
 ```sh
