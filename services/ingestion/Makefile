@@ -36,6 +36,7 @@ help:
 	@echo "  dissolve-campaign-hypothesis-build  go build -trimpath -o $(BIN_DIR)/dissolve-campaign-hypothesis ./cmd/dissolve-campaign-hypothesis"
 	@echo "  merge-campaign-hypotheses-build  go build -trimpath -o $(BIN_DIR)/merge-campaign-hypotheses ./cmd/merge-campaign-hypotheses"
 	@echo "  split-campaign-hypothesis-build  go build -trimpath -o $(BIN_DIR)/split-campaign-hypothesis ./cmd/split-campaign-hypothesis"
+	@echo "  form-coordination-ring-build  go build -trimpath -o $(BIN_DIR)/form-coordination-ring ./cmd/form-coordination-ring"
 	@echo "  test           go test -race ./..."
 	@echo "  golden-corpus  regenerate canonical-corpus golden files (schemas-evolution event)"
 	@echo "  clean          remove $(GEN_OUT) + $(BIN_DIR)"
@@ -75,7 +76,8 @@ generate: $(PROTOC_GEN_GO)
 	  events/v1/campaign_hypothesis_demotion.proto \
 	  events/v1/campaign_hypothesis_dissolution.proto \
 	  events/v1/campaign_hypothesis_merge.proto \
-	  events/v1/campaign_hypothesis_split.proto
+	  events/v1/campaign_hypothesis_split.proto \
+	  events/v1/coordination_ring_formation.proto
 
 $(PROTOC_GEN_GO):
 	$(MAKE) tools
@@ -204,6 +206,11 @@ merge-campaign-hypotheses-build:
 split-campaign-hypothesis-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/split-campaign-hypothesis ./cmd/split-campaign-hypothesis
+
+.PHONY: form-coordination-ring-build
+form-coordination-ring-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/form-coordination-ring ./cmd/form-coordination-ring
 
 .PHONY: test
 test:

@@ -145,6 +145,32 @@ Adding a new CampaignHypothesis formation pattern: implement `CampaignHypothesis
 
 Exit code: **0** on success; **2** on tool/configuration error.
 
+## `form-coordination-ring` CLI
+
+Operator-invoked tool to form `CoordinationRing` hypotheses — the **fourth (and final) Category III concrete subtype** per [`§0070`](../../docs/charter/decision-log.md). Mirrors the formation pathways for the prior three subtypes but with an **interaction-centric (edge-list) inference** rather than the actor-set (BC/AG) or event-set (CH) shapes. Per [entity-model.md §Category III](../../docs/ontology/entity-model.md), a CoordinationRing is "a set of actors whose patterns of INTERACTION suggest coordinated action" — the relational structure is what distinguishes it from the other three subtypes; flattening edges into a vertex set would lose the property the subtype was carved out to preserve (per [§0070 modeling choice](../../docs/charter/decision-log.md)).
+
+```sh
+make form-coordination-ring-build                                          # builds ./bin/form-coordination-ring
+
+# Default co-occurrence-window-v1 pattern (min 3 supports, max 600s window)
+./bin/form-coordination-ring -db ./ghost-trace.db -blobs ./blobs
+
+# Tighter window + stricter support
+./bin/form-coordination-ring -min-edge-support 5 -max-window-seconds 120
+```
+
+The CLI walks every `DeclaredSession`, applies the formation pattern, and commits each resulting `CoordinationRingFormation` event via `substrate.Append`. Same idempotency + versioning semantics as the prior three subtypes per §0045.
+
+Registered formation patterns:
+
+| Signature | Parameters | Inference |
+|---|---|---|
+| `co-occurrence-window-v1` | `min_edge_support=<int>` (default 3), `max_window_seconds=<int>` (default 600) | Groups `DeclaredSession` rows by byte-equal `session_descriptor`; within each group, builds undirected actor-pair edges from sessions whose `declared_at` timestamps fall within `max_window_seconds` of each other; emits one `CoordinationRingFormation` per connected component whose constituent edges all meet `min_edge_support`. Per §0070 the wire-form `CoordinationRingInteraction` is lex-canonicalized within each edge (`actor_a < actor_b`) and the repeated field is sorted ascending — content-hash stability under observation reordering. |
+
+Adding a new CoordinationRing formation pattern: implement `CoordinationRingFormationPattern` in [`internal/hypothesis`](./internal/hypothesis), register it in `cmd/form-coordination-ring/main.go`'s `resolvePattern`. Same incremental-extension pathway as §0045 + §0056 + §0063.
+
+Exit code: **0** on success; **2** on tool/configuration error.
+
 ## `promote-campaign-hypothesis` CLI
 
 Operator-invoked tool to record the **CampaignHypothesis promotion** lifecycle operation per [`§0064`](../../docs/charter/decision-log.md) — second lifecycle operation of the third Cat III subtype arc. Mirrors `promote-hypothesis` (BC) and `promote-automation-group` (AG).

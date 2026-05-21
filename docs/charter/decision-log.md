@@ -2722,6 +2722,53 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0070` — Fourth (and final) Category III concrete subtype (`CoordinationRing`) formation lands; first INTERACTION-centric (edge-list) subtype; fourth subtype lifecycle arc opens
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0063`](#0063--third-cat-iii-concrete-subtype-campaignhypothesis-formation-lands-first-event-centric-subtype-third-subtype-lifecycle-arc-opens) opened the third Cat III subtype lifecycle arc (event-centric `CampaignHypothesis`); §0063–§0068 closed that arc with all six lifecycle operations + §0069 closed the projection-layer carry-forward. The §0010 (Q2 resolution) commitment named four concrete Cat III subtypes — `BehavioralCluster`, `AutomationGroup`, `CampaignHypothesis`, `CoordinationRing` — each to be landed under the typed-subtype-landings discipline reaffirmed at §0045+§0050+§0056+§0063. This entry opens the FOURTH (and final) such arc.
+
+  CoordinationRing per [`entity-model.md` §Category III](../ontology/entity-model.md) is "a set of actors whose patterns of INTERACTION suggest coordinated action". It is the only Cat III subtype whose inference shape is **relational** (edges between actors) rather than flat-set-shaped (BC/AG carry an `actor_refs` set; CH carries a `source_event_hashes` set). The §0070 modeling choice closes this gap.
+
+  Two structural decisions surface in this entry:
+
+  - **Edge-list vs flat-set on the wire (the §0070 modeling fork).** Option (A) — explicit `interactions` repeated field carrying `CoordinationRingInteraction { actor_a, actor_b }` tuples; the relational structure is recorded on the wire. Option (B) — reuse the BC/AG `actor_refs` shape and let the interaction pattern live only in `pattern_signature` + `pattern_parameters`; lower wire-shape variance but loses the edge structure on the substrate, recoverable only by re-deriving from `source_event_hashes`. Option (A) chosen — the whole point of CR vs BC is that *interaction* is what distinguishes the subtype; flattening edges into a vertex set would lose the property the subtype was carved out to preserve. The cost is one additional canonicalization rule (within-edge `actor_a < actor_b` lex; repeated field sorted ascending) plus a denormalization commitment: the ring's MEMBER SET is the union of `actor_a + actor_b` and is NOT carried as a separate `actor_refs` field — operators that want vertex-set membership compute the union locally rather than carrying a redundant denormalized field (mirrors the §2.5 BC3 spirit: derive rather than denormalize).
+  - **Undirected pair semantic (§0070 deferral, not modeling fork).** At this layer "coordinated action" is *symmetric* — there is no directional ordering between two co-acting actors. Directed coordination (e.g. influence-chain inference, command-source attribution) is deferred until empirical pressure surfaces a use case the symmetric shape cannot express. The lex-canonical (`actor_a < actor_b`) within-edge ordering enforces the symmetric semantic on the wire — no swapped-pair divergent hashes.
+
+- **Decision:** Land `CoordinationRingFormation` with three structural moves mirroring §0045+§0056+§0063 but with the new INTERACTION-centric wire shape:
+
+  1. **`CoordinationRingFormation` Protobuf message** at [`schemas/events/v1/coordination_ring_formation.proto`](../../schemas/events/v1/coordination_ring_formation.proto). Six fields: `pattern_signature`, `pattern_parameters`, `interactions` (repeated `CoordinationRingInteraction { actor_a, actor_b }`; cardinality ≥ 1; within-edge actor_a < actor_b lex; sorted ascending by (actor_a, actor_b); no duplicate edges), `formation_at`, placeholder `confidence`, `source_event_hashes` (sorted ascending). The new nested `CoordinationRingInteraction` message is the canonical wire form of an undirected coordination edge.
+
+  2. **`FormCoordinationRingAll` entry point** at [`services/ingestion/internal/hypothesis/coordination_ring_formation.go`](../../services/ingestion/internal/hypothesis/coordination_ring_formation.go). Parallel to §0045+§0056+§0063 entry points. New `CoordinationRingFormationContext` + `CoordinationRingFormationPattern` interfaces. Reuses `SourceDeclaredSession` (shared Cat I surface). Idempotency + concurrency model identical to prior three subtypes per §0027 AP6.
+
+  3. **`CoOccurrenceWindowV1` formation pattern** at [`services/ingestion/internal/hypothesis/co_occurrence_window_v1.go`](../../services/ingestion/internal/hypothesis/co_occurrence_window_v1.go). First canonical CR pattern, analogous to `session-descriptor-shared-v1` (BC), `uniform-cadence-v1` (AG), `temporal-descriptor-cohort-v1` (CH). Inference: actor pairs whose declared sessions share a descriptor within `max_window_seconds` accrue support; edges meeting `min_edge_support` are unioned into connected components; one ring formation per component. Union-find for component discovery; lex-canonicalization of all edges before emission.
+
+  4. **`cmd/form-coordination-ring` operator interface** — 25th operational binary; 20th substrate-write.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1 (Cat I record committed under §2.5 BC5; immutability preserved), §2.2 (CR is Cat III hypothesis — probabilistic), §2.3 (`source_event_hashes` carries observational provenance per §2.3 frozen v0.4), §2.5 + §2.5 BC3 + §2.5 BC5. Respects §0045+§0056+§0063 hypothesis-identity invariant — formation event's content-hash IS the ring's stable identifier. Respects §0010 (Q2 four-subtype resolution) + §0045+§0050+§0056+§0063 typed-subtype-landings commitment — the new `interactions` wire shape is subtype-specific, NOT shoehorned into BC/AG's `actor_refs` or CH's `source_event_hashes`. Respects §0023 single-tier `actor_ref` (each `actor_a`/`actor_b` field is a single-tier reference). Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`schemas/events/v1/coordination_ring_formation.proto`](../../schemas/events/v1/coordination_ring_formation.proto) — new file. Introduces `CoordinationRingFormation` + `CoordinationRingInteraction` messages.
+  - [`services/ingestion/internal/hypothesis/coordination_ring_formation.go`](../../services/ingestion/internal/hypothesis/coordination_ring_formation.go) — new file.
+  - [`services/ingestion/internal/hypothesis/co_occurrence_window_v1.go`](../../services/ingestion/internal/hypothesis/co_occurrence_window_v1.go) — new file.
+  - [`services/ingestion/internal/hypothesis/coordination_ring_formation_test.go`](../../services/ingestion/internal/hypothesis/coordination_ring_formation_test.go) — **6 tests** covering happy-path-three-actor-triangle, insufficient-support-rejection, outside-window-rejection, idempotency, observation-order invariance under edge canonicalization, disconnected-components → multiple-rings.
+  - [`services/ingestion/cmd/form-coordination-ring/main.go`](../../services/ingestion/cmd/form-coordination-ring/main.go) — new binary; 25th operational CLI; 20th substrate-write.
+  - Makefile, canonical corpus (minimal + typical), corpus README, service README, decision-log §0070.
+  - **Fourth subtype lifecycle arc opens.** Mirrors §0045 BC arc, §0056 AG arc, §0063 CH arc. Five follow-on lifecycle landings expected: promotion (§0071), demotion (§0072), dissolution (§0073), merge (§0074), split (§0075) — same template as §0046–§0050 BC, §0057–§0061 AG, §0064–§0068 CH. Each operation reuses the cross-subtype sentinels (`ErrTargetNotFound`, `ErrTargetWrongType`, `ErrMergeAntecedentsIdentical`, `ErrSplitInsufficientSuccessors`, `ErrSplitSuccessorsNotDistinct`) — the sentinel-sharing landscape established at §0061+§0068 transfers cleanly. Per-subtype message_type discriminator (`coordinationRingFormationMessageType`) preserves cross-subtype rejection.
+  - **First INTERACTION-centric subtype on the substrate.** The wire shape carries explicit edges as `CoordinationRingInteraction { actor_a, actor_b }`. The three previously-landed subtypes carry flat-set membership shapes (BC/AG → `actor_refs`; CH → `source_event_hashes`). CR's `interactions` field is the first relational-structure-preserving wire shape; future subtypes (none currently planned — Q2 resolved at exactly four) would need their own modeling justification, but the typed-subtype-landings discipline accommodates new shapes without forcing existing subtypes to widen.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Five remaining CoordinationRing lifecycle operations** — promotion (§0071), demotion (§0072), dissolution (§0073), merge (§0074), split (§0075). Expected to follow the §0046–§0050 / §0057–§0061 / §0064–§0068 template. Five follow-on entries to close the fourth subtype's lifecycle arc.
+    - **Projection layer extension for CoordinationRing** — `internal/projection` does NOT yet carry a `CoordinationRingProjection` type. Natural §0076 candidate (mirrors §0062 AG + §0069 CH extensions).
+    - **Directed-coordination semantic** — deferred until empirical pressure surfaces a use case the symmetric pair shape cannot express; the wire shape's lex-canonicalization rule would need amendment via Charter-discipline RFC.
+    - **Cross-subtype operations** — unchanged from §0049+§0050+§0067+§0068 carry-forwards; cross-subtype merge/split between e.g. CR and BC remains the open Ontology question per Q4 deferral.
+    - **Edge-weight / multi-edge semantics** — current shape carries one edge per actor pair with no weight or multiplicity. If future patterns need weighted edges (e.g. support count carried on the wire as opposed to derived), the wire shape needs amendment.
+    - **Layer B deep-criterion** — unchanged from §0047 carry-forward; blocked on §2.6 redaction.
+
+- **Supersession:** None. Opens the fourth Cat III subtype lifecycle arc per the §0010 Q2 resolution. The §0045+§0050+§0056+§0063 typed-subtype-landings commitment is now validated across all four subtypes at the formation layer (subsequent lifecycle ops + projection follow). §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
