@@ -4227,6 +4227,53 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0105` — T4 pilot: `POST /v1/hypotheses/behavioral-cluster/promote` lands; pattern established for the 23 remaining endpoints
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** Third of three named follow-on landings opened by [`§0098`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens) is the T4 24-endpoint arc (`POST /v1/hypotheses/<subtype>/{form,promote,demote,dissolve,merge,split}` × 4 subtypes). [`§0103`](#0103--multitier-token-plumbing-lands-t3t4-implementation-arc-foundational-landing-per-0098) delivered multi-tier plumbing; [`§0104`](#0104--t3-http-orphancleanup-endpoint-lands-orphancleanupaudit-cat-i-record-introduced-0098-landing-23) delivered T3 + the audit-on-commit pattern. This entry records the T4 pilot — one endpoint (behavioral-cluster promote) — establishing the wire pattern for mechanical replication across the remaining 23.
+
+- **Decision:** [`services/ingestion/internal/httpapi/lifecycle.go`](../../services/ingestion/internal/httpapi/lifecycle.go) ships the pilot handler `handlePromoteBehavioralCluster` for `POST /v1/hypotheses/behavioral-cluster/promote`. The handler:
+
+  1. **Tier classification.** Per [`§0094`](#0094--http-authmodel-evolution-framed-operationtier-classification-recorded-tier-34-advance-deferred-to-followon-rfc) + [`§0103`](#0103--multitier-token-plumbing-lands-t3t4-implementation-arc-foundational-landing-per-0098), the route is annotated as `TierConstitutionalAct`; `routeTier` extended.
+
+  2. **Wire pattern (matches §0034 contract).** Accepts `application/x-protobuf` with a `BehavioralClusterPromotion` payload. Body decoded into the proto; its four payload fields (`formation_event_hash`, `promoted_at`, `cadence_seconds`, `reason`) become the [`hypothesis.PromoteOptions`](../../services/ingestion/internal/hypothesis/promotion.go) parameters. Validation: 32-byte hash length, positive cadence_seconds; failures return 400.
+
+  3. **Per-actor attribution.** The handler's `resolveT4Actor(env, tier)` helper implements RFC item 4(c) precedence: (a) verified mTLS subject CN when γ active (`env.ClientCommonName` populated by `envelopeForRequest`); (b) fallback literal `unattributed-token-<tier>` when only α active OR no client cert presented. `Actor` is unconditionally non-empty for HTTP T4 — driving `hypothesis.Promote`'s AppendPair path per [`§0097`](#0097--cli-peractor-attribution-pilot-promotehypothesis-actor-authscope-rfc-open-question-2-partially-discharged) pilot extension. Result: every HTTP T4 promote write commits the BehavioralClusterPromotion + IngestionEvent atomically, satisfying the [`§0094`](#0094--http-authmodel-evolution-framed-operationtier-classification-recorded-tier-34-advance-deferred-to-followon-rfc) cross-tier per-actor-attribution requirement structurally.
+
+  4. **Error semantics.** `hypothesis.ErrTargetNotFound` and `hypothesis.ErrTargetWrongType` both surface as 404 (formation hash unresolvable in substrate or resolves to a non-`BehavioralClusterFormation` row). Other substrate errors surface as 500 + fatal-channel escalation. Mirrors the existing handler patterns.
+
+  5. **Wire-shape response.** `promoteResponse` JSON with `promotion_event_hash`, `ingestion_event_hash`, `already_promoted`. The `IngestionEventHash` field is unconditionally non-empty (distinct from the CLI's optional-Actor path where it may be empty).
+
+  6. **Tests.** [`services/ingestion/internal/httpapi/lifecycle_test.go`](../../services/ingestion/internal/httpapi/lifecycle_test.go) 13 new tests covering: happy path; idempotent re-commit; reject non-POST; reject wrong Content-Type; reject bad hash length; reject non-positive cadence; reject unknown formation (404); reject wrong-type formation (404); 503 without WithSubstrate; T4 multi-tier auth requires constitutional-act token (401 with producer token); T4 multi-tier constitutional-act token authorizes; `resolveT4Actor` mTLS CN preferred; `resolveT4Actor` fallback literal.
+
+  7. **README.** [`services/ingestion/README.md`](../../services/ingestion/README.md) "HTTP T4 constitutional-act endpoints (pilot: behavioral-cluster promote)" subsection documenting wire shape, response codes, per-actor attribution precedence, idempotency, and distinction from the CLI's optional-Actor path.
+
+- **Constitutional review:** No Charter invariant amended. The T4 cross-tier per-actor-attribution requirement per [`§0094`](#0094--http-authmodel-evolution-framed-operationtier-classification-recorded-tier-34-advance-deferred-to-followon-rfc) is satisfied structurally: every HTTP T4 promote commits BehavioralClusterPromotion + IngestionEvent as a paired Cat I unit. The §2.5 lifecycle-integrity gate (promotion references only BehavioralClusterFormation predecessors) is preserved by routing through `hypothesis.Promote`'s existing type check; HTTP T4 inherits the gate without re-implementing it. The §2.1 substrate-immutability + §2.3 provenance + §2.5 lifecycle-event commitments operate through the shared `AppendPair` path.
+
+  Falsifiability: every claim in the README + decision-log is testable by mechanical replay of the 13 lifecycle_test.go tests. The cross-tier per-actor-attribution is exercised by `TestT4PromoteBehavioralClusterHappyPath` (IngestionEvent hash present in response) + `TestResolveT4ActorFallback` (literal fallback when no CN); the AP1 tier conflation defense is exercised by `TestT4PromoteMultiTierRequiresConstitutionalActToken` (producer token rejected on T4).
+
+- **Consequences:**
+  - `POST /v1/hypotheses/behavioral-cluster/promote` reachable; commits paired BehavioralClusterPromotion + IngestionEvent per request.
+  - **§0098 landing 3 of 3 STARTED — pilot endpoint shipped; 23 remaining endpoints unblocked for mechanical replication.** Pattern:
+    - 6 ops × 3 remaining subtypes (automation-group, campaign-hypothesis, coordination-ring) for promote = 3 follow-on PRs analogous to this one (each reuses `hypothesis.Promote*` per-subtype).
+    - 5 remaining ops (form, demote, dissolve, merge, split) for each of 4 subtypes = 20 follow-on endpoints with the same wire pattern (proto body → opts → `hypothesis.X*` → JSON response). Form is structurally different (pattern-based, not target-hash-based); its handler shape diverges from promote/demote/dissolve/merge/split.
+  - First T4 endpoint shipped means the cross-tier per-actor-attribution requirement is now exercised structurally (not just declared in RFC text).
+
+  - **Methodological observation 1 — T4 pilot-then-replicate pattern.** Establishing the wire pattern with one endpoint validates the proto-body decode + opts-extraction + Actor-resolution + commit-via-hypothesis-package + JSON-response chain. The pattern replicates mechanically for promote/demote/dissolve across subtypes; merge + split + form each add a per-op shape variant. Suggested follow-on cadence: ship the 3 remaining `promote-*` subtype endpoints in one PR (mechanical replication; same wire pattern + per-subtype helper function call); then ship the other 5 ops per subtype as separate PRs. Pattern reusable for future RFC-mandated multi-endpoint landings.
+
+  - **Methodological observation 2 — `resolveT4Actor` precedence sleeve.** The mTLS-CN-first + fallback-literal precedence is structural — encoded in the handler, not the caller. Future T4 endpoints reuse `resolveT4Actor(env, tier)` directly; no per-handler reimplementation. When the `token_id` precedence rung lands (per-tier token files extended to `<token>\n<token_id>\n`), the change is contained to `resolveT4Actor`; handler bodies are unchanged.
+
+  - **Carry-forwards:**
+    - **23 remaining T4 endpoints** — mechanical replication of this pilot's pattern for the other 5 BehavioralCluster ops + all 6 ops × 3 remaining subtypes. Suggested cadence: per-op-across-subtypes (e.g., one PR adds the 3 remaining `promote-*` subtype endpoints; subsequent PRs add demote-* / dissolve-* across all subtypes; merge-* / split-* / form-* each their own per-op-across-subtypes PR).
+    - **`token_id` field per RFC item 4(b)** — bearer-token actor attribution. Currently `resolveT4Actor` falls back to a literal; when per-tier token files gain a `token_id` line, `resolveT4Actor` returns that value. Becomes load-bearing at multi-admin α deployments.
+    - **CLI orphan-cleanup audit symmetry** per [`§0104`](#0104--t3-http-orphancleanup-endpoint-lands-orphancleanupaudit-cat-i-record-introduced-0098-landing-23) carry-forward — orthogonal to T4 expansion.
+
+- **Supersession:** None. Third of three named follow-on landings opened by [`§0098`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens); the arc is started, pattern locked, mechanical replication scoped to follow-on PRs.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
