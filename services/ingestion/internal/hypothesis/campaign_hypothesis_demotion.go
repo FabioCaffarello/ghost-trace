@@ -24,6 +24,10 @@ type CampaignHypothesisDemoteOptions struct {
 	PromotionEventHash [32]byte
 	DemotedAt          int64
 	Reason             string
+
+	// Actor per §0107 T4 demote landing — non-empty triggers
+	// AppendPair with IngestionEvent.
+	Actor string
 }
 
 // CampaignHypothesisDemoteReport is the per-DemoteCampaignHypothesis
@@ -33,6 +37,9 @@ type CampaignHypothesisDemoteReport struct {
 	AlreadyDemoted        bool
 	CadenceSatisfied      bool
 	CadenceElapsedSeconds int64
+
+	// IngestionEventHashHex non-empty when Actor was supplied.
+	IngestionEventHashHex string
 }
 
 // DemoteCampaignHypothesis records a CampaignHypothesisDemotion
@@ -98,15 +105,48 @@ func DemoteCampaignHypothesis(ctx context.Context, sub *substrate.Substrate, opt
 		return CampaignHypothesisDemoteReport{}, fmt.Errorf("hypothesis.DemoteCampaignHypothesis: lookup demotion %s: %w", hex, lookupErr)
 	}
 
+	committedAt := now().UnixNano()
 	demoRow := substrate.EventRow{
 		EventHash:   hash,
 		EventTime:   demotedAt,
 		MessageType: string(ev.ProtoReflect().Descriptor().FullName()),
 		PayloadRef:  hex[:2] + "/" + hex[2:],
-		CommittedAt: now().UnixNano(),
+		CommittedAt: committedAt,
 	}
-	if err := sub.Append(ctx, demoRow, demotionPayload); err != nil {
-		return CampaignHypothesisDemoteReport{}, fmt.Errorf("hypothesis.DemoteCampaignHypothesis: append demotion %s: %w", hex, err)
+
+	if opts.Actor == "" {
+		if err := sub.Append(ctx, demoRow, demotionPayload); err != nil {
+			return CampaignHypothesisDemoteReport{}, fmt.Errorf("hypothesis.DemoteCampaignHypothesis: append demotion %s: %w", hex, err)
+		}
+		return CampaignHypothesisDemoteReport{
+			DemotionEventHashHex:  hex,
+			AlreadyDemoted:        alreadyPresent,
+			CadenceSatisfied:      cadenceSatisfied,
+			CadenceElapsedSeconds: elapsedSeconds,
+		}, nil
+	}
+
+	ingEv := &eventsv1.IngestionEvent{
+		PrimaryEventHash: hash[:],
+		ReceivedAt:       committedAt,
+		IngestedAt:       committedAt,
+		Channel:          "cli",
+		ClientCommonName: opts.Actor,
+	}
+	ingPayload, ingHash, err := canonical.MarshalAndHash(ingEv)
+	if err != nil {
+		return CampaignHypothesisDemoteReport{}, fmt.Errorf("hypothesis.DemoteCampaignHypothesis: marshal ingestion event: %w", err)
+	}
+	ingHex := canonical.HashHex(ingHash)
+	ingRow := substrate.EventRow{
+		EventHash:   ingHash,
+		EventTime:   committedAt,
+		MessageType: string(ingEv.ProtoReflect().Descriptor().FullName()),
+		PayloadRef:  ingHex[:2] + "/" + ingHex[2:],
+		CommittedAt: committedAt,
+	}
+	if err := sub.AppendPair(ctx, demoRow, demotionPayload, ingRow, ingPayload); err != nil {
+		return CampaignHypothesisDemoteReport{}, fmt.Errorf("hypothesis.DemoteCampaignHypothesis: append pair (demotion %s, ingestion %s): %w", hex, ingHex, err)
 	}
 
 	return CampaignHypothesisDemoteReport{
@@ -114,5 +154,6 @@ func DemoteCampaignHypothesis(ctx context.Context, sub *substrate.Substrate, opt
 		AlreadyDemoted:        alreadyPresent,
 		CadenceSatisfied:      cadenceSatisfied,
 		CadenceElapsedSeconds: elapsedSeconds,
+		IngestionEventHashHex: ingHex,
 	}, nil
 }

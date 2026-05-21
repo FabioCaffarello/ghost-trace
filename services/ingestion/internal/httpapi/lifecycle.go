@@ -293,6 +293,243 @@ func (h *Handler) handlePromoteCampaignHypothesis(w http.ResponseWriter, r *http
 	})
 }
 
+// demoteResponse is the wire-shape of the T4 demote endpoints' JSON
+// response. Cadence fields surface §0011 Layer A gate state for
+// operator-facing reporting (Layer A is CANDIDACY, not hard barrier).
+type demoteResponse struct {
+	// DemotionEventHash is the lowercase-hex content-hash of the
+	// committed <Subtype>Demotion event.
+	DemotionEventHash string `json:"demotion_event_hash"`
+
+	// IngestionEventHash is the lowercase-hex content-hash of the
+	// paired IngestionEvent. Always non-empty for HTTP T4.
+	IngestionEventHash string `json:"ingestion_event_hash"`
+
+	// AlreadyDemoted true on idempotent re-commit.
+	AlreadyDemoted bool `json:"already_demoted"`
+
+	// CadenceSatisfied reports whether Layer A cadence had elapsed
+	// at demoted_at. Per §0011 CANDIDACY criterion (not hard barrier);
+	// surfaced for operator-facing reporting.
+	CadenceSatisfied bool `json:"cadence_satisfied"`
+
+	// CadenceElapsedSeconds reports how many seconds elapsed between
+	// the source promotion's promoted_at and this demotion's
+	// demoted_at.
+	CadenceElapsedSeconds int64 `json:"cadence_elapsed_seconds"`
+}
+
+// decodeDemotePayload is the demote analog of decodePromotePayload —
+// shared body decode + length cap + Content-Type check for the four
+// T4 demote handlers per §0107.
+func (h *Handler) decodeDemotePayload(r *http.Request, msg proto.Message) (status int, errMsg string, ok bool) {
+	if r.Method != http.MethodPost {
+		return http.StatusMethodNotAllowed, "method not allowed; POST required", false
+	}
+	if h.sub == nil {
+		return http.StatusServiceUnavailable, "substrate access not configured (WithSubstrate)", false
+	}
+	if ct := r.Header.Get("Content-Type"); ct != "application/x-protobuf" {
+		return http.StatusUnsupportedMediaType, fmt.Sprintf("Content-Type must be application/x-protobuf (got %q)", ct), false
+	}
+	b, err := io.ReadAll(io.LimitReader(r.Body, h.requestBodyLimit+1))
+	if err != nil {
+		return http.StatusBadRequest, fmt.Sprintf("read body: %v", err), false
+	}
+	if int64(len(b)) > h.requestBodyLimit {
+		return http.StatusRequestEntityTooLarge, fmt.Sprintf("request body exceeds %d-byte limit", h.requestBodyLimit), false
+	}
+	if err := proto.Unmarshal(b, msg); err != nil {
+		return http.StatusBadRequest, fmt.Sprintf("decode payload: %v", err), false
+	}
+	return 0, "", true
+}
+
+// validateDemoteParams enforces the shared validation gate across the
+// four T4 demote handlers: 32-byte promotion_event_hash.
+func validateDemoteParams(promotionHash []byte) (int, string, bool) {
+	if len(promotionHash) != 32 {
+		return http.StatusBadRequest, fmt.Sprintf("promotion_event_hash must be 32 bytes (got %d)", len(promotionHash)), false
+	}
+	return 0, "", true
+}
+
+// demoteErrToHTTPStatus maps a hypothesis.Demote* error to its HTTP
+// status + body message. Shared across the four T4 demote handlers.
+func demoteErrToHTTPStatus(err error, promotionHash [32]byte) (int, string) {
+	switch {
+	case errIs(err, hypothesis.ErrTargetNotFound):
+		return http.StatusNotFound, fmt.Sprintf("promotion event hash not found: %x", promotionHash)
+	case errIs(err, hypothesis.ErrTargetWrongType):
+		return http.StatusNotFound, fmt.Sprintf("promotion event hash resolves to wrong type: %x", promotionHash)
+	}
+	return http.StatusInternalServerError, fmt.Sprintf("demote: %v", err)
+}
+
+// handleDemoteBehavioralCluster implements POST
+// /v1/hypotheses/behavioral-cluster/demote per §0107.
+func (h *Handler) handleDemoteBehavioralCluster(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.BehavioralClusterDemotion
+	status, errMsg, ok := h.decodeDemotePayload(r, &msg)
+	if !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	if s, m, ok := validateDemoteParams(msg.GetPromotionEventHash()); !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+	var promotionHash [32]byte
+	copy(promotionHash[:], msg.GetPromotionEventHash())
+
+	env := envelopeForRequest(r)
+	opts := hypothesis.DemoteOptions{
+		PromotionEventHash: promotionHash,
+		DemotedAt:          msg.GetDemotedAt(),
+		Reason:             msg.GetReason(),
+		Actor:              resolveT4Actor(env, TierConstitutionalAct),
+	}
+	report, err := hypothesis.Demote(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		s, m := demoteErrToHTTPStatus(err, promotionHash)
+		if s == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 demote-behavioral-cluster: %w", err))
+		}
+		writeIngestError(w, s, m)
+		return
+	}
+	writeJSON(w, http.StatusOK, demoteResponse{
+		DemotionEventHash:     report.DemotionEventHashHex,
+		IngestionEventHash:    report.IngestionEventHashHex,
+		AlreadyDemoted:        report.AlreadyDemoted,
+		CadenceSatisfied:      report.CadenceSatisfied,
+		CadenceElapsedSeconds: report.CadenceElapsedSeconds,
+	})
+}
+
+// handleDemoteAutomationGroup implements POST
+// /v1/hypotheses/automation-group/demote per §0107.
+func (h *Handler) handleDemoteAutomationGroup(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.AutomationGroupDemotion
+	status, errMsg, ok := h.decodeDemotePayload(r, &msg)
+	if !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	if s, m, ok := validateDemoteParams(msg.GetPromotionEventHash()); !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+	var promotionHash [32]byte
+	copy(promotionHash[:], msg.GetPromotionEventHash())
+
+	env := envelopeForRequest(r)
+	opts := hypothesis.AutomationGroupDemoteOptions{
+		PromotionEventHash: promotionHash,
+		DemotedAt:          msg.GetDemotedAt(),
+		Reason:             msg.GetReason(),
+		Actor:              resolveT4Actor(env, TierConstitutionalAct),
+	}
+	report, err := hypothesis.DemoteAutomationGroup(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		s, m := demoteErrToHTTPStatus(err, promotionHash)
+		if s == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 demote-automation-group: %w", err))
+		}
+		writeIngestError(w, s, m)
+		return
+	}
+	writeJSON(w, http.StatusOK, demoteResponse{
+		DemotionEventHash:     report.DemotionEventHashHex,
+		IngestionEventHash:    report.IngestionEventHashHex,
+		AlreadyDemoted:        report.AlreadyDemoted,
+		CadenceSatisfied:      report.CadenceSatisfied,
+		CadenceElapsedSeconds: report.CadenceElapsedSeconds,
+	})
+}
+
+// handleDemoteCampaignHypothesis implements POST
+// /v1/hypotheses/campaign-hypothesis/demote per §0107.
+func (h *Handler) handleDemoteCampaignHypothesis(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.CampaignHypothesisDemotion
+	status, errMsg, ok := h.decodeDemotePayload(r, &msg)
+	if !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	if s, m, ok := validateDemoteParams(msg.GetPromotionEventHash()); !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+	var promotionHash [32]byte
+	copy(promotionHash[:], msg.GetPromotionEventHash())
+
+	env := envelopeForRequest(r)
+	opts := hypothesis.CampaignHypothesisDemoteOptions{
+		PromotionEventHash: promotionHash,
+		DemotedAt:          msg.GetDemotedAt(),
+		Reason:             msg.GetReason(),
+		Actor:              resolveT4Actor(env, TierConstitutionalAct),
+	}
+	report, err := hypothesis.DemoteCampaignHypothesis(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		s, m := demoteErrToHTTPStatus(err, promotionHash)
+		if s == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 demote-campaign-hypothesis: %w", err))
+		}
+		writeIngestError(w, s, m)
+		return
+	}
+	writeJSON(w, http.StatusOK, demoteResponse{
+		DemotionEventHash:     report.DemotionEventHashHex,
+		IngestionEventHash:    report.IngestionEventHashHex,
+		AlreadyDemoted:        report.AlreadyDemoted,
+		CadenceSatisfied:      report.CadenceSatisfied,
+		CadenceElapsedSeconds: report.CadenceElapsedSeconds,
+	})
+}
+
+// handleDemoteCoordinationRing implements POST
+// /v1/hypotheses/coordination-ring/demote per §0107.
+func (h *Handler) handleDemoteCoordinationRing(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.CoordinationRingDemotion
+	status, errMsg, ok := h.decodeDemotePayload(r, &msg)
+	if !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	if s, m, ok := validateDemoteParams(msg.GetPromotionEventHash()); !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+	var promotionHash [32]byte
+	copy(promotionHash[:], msg.GetPromotionEventHash())
+
+	env := envelopeForRequest(r)
+	opts := hypothesis.CoordinationRingDemoteOptions{
+		PromotionEventHash: promotionHash,
+		DemotedAt:          msg.GetDemotedAt(),
+		Reason:             msg.GetReason(),
+		Actor:              resolveT4Actor(env, TierConstitutionalAct),
+	}
+	report, err := hypothesis.DemoteCoordinationRing(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		s, m := demoteErrToHTTPStatus(err, promotionHash)
+		if s == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 demote-coordination-ring: %w", err))
+		}
+		writeIngestError(w, s, m)
+		return
+	}
+	writeJSON(w, http.StatusOK, demoteResponse{
+		DemotionEventHash:     report.DemotionEventHashHex,
+		IngestionEventHash:    report.IngestionEventHashHex,
+		AlreadyDemoted:        report.AlreadyDemoted,
+		CadenceSatisfied:      report.CadenceSatisfied,
+		CadenceElapsedSeconds: report.CadenceElapsedSeconds,
+	})
+}
+
 // handlePromoteCoordinationRing implements POST
 // /v1/hypotheses/coordination-ring/promote per §0105 pilot-then-
 // replicate pattern.

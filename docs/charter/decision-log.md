@@ -4318,6 +4318,46 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0107` — T4 demote replicated across all four subtypes; per-op-across-subtypes cadence continues (§0098 8/24)
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0105`](#0105--t4-pilot-post-v1hypothesesbehavioralclusterpromote-lands-pattern-established-for-the-23-remaining-endpoints) shipped the T4 pilot; [`§0106`](#0106--t4-promote-replicated-across-the-three-remaining-subtypes-0097-actor-pattern-extended-to-all-four) completed promote across the 4 subtypes. This entry replicates the same pattern for the demote op, continuing the per-op-across-subtypes cadence suggested at §0105.
+
+- **Decision:** Coordinated two-part landing:
+
+  1. **Four `Demote*` helpers extended with `Actor` + `IngestionEventHashHex`.** BehavioralCluster `Demote` (not covered by §0097, which was promote-only) + `DemoteAutomationGroup` / `DemoteCampaignHypothesis` / `DemoteCoordinationRing` all gain the §0097-equivalent extension: Options gain `Actor string`; Report gains `IngestionEventHashHex string`; function body gains the if-Actor-empty-Append-else-AppendPair branch. The pattern mirrors §0106's three-subtype extension exactly.
+
+  2. **Four new HTTP T4 demote handlers.** [`lifecycle.go`](../../services/ingestion/internal/httpapi/lifecycle.go) gains `handleDemoteBehavioralCluster` / `handleDemoteAutomationGroup` / `handleDemoteCampaignHypothesis` / `handleDemoteCoordinationRing` + 3 shared demote helpers (`decodeDemotePayload`, `validateDemoteParams`, `demoteErrToHTTPStatus`) + `demoteResponse` JSON shape. Per-route tier annotation extended; `ServeHTTP` dispatches the 4 new paths.
+
+  3. **Tests.** [`lifecycle_test.go`](../../services/ingestion/internal/httpapi/lifecycle_test.go) gains 4 promoted-X helpers (form + promote → return promotion hash) + 4 happy-path demote tests + cross-type rejection test (formation hash in demote endpoint → 404) + bad-hash-length rejection test. Hex-decode utility (`hexToHash`) introduced for hash conversion in test setup.
+
+  4. **README.** [`services/ingestion/README.md`](../../services/ingestion/README.md) T4 subsection extended with the four demote endpoints + cadence-gate state surfacing + cross-subtype rejection note.
+
+- **Constitutional review:** No Charter invariant amended. The HTTP T4 cross-tier per-actor-attribution requirement per [`§0094`](#0094--http-authmodel-evolution-framed-operationtier-classification-recorded-tier-34-advance-deferred-to-followon-rfc) is satisfied structurally for demote across all 4 subtypes (parallel to the promote-side coverage in §0106). The §2.5 BC5 lifecycle-integrity gate (demotion references only the correctly-typed promotion predecessor) is preserved by each subtype's `Demote*` per-message-type check — exercised explicitly by `TestT4DemoteRejectsFormationHashAsPromotion` (formation hash submitted to demote → 404). The §0011 Layer A cadence-gate semantic (CANDIDACY, not hard barrier) is preserved unchanged — `Demote*` records the demotion regardless; the response surfaces `cadence_satisfied` + `cadence_elapsed_seconds` for operator-facing reporting.
+
+  Falsifiability: every claim in the README + decision-log is testable by mechanical replay of the new lifecycle_test.go tests. Cadence-gate surfacing is exercised by `TestT4DemoteBehavioralClusterHappyPath` (`CadenceSatisfied=true` when 5000s > 3600s cadence).
+
+- **Consequences:**
+  - All four T4 demote endpoints reachable.
+  - **§0098 landing 3/3: 8/24 T4 endpoints done.** Remaining: 16 — dissolve / merge / split × 4 subtypes; form × 4 subtypes.
+  - **§0097 carry-forward EXTENDED to demote helpers across all 4 subtypes.** §0097 was promote-specific; §0107 generalizes the Actor + IngestionEvent pairing pattern to demote (which §0097 itself had not covered, even for BehavioralCluster).
+  - All four `Demote*` helpers + all four `Promote*` helpers now share the Options-with-Actor + Report-with-IngestionEventHashHex shape, making future T4 op replication (dissolve, merge, split) mechanically uniform.
+
+  - **Methodological observation 1 — Per-op-across-subtypes cadence empirically validated at two ops.** §0106 suggested this cadence; §0107 enacted it for demote. The pattern is highly compressible: hypothesis-package extension (~30 LOC × 4 subtypes for the if-Actor branch + struct field additions) + handler additions (~30 LOC × 4 handlers) + tests (~50 LOC × 4 happy paths + cross-rejection). Total ~600-700 LOC per T4 op covering all 4 subtypes. Recommend continuing this cadence for the remaining 4 ops (dissolve, merge, split, form) — each a separate PR.
+
+  - **Methodological observation 2 — `hexToHash` test utility surfaces as cross-test reuse opportunity.** This PR added a `hexToHash` helper in `lifecycle_test.go` to convert promote-response hex strings back to `[32]byte` hashes for demote setup. The pattern recurs in future T4 op landings (any op-against-prior-op chain — dissolve-against-promotion-or-demotion; merge-against-formations; split-against-formation). Worth promoting to a shared test helper file if the cross-test reuse pattern accumulates further.
+
+  - **Carry-forwards:**
+    - **16 remaining T4 endpoints** — dissolve / merge / split × 4 subtypes; form × 4 subtypes.
+    - **§0097 CLI-side carry-forward** — promote CLIs across AG/CH/CR still lack `--actor`; demote CLIs across all 4 subtypes still lack `--actor`. Net accumulated: 7 CLIs to extend (3 promote + 4 demote). Bundle with next T4 op landing OR standalone.
+    - **`token_id` field per RFC item 4(b)** — unchanged from §0106.
+
+- **Supersession:** None. Extends [`§0098`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens) landing 3 from 4/24 to 8/24 endpoints.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

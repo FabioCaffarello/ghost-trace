@@ -625,6 +625,248 @@ func TestT4PromoteWrongSubtypeFormationHashRejected(t *testing.T) {
 	}
 }
 
+// promotedBehavioralCluster: forms a BC + promotes it; returns the
+// promotion event hash for use as the demote target.
+func promotedBehavioralCluster(t *testing.T) (*substrate.Substrate, [32]byte) {
+	t.Helper()
+	sub, formationHash := formedBehavioralCluster(t)
+	rep, err := hypothesis.Promote(context.Background(), sub,
+		hypothesis.PromoteOptions{
+			FormationEventHash: formationHash,
+			PromotedAt:         300000,
+			CadenceSeconds:     3600,
+			Reason:             "demote-test",
+		},
+		func() time.Time { return time.Unix(0, 400000) })
+	if err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+	var promotionHash [32]byte
+	hexBytes := []byte(rep.PromotionEventHashHex)
+	if len(hexBytes) != 64 {
+		t.Fatalf("unexpected promotion hex length: %d", len(hexBytes))
+	}
+	for i := 0; i < 32; i++ {
+		hi := hexNibble(hexBytes[2*i])
+		lo := hexNibble(hexBytes[2*i+1])
+		promotionHash[i] = byte(hi<<4 | lo)
+	}
+	return sub, promotionHash
+}
+
+// promotedAutomationGroup forms + promotes an AG; returns promotion hash.
+func promotedAutomationGroup(t *testing.T) (*substrate.Substrate, [32]byte) {
+	t.Helper()
+	sub, formationHash := formedAutomationGroup(t)
+	rep, err := hypothesis.PromoteAutomationGroup(context.Background(), sub,
+		hypothesis.AutomationGroupPromoteOptions{
+			FormationEventHash: formationHash,
+			PromotedAt:         300000,
+			CadenceSeconds:     3600,
+		},
+		func() time.Time { return time.Unix(0, 400000) })
+	if err != nil {
+		t.Fatalf("PromoteAutomationGroup: %v", err)
+	}
+	return sub, hexToHash(t, rep.PromotionEventHashHex)
+}
+
+// promotedCampaignHypothesis forms + promotes a CH; returns promotion hash.
+func promotedCampaignHypothesis(t *testing.T) (*substrate.Substrate, [32]byte) {
+	t.Helper()
+	sub, formationHash := formedCampaignHypothesis(t)
+	rep, err := hypothesis.PromoteCampaignHypothesis(context.Background(), sub,
+		hypothesis.CampaignHypothesisPromoteOptions{
+			FormationEventHash: formationHash,
+			PromotedAt:         300000,
+			CadenceSeconds:     3600,
+		},
+		func() time.Time { return time.Unix(0, 400000) })
+	if err != nil {
+		t.Fatalf("PromoteCampaignHypothesis: %v", err)
+	}
+	return sub, hexToHash(t, rep.PromotionEventHashHex)
+}
+
+// promotedCoordinationRing forms + promotes a CR; returns promotion hash.
+func promotedCoordinationRing(t *testing.T) (*substrate.Substrate, [32]byte) {
+	t.Helper()
+	sub, formationHash := formedCoordinationRing(t)
+	rep, err := hypothesis.PromoteCoordinationRing(context.Background(), sub,
+		hypothesis.CoordinationRingPromoteOptions{
+			FormationEventHash: formationHash,
+			PromotedAt:         300000,
+			CadenceSeconds:     3600,
+		},
+		func() time.Time { return time.Unix(0, 400000) })
+	if err != nil {
+		t.Fatalf("PromoteCoordinationRing: %v", err)
+	}
+	return sub, hexToHash(t, rep.PromotionEventHashHex)
+}
+
+func hexNibble(c byte) int {
+	switch {
+	case c >= '0' && c <= '9':
+		return int(c - '0')
+	case c >= 'a' && c <= 'f':
+		return int(c-'a') + 10
+	case c >= 'A' && c <= 'F':
+		return int(c-'A') + 10
+	}
+	return 0
+}
+
+func hexToHash(t *testing.T, hex string) [32]byte {
+	t.Helper()
+	if len(hex) != 64 {
+		t.Fatalf("unexpected hex length: %d", len(hex))
+	}
+	var out [32]byte
+	for i := 0; i < 32; i++ {
+		hi := hexNibble(hex[2*i])
+		lo := hexNibble(hex[2*i+1])
+		out[i] = byte(hi<<4 | lo)
+	}
+	return out
+}
+
+func TestT4DemoteBehavioralClusterHappyPath(t *testing.T) {
+	sub, promotionHash := promotedBehavioralCluster(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.BehavioralClusterDemotion{
+		PromotionEventHash: promotionHash[:],
+		DemotedAt:          5000000000000,
+		Reason:             "T4 demote test",
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/behavioral-cluster/demote", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Fatalf("status: got %d, want %d; body=%s", got, want, rr.Body.String())
+	}
+	var out demoteResponse
+	_ = json.Unmarshal(rr.Body.Bytes(), &out)
+	if out.DemotionEventHash == "" || out.IngestionEventHash == "" {
+		t.Errorf("hashes: demotion=%q ingestion=%q (both should be non-empty)", out.DemotionEventHash, out.IngestionEventHash)
+	}
+	// CadenceElapsedSeconds = (5000000000000 - 300000) / 1e9 ≈ 4999s,
+	// which is > 3600 cadence_seconds → CadenceSatisfied=true.
+	if !out.CadenceSatisfied {
+		t.Errorf("CadenceSatisfied: got false, want true (5000s > 3600s)")
+	}
+}
+
+func TestT4DemoteAutomationGroupHappyPath(t *testing.T) {
+	sub, promotionHash := promotedAutomationGroup(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.AutomationGroupDemotion{
+		PromotionEventHash: promotionHash[:],
+		DemotedAt:          5000000000000,
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/automation-group/demote", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Fatalf("status: got %d, want %d; body=%s", got, want, rr.Body.String())
+	}
+	var out demoteResponse
+	_ = json.Unmarshal(rr.Body.Bytes(), &out)
+	if out.DemotionEventHash == "" || out.IngestionEventHash == "" {
+		t.Errorf("hashes: demotion=%q ingestion=%q", out.DemotionEventHash, out.IngestionEventHash)
+	}
+}
+
+func TestT4DemoteCampaignHypothesisHappyPath(t *testing.T) {
+	sub, promotionHash := promotedCampaignHypothesis(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.CampaignHypothesisDemotion{
+		PromotionEventHash: promotionHash[:],
+		DemotedAt:          5000000000000,
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/campaign-hypothesis/demote", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Fatalf("status: got %d, want %d; body=%s", got, want, rr.Body.String())
+	}
+	var out demoteResponse
+	_ = json.Unmarshal(rr.Body.Bytes(), &out)
+	if out.DemotionEventHash == "" || out.IngestionEventHash == "" {
+		t.Errorf("hashes: demotion=%q ingestion=%q", out.DemotionEventHash, out.IngestionEventHash)
+	}
+}
+
+func TestT4DemoteCoordinationRingHappyPath(t *testing.T) {
+	sub, promotionHash := promotedCoordinationRing(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.CoordinationRingDemotion{
+		PromotionEventHash: promotionHash[:],
+		DemotedAt:          5000000000000,
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/coordination-ring/demote", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Fatalf("status: got %d, want %d; body=%s", got, want, rr.Body.String())
+	}
+	var out demoteResponse
+	_ = json.Unmarshal(rr.Body.Bytes(), &out)
+	if out.DemotionEventHash == "" || out.IngestionEventHash == "" {
+		t.Errorf("hashes: demotion=%q ingestion=%q", out.DemotionEventHash, out.IngestionEventHash)
+	}
+}
+
+func TestT4DemoteRejectsFormationHashAsPromotion(t *testing.T) {
+	// Demote endpoint with a formation hash (not promotion) → 404
+	// (§2.5 BC5 wrong-type gate).
+	sub, formationHash := formedBehavioralCluster(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.BehavioralClusterDemotion{
+		PromotionEventHash: formationHash[:],
+		DemotedAt:          5000000000000,
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/behavioral-cluster/demote", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusNotFound; got != want {
+		t.Errorf("status: got %d, want %d (formation in demote endpoint must 404; body: %s)",
+			got, want, rr.Body.String())
+	}
+}
+
+func TestT4DemoteRejectsBadHashLength(t *testing.T) {
+	sub, _ := formedBehavioralCluster(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.BehavioralClusterDemotion{
+		PromotionEventHash: []byte("too-short"),
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/behavioral-cluster/demote", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusBadRequest; got != want {
+		t.Errorf("status: got %d, want %d; body=%s", got, want, rr.Body.String())
+	}
+}
+
 func TestResolveT4ActorFromMTLS(t *testing.T) {
 	got := resolveT4Actor(ingest.Envelope{ClientCommonName: "operator-alice"}, TierConstitutionalAct)
 	if want := "operator-alice"; got != want {

@@ -1230,7 +1230,16 @@ Per [`§0105`](../../docs/charter/decision-log.md) (pilot landing) + [`§0106`](
 - `POST /v1/hypotheses/campaign-hypothesis/promote`
 - `POST /v1/hypotheses/coordination-ring/promote`
 
-All four are tier T4 (`constitutional-act`); all require the constitutional-act bearer token (or single-token under §0035 backward-compat). Each accepts `application/x-protobuf` with the corresponding `<Subtype>Promotion` message; canonical-serialization-contract enforcement matches §0034 `POST /v1/events`. Each commits the promotion event paired with an `IngestionEvent` via `substrate.AppendPair` (the AppendPair path is unconditional for HTTP T4 per the auth-scope RFC's cross-tier per-actor-attribution requirement).
+All four promote endpoints are tier T4 (`constitutional-act`); all require the constitutional-act bearer token (or single-token under §0035 backward-compat). Each accepts `application/x-protobuf` with the corresponding `<Subtype>Promotion` message; canonical-serialization-contract enforcement matches §0034 `POST /v1/events`. Each commits the promotion event paired with an `IngestionEvent` via `substrate.AppendPair` (the AppendPair path is unconditional for HTTP T4 per the auth-scope RFC's cross-tier per-actor-attribution requirement).
+
+Per [`§0107`](../../docs/charter/decision-log.md), the demote endpoint shipped across all four subtypes as well:
+
+- `POST /v1/hypotheses/behavioral-cluster/demote`
+- `POST /v1/hypotheses/automation-group/demote`
+- `POST /v1/hypotheses/campaign-hypothesis/demote`
+- `POST /v1/hypotheses/coordination-ring/demote`
+
+Each accepts `application/x-protobuf` with the corresponding `<Subtype>Demotion` message; commits the demotion paired with an `IngestionEvent` via `AppendPair`. The response surfaces the §0011 Layer A cadence-gate state (`cadence_satisfied` + `cadence_elapsed_seconds`) — Layer A is CANDIDACY, not hard barrier per §0011; the demotion records regardless. Cross-subtype rejection per §2.5 BC5: a formation hash submitted to a demote endpoint returns 404 (demote expects a `<Subtype>Promotion` event hash, not a formation).
 
 Wire shape — request:
 
