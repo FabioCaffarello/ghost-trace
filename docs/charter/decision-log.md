@@ -3377,6 +3377,57 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0086` — First Phase 3 reconstructive replay tool — BehavioralCluster formation
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0084`](#0084--first-phase-1-replay-tool-lands-deterministic-operationalsession-re-derivation-verified) and [`§0085`](#0085--substrate-wide-batch-phase-1-replay-0084-named-carry-forward-discharged) landed Phase 1 deterministic replay (per-target + batch) for Cat II `OperationalSession`. This entry lands the first **Phase 3 reconstructive replay** tool per [`docs/architecture/replay-model.md`](../architecture/replay-model.md) L25-28: re-running a Cat III formation pattern against the substrate-at-commit-time view of Cat I observations.
+
+  Phase 3 differs from Phase 1 in shape:
+
+  - **Phase 1** (replay-model.md L17-19): "re-running the same rules over the same observations yields the same Phase 1 assertions". Deterministic verification of a single Cat II record from a single Cat I source.
+  - **Phase 3** (L25-27): depends on global graph state; replaying exactly may require versioned graph snapshots; re-deriving Phase 3 from scratch is acknowledged to potentially produce divergent reconstructions. What is preserved is the historical truth of *what was concluded*.
+
+  The replay-model.md scaffold acknowledges Phase 3 *may* produce divergent reconstructions. In practice, our concrete formation patterns (session-descriptor-shared-v1 for BC) ARE deterministic given their FormationContext. Phase 3 replay's value is therefore: (a) verifying that the formation deterministically reproduces against the substrate state visible at its commit time, and (b) surfacing pattern-implementation drift OR substrate-time vs event-time inconsistencies as detectable divergences.
+
+- **Decision:** Land Phase 3 reconstructive replay for BehavioralCluster formation with three structural moves:
+
+  1. **`hypothesis.CollectFormationContextAt(ctx, sub, maxCommittedAt) (FormationContext, error)`** at [`services/ingestion/internal/hypothesis/formation.go`](../../services/ingestion/internal/hypothesis/formation.go). New exported helper that walks the substrate filtered to DeclaredSession rows with `committed_at ≤ maxCommittedAt`; `maxCommittedAt == 0` disables the bound (matches `FormAll`'s unrestricted behavior). The bound is by `committed_at` NOT `event_time` per the [`§0021`](#0021--omq-3-resolution-substrate-time-generation-candidate--0020-cascade-fully-discharged) OMQ #3 substrate-time-generation resolution — substrate authority is at substrate time. Per the [`§0083`](#0083--aggregation-helper-consolidation-0082-named-carry-forward-discharged) single-source-of-truth pattern: `FormAll` refactored to call `CollectFormationContextAt(..., 0)`; no behavioral change to formation.
+
+  2. **`replay.ReplayBehavioralClusterFormation` + `replay.ResolveBCFormationPattern`** at [`services/ingestion/internal/replay/behavioral_cluster.go`](../../services/ingestion/internal/replay/behavioral_cluster.go) (new file). Mirrors the §0084 per-target shape: looks up the BC formation row, reads its `pattern_signature` + `pattern_parameters` + `formation_at`, resolves the pattern, verifies parameter round-trip, collects the FormationContext bounded by the original row's `committed_at`, re-runs the pattern, and searches the reconstructed formation set for a content-hash match. Two new sentinels: `ErrPatternUnknown`, `ErrPatternParameterMismatch` (mirror §0084's `ErrDefinitionUnknown` + `ErrDefinitionParameterMismatch`).
+
+  3. **`cmd/replay-behavioral-cluster-formation` operator interface** at [`services/ingestion/cmd/replay-behavioral-cluster-formation/main.go`](../../services/ingestion/cmd/replay-behavioral-cluster-formation/main.go) (new file). 33rd operational binary; 5th substrate-audit/maintenance. Same four-exit-code semantic as the Phase 1 tool: 0 = match, 1 = drift, 2 = config error, 3 = precondition failure.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1 (read-only over immutable substrate; the originally-committed BC formation remains authoritative). Respects §2.2 (Cat III hypothesis stays Cat III; replay is observability, not category-shifting). Respects §2.3 + §2.5 + §2.5 BC3 + §2.5 BC5. Respects the [`§0021`](#0021--omq-3-resolution-substrate-time-generation-candidate--0020-cascade-fully-discharged) OMQ #3 substrate-time-generation resolution — Phase 3 replay's filter by `committed_at` is exactly the substrate-time view the OMQ #3 resolution authorized. Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`services/ingestion/internal/hypothesis/formation.go`](../../services/ingestion/internal/hypothesis/formation.go) — `CollectFormationContextAt` exported; `FormAll` refactored to call it. No behavioral change; existing 100+ hypothesis tests continue to pass.
+  - [`services/ingestion/internal/replay/behavioral_cluster.go`](../../services/ingestion/internal/replay/behavioral_cluster.go) — new file. `ReplayBehavioralClusterFormation`, `ResolveBCFormationPattern`, `ErrPatternUnknown`, `ErrPatternParameterMismatch`, `BehavioralClusterFormationReport`.
+  - [`services/ingestion/internal/replay/behavioral_cluster_test.go`](../../services/ingestion/internal/replay/behavioral_cluster_test.go) — new file. **8 tests** covering happy path, unknown target, wrong message type, parameter-drift via hand-injected divergent formation, unknown pattern, **substrate-time-filter correctness** (a load-bearing test that ingests late observations AFTER the formation and verifies the replay correctly excludes them via the committed_at bound), and two resolver tests.
+  - [`services/ingestion/cmd/replay-behavioral-cluster-formation/main.go`](../../services/ingestion/cmd/replay-behavioral-cluster-formation/main.go) — new binary; 33rd operational CLI; 5th substrate-audit/maintenance.
+  - [`services/ingestion/Makefile`](../../services/ingestion/Makefile) — help echo + PHONY target.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — new CLI section with Phase 3 vs Phase 1 distinction + substrate-time-filter note.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0086 (this entry).
+  - **First Phase 3 replay tool lands.** The replay-model.md L25-27 scaffold's Phase 3 contract is now operationally verifiable for the first Cat III subtype.
+  - **Substrate-time filter is the key Phase 3 primitive.** The `CollectFormationContextAt` helper generalizes naturally to AG/CH/CR (they all consume the same `FormationContext` shape per §0056+§0063+§0070 typed-subtype-landings) — the follow-on entries mechanically extend this entry's pattern.
+  - **33rd operational binary; 5th audit/maintenance.** `cmd/` now contains 33 binaries:
+    - substrate-write (25): unchanged.
+    - **substrate-audit/maintenance (5):** `verify`, `orphan-cleanup`, `replay-operational-session`, `replay-all-operational-sessions`, **`replay-behavioral-cluster-formation`** (new).
+    - projection-read (3): unchanged.
+  - **Out of scope at this layer (carry-forwards).**
+    - **AG / CH / CR Phase 3 replay tools** — mechanical extension of this entry's pattern (one PR per subtype). Each subtype has its own `FormationPattern` interface + concrete pattern (uniform-cadence-v1, temporal-descriptor-cohort-v1, co-occurrence-window-v1); the replay package adds a per-subtype Resolve + Replay + CLI. Named follow-on for §0087-§0089.
+    - **Phase 3 lifecycle-event replay** — beyond formation, the §2.5 lifecycle events (promotion, demotion, merge, split, dissolution) also have a Phase 3 sense ("what events were in scope when this lifecycle operation was committed?"). Deferred: the per-event semantic question is open (the operations themselves don't carry pattern_signature; they're directly committed by operators). Future work may surface a different shape.
+    - **Substrate-wide BC Phase 3 batch replay** — mirrors §0085 but for BC. Named carry-forward when operator pressure surfaces.
+    - **HTTP Phase 3 endpoints** — mirrors §0080-§0082 + §0084 HTTP-carry-forward. Deferred.
+    - **Phase 2 replay** — no Cat II type that depends on enrichment-as-of-T₁ exists yet; deferred.
+    - **Phase 4 retrospective analytical** — unchanged from §0084 carry-forward.
+    - **Replay-model.md open questions** — graph snapshot frequency, hot vs cold replay, computation versioning. The Phase 3 work here surfaces "computation versioning" as a concrete concern (the `pattern_signature` field IS the version identifier the formation event carries; the registry resolves it); the other two questions remain Phase 3/4 territory.
+
+- **Supersession:** None. Opens the Phase 3 replay arc. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

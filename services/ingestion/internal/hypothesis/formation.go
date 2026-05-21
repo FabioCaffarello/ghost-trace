@@ -155,26 +155,12 @@ func FormAll(ctx context.Context, sub *substrate.Substrate, pattern FormationPat
 		now = time.Now
 	}
 
-	fctx := &walkerContext{}
-	if err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
-		if row.MessageType != declaredSessionMessageType {
-			return nil
-		}
-		payload, err := sub.ReadBlob(ctx, row.EventHash)
-		if err != nil {
-			return fmt.Errorf("read declared session %x: %w", row.EventHash, err)
-		}
-		ds := &eventsv1.DeclaredSession{}
-		if err := proto.Unmarshal(payload, ds); err != nil {
-			return fmt.Errorf("unmarshal declared session %x: %w", row.EventHash, err)
-		}
-		fctx.sessions = append(fctx.sessions, SourceDeclaredSession{Hash: row.EventHash, Session: ds})
-		return nil
-	}); err != nil {
-		return Report{}, fmt.Errorf("hypothesis.FormAll: collect declared sessions: %w", err)
+	fctx, err := CollectFormationContextAt(ctx, sub, 0)
+	if err != nil {
+		return Report{}, fmt.Errorf("hypothesis.FormAll: %w", err)
 	}
 
-	rep := Report{Examined: int64(len(fctx.sessions))}
+	rep := Report{Examined: int64(len(fctx.DeclaredSessions()))}
 	formationAt := now().UnixNano()
 	formations := pattern.Form(fctx, formationAt)
 
@@ -213,4 +199,49 @@ func FormAll(ctx context.Context, sub *substrate.Substrate, pattern FormationPat
 	}
 
 	return rep, nil
+}
+
+// CollectFormationContextAt walks the substrate to pre-collect every
+// DeclaredSession whose substrate row's committed_at is ≤
+// maxCommittedAt. Returns a FormationContext suitable for passing to
+// FormationPattern.Form.
+//
+// maxCommittedAt == 0 disables the bound (collect ALL DeclaredSessions
+// regardless of commit time) — matches the unrestricted behavior
+// FormAll uses for normal formation.
+//
+// Bounded collection is the substrate-time-filter primitive Phase 3
+// reconstructive replay consumes per decision-log §0086 +
+// docs/architecture/replay-model.md L25-28: "given the substrate as
+// it existed at time T, what would the formation pattern have
+// concluded?". The bound by committed_at (NOT event_time) matches the
+// OMQ #3 resolution (§0021 substrate-time generation) — substrate
+// authority is at substrate time.
+//
+// Cost: one substrate walk + one blob-read per DeclaredSession.
+// Reused across FormAll + replay paths per §0083 single-source-of-
+// truth pattern.
+func CollectFormationContextAt(ctx context.Context, sub *substrate.Substrate, maxCommittedAt int64) (FormationContext, error) {
+	fctx := &walkerContext{}
+	if err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
+		if row.MessageType != declaredSessionMessageType {
+			return nil
+		}
+		if maxCommittedAt != 0 && row.CommittedAt > maxCommittedAt {
+			return nil
+		}
+		payload, err := sub.ReadBlob(ctx, row.EventHash)
+		if err != nil {
+			return fmt.Errorf("read declared session %x: %w", row.EventHash, err)
+		}
+		ds := &eventsv1.DeclaredSession{}
+		if err := proto.Unmarshal(payload, ds); err != nil {
+			return fmt.Errorf("unmarshal declared session %x: %w", row.EventHash, err)
+		}
+		fctx.sessions = append(fctx.sessions, SourceDeclaredSession{Hash: row.EventHash, Session: ds})
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("CollectFormationContextAt: %w", err)
+	}
+	return fctx, nil
 }

@@ -783,6 +783,41 @@ The two failure modes are structurally distinct: exit 1 means replay ran and the
 
 **Scope:** this is Phase 1 replay over the only Cat II type committed today. Cat III hypothesis replay is Phase 3 reconstructive replay per [`replay-model.md`](../../docs/architecture/replay-model.md) L25-28 and is out of scope.
 
+## `replay-behavioral-cluster-formation` CLI
+
+Operator-invoked tool to verify **Phase 3 reconstructive replay** of a `BehavioralClusterFormation` per [`§0086`](../../docs/charter/decision-log.md) + [`replay-model.md`](../../docs/architecture/replay-model.md) L25-28. Walks the substrate filtered to events with `committed_at ≤ original_formation.committed_at`, re-runs the formation pattern against this substrate-at-commit-time view, and searches for a reconstructed formation whose canonical content-hash matches the original.
+
+```sh
+make replay-behavioral-cluster-formation-build                             # builds ./bin/replay-behavioral-cluster-formation
+
+./bin/replay-behavioral-cluster-formation \
+  -target-event-hash <64-hex-chars>
+```
+
+**Phase 3 vs Phase 1:** Phase 1 ([`replay-operational-session`](#replay-operational-session-cli)) verifies deterministic re-derivation of a single Cat II record from a single Cat I source. **Phase 3 reconstructs** a Cat III hypothesis from the substrate-at-commit-time view of all Cat I observations. Per [`replay-model.md`](../../docs/architecture/replay-model.md) L27 "re-deriving Phase 3 from scratch is acknowledged to potentially yield a different result" — but for our concrete patterns (session-descriptor-shared-v1) the formation IS deterministic given its FormationContext, so `match=true` is the expected outcome.
+
+**Substrate-time filter:** the FormationContext passed to the replayed pattern contains only DeclaredSessions with `committed_at ≤ original.committed_at`. Late-arriving observations (those committed AFTER the formation was committed) are excluded — preserving the §2.1 + OMQ #3 substrate-time-authority invariant.
+
+| Field | Meaning |
+|---|---|
+| `target_event_hash` | Hex content-hash of the BC formation being replayed. |
+| `match` | True iff a reconstructed formation has byte-identical content-hash. |
+| `recomputed_event_hash` | Hash of the matching reconstructed formation (omitted when no match). |
+| `pattern_signature` | Pattern identifier read from the original. |
+| `pattern_parameters` | Canonical-parameter string read from the original. |
+| `reconstructed_formation_count` | Number of formations the pattern produced over the filtered context. |
+| `contributing_observation_count` | DeclaredSessions visible at `committed_at ≤ max_committed_at_ns`. |
+| `max_committed_at_ns` | Substrate-time bound (= original formation row's `committed_at`). |
+
+Exit codes:
+
+- **0** — match (Phase 3 contract holds).
+- **1** — drift detected (no reconstructed formation has matching hash). Investigate pattern-implementation drift OR substrate-time vs event-time inconsistency.
+- **2** — tool/configuration error.
+- **3** — substrate-precondition failure (`ErrTargetNotFound`, `ErrTargetWrongType`, `ErrPatternUnknown`, `ErrPatternParameterMismatch`).
+
+**Scope:** this entry covers BC. AutomationGroup, CampaignHypothesis, and CoordinationRing Phase 3 replay tools follow as separate landings (one-PR-per-subtype mechanical extension).
+
 ## `replay-all-operational-sessions` CLI
 
 Substrate-wide batch Phase 1 replay per [`§0085`](../../docs/charter/decision-log.md). Walks every `OperationalSession` in the substrate, re-derives each from its declared source, and reports aggregate match/drift/error counts. Pre-collects the `DerivationContext` once and reuses it across all per-target replays (cost: substrate walks = 2 + 1 lookup-per-record; vs N+1 walks if the per-target CLI were called naively in a loop).
