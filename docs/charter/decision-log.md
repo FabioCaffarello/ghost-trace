@@ -2837,6 +2837,39 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0073` — Fourth-subtype dissolution (`CoordinationRingDissolution`) lands; demotion/dissolution distinction observable across all four subtypes
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0072`](#0072--fourth-subtype-demotion-coordinationringdemotion-lands-promotedemote-loop-closed-for-fourth-subtype) closed the promote/demote loop for CR. This entry lands dissolution — fourth lifecycle op of the fourth subtype arc. Mirrors §0048 BC + §0059 AG + §0066 CH. The glossary distinction (demotion withdraws OPERATIONAL USE; dissolution recognizes NON-EXISTENCE) now manifests structurally across all four Cat III subtypes.
+
+- **Decision:** Land `CoordinationRingDissolution` with three structural moves mirroring §0066:
+
+  1. **`CoordinationRingDissolution` Protobuf message** at [`schemas/events/v1/coordination_ring_dissolution.proto`](../../schemas/events/v1/coordination_ring_dissolution.proto). Three fields identical to §0066's shape (only documented subtype identity differs).
+
+  2. **`DissolveCoordinationRing` entry point** at [`services/ingestion/internal/hypothesis/coordination_ring_dissolution.go`](../../services/ingestion/internal/hypothesis/coordination_ring_dissolution.go). Reuses shared `ErrTargetNotFound` + `ErrTargetWrongType` sentinels. Validates target is a `CoordinationRingFormation` (not promotion, not cross-subtype formation).
+
+  3. **`cmd/dissolve-coordination-ring`** — 28th operational binary; 23rd substrate-write.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1, §2.2, §2.3, §2.5 + §2.5 BC3 + §2.5 BC5. Respects §0048+§0059+§0066 demotion/dissolution distinction. Respects §0045+§0056+§0063+§0070 hypothesis-identity invariant. Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`schemas/events/v1/coordination_ring_dissolution.proto`](../../schemas/events/v1/coordination_ring_dissolution.proto) — new file.
+  - [`services/ingestion/internal/hypothesis/coordination_ring_dissolution.go`](../../services/ingestion/internal/hypothesis/coordination_ring_dissolution.go) — new file.
+  - [`services/ingestion/internal/hypothesis/coordination_ring_dissolution_test.go`](../../services/ingestion/internal/hypothesis/coordination_ring_dissolution_test.go) — **7 tests** covering direct dissolution from formation, idempotency, unknown-target, promotion-hash rejection, cross-subtype rejection (BC + CH), default `dissolved_at`.
+  - [`services/ingestion/cmd/dissolve-coordination-ring/main.go`](../../services/ingestion/cmd/dissolve-coordination-ring/main.go) — new binary; 28th CLI; 23rd substrate-write.
+  - Makefile, canonical corpus, corpus README, service README, decision-log §0073.
+  - **Demotion/dissolution distinction observable across all four subtypes.** The glossary commitment carried at §0013+§0048+§0059+§0066 now manifests structurally across BC/AG/CH/CR — operators can express either "no longer used operationally" (demotion) or "no longer corresponds to any underlying phenomenon" (dissolution) for any of the four subtypes.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Two remaining CoordinationRing lifecycle operations** — merge (§0074), split (§0075). Each follows the §0049/§0050 BC + §0060/§0061 AG + §0067/§0068 CH templates.
+    - **Projection layer extension for CoordinationRing** — unchanged from §0070 carry-forward.
+    - **Layer B deep-criterion** — unchanged from §0047 carry-forward.
+
+- **Supersession:** None. Extends §0072 with the fourth CoordinationRing lifecycle operation. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
