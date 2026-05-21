@@ -62,7 +62,8 @@ def parse_frozen_sections(claude_md):
     return markers
 
 
-def parse_frozen_ranges(charter_path, claude_md):
+def parse_frozen_ranges(charter_path, claude_md, exclude_sections=None):
+    exclude = set(exclude_sections or [])
     markers = parse_frozen_sections(claude_md)
     charter_lines = read(charter_path).splitlines()
     headings = []
@@ -72,6 +73,8 @@ def parse_frozen_ranges(charter_path, claude_md):
             headings.append((i, len(m.group(1)), m.group(2)))
     ranges = []
     for marker in markers:
+        if marker in exclude:
+            continue
         num = marker.lstrip('§')
         start_idx = start_lvl = None
         for idx, lvl, n in headings:
@@ -83,11 +86,11 @@ def parse_frozen_ranges(charter_path, claude_md):
             continue
         end_idx = len(charter_lines) - 1
         for idx, lvl, n in headings:
-            if idx > start_idx and lvl <= start_lvl:
+            if idx > start_idx:
                 end_idx = idx - 1
                 break
         ranges.append(f"{start_idx + 1}:{end_idx + 1}")
-    if not ranges:
+    if not ranges and not exclude:
         fail("no frozen line ranges computed")
     return ranges
 
@@ -162,12 +165,18 @@ def main():
     g.add_argument('--forbidden', metavar='SKILL_MD')
     g.add_argument('--marketing', metavar='SKILL_MD')
     g.add_argument('--ambiguity', metavar='SKILL_MD')
+    ap.add_argument('--exclude-sections', default='',
+                    help='Comma-separated list of section markers (e.g., "§2.4") to exclude '
+                         'from --frozen-ranges output. Used by the hook to exempt sections '
+                         'being newly promoted pending→frozen in the same change set per '
+                         'decision-log §0100 + amendment v0.5.1.')
     args = ap.parse_args()
+    exclude = [s.strip() for s in args.exclude_sections.split(',') if s.strip()]
     items = []
     if args.frozen_sections:
         items = parse_frozen_sections(args.frozen_sections)
     elif args.frozen_ranges:
-        items = parse_frozen_ranges(args.frozen_ranges[0], args.frozen_ranges[1])
+        items = parse_frozen_ranges(args.frozen_ranges[0], args.frozen_ranges[1], exclude_sections=exclude)
     elif args.forbidden:
         items = parse_forbidden(args.forbidden)
     elif args.marketing:

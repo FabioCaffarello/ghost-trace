@@ -4035,6 +4035,49 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0100` — Patch amendment v0.5.1: hook handles pending→frozen promotion PRs + level-2 frozen range tightened
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** §0099 v0.5 closure committed locally as commits `3238260` (initial closure) + `0ddb2a1` (charter-reviewer R1-R5 + CF1-CF4) + `c4d03fd` (Sessão C bundle); PR #75 opened against `main`. CI doc-check blocked merge with two `BLOCK [frozen-section-edit]` findings on `docs/charter/constitutional-charter.md` lines 144-150 — the binding text added in commit `3238260`+`c4d03fd` intersects both the §2.4 frozen range (142:191) and the §2 frozen range (32:244 — covering all of §2.x). The very PR that promotes §2.4 from `pending` to `frozen` was rejected by the discipline mechanism it was completing. The pattern matches [`§0018`](#0018--v041-patch-fix-hook-frozen-section-parser-to-accept-the-amendment-qualified-status-cell) v0.4.1 patch precedent: infrastructure rule discovered to inadequately model a constitutional procedure when the procedure is exercised under the rule's protection.
+
+  Why §2.3 v0.4 (§0017) and §2.5 v0.3 (§0013) did NOT trigger the same block: the parser was broken between v0.3 and v0.4.1 — its regex required exact `frozen` cell content and silently dropped sections carrying `frozen — minor amendment vN.Y` from the recognized-frozen set. v0.4.1 ([`§0018`](#0018--v041-patch-fix-hook-frozen-section-parser-to-accept-the-amendment-qualified-status-cell)) fixed the regex; §2.4 v0.5 is the first promotion-to-frozen running against a parser-correct hook. The gap is therefore endemic to the post-v0.4.1 discipline architecture, not a §2.4-specific accident.
+
+- **Decision:** Charter patch amendment v0.5.1 coordinates two `.claude/hooks/` changes:
+
+  1. **`_parse_watchlists.py` — `parse_frozen_ranges` accepts `exclude_sections` + `--exclude-sections` CLI option.** The parser's level-2 section range now ends at the first sub-heading (any level greater than start_lvl), tightening §2's range from `32:244` (covering all of §2.1-§2.6) to `32:46` (the qualification criteria text between `## 2.` and `### 2.1` only). The previous behavior was structurally inconsistent: §4's status table lists §2 and §2.1-§2.5 as independent rows with independent frozen statuses; §2's range spanning sub-sections meant a §2.x sub-section edit was blocked by both its own range AND §2's enclosing range, which conflated "frozen at the §2 header level" with "frozen at any sub-section level". The new behavior gives each row its own non-overlapping range.
+
+  2. **`pre-commit-doc-check.sh` — newly-frozen exemption.** The hook now compares the frozen-section set at `git show HEAD:.claude/CLAUDE.md` against the working state of `.claude/CLAUDE.md`; the difference (newly-frozen sections — sections promoted from pending to frozen in the same change set) is passed to the parser via `--exclude-sections`. Both contexts (local pre-commit and CI after `git reset --soft origin/<base>`) use `HEAD` as the base reference, so the same logic covers both. Self-test output gains a `newly-frozen exempt (promotion in change set): ...` line when sections are excluded, making the exemption auditable.
+
+- **Constitutional review:** No Charter prose amended. Only the banner is touched (version line `v0.5` → `v0.5.1`; status line v0.5.1 patch clause appended). CLAUDE.md §4 status table narrative paragraph extended with v0.5.1 chronological clause per [`§0017`](#0017--gate-23-second-object-level-invariant-redaction-path-a-full-redaction-amendment-v04) + [`§0022`](#0022--implementation-pivot-64-amendment--0003-reversal-authorization--2426-posture-shift) precedent. Pattern parallel to [`§0018`](#0018--v041-patch-fix-hook-frozen-section-parser-to-accept-the-amendment-qualified-status-cell) v0.4.1 (patch — hook fix, no Charter prose amended).
+
+  The newly-frozen exemption is structurally observable per the falsifiability discipline: parser's `--exclude-sections` produces deterministic output; the hook self-test emits an explicit line when sections are excluded; simulated PR replay (edit §2.4 binding text without simultaneously promoting it from base) confirms the exemption correctly does not apply (BASE_FROZEN already contains §2.4), and the frozen-section check blocks. Falsifiable by mechanical replay.
+
+  The level-2 range tightening is a quietly necessary corollary discovered during the fix: §2's `32:244` range was masking the per-row-independence intent of the §4 status table. The tightening makes the parser match the documented semantics. No frozen invariant amended; only the parser's range computation refined to match the existing status-table architecture.
+
+- **Consequences:**
+  - Charter banner version line `v0.5` → `v0.5.1` (no semantic change to any invariant; patch increments only).
+  - [`docs/charter/amendments.md`](./amendments.md) — v0.5.1 entry added after v0.5.
+  - [`.claude/hooks/_parse_watchlists.py`](../../.claude/hooks/_parse_watchlists.py) — `parse_frozen_ranges` signature extended; level-2 range logic tightened.
+  - [`.claude/hooks/pre-commit-doc-check.sh`](../../.claude/hooks/pre-commit-doc-check.sh) — newly-frozen exemption computed before `--frozen-ranges` call; self-test output extended.
+  - [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md) §4 status table narrative — v0.5.1 chronological clause appended per [`§0017`](#0017--gate-23-second-object-level-invariant-redaction-path-a-full-redaction-amendment-v04) + [`§0022`](#0022--implementation-pivot-64-amendment--0003-reversal-authorization--2426-posture-shift) precedent.
+  - CI self-test will report 8 frozen ranges with `--exclude-sections §2.4` exempted during PR #75's CI run (was 8 ranges total previously; §2.4 exempted → 7 ranges, §2 tightened → range still present but smaller). After PR #75 merges to main, subsequent commits will see §2.4 already in main's frozen set; NEWLY_FROZEN will be empty; §2.4's frozen range becomes active.
+  - The exemption logic is structurally limited to the same-change-set frame: a future PR editing §2.4 binding text without simultaneously promoting it (which is impossible on already-frozen §2.4) is correctly NOT exempted — base already has §2.4 frozen, so the exemption set is empty for §2.4.
+
+  - **Methodological observation 1 — Patch-via-pressure pattern recurs.** [`§0018`](#0018--v041-patch-fix-hook-frozen-section-parser-to-accept-the-amendment-qualified-status-cell) v0.4.1 surfaced the regex gap when §2.5 v0.3 sections silently passed unprotected; this §0100 v0.5.1 surfaces the promotion-PR gap when §2.4 v0.5 was blocked by the corrected regex. Pattern: each new Gate may surface a previously-latent parser-or-hook gap. Useful for §2.6 + §3 pre-Gate dependency assessment — schedule a parser+hook self-test review against the redaction's anticipated promotion path before Step 1.1 opens.
+
+  - **Methodological observation 2 — Level-2 frozen range corollary.** The `lvl <= start_lvl` rule in the parser conflated "section X is frozen" with "all of X and X's sub-sections are frozen". The correct rule for §4 status table semantics is "section X is frozen at the granularity X claims" — for §2 (header criteria), that's the text between `## 2.` and `### 2.1`; sub-sections claim their own rows. The tightening matches the documented per-row-independent semantics. Useful precedent if future Charter structure introduces level-3 sub-sections with level-4 children (each H3 row would also independently claim only its direct content, not its H4 children).
+
+  - **Carry-forwards:**
+    - **CF1 from §0099 (heading-depth transposition discipline for `invariant-redactor` SKILL.md)** remains open per §0099 disposition. Independent of v0.5.1; future Sessão C-style work on §2.6 or §3 redaction should surface the transposition step explicitly.
+    - **Pre-§2.6-redaction sweep against §2.4 frozen v0.5** per §0099 methodological observation 3 + CF4 remains open. Independent of v0.5.1.
+    - **Hook discipline schedule** — methodological observation 1 above: §2.6 pre-Gate dependency assessment should include a parser+hook self-test review against the anticipated promotion path.
+
+- **Supersession:** None. Discharges the CI-blocking gap surfaced during PR #75's first CI run. [`§0022`](#0022--implementation-pivot-64-amendment--0003-reversal-authorization--2426-posture-shift) implementation-gate criteria continue to be satisfied; §0099 v0.5 redaction remains accepted.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
