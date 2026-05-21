@@ -2551,6 +2551,39 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0066` — Third-subtype dissolution (`CampaignHypothesisDissolution`) lands; demotion/dissolution distinction observable across all three subtypes
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0065`](#0065--third-subtype-demotion-campaignhypothesisdemotion-lands-promotedemote-loop-closed-for-third-subtype) closed the promote/demote loop for CampaignHypothesis. This entry lands dissolution (mirrors §0048 BC, §0059 AG). The §0048 demotion/dissolution distinction (demotion withdraws OPERATIONAL USE; dissolution recognizes NON-EXISTENCE) is now observable across **all three Cat III subtypes** implemented to date.
+
+- **Decision:** Land `CampaignHypothesisDissolution` with three structural moves:
+
+  1. **`CampaignHypothesisDissolution` Protobuf message** at [`schemas/events/v1/campaign_hypothesis_dissolution.proto`](../../schemas/events/v1/campaign_hypothesis_dissolution.proto). Three fields mirroring §0048/§0059.
+
+  2. **`DissolveCampaignHypothesis` entry point** at [`services/ingestion/internal/hypothesis/campaign_hypothesis_dissolution.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_dissolution.go). Targets `CampaignHypothesisFormation` directly. Reuses shared sentinels.
+
+  3. **`cmd/dissolve-campaign-hypothesis`** — 22nd operational binary; 17th substrate-write.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1, §2.2, §2.3, §2.5 + §2.5 BC3 + §2.5 BC5. Respects glossary + lifecycle-semantics.md demotion/dissolution distinction (transfers across all three subtypes). Respects §0046+§0047 sentinel-sharing pattern. Cross-subtype rejection tested (BC + AG formation hashes both rejected). Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`schemas/events/v1/campaign_hypothesis_dissolution.proto`](../../schemas/events/v1/campaign_hypothesis_dissolution.proto) — new file.
+  - [`services/ingestion/internal/hypothesis/campaign_hypothesis_dissolution.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_dissolution.go) — new file.
+  - [`services/ingestion/internal/hypothesis/campaign_hypothesis_dissolution_test.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_dissolution_test.go) — **7 tests** covering direct-from-formation, idempotency, unknown target, promotion-hash rejection, cross-subtype BC rejection, cross-subtype AG rejection, default dissolved_at.
+  - [`services/ingestion/cmd/dissolve-campaign-hypothesis/main.go`](../../services/ingestion/cmd/dissolve-campaign-hypothesis/main.go) — new binary; 22nd operational CLI; 17th substrate-write.
+  - Makefile, canonical corpus, corpus README, service README, decision-log §0066.
+  - **Test count grows.** Combined: **335 tests** (up from 328 at §0065; +7).
+  - **Demotion/dissolution distinction operationally observable across all three subtypes.** A substrate may now carry the demotion + dissolution pair for any of BC, AG, or CH hypotheses — the §0048 constitutional distinction transfers without modification.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Two remaining CampaignHypothesis lifecycle operations** — merge (§0067), split (§0068). Note: merge + split for event-centric subtype require structural consideration (event-set partition semantics vs actor-set).
+    - **Projection layer extension for CampaignHypothesis** — unchanged from §0063 carry-forward.
+
+- **Supersession:** None. Extends §0065 with the fourth CampaignHypothesis lifecycle operation. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

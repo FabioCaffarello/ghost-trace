@@ -178,6 +178,22 @@ Validates the supplied `promotion-event-hash` resolves to a `CampaignHypothesisP
 
 Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
 
+## `dissolve-campaign-hypothesis` CLI
+
+Operator-invoked tool to record the **CampaignHypothesis dissolution** lifecycle operation per [`§0066`](../../docs/charter/decision-log.md). Mirrors `dissolve-hypothesis` (BC) and `dissolve-automation-group` (AG). Per glossary, dissolution is DISTINGUISHED from demotion: demotion withdraws OPERATIONAL USE; dissolution recognizes NON-EXISTENCE.
+
+```sh
+make dissolve-campaign-hypothesis-build                                   # builds ./bin/dissolve-campaign-hypothesis
+
+./bin/dissolve-campaign-hypothesis \
+  -formation-event-hash <64-hex-chars> \
+  -reason "campaign spurious"
+```
+
+Validates the supplied `formation-event-hash` resolves to a `CampaignHypothesisFormation` row.
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
+
 ## `promote-automation-group` CLI
 
 Operator-invoked tool to record the **AutomationGroup promotion** lifecycle operation per [`§0057`](../../docs/charter/decision-log.md) — second lifecycle operation of the second Cat III subtype arc. Mirrors [`promote-hypothesis`](#promote-hypothesis-cli) for the AutomationGroup subtype. Same Layer A cadence semantic per [`§0011`](../../docs/charter/decision-log.md).
