@@ -351,6 +351,280 @@ func TestT4PromoteMultiTierConstitutionalActTokenAuthorizes(t *testing.T) {
 	}
 }
 
+// formedAutomationGroup populates a substrate with 5 uniform-cadence
+// NetworkEvents from a single actor; FormAutomationGroupAll matches
+// UniformCadenceV1 with MinObservationCount=5; returns the formation
+// hash.
+func formedAutomationGroup(t *testing.T) (*substrate.Substrate, [32]byte) {
+	t.Helper()
+	dir := t.TempDir()
+	ctx := context.Background()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Close() })
+
+	in := ingest.New(sub, time.Now)
+	gap := int64(60 * 1e9)
+	for i := int64(0); i < 5; i++ {
+		msg := &eventsv1.DeclaredSession{
+			DeclaredAt:        1000 + i*gap,
+			ActorRef:          "bot-ag-t4",
+			SessionDescriptor: []byte("ag-t4-descriptor"),
+		}
+		if _, err := in.Append(ctx, msg, msg.DeclaredAt, ingest.Envelope{Channel: "test"}); err != nil {
+			t.Fatalf("Append %d: %v", i, err)
+		}
+	}
+
+	rep, err := hypothesis.FormAutomationGroupAll(ctx, sub,
+		hypothesis.UniformCadenceV1{MinObservationCount: 5, MaxCoVThreshold: 0.5},
+		func() time.Time { return time.Unix(0, 1) })
+	if err != nil {
+		t.Fatalf("FormAutomationGroupAll: %v", err)
+	}
+	if rep.NewlyFormed != 1 {
+		t.Fatalf("expected 1 AG formation; got %d", rep.NewlyFormed)
+	}
+
+	var formationHash [32]byte
+	if err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
+		if row.MessageType == "ghosttrace.events.v1.AutomationGroupFormation" {
+			formationHash = row.EventHash
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("WalkEvents: %v", err)
+	}
+	return sub, formationHash
+}
+
+// formedCampaignHypothesis populates a substrate with 3 DeclaredSessions
+// sharing a campaign descriptor within MaxIntraEventGapSeconds; returns
+// the formation hash.
+func formedCampaignHypothesis(t *testing.T) (*substrate.Substrate, [32]byte) {
+	t.Helper()
+	dir := t.TempDir()
+	ctx := context.Background()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Close() })
+
+	in := ingest.New(sub, time.Now)
+	gap := int64(60 * 1e9)
+	for i := int64(0); i < 3; i++ {
+		msg := &eventsv1.DeclaredSession{
+			DeclaredAt:        1000 + i*gap,
+			ActorRef:          "actor-campaign-t4",
+			SessionDescriptor: []byte("campaign-t4"),
+		}
+		if _, err := in.Append(ctx, msg, msg.DeclaredAt, ingest.Envelope{Channel: "test"}); err != nil {
+			t.Fatalf("Append %d: %v", i, err)
+		}
+	}
+
+	rep, err := hypothesis.FormCampaignHypothesisAll(ctx, sub,
+		hypothesis.TemporalDescriptorCohortV1{MinCampaignSize: 3, MaxIntraEventGapSeconds: 300},
+		func() time.Time { return time.Unix(0, 1) })
+	if err != nil {
+		t.Fatalf("FormCampaignHypothesisAll: %v", err)
+	}
+	if rep.NewlyFormed != 1 {
+		t.Fatalf("expected 1 CH formation; got %d", rep.NewlyFormed)
+	}
+
+	var formationHash [32]byte
+	if err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
+		if row.MessageType == "ghosttrace.events.v1.CampaignHypothesisFormation" {
+			formationHash = row.EventHash
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("WalkEvents: %v", err)
+	}
+	return sub, formationHash
+}
+
+// formedCoordinationRing populates a substrate with three actors
+// repeatedly co-occurring on the same descriptor within the window
+// → triangle of edges → one ring formation.
+func formedCoordinationRing(t *testing.T) (*substrate.Substrate, [32]byte) {
+	t.Helper()
+	dir := t.TempDir()
+	ctx := context.Background()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Close() })
+
+	in := ingest.New(sub, time.Now)
+	gap := int64(60 * 1e9)
+	for round := int64(0); round < 3; round++ {
+		base := 1000 + round*5*gap
+		for k, actor := range []string{"actor-cr-a", "actor-cr-b", "actor-cr-c"} {
+			msg := &eventsv1.DeclaredSession{
+				DeclaredAt:        base + int64(k)*gap,
+				ActorRef:          actor,
+				SessionDescriptor: []byte("shared-cr-t4"),
+			}
+			if _, err := in.Append(ctx, msg, msg.DeclaredAt, ingest.Envelope{Channel: "test"}); err != nil {
+				t.Fatalf("Append: %v", err)
+			}
+		}
+	}
+
+	rep, err := hypothesis.FormCoordinationRingAll(ctx, sub,
+		hypothesis.CoOccurrenceWindowV1{MinEdgeSupport: 3, MaxWindowSeconds: 600},
+		func() time.Time { return time.Unix(0, 1) })
+	if err != nil {
+		t.Fatalf("FormCoordinationRingAll: %v", err)
+	}
+	if rep.NewlyFormed != 1 {
+		t.Fatalf("expected 1 CR formation; got %d", rep.NewlyFormed)
+	}
+
+	var formationHash [32]byte
+	if err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
+		if row.MessageType == "ghosttrace.events.v1.CoordinationRingFormation" {
+			formationHash = row.EventHash
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("WalkEvents: %v", err)
+	}
+	return sub, formationHash
+}
+
+func TestT4PromoteAutomationGroupHappyPath(t *testing.T) {
+	sub, formationHash := formedAutomationGroup(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.AutomationGroupPromotion{
+		FormationEventHash: formationHash[:],
+		PromotedAt:         200000,
+		CadenceSeconds:     3600,
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/automation-group/promote", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Fatalf("status: got %d, want %d; body=%s", got, want, rr.Body.String())
+	}
+	var out promoteResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if out.PromotionEventHash == "" || out.IngestionEventHash == "" {
+		t.Errorf("hashes: promotion=%q ingestion=%q (both should be non-empty)", out.PromotionEventHash, out.IngestionEventHash)
+	}
+}
+
+func TestT4PromoteAutomationGroupIdempotent(t *testing.T) {
+	sub, formationHash := formedAutomationGroup(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.AutomationGroupPromotion{
+		FormationEventHash: formationHash[:],
+		PromotedAt:         200000,
+		CadenceSeconds:     3600,
+	})
+
+	rr1 := httptest.NewRecorder()
+	req1 := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/automation-group/promote", bytes.NewReader(body))
+	req1.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr1, req1)
+	if rr1.Code != http.StatusOK {
+		t.Fatalf("first call: status %d; body=%s", rr1.Code, rr1.Body.String())
+	}
+
+	rr2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/automation-group/promote", bytes.NewReader(body))
+	req2.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr2, req2)
+
+	var out2 promoteResponse
+	_ = json.Unmarshal(rr2.Body.Bytes(), &out2)
+	if !out2.AlreadyPromoted {
+		t.Errorf("second call AlreadyPromoted: got false, want true")
+	}
+}
+
+func TestT4PromoteCampaignHypothesisHappyPath(t *testing.T) {
+	sub, formationHash := formedCampaignHypothesis(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.CampaignHypothesisPromotion{
+		FormationEventHash: formationHash[:],
+		PromotedAt:         200000,
+		CadenceSeconds:     3600,
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/campaign-hypothesis/promote", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Fatalf("status: got %d, want %d; body=%s", got, want, rr.Body.String())
+	}
+	var out promoteResponse
+	_ = json.Unmarshal(rr.Body.Bytes(), &out)
+	if out.PromotionEventHash == "" || out.IngestionEventHash == "" {
+		t.Errorf("hashes: promotion=%q ingestion=%q", out.PromotionEventHash, out.IngestionEventHash)
+	}
+}
+
+func TestT4PromoteCoordinationRingHappyPath(t *testing.T) {
+	sub, formationHash := formedCoordinationRing(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.CoordinationRingPromotion{
+		FormationEventHash: formationHash[:],
+		PromotedAt:         200000,
+		CadenceSeconds:     3600,
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/coordination-ring/promote", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Fatalf("status: got %d, want %d; body=%s", got, want, rr.Body.String())
+	}
+	var out promoteResponse
+	_ = json.Unmarshal(rr.Body.Bytes(), &out)
+	if out.PromotionEventHash == "" || out.IngestionEventHash == "" {
+		t.Errorf("hashes: promotion=%q ingestion=%q", out.PromotionEventHash, out.IngestionEventHash)
+	}
+}
+
+func TestT4PromoteWrongSubtypeFormationHashRejected(t *testing.T) {
+	// AG promote endpoint with a BC formation hash → 404 (cross-subtype
+	// integrity per §2.5 BC5).
+	sub, bcFormationHash := formedBehavioralCluster(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.AutomationGroupPromotion{
+		FormationEventHash: bcFormationHash[:],
+		PromotedAt:         200000,
+		CadenceSeconds:     3600,
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/automation-group/promote", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusNotFound; got != want {
+		t.Errorf("status: got %d, want %d (BC formation in AG endpoint must 404; body: %s)",
+			got, want, rr.Body.String())
+	}
+}
+
 func TestResolveT4ActorFromMTLS(t *testing.T) {
 	got := resolveT4Actor(ingest.Envelope{ClientCommonName: "operator-alice"}, TierConstitutionalAct)
 	if want := "operator-alice"; got != want {

@@ -43,6 +43,17 @@ type AutomationGroupPromoteOptions struct {
 
 	// Reason is an operator-supplied free-form note. Optional.
 	Reason string
+
+	// Actor is an optional per-actor attribution string. Mirrors
+	// PromoteOptions.Actor per §0097 BehavioralCluster pilot — extended
+	// to AutomationGroup at the §0105 mechanical-replication landing
+	// (§0098 T4 promote-* across remaining subtypes). When non-empty,
+	// PromoteAutomationGroup commits the AutomationGroupPromotion
+	// event paired with an IngestionEvent (channel="cli" or HTTP-
+	// channel-tier-derived per resolveT4Actor; client_common_name=
+	// Actor) via AppendPair. Empty preserves the §0057 single-Append
+	// path (backward compatible).
+	Actor string
 }
 
 // AutomationGroupPromoteReport is the per-PromoteAutomationGroup
@@ -55,6 +66,11 @@ type AutomationGroupPromoteReport struct {
 	// AlreadyPromoted is true when an identical promotion event was
 	// already in the substrate (content-hash collision).
 	AlreadyPromoted bool
+
+	// IngestionEventHashHex is the content-hash (hex) of the paired
+	// IngestionEvent committed when AutomationGroupPromoteOptions.
+	// Actor was non-empty. Empty when no Actor was supplied.
+	IngestionEventHashHex string
 }
 
 // PromoteAutomationGroup records an AutomationGroupPromotion
@@ -117,19 +133,51 @@ func PromoteAutomationGroup(ctx context.Context, sub *substrate.Substrate, opts 
 		return AutomationGroupPromoteReport{}, fmt.Errorf("hypothesis.PromoteAutomationGroup: lookup promotion %s: %w", hex, lookupErr)
 	}
 
+	committedAt := now().UnixNano()
 	promRow := substrate.EventRow{
 		EventHash:   hash,
 		EventTime:   promotedAt,
 		MessageType: string(ev.ProtoReflect().Descriptor().FullName()),
 		PayloadRef:  hex[:2] + "/" + hex[2:],
-		CommittedAt: now().UnixNano(),
+		CommittedAt: committedAt,
 	}
-	if err := sub.Append(ctx, promRow, payload); err != nil {
-		return AutomationGroupPromoteReport{}, fmt.Errorf("hypothesis.PromoteAutomationGroup: append promotion %s: %w", hex, err)
+
+	if opts.Actor == "" {
+		if err := sub.Append(ctx, promRow, payload); err != nil {
+			return AutomationGroupPromoteReport{}, fmt.Errorf("hypothesis.PromoteAutomationGroup: append promotion %s: %w", hex, err)
+		}
+		return AutomationGroupPromoteReport{
+			PromotionEventHashHex: hex,
+			AlreadyPromoted:       alreadyPresent,
+		}, nil
+	}
+
+	ingEv := &eventsv1.IngestionEvent{
+		PrimaryEventHash: hash[:],
+		ReceivedAt:       committedAt,
+		IngestedAt:       committedAt,
+		Channel:          "cli",
+		ClientCommonName: opts.Actor,
+	}
+	ingPayload, ingHash, err := canonical.MarshalAndHash(ingEv)
+	if err != nil {
+		return AutomationGroupPromoteReport{}, fmt.Errorf("hypothesis.PromoteAutomationGroup: marshal ingestion event: %w", err)
+	}
+	ingHex := canonical.HashHex(ingHash)
+	ingRow := substrate.EventRow{
+		EventHash:   ingHash,
+		EventTime:   committedAt,
+		MessageType: string(ingEv.ProtoReflect().Descriptor().FullName()),
+		PayloadRef:  ingHex[:2] + "/" + ingHex[2:],
+		CommittedAt: committedAt,
+	}
+	if err := sub.AppendPair(ctx, promRow, payload, ingRow, ingPayload); err != nil {
+		return AutomationGroupPromoteReport{}, fmt.Errorf("hypothesis.PromoteAutomationGroup: append pair (promotion %s, ingestion %s): %w", hex, ingHex, err)
 	}
 
 	return AutomationGroupPromoteReport{
 		PromotionEventHashHex: hex,
 		AlreadyPromoted:       alreadyPresent,
+		IngestionEventHashHex: ingHex,
 	}, nil
 }

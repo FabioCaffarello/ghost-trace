@@ -735,9 +735,12 @@ func TestRouteTierClassification(t *testing.T) {
 		{"/v1/verify", TierOperatorRead},
 		{"/v1/admin/orphan-cleanup", TierSubstrateAdmin},
 		{"/v1/hypotheses/behavioral-cluster/promote", TierConstitutionalAct},
+		{"/v1/hypotheses/automation-group/promote", TierConstitutionalAct},
+		{"/v1/hypotheses/campaign-hypothesis/promote", TierConstitutionalAct},
+		{"/v1/hypotheses/coordination-ring/promote", TierConstitutionalAct},
 		// Other T4 routes not yet implemented; unclassified.
 		{"/v1/hypotheses/behavioral-cluster/demote", ""},
-		{"/v1/hypotheses/automation-group/promote", ""},
+		{"/v1/hypotheses/automation-group/demote", ""},
 		{"/some-random-path", ""},
 	}
 	for _, c := range cases {
