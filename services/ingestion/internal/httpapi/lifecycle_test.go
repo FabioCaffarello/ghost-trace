@@ -867,6 +867,112 @@ func TestT4DemoteRejectsBadHashLength(t *testing.T) {
 	}
 }
 
+// T4 dissolve tests per §0108.
+
+func TestT4DissolveBehavioralClusterHappyPath(t *testing.T) {
+	sub, formationHash := formedBehavioralCluster(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.BehavioralClusterDissolution{
+		FormationEventHash: formationHash[:],
+		DissolvedAt:        9000000000000,
+		Reason:             "T4 dissolve test",
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/behavioral-cluster/dissolve", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Fatalf("status: got %d, want %d; body=%s", got, want, rr.Body.String())
+	}
+	var out dissolveResponse
+	_ = json.Unmarshal(rr.Body.Bytes(), &out)
+	if out.DissolutionEventHash == "" || out.IngestionEventHash == "" {
+		t.Errorf("hashes: dissolution=%q ingestion=%q", out.DissolutionEventHash, out.IngestionEventHash)
+	}
+}
+
+func TestT4DissolveAutomationGroupHappyPath(t *testing.T) {
+	sub, formationHash := formedAutomationGroup(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.AutomationGroupDissolution{
+		FormationEventHash: formationHash[:],
+		DissolvedAt:        9000000000000,
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/automation-group/dissolve", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Fatalf("status: got %d, want %d; body=%s", got, want, rr.Body.String())
+	}
+	var out dissolveResponse
+	_ = json.Unmarshal(rr.Body.Bytes(), &out)
+	if out.DissolutionEventHash == "" || out.IngestionEventHash == "" {
+		t.Errorf("hashes: dissolution=%q ingestion=%q", out.DissolutionEventHash, out.IngestionEventHash)
+	}
+}
+
+func TestT4DissolveCampaignHypothesisHappyPath(t *testing.T) {
+	sub, formationHash := formedCampaignHypothesis(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.CampaignHypothesisDissolution{
+		FormationEventHash: formationHash[:],
+		DissolvedAt:        9000000000000,
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/campaign-hypothesis/dissolve", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Fatalf("status: got %d, want %d; body=%s", got, want, rr.Body.String())
+	}
+}
+
+func TestT4DissolveCoordinationRingHappyPath(t *testing.T) {
+	sub, formationHash := formedCoordinationRing(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.CoordinationRingDissolution{
+		FormationEventHash: formationHash[:],
+		DissolvedAt:        9000000000000,
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/coordination-ring/dissolve", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Fatalf("status: got %d, want %d; body=%s", got, want, rr.Body.String())
+	}
+}
+
+func TestT4DissolveDirectFromFormation(t *testing.T) {
+	// Dissolution does NOT require a prior promotion (lifecycle-
+	// semantics distinction: dissolution recognizes NON-EXISTENCE;
+	// formation can be dissolved directly). Test that a freshly-
+	// formed BC can be dissolved without intermediate promote/demote.
+	sub, formationHash := formedBehavioralCluster(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	body, _ := proto.Marshal(&eventsv1.BehavioralClusterDissolution{
+		FormationEventHash: formationHash[:],
+	})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/behavioral-cluster/dissolve", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Fatalf("status: got %d, want %d; body=%s", got, want, rr.Body.String())
+	}
+}
+
 func TestResolveT4ActorFromMTLS(t *testing.T) {
 	got := resolveT4Actor(ingest.Envelope{ClientCommonName: "operator-alice"}, TierConstitutionalAct)
 	if want := "operator-alice"; got != want {

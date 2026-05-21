@@ -4358,6 +4358,45 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0108` — T4 dissolve replicated across all four subtypes; per-op-across-subtypes cadence continues (§0098 12/24)
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0107`](#0107--t4-demote-replicated-across-all-four-subtypes-peropacrosssubtypes-cadence-continues-0098-824) shipped demote across all 4 subtypes. This entry continues the per-op-across-subtypes cadence with dissolve, the terminal lifecycle operation per `lifecycle-semantics.md` line 36.
+
+- **Decision:** Coordinated two-part landing parallel to §0107:
+
+  1. **Four `Dissolve*` helpers extended with `Actor` + `IngestionEventHashHex`.** BC `Dissolve` + `DissolveAutomationGroup` / `DissolveCampaignHypothesis` / `DissolveCoordinationRing` all gain Options.Actor + Report.IngestionEventHashHex + the if-Actor-empty-Append-else-AppendPair branch.
+
+  2. **Four new HTTP T4 dissolve handlers.** [`lifecycle.go`](../../services/ingestion/internal/httpapi/lifecycle.go) gains `handleDissolveBehavioralCluster` / `handleDissolveAutomationGroup` / `handleDissolveCampaignHypothesis` / `handleDissolveCoordinationRing` + 3 shared dissolve helpers + `dissolveResponse` JSON shape (simpler than `demoteResponse`: no cadence-gate state to surface; dissolution does not consult Layer A).
+
+  3. **Tests.** 4 happy-path tests + 1 direct-from-formation test (verifies dissolution does not require prior promotion per `lifecycle-semantics.md` distinction).
+
+  4. **README.** T4 subsection extended with the four dissolve endpoints + `lifecycle-semantics.md` distinction (dissolution targets formation; recognizes NON-EXISTENCE).
+
+- **Constitutional review:** No Charter invariant amended. The §2.5 BC5 lifecycle-integrity gate (dissolution references the correctly-typed formation predecessor) is preserved by each subtype's `Dissolve*` per-message-type check. The §2.5 BC3 substrate-event-discreteness property (lifecycle events are independently committed; projection reconstructs the chain) is preserved unchanged — `Dissolve*` does not require prior promotion/demotion events, matching the structural commitment that the substrate stores discrete events.
+
+  Falsifiability: every claim in the README + decision-log is testable by mechanical replay. The direct-from-formation property is exercised by `TestT4DissolveDirectFromFormation`.
+
+- **Consequences:**
+  - All four T4 dissolve endpoints reachable.
+  - **§0098 landing 3/3: 12/24 T4 endpoints done.** Remaining: 12 — merge / split × 4 subtypes; form × 4 subtypes.
+  - **§0097 carry-forward EXTENDED to dissolve helpers across all 4 subtypes.** 4 more `Dissolve*` helpers gain Actor + IngestionEvent pairing. All 12 promote/demote/dissolve helpers across the 4 subtypes now share the same Options-with-Actor + Report-with-IngestionEventHashHex shape.
+
+  - **Methodological observation 1 — Per-op-across-subtypes cadence validated at three ops.** §0106 (promote) + §0107 (demote) + §0108 (dissolve) confirm the pattern. Compressibility is consistent: ~600-700 LOC per op covering all 4 subtypes. Recommend continuing for merge/split/form.
+
+  - **Methodological observation 2 — Dissolve's simpler response wire-shape surfaces.** Unlike `demoteResponse`'s cadence-gate fields (Layer A semantic per §0011), `dissolveResponse` carries only the dissolution + ingestion hashes + idempotency boolean. Pattern: per-op response shape carries op-specific state (promote: idempotency; demote: cadence-gate; dissolve: idempotency; merge: 2 antecedent hashes; split: N successor hashes). Worth pre-thinking the shape for upcoming merge + split + form ops.
+
+  - **Carry-forwards:**
+    - **12 remaining T4 endpoints** — merge / split × 4; form × 4.
+    - **§0097 CLI-side carry-forward** — net accumulated: 11 CLIs pending `--actor` (3 promote AG/CH/CR + 4 demote + 4 dissolve). Bundle with next T4 op landing OR ship standalone.
+    - **`token_id` field per RFC item 4(b)** — unchanged.
+
+- **Supersession:** None. Extends [`§0098`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens) landing 3 from 8/24 to 12/24 endpoints (50% of T4).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

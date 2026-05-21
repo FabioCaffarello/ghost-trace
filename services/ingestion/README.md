@@ -1241,6 +1241,15 @@ Per [`§0107`](../../docs/charter/decision-log.md), the demote endpoint shipped 
 
 Each accepts `application/x-protobuf` with the corresponding `<Subtype>Demotion` message; commits the demotion paired with an `IngestionEvent` via `AppendPair`. The response surfaces the §0011 Layer A cadence-gate state (`cadence_satisfied` + `cadence_elapsed_seconds`) — Layer A is CANDIDACY, not hard barrier per §0011; the demotion records regardless. Cross-subtype rejection per §2.5 BC5: a formation hash submitted to a demote endpoint returns 404 (demote expects a `<Subtype>Promotion` event hash, not a formation).
 
+Per [`§0108`](../../docs/charter/decision-log.md), the dissolve endpoint shipped across all four subtypes as well:
+
+- `POST /v1/hypotheses/behavioral-cluster/dissolve`
+- `POST /v1/hypotheses/automation-group/dissolve`
+- `POST /v1/hypotheses/campaign-hypothesis/dissolve`
+- `POST /v1/hypotheses/coordination-ring/dissolve`
+
+Each accepts `application/x-protobuf` with the corresponding `<Subtype>Dissolution` message; commits the dissolution paired with an `IngestionEvent` via `AppendPair`. Dissolution targets the FORMATION hash directly (not promotion) — per `glossary.md` + `lifecycle-semantics.md` line 36, dissolution recognizes NON-EXISTENCE of the underlying phenomenon, distinct from demotion's withdrawal of operational use. A hypothesis may be dissolved directly without intermediate promote/demote (terminal lifecycle operation; substrate accepts the discrete event regardless of intermediate state per §2.5 BC3).
+
 Wire shape — request:
 
 ```sh
