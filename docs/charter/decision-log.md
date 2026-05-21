@@ -4542,6 +4542,25 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0113` — §0097 CLI-side extension: demote-* CLIs (BC + AG + CH + CR) gain --actor option
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0112`](#0112--0097-clisetension-promote-clis-for-agchcr-gain-actor-option) discharged 3 of 23 CLI-side §0097 carry-forwards (promote-* AG/CH/CR). [`§0107`](#0107--t4-demote-replicated-across-all-four-subtypes-peropacrosssubtypes-cadence-continues-0098-824) shipped helper-side Actor extension for all 4 demote helpers (including BC `Demote`, which was NOT covered by [`§0097`](#0097--cli-peractor-attribution-pilot-promotehypothesis-actor-authscope-rfc-open-question-2-partially-discharged) — that was promote-only). This entry ships the CLI-side wiring for all 4 demote CLIs.
+
+- **Decision:** [`cmd/demote-hypothesis/main.go`](../../services/ingestion/cmd/demote-hypothesis/main.go) + [`cmd/demote-automation-group/main.go`](../../services/ingestion/cmd/demote-automation-group/main.go) + [`cmd/demote-campaign-hypothesis/main.go`](../../services/ingestion/cmd/demote-campaign-hypothesis/main.go) + [`cmd/demote-coordination-ring/main.go`](../../services/ingestion/cmd/demote-coordination-ring/main.go) each gain `--actor` (matching the [`§0097`](#0097--cli-peractor-attribution-pilot-promotehypothesis-actor-authscope-rfc-open-question-2-partially-discharged) + [`§0112`](#0112--0097-clisetension-promote-clis-for-agchcr-gain-actor-option) promote-* shape): non-empty triggers `AppendPair` via the §0107 helper extension; JSON payload + stderr summary extended with `ingestion_event_hash` field. Empty preserves single-`Append` (backward compatible).
+
+- **Constitutional review:** No Charter invariant amended. Pure-wiring closure of the [`§0107`](#0107--t4-demote-replicated-across-all-four-subtypes-peropacrosssubtypes-cadence-continues-0098-824) helper-side extension at the CLI surface.
+
+- **Consequences:**
+  - 4 demote CLIs (BC + AG + CH + CR) now support `--actor`.
+  - **§0097 CLI-side: 8/24 done** (4 promote per §0097 + §0112 + 4 demote per this entry). Remaining: 4 dissolve + 4 merge + 4 split + 4 form = 16 CLIs. Same mechanical pattern.
+
+- **Supersession:** None. Partial discharge of [`§0097`](#0097--cli-peractor-attribution-pilot-promotehypothesis-actor-authscope-rfc-open-question-2-partially-discharged) carry-forward (4 more of 19 remaining → 16 remaining).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
