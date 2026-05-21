@@ -43,6 +43,7 @@ func run() error {
 	cadenceSeconds := flag.Int64("cadence-seconds", 86400, "Layer A cadence parameter per decision-log §0011")
 	promotedAtNs := flag.Int64("promoted-at-ns", 0, "explicit promoted_at as Unix nanoseconds; 0 = wall-clock now()")
 	reason := flag.String("reason", "", "operator-supplied forensic note; optional")
+	actor := flag.String("actor", "", "OPTIONAL per decision-log §0097 + §0106: when non-empty, pairs the promotion with an IngestionEvent for per-actor attribution.")
 	flag.Parse()
 
 	if *formationHashHex == "" {
@@ -70,6 +71,7 @@ func run() error {
 		PromotedAt:         *promotedAtNs,
 		CadenceSeconds:     *cadenceSeconds,
 		Reason:             *reason,
+		Actor:              *actor,
 	}, time.Now)
 	if err != nil {
 		return err
@@ -82,13 +84,20 @@ func run() error {
 		PromotionEventHashHex: report.PromotionEventHashHex,
 		CadenceSeconds:        *cadenceSeconds,
 		AlreadyPromoted:       report.AlreadyPromoted,
+		IngestionEventHashHex: report.IngestionEventHashHex,
 	}); err != nil {
 		return fmt.Errorf("encode json: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr,
-		"promote-coordination-ring: formation=%s promotion=%s cadence_seconds=%d already_promoted=%v\n",
-		*formationHashHex, report.PromotionEventHashHex, *cadenceSeconds, report.AlreadyPromoted)
+	if *actor != "" {
+		fmt.Fprintf(os.Stderr,
+			"promote-coordination-ring: formation=%s promotion=%s ingestion=%s cadence_seconds=%d actor=%q already_promoted=%v\n",
+			*formationHashHex, report.PromotionEventHashHex, report.IngestionEventHashHex, *cadenceSeconds, *actor, report.AlreadyPromoted)
+	} else {
+		fmt.Fprintf(os.Stderr,
+			"promote-coordination-ring: formation=%s promotion=%s cadence_seconds=%d already_promoted=%v\n",
+			*formationHashHex, report.PromotionEventHashHex, *cadenceSeconds, report.AlreadyPromoted)
+	}
 	return nil
 }
 
@@ -97,4 +106,5 @@ type payload struct {
 	PromotionEventHashHex string `json:"promotion_event_hash"`
 	CadenceSeconds        int64  `json:"cadence_seconds"`
 	AlreadyPromoted       bool   `json:"already_promoted"`
+	IngestionEventHashHex string `json:"ingestion_event_hash,omitempty"`
 }
