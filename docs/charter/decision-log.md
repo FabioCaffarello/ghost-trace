@@ -4609,6 +4609,21 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0117` — §0097 CLI-side extension: form-* (BC + AG + CH + CR) gain --actor option — §0097 CLI-side CLOSED 24/24
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** Final batch of the §0097 CLI-side carry-forward. After [`§0112`](#0112--0097-clisetension-promote-clis-for-agchcr-gain-actor-option) (promote, 4/24), [`§0113`](#0113--0097-cliside-extension-demote-clis-bc--ag--ch--cr-gain-actor-option) (demote, 8/24), [`§0114`](#0114--0097-cliside-extension-dissolve-bc--ag--ch--cr-gain-actor-option) (dissolve, 12/24), [`§0115`](#0115--0097-cliside-extension-merge-bc--ag--ch--cr-gain-actor-option) (merge, 16/24), [`§0116`](#0116--0097-cliside-extension-split-bc--ag--ch--cr-gain-actor-option) (split, 20/24), this entry ships the four remaining form-* CLIs. Helper-side per [`§0111`](#0111--t4-form-replicated-across-all-four-subtypes-0098-arc-closed-2424).
+
+- **Decision:** All 4 form CLIs — [`cmd/form-hypothesis`](../../services/ingestion/cmd/form-hypothesis), [`cmd/form-automation-group`](../../services/ingestion/cmd/form-automation-group), [`cmd/form-campaign-hypothesis`](../../services/ingestion/cmd/form-campaign-hypothesis), [`cmd/form-coordination-ring`](../../services/ingestion/cmd/form-coordination-ring) — gain `--actor` matching the established pattern: non-empty triggers `Form*AllWithActor` (which uses `AppendPair` for per-formation IngestionEvent attribution); empty preserves the single-`Append` path. Form is multi-formation: the helper returns aggregate Examined/NewlyFormed/AlreadyFormed counts and does not surface per-formation IngestionEvent hashes through the Report struct, so the CLI JSON payload is unchanged — only the stderr summary gains the `actor=%q` suffix when `--actor` is non-empty.
+
+- **Consequences:** **§0097 CLI-side: 24/24 done (100%). §0097 carry-forward CLOSED.** All six Cat III lifecycle operations (form, promote, demote, dissolve, merge, split) across all four subtypes (BC, AG, CH, CR) now expose `--actor` at the CLI layer. Per-actor attribution is end-to-end-available from operator invocation through helper to substrate IngestionEvent.
+
+- **Supersession:** Full discharge of [`§0097`](#0097--cli-peractor-attribution-pilot-promotehypothesis-actor-authscope-rfc-open-question-2-partially-discharged) carry-forward (final 4 → 0 remaining).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
