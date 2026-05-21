@@ -32,6 +32,13 @@
 //   - GET  /v1/replay/formations — Phase 3 substrate-wide batch
 //     replay across all four Cat III subtypes; per §0091. Mirrors
 //     cmd/replay-all-formations.
+//   - GET  /v1/verify — substrate-integrity audit; per decision-log
+//     §0093. Mirrors cmd/verify (per §0039 + §0040). Walks every
+//     events-table row + recomputes blob hashes; with
+//     check_orphans=true, additionally walks the blob-store directory
+//     to surface orphan blobs (harmless per §0033). Substrate-
+//     integrity failures land as HTTP 200 with passed=false (same
+//     drift semantic as §0091's replay endpoints).
 //   - GET  /healthz    — liveness probe; returns 200 + {"status":"ok"}.
 //
 // All other paths return 404; non-matching methods return 405.
@@ -204,6 +211,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleReplayFormation(w, r)
 	case r.URL.Path == "/v1/replay/formations":
 		h.handleReplayAllFormations(w, r)
+	case r.URL.Path == "/v1/verify":
+		h.handleVerify(w, r)
 	default:
 		http.NotFound(w, r)
 	}

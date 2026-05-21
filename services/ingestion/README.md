@@ -1112,6 +1112,24 @@ Response codes:
 
 Note: HTTP responses do NOT distinguish drift (match=false) from precondition-failure via status codes — operators detect drift by reading the `match` boolean in the body. The CLIs use exit codes 1 vs 3 for this distinction; the HTTP shape uses 200 with `match: false` for drift and 404 for precondition errors. JSON wire shapes mirror the CLI outputs.
 
+### HTTP verify endpoint
+
+Per [`§0093`](../../docs/charter/decision-log.md), the HTTP interface gains a substrate-integrity audit endpoint mirroring [`cmd/verify`](#verify-cli) (§0039 + §0040):
+
+- **`GET /v1/verify[?check_orphans=true]`** — walks every events-table row, recomputes each blob's BLAKE3 hash via `substrate.ReadBlob`, surfaces hash-mismatch + missing-blob failures. With `check_orphans=true`, additionally walks the blob-store directory and reports orphan blobs (harmless per [`§0033`](../../docs/charter/decision-log.md) + [`§0040`](../../docs/charter/decision-log.md); reported but do NOT cause `passed=false`).
+
+Wire shape matches `cmd/verify`'s stdout JSON exactly: `{verified, hash_mismatch, missing_blob, orphan_blob, passed, hash_mismatch_hashes, missing_blob_hashes, orphan_blob_paths}`. Operators get the same response regardless of channel (CLI or HTTP).
+
+The CLI's exit-code semantic maps to HTTP as follows:
+
+- CLI exit 0 (pass) → HTTP **200** with `passed=true`.
+- CLI exit 1 (substrate-integrity violation) → HTTP **200** with `passed=false`. Operators inspect the `passed` boolean and the `hash_mismatch_hashes` / `missing_blob_hashes` arrays to detect violations; substrate-integrity failure is a body field, not an HTTP error code. Matches §0091's drift semantic.
+- CLI exit 2 (tool/config error) → HTTP **503** (substrate not configured) or **500** (walk error).
+
+Response codes: **200** (audit completed; check `passed`); **400** invalid `check_orphans` value; **405** non-GET; **500** walk error; **503** substrate not configured.
+
+**Operational cost.** This endpoint walks every substrate row + reads every blob. For large substrates the call is slow. Operators SHOULD run it on a schedule (cron / systemd timer) against a dedicated read-only auth token rather than from interactive dashboards. Concurrent invocations are safe under SQLite WAL but each multiplies the read load.
+
 ## Required Properties
 
 Per the original constitutional placeholder ([decision-log §0022](../../docs/charter/decision-log.md) implementation pivot):
