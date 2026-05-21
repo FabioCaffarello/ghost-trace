@@ -2804,6 +2804,39 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0072` — Fourth-subtype demotion (`CoordinationRingDemotion`) lands; promote/demote loop closed for fourth subtype
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0071`](#0071--fourth-subtype-promotion-coordinationringpromotion-lands-sentinel-sharing-landscape-spans-all-four-subtypes) landed CoordinationRing promotion. This entry lands demotion — third lifecycle op of the fourth subtype arc, closing the promote/demote loop. Mirrors §0047 BC + §0058 AG + §0065 CH. No novel modeling decisions; the §0011 Layer-A-as-candidacy semantic and the two-hop chain shape (demotion → promotion → formation) transfer cleanly.
+
+- **Decision:** Land `CoordinationRingDemotion` with three structural moves mirroring §0065:
+
+  1. **`CoordinationRingDemotion` Protobuf message** at [`schemas/events/v1/coordination_ring_demotion.proto`](../../schemas/events/v1/coordination_ring_demotion.proto). Three fields identical to §0065's shape.
+
+  2. **`DemoteCoordinationRing` entry point** at [`services/ingestion/internal/hypothesis/coordination_ring_demotion.go`](../../services/ingestion/internal/hypothesis/coordination_ring_demotion.go). Reuses shared `ErrTargetNotFound` + `ErrTargetWrongType` sentinels. Validates target is a `CoordinationRingPromotion` (new `coordinationRingPromotionMessageType` constant). Computes cadence-satisfaction state from the referenced promotion's `cadence_seconds` per §0011 (Layer A candidacy semantic).
+
+  3. **`cmd/demote-coordination-ring`** — 27th operational binary; 22nd substrate-write.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1, §2.2, §2.3, §2.5 + §2.5 BC3 + §2.5 BC5. Respects §0011 Layer-A-as-candidacy rule (the operator may demote within the cadence window; the substrate records the gate state without barring the demotion). Respects §0045+§0056+§0063+§0070 hypothesis-identity invariant via two-hop chain (demotion's `promotion_event_hash` → promotion's `formation_event_hash`). Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`schemas/events/v1/coordination_ring_demotion.proto`](../../schemas/events/v1/coordination_ring_demotion.proto) — new file.
+  - [`services/ingestion/internal/hypothesis/coordination_ring_demotion.go`](../../services/ingestion/internal/hypothesis/coordination_ring_demotion.go) — new file.
+  - [`services/ingestion/internal/hypothesis/coordination_ring_demotion_test.go`](../../services/ingestion/internal/hypothesis/coordination_ring_demotion_test.go) — **7 tests** covering happy-path cadence-satisfied, cadence-unsatisfied early demote, idempotency, unknown-target, formation-hash-rejection, cross-subtype rejection (BC promotion), default `demoted_at`.
+  - [`services/ingestion/cmd/demote-coordination-ring/main.go`](../../services/ingestion/cmd/demote-coordination-ring/main.go) — new binary; 27th CLI; 22nd substrate-write.
+  - Makefile, canonical corpus, corpus README, service README, decision-log §0072.
+  - **Promote/demote loop closed for fourth subtype.** All four Cat III subtypes' promote/demote arcs are now operational. Three remaining CR lifecycle ops to close the arc.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Three remaining CoordinationRing lifecycle operations** — dissolution (§0073), merge (§0074), split (§0075).
+    - **Projection layer extension for CoordinationRing** — unchanged from §0070 carry-forward.
+    - **Layer B deep-criterion** — unchanged from §0047 carry-forward.
+
+- **Supersession:** None. Extends §0071 with the third CoordinationRing lifecycle operation. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

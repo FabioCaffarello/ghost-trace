@@ -1,0 +1,29 @@
+// Category III hypothesis lifecycle event per Charter §2.5 +
+// decision-log §0011 (Layer A cadence consumed) + decision-log
+// §0072 (this entry — fourth-subtype demotion landing; mirrors
+// §0047 BC, §0058 AG, §0065 CH).
+//
+// Per Charter §2.5 BC5, CoordinationRingDemotion is a Cat I record
+// committed under §2.1 immutability. Two-hop chain reconstruction:
+//   demotion.promotion_event_hash → CoordinationRingPromotion
+//   promotion.formation_event_hash → CoordinationRingFormation
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// CoordinationRingDemotion records the transition of a
+// CoordinationRing OUT of operational use as enrichment context.
+message CoordinationRingDemotion {
+  // promotion_event_hash is the BLAKE3-256 content-hash of the
+  // CoordinationRingPromotion event being ended.
+  bytes promotion_event_hash = 1;
+
+  // demoted_at is the Unix-nanoseconds time at which demotion was
+  // recorded. Cadence-gate state computed at consumer time.
+  int64 demoted_at = 2;
+
+  // reason is an operator-supplied free-form note. Optional.
+  string reason = 3;
+}

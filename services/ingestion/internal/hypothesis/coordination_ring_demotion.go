@@ -1,0 +1,119 @@
+package hypothesis
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"time"
+
+	"google.golang.org/protobuf/proto"
+
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/canonical"
+	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
+)
+
+// coordinationRingPromotionMessageType is the substrate's
+// message_type discriminator for CoordinationRingPromotion rows.
+const coordinationRingPromotionMessageType = "ghosttrace.events.v1.CoordinationRingPromotion"
+
+// CoordinationRingDemoteOptions configures a single CoordinationRing
+// demotion. Mirrors §0047+§0058+§0065 demote options for the
+// fourth-subtype landing.
+type CoordinationRingDemoteOptions struct {
+	PromotionEventHash [32]byte
+	DemotedAt          int64
+	Reason             string
+}
+
+// CoordinationRingDemoteReport is the per-DemoteCoordinationRing
+// outcome.
+type CoordinationRingDemoteReport struct {
+	DemotionEventHashHex  string
+	AlreadyDemoted        bool
+	CadenceSatisfied      bool
+	CadenceElapsedSeconds int64
+}
+
+// DemoteCoordinationRing records a CoordinationRingDemotion lifecycle
+// event against the CoordinationRingPromotion identified by
+// opts.PromotionEventHash. Per Charter §2.5 BC5 the demotion event
+// is a Cat I record committed via substrate.Append.
+//
+// Per §0011 Layer A is a CANDIDACY criterion, not hard barrier.
+// DemoteCoordinationRing records demotion regardless of whether the
+// cadence has elapsed; the report surfaces the gate state.
+//
+// Errors:
+//   - ErrTargetNotFound: promotion hash does not resolve to any row.
+//   - ErrTargetWrongType: target hash is NOT a
+//     CoordinationRingPromotion.
+func DemoteCoordinationRing(ctx context.Context, sub *substrate.Substrate, opts CoordinationRingDemoteOptions, now func() time.Time) (CoordinationRingDemoteReport, error) {
+	if now == nil {
+		now = time.Now
+	}
+
+	row, err := sub.LookupRow(ctx, opts.PromotionEventHash)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return CoordinationRingDemoteReport{}, fmt.Errorf("%w: %x", ErrTargetNotFound, opts.PromotionEventHash)
+		}
+		return CoordinationRingDemoteReport{}, fmt.Errorf("hypothesis.DemoteCoordinationRing: lookup target: %w", err)
+	}
+	if row.MessageType != coordinationRingPromotionMessageType {
+		return CoordinationRingDemoteReport{}, fmt.Errorf("%w: %x is %q", ErrTargetWrongType, opts.PromotionEventHash, row.MessageType)
+	}
+
+	payload, err := sub.ReadBlob(ctx, opts.PromotionEventHash)
+	if err != nil {
+		return CoordinationRingDemoteReport{}, fmt.Errorf("hypothesis.DemoteCoordinationRing: read promotion blob: %w", err)
+	}
+	promotion := &eventsv1.CoordinationRingPromotion{}
+	if err := proto.Unmarshal(payload, promotion); err != nil {
+		return CoordinationRingDemoteReport{}, fmt.Errorf("hypothesis.DemoteCoordinationRing: unmarshal promotion: %w", err)
+	}
+
+	demotedAt := opts.DemotedAt
+	if demotedAt == 0 {
+		demotedAt = now().UnixNano()
+	}
+
+	elapsedSeconds := (demotedAt - promotion.GetPromotedAt()) / int64(time.Second)
+	cadenceSatisfied := elapsedSeconds >= promotion.GetCadenceSeconds()
+
+	ev := &eventsv1.CoordinationRingDemotion{
+		PromotionEventHash: opts.PromotionEventHash[:],
+		DemotedAt:          demotedAt,
+		Reason:             opts.Reason,
+	}
+	demotionPayload, hash, err := canonical.MarshalAndHash(ev)
+	if err != nil {
+		return CoordinationRingDemoteReport{}, fmt.Errorf("hypothesis.DemoteCoordinationRing: marshal demotion: %w", err)
+	}
+	hex := canonical.HashHex(hash)
+
+	_, lookupErr := sub.LookupRow(ctx, hash)
+	alreadyPresent := lookupErr == nil
+	if lookupErr != nil && !errors.Is(lookupErr, sql.ErrNoRows) {
+		return CoordinationRingDemoteReport{}, fmt.Errorf("hypothesis.DemoteCoordinationRing: lookup demotion %s: %w", hex, lookupErr)
+	}
+
+	demoRow := substrate.EventRow{
+		EventHash:   hash,
+		EventTime:   demotedAt,
+		MessageType: string(ev.ProtoReflect().Descriptor().FullName()),
+		PayloadRef:  hex[:2] + "/" + hex[2:],
+		CommittedAt: now().UnixNano(),
+	}
+	if err := sub.Append(ctx, demoRow, demotionPayload); err != nil {
+		return CoordinationRingDemoteReport{}, fmt.Errorf("hypothesis.DemoteCoordinationRing: append demotion %s: %w", hex, err)
+	}
+
+	return CoordinationRingDemoteReport{
+		DemotionEventHashHex:  hex,
+		AlreadyDemoted:        alreadyPresent,
+		CadenceSatisfied:      cadenceSatisfied,
+		CadenceElapsedSeconds: elapsedSeconds,
+	}, nil
+}
