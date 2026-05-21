@@ -48,6 +48,7 @@ help:
 	@echo "  replay-automation-group-formation-build  go build -trimpath -o $(BIN_DIR)/replay-automation-group-formation ./cmd/replay-automation-group-formation"
 	@echo "  replay-campaign-hypothesis-formation-build  go build -trimpath -o $(BIN_DIR)/replay-campaign-hypothesis-formation ./cmd/replay-campaign-hypothesis-formation"
 	@echo "  replay-coordination-ring-formation-build  go build -trimpath -o $(BIN_DIR)/replay-coordination-ring-formation ./cmd/replay-coordination-ring-formation"
+	@echo "  replay-all-formations-build  go build -trimpath -o $(BIN_DIR)/replay-all-formations ./cmd/replay-all-formations"
 	@echo "  test           go test -race ./..."
 	@echo "  golden-corpus  regenerate canonical-corpus golden files (schemas-evolution event)"
 	@echo "  clean          remove $(GEN_OUT) + $(BIN_DIR)"
@@ -282,6 +283,11 @@ replay-campaign-hypothesis-formation-build:
 replay-coordination-ring-formation-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/replay-coordination-ring-formation ./cmd/replay-coordination-ring-formation
+
+.PHONY: replay-all-formations-build
+replay-all-formations-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/replay-all-formations ./cmd/replay-all-formations
 
 .PHONY: test
 test:

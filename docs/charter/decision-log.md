@@ -3538,6 +3538,49 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0090` — Substrate-wide Phase 3 batch replay across all four Cat III subtypes; §0086–§0089 batch carry-forward discharged
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0085`](#0085--substrate-wide-batch-phase-1-replay-0084-named-carry-forward-discharged) landed substrate-wide Phase 1 batch replay for OperationalSession. [`§0086`](#0086--first-phase-3-reconstructive-replay-tool--behavioralcluster-formation)–[`§0089`](#0089--coordinationring-phase-3-replay-closes-the-four-subtype-phase-3-reconstructive-replay-arc) landed per-target Phase 3 replay for all four Cat III subtypes. Each §0086-§0089 entry carried "Substrate-wide BC/AG/CH/CR Phase 3 batch tools" as a deferred carry-forward. This entry discharges that carry-forward.
+
+  Single bundled landing (one PR) rather than four per-subtype PRs — the four batch functions share the same skeleton (walk substrate by message_type, replay each, aggregate into BatchReplayReport from §0085). Operators want to audit "the entire substrate's Phase 3 contract", not subtype-by-subtype; one CLI with optional `--subtype` filter is more operationally useful than four parallel binaries.
+
+- **Decision:** Land substrate-wide Phase 3 batch replay with two structural moves:
+
+  1. **Four batch functions in `internal/replay`** at [`services/ingestion/internal/replay/replay_all_formations.go`](../../services/ingestion/internal/replay/replay_all_formations.go) (new file). Each wraps a per-subtype `ReplayXXX` function in the shared `replayAllFormations` skeleton (substrate walk filtered by message_type → call per-target → accumulate outcomes). Reuses the existing `BatchReplayReport` + `BatchReplayEntry` + `BatchReplayOutcome` types from §0085 — no new shapes. Per-subtype Report-to-Entry converters (`bcReportToEntry` etc.) bridge the typed Phase-3 reports to the shared entry shape.
+
+  2. **One bundled CLI** at [`services/ingestion/cmd/replay-all-formations/main.go`](../../services/ingestion/cmd/replay-all-formations/main.go) (new file). 37th operational binary; 9th substrate-audit/maintenance. Optional `--subtype` filter; default replays all four. Output JSON has per-subtype sections; exit code computes across all selected subtypes (drift > 0 → 1; else error > 0 → 3; else 0).
+
+- **Constitutional review:** No Charter invariant amended. Same constitutional shape as §0085: read-only over immutable substrate; aggregates derived from projection-time logic; no new records committed. Respects §0021 OMQ #3 substrate-time-generation (each per-target replay independently uses its own formation's committed_at as the time bound). Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`services/ingestion/internal/replay/replay_all_formations.go`](../../services/ingestion/internal/replay/replay_all_formations.go) — new file. Four exported batch functions + shared `replayAllFormations` skeleton + four per-subtype Report-to-Entry converters.
+  - [`services/ingestion/internal/replay/replay_all_formations_test.go`](../../services/ingestion/internal/replay/replay_all_formations_test.go) — new file. **7 tests**: empty substrate, all-match for each of the four subtypes (4 tests), error-counting via hand-injected bogus formation, skip-other-subtypes invariant.
+  - [`services/ingestion/cmd/replay-all-formations/main.go`](../../services/ingestion/cmd/replay-all-formations/main.go) — new binary. 37th CLI; 9th audit/maintenance.
+  - Makefile + README + decision-log §0090.
+  - **§0086+§0087+§0088+§0089 "substrate-wide Phase 3 batch" carry-forward discharged.** Operators can now audit Phase 3 reproducibility across the entire substrate in one command.
+  - **37th operational binary; 9th audit/maintenance.** `cmd/` now contains 37 binaries:
+    - substrate-write (25): unchanged.
+    - **substrate-audit/maintenance (9):** verify, orphan-cleanup, replay-operational-session, replay-all-operational-sessions, replay-behavioral-cluster-formation, replay-automation-group-formation, replay-campaign-hypothesis-formation, replay-coordination-ring-formation, **replay-all-formations** (new).
+    - projection-read (3): unchanged.
+  - **Replay tooling state post-§0090.** Phase 1 + Phase 3 are operationally complete with both per-target and substrate-wide tools for each:
+    - Phase 1 per-target: §0084 (`replay-operational-session`)
+    - Phase 1 substrate-wide: §0085 (`replay-all-operational-sessions`)
+    - Phase 3 per-target: §0086–§0089 (four CLIs)
+    - Phase 3 substrate-wide: §0090 (one CLI with subtype filter)
+  - **Performance note.** Each per-target Phase 3 replay walks the substrate once for its FormationContext (filtered by its own committed_at). Batch replay over N formations does N walks. A future optimization could pre-collect all DeclaredSessions with their committed_at once, then client-side filter per formation — reducing the cost to one walk + N filter passes. Deferred until operator pressure surfaces (current substrates are small enough that the N-walks cost is acceptable).
+  - **Out of scope at this layer (carry-forwards).**
+    - **Phase 3 batch-replay performance optimization** — pre-collect-all + client-side-filter as named above. Carry-forward.
+    - **Lifecycle-event Phase 3 replay** — unchanged from §0086 carry-forward (semantic open).
+    - **HTTP replay endpoints** — unchanged.
+    - **Phase 2 + Phase 4** — unchanged.
+
+- **Supersession:** None. Discharges a four-entry-old carry-forward (§0086+§0087+§0088+§0089). §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

@@ -855,6 +855,31 @@ make replay-coordination-ring-formation-build                              # bui
 
 With this CLI, Phase 3 reconstructive replay covers all four §0010 Q2-resolved Cat III subtypes (BC, AG, CH, CR). Each subtype carries the same wire shape + exit-code semantic; the shared `hypothesis.CollectFormationContextAt` helper handles substrate-time filtering for all four via the interface-to-interface assertion pattern.
 
+## `replay-all-formations` CLI
+
+Substrate-wide Phase 3 batch replay across all four Cat III subtype formations per [`§0090`](../../docs/charter/decision-log.md). Default: replays every formation of every subtype. Optional `--subtype` filter narrows to one.
+
+```sh
+make replay-all-formations-build                                           # builds ./bin/replay-all-formations
+
+# Audit Phase 3 reproducibility across all four Cat III subtypes
+./bin/replay-all-formations -db ./ghost-trace.db -blobs ./blobs
+
+# Single-subtype audit
+./bin/replay-all-formations -subtype coordination_ring
+```
+
+Output JSON contains a section per selected subtype, each carrying the `BatchReplayReport` shape from [`§0085`](../../docs/charter/decision-log.md) (`total`, `matched`, `drifted`, `errored` + optional `drift` / `errors` arrays).
+
+Exit codes (computed across all selected subtypes):
+
+- **0** — every formation in every selected subtype matched.
+- **1** — at least one drift detected.
+- **2** — tool/configuration error.
+- **3** — no drift but at least one substrate-precondition error.
+
+Drift takes precedence over precondition error when both are present, mirroring the §0085 + §0086-§0089 convention.
+
 ## `replay-all-operational-sessions` CLI
 
 Substrate-wide batch Phase 1 replay per [`§0085`](../../docs/charter/decision-log.md). Walks every `OperationalSession` in the substrate, re-derives each from its declared source, and reports aggregate match/drift/error counts. Pre-collects the `DerivationContext` once and reuses it across all per-target replays (cost: substrate walks = 2 + 1 lookup-per-record; vs N+1 walks if the per-target CLI were called naively in a loop).
