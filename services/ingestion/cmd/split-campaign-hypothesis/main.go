@@ -68,6 +68,7 @@ func run() error {
 	flag.Var(&successors, "successor-formation-hash", "REQUIRED (≥ 2 invocations): hex-encoded BLAKE3-256 of a successor CampaignHypothesisFormation; repeat the option for each successor")
 	splitAtNs := flag.Int64("split-at-ns", 0, "explicit split_at as Unix nanoseconds; 0 = wall-clock now()")
 	reason := flag.String("reason", "", "operator-supplied forensic note; strongly recommended")
+	actor := flag.String("actor", "", "OPTIONAL per decision-log §0097 + §0110: when non-empty, pairs the split with an IngestionEvent for per-actor attribution.")
 	flag.Parse()
 
 	if *antecedentHex == "" {
@@ -102,6 +103,7 @@ func run() error {
 		SuccessorFormationHashes: succs,
 		SplitAt:                  *splitAtNs,
 		Reason:                   *reason,
+		Actor:                    *actor,
 	}, time.Now)
 	if err != nil {
 		return err
@@ -114,13 +116,20 @@ func run() error {
 		SuccessorFormationHashes: successors.hexes,
 		SplitEventHash:           report.SplitEventHashHex,
 		AlreadySplit:             report.AlreadySplit,
+		IngestionEventHash:       report.IngestionEventHashHex,
 	}); err != nil {
 		return fmt.Errorf("encode json: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr,
-		"split-campaign-hypothesis: antecedent=%s successors=%d split=%s already_split=%v\n",
-		*antecedentHex, len(successors.hexes), report.SplitEventHashHex, report.AlreadySplit)
+	if *actor != "" {
+		fmt.Fprintf(os.Stderr,
+			"split-campaign-hypothesis: antecedent=%s successors=%d split=%s ingestion=%s actor=%q already_split=%v\n",
+			*antecedentHex, len(successors.hexes), report.SplitEventHashHex, report.IngestionEventHashHex, *actor, report.AlreadySplit)
+	} else {
+		fmt.Fprintf(os.Stderr,
+			"split-campaign-hypothesis: antecedent=%s successors=%d split=%s already_split=%v\n",
+			*antecedentHex, len(successors.hexes), report.SplitEventHashHex, report.AlreadySplit)
+	}
 	return nil
 }
 
@@ -142,4 +151,5 @@ type payload struct {
 	SuccessorFormationHashes []string `json:"successor_formation_hashes"`
 	SplitEventHash           string   `json:"split_event_hash"`
 	AlreadySplit             bool     `json:"already_split"`
+	IngestionEventHash       string   `json:"ingestion_event_hash,omitempty"`
 }
