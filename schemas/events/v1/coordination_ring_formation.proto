@@ -1,0 +1,118 @@
+// Category III hypothesis lifecycle event per Charter §2.5
+// (Hypothesis Lifecycle Explicitness, frozen v0.3) +
+// entity-model.md §Category III (`CoordinationRing` concrete
+// subtype: "a set of actors whose patterns of interaction suggest
+// coordinated action") + decision-log §0010 (Q2 subtype
+// resolution) + decision-log §0070 (this entry — first
+// CoordinationRing formation landing; opens the fourth and final
+// Cat III subtype lifecycle arc).
+//
+// Encoded under the canonical-serialization-contract at
+// docs/architecture/canonical-serialization-contract.md.
+//
+// Per Charter §2.5 BC5, CoordinationRingFormation is a Cat I
+// record committed under §2.1 immutability — the formation event
+// IS the substrate-level fact, while the ring's current state is a
+// projection over its lifecycle event chain (§2.5 BC3 + §0051).
+//
+// Hypothesis identity (per §0045 + §0056 + §0063 invariant carried
+// forward): the formation event's content-hash IS the
+// CoordinationRing's stable identifier. Subsequent lifecycle
+// events (promotion, demotion, merge, split, dissolution — all
+// follow-on landings) reference the formation event's content-hash.
+//
+// Subtype distinction (per entity-model.md + §0070 modeling
+// choice): the inference is over INTERACTIONS between actors, NOT
+// over a flat set of actors. Where BehavioralCluster (§0045) and
+// AutomationGroup (§0056) carry `actor_refs` as a set, and
+// CampaignHypothesis (§0063) carries `source_event_hashes` as the
+// event-centric membership shape, CoordinationRing carries
+// `interactions` as an explicit edge list. The relational structure
+// is what distinguishes a coordination ring from the three other
+// subtypes — flattening edges into a vertex set would lose the
+// property the subtype was carved out to preserve.
+//
+// Edge canonicalization: each `CoordinationRingInteraction`
+// represents an UNDIRECTED pair (per the §0070 modeling choice —
+// "coordinated action" is symmetric at this inference layer;
+// directed-coordination is deferred). Per-edge canonicalization:
+// the two actor_refs MUST be lex-ordered as `actor_a < actor_b`.
+// The repeated field MUST be sorted ASCENDING by (actor_a,
+// actor_b) lex order. The same edge MUST NOT appear twice. These
+// rules guarantee byte-identical formation events for logically-
+// identical edge sets regardless of ingestion order.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// CoordinationRingInteraction is the canonical wire form of an
+// undirected coordination edge between two actors. Per §0070,
+// actor_a MUST be lex-less-than actor_b (within-edge canonical
+// ordering) so that swapped pairs never produce divergent
+// formation hashes.
+message CoordinationRingInteraction {
+  // actor_a is the lex-smaller of the pair. Single-tier per
+  // decision-log §0023.
+  string actor_a = 1;
+
+  // actor_b is the lex-larger of the pair. Single-tier per
+  // decision-log §0023.
+  string actor_b = 2;
+}
+
+// CoordinationRingFormation records the formation of a Category
+// III CoordinationRing per entity-model.md "set of actors whose
+// patterns of interaction suggest coordinated action".
+//
+// The inference that triggered formation is non-deterministic per
+// Charter §2.2 (Category III). The recording is deterministic —
+// given the same (substrate state, pattern_signature,
+// pattern_parameters) tuple, the resulting
+// CoordinationRingFormation content-hash is reproducible.
+message CoordinationRingFormation {
+  // pattern_signature is the stable identifier of the formation
+  // pattern that produced this ring (e.g.
+  // "co-occurrence-window-v1"). Maps to entity-model.md
+  // "interaction-pattern reference". Part of the formation event's
+  // content-hash → part of the hypothesis's identity.
+  string pattern_signature = 1;
+
+  // pattern_parameters is the canonical-form string encoding of
+  // the pattern's parameters (e.g.
+  // "min_edge_support=3;max_window_seconds=600"). Canonical form:
+  // lowercase key=value pairs sorted by key, separated by
+  // semicolons. Two formations with logically-identical parameters
+  // MUST produce byte-identical pattern_parameters strings.
+  string pattern_parameters = 2;
+
+  // interactions is the set of UNDIRECTED actor pairs whose
+  // interaction the inference recognized as coordinated. Per the
+  // §0070 modeling choice: cardinality MUST be >= 1; within each
+  // edge actor_a < actor_b lex; the repeated field is sorted
+  // ASCENDING by (actor_a, actor_b); no edge appears twice. The
+  // ring's MEMBER SET is the union of all actor_a + actor_b values
+  // and is recoverable by walking this list; operators that want
+  // set-shaped membership compute the union locally rather than
+  // carrying a denormalized actor_refs field.
+  repeated CoordinationRingInteraction interactions = 3;
+
+  // formation_at is the Unix-nanoseconds time the inference
+  // recognized the formation. Distinct from substrate's
+  // committed_at. Per §0045+§0056+§0063 determinism contract,
+  // typically derived deterministically (e.g. max event_time
+  // across the ring's contributing observations).
+  int64 formation_at = 4;
+
+  // confidence is a scalar in [0.0, 1.0] expressing the formation
+  // pattern's confidence. PLACEHOLDER pending Charter §2.6
+  // redaction (same disclaimer as §0045+§0056+§0063).
+  float confidence = 5;
+
+  // source_event_hashes is the set of Cat I observation
+  // content-hashes from which the formation was inferred —
+  // observational provenance per Charter §2.3 frozen v0.4. Sorted
+  // ASCENDING (byte-lexicographic) for content-hash stability.
+  repeated bytes source_event_hashes = 6;
+}
