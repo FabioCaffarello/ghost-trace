@@ -3498,6 +3498,46 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0089` — CoordinationRing Phase 3 replay; closes the four-subtype Phase 3 reconstructive replay arc
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0086`](#0086--first-phase-3-reconstructive-replay-tool--behavioralcluster-formation) opened the Phase 3 replay arc with BC; [`§0087`](#0087--automationgroup-phase-3-replay-second-of-four-subtype-specific-phase-3-tools) extended to AG; [`§0088`](#0088--campaignhypothesis-phase-3-replay-third-of-four-subtype-specific-phase-3-tools) to CH. This entry closes the four-subtype Phase 3 arc with CoordinationRing.
+
+  With this landing, **Phase 3 reconstructive replay covers all four §0010 Q2-resolved Cat III subtypes** (BC, AG, CH, CR) at the formation layer. The shared `hypothesis.CollectFormationContextAt` helper + interface-to-interface assertion pattern serves all four uniformly; per-subtype pattern resolvers handle the four concrete formation patterns (session-descriptor-shared-v1, uniform-cadence-v1, temporal-descriptor-cohort-v1, co-occurrence-window-v1).
+
+- **Decision:** Land CR Phase 3 replay with three structural moves mirroring §0086+§0087+§0088:
+
+  1. **`replay.ReplayCoordinationRingFormation` + `replay.ResolveCRFormationPattern`** at [`services/ingestion/internal/replay/coordination_ring.go`](../../services/ingestion/internal/replay/coordination_ring.go) (new file). Resolves the `co-occurrence-window-v1` pattern. Two int parameters (`max_window_seconds`, `min_edge_support`) — same parser as BC + CH.
+
+  2. **Interface-to-interface assertion** to `CoordinationRingFormationContext`.
+
+  3. **`cmd/replay-coordination-ring-formation`** (new file). 36th operational binary; 8th substrate-audit/maintenance. Same four-exit-code semantic as §0086+§0087+§0088.
+
+- **Constitutional review:** No Charter invariant amended. Same constitutional shape as §0086+§0087+§0088. Respects the §0021 OMQ #3 substrate-time-generation resolution. Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`services/ingestion/internal/replay/coordination_ring.go`](../../services/ingestion/internal/replay/coordination_ring.go) — new file.
+  - [`services/ingestion/internal/replay/coordination_ring_test.go`](../../services/ingestion/internal/replay/coordination_ring_test.go) — new file. **7 tests** mirroring §0086+§0087+§0088: happy path, unknown target, wrong message type, unknown pattern, substrate-time-filter correctness, two resolver tests.
+  - [`services/ingestion/cmd/replay-coordination-ring-formation/main.go`](../../services/ingestion/cmd/replay-coordination-ring-formation/main.go) — new binary; 36th CLI; 8th audit/maintenance.
+  - Makefile + README + decision-log §0089.
+  - **Four-subtype Phase 3 reconstructive replay arc complete.** Operators can now verify Phase 3 reproducibility for ANY Cat III formation in the substrate, regardless of subtype. The arc spans 4 PRs (§0086-§0089) + 4 CLIs + 4 pattern resolvers, all sharing one substrate-time-bounded FormationContext collector.
+  - **36th operational binary; 8th audit/maintenance.** `cmd/` now contains 36 binaries:
+    - substrate-write (25): unchanged.
+    - **substrate-audit/maintenance (8):** verify, orphan-cleanup, replay-operational-session, replay-all-operational-sessions, replay-behavioral-cluster-formation, replay-automation-group-formation, replay-campaign-hypothesis-formation, **replay-coordination-ring-formation** (new).
+    - projection-read (3): unchanged.
+  - **Replay tooling state post-§0089.** Phase 1 (per-target + batch over OS) + Phase 3 (per-target across all four Cat III subtypes) are operational. Remaining replay carry-forwards: Phase 2 (no Cat II type that depends on enrichment-as-of-T₁ exists yet), Phase 4 (analytical), substrate-wide BC/AG/CH/CR Phase 3 batch tools, lifecycle-event Phase 3 replay, HTTP replay endpoints.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Phase 3 lifecycle-event replay** — unchanged from §0086 carry-forward (lifecycle events like promotion/demotion/merge/split don't carry pattern_signature; the per-event semantic is open).
+    - **Substrate-wide BC/AG/CH/CR Phase 3 batch tools** — mirror §0085 (Phase 1 batch) for the Phase 3 subtype tools. Named carry-forward when operator pressure surfaces.
+    - **HTTP Phase 3 endpoints** — mirror §0080-§0082 + §0084 HTTP-carry-forward.
+    - **Phase 2 + Phase 4** — unchanged from §0084 deferral.
+
+- **Supersession:** None. Closes the four-subtype Phase 3 reconstructive replay arc opened at §0086. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
