@@ -3720,6 +3720,72 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0094` — HTTP auth-model evolution framed; operation-tier classification recorded; Tier 3-4 advance deferred to follow-on RFC
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0093`](#0093--http-substrate-integrity-audit-endpoint-get-v1verify-extends-0091-http-readside-arc-to-substrate-audit-category) explicitly named the next structural gate: "bearer-token-only auth is insufficient for a §2.1-mutating operation." Two consequences were carried forward at §0093: HTTP `orphan-cleanup` (destructive maintenance) and HTTP write-side for the 24 Cat III lifecycle CLIs (form/promote/demote/dissolve/merge/split × 4 subtypes). Both were deferred on the same predicate — the auth model lacks per-operation scope.
+
+  The current auth model accumulated over [`§0035`](#0035--bearertoken-authentication-added-to-ingestion-http-interface-0034-authdeferred-discharged)–[`§0038`](#0038--ingestionevent-enrichment--mtls-client-identity-threaded-into-ingestion-provenance-0037-clientidentity-followon-discharged) provides:
+  - **Bearer token** ([`§0035`](#0035--bearertoken-authentication-added-to-ingestion-http-interface-0034-authdeferred-discharged)) — single shared secret; all-or-nothing access; the same token grants all protected paths.
+  - **TLS termination** ([`§0036`](#0036--tls-termination-added-to-ingestion-http-interface-0035-tlsdeferred-discharged)) — wire-level confidentiality + tamper-evidence.
+  - **mTLS** ([`§0037`](#0037--mtls-option-added-to-ingestion-http-interface-0035--0036-mtlsdeferred-discharged)) — per-client identity via verified certificate; identity recorded in `IngestionEvent` provenance ([`§0038`](#0038--ingestionevent-enrichment--mtls-client-identity-threaded-into-ingestion-provenance-0037-clientidentity-followon-discharged)).
+
+  The §0035 carry-forwards explicitly named "Multi-token / scoped tokens — single shared secret at inception. Multi-tenant deployments or per-producer auth requires a separate RFC." That RFC has not been authored; this entry produces its structural antecedent — the operation-tier classification — without making the wire-format selection.
+
+  §0093's named gap, combined with the §0035 multi-token/scoped-token carry-forward, is now mature enough for a framing entry. Sufficient operational surface exists ([`§0091`](#0091--http-replay-endpoints-0084--00860089--0090-http-carry-forwards-discharged) 8 routes + [`§0093`](#0093--http-substrate-integrity-audit-endpoint-get-v1verify-extends-0091-http-readside-arc-to-substrate-audit-category) 9th route = 9 routes; 33 CLIs; clear write-side gaps) to classify operations by auth-tier without speculative anticipation.
+
+- **Decision:** Record the **HTTP operation-tier classification** as the structural antecedent to a future auth-model RFC. Three structural moves:
+
+  1. **Five-tier classification of HTTP operations.** Each tier identifies the minimum authorization granularity required for the operation. Higher tiers presuppose lower tiers (a Tier 3 token is implicitly a Tier 2 token; the reverse is not true).
+
+     | Tier | Name | Operations | Current coverage | Sufficient? |
+     |---|---|---|---|---|
+     | **T0** | Public | `GET /healthz` | None required ([`§0035`](#0035--bearertoken-authentication-added-to-ingestion-http-interface-0034-authdeferred-discharged) `/healthz` exemption) | YES |
+     | **T1** | Producer | `POST /v1/events/{type}` (Cat I write) | Bearer token + optional mTLS for client identity ([`§0037`](#0037--mtls-option-added-to-ingestion-http-interface-0035--0036-mtlsdeferred-discharged)–[`§0038`](#0038--ingestionevent-enrichment--mtls-client-identity-threaded-into-ingestion-provenance-0037-clientidentity-followon-discharged)) | YES at inception |
+     | **T2** | Operator-read | `GET /v1/hypotheses/*` (3 routes per [`§0080`](#0080--http-projection-read-endpoint-lands-get-v1hypothesesstate-first-readside-surface-on-the-http-channel)–[`§0082`](#0082--http-summary-endpoint-get-v1hypothesessummary-three-endpoint-http-read-arc-complete)), `GET /v1/replay/*` (4 routes per [`§0091`](#0091--http-replay-endpoints-0084--00860089--0090-http-carry-forwards-discharged)), `GET /v1/verify` ([`§0093`](#0093--http-substrate-integrity-audit-endpoint-get-v1verify-extends-0091-http-readside-arc-to-substrate-audit-category)) | Bearer token | YES at inception |
+     | **T3** | Substrate-admin | `POST /v1/admin/orphan-cleanup` (named follow-on per [`§0093`](#0093--http-substrate-integrity-audit-endpoint-get-v1verify-extends-0091-http-readside-arc-to-substrate-audit-category)) | NOT exposed | **NO** — gap |
+     | **T4** | Constitutional-act | HTTP analogs of the 24 Cat III lifecycle CLIs (form/promote/demote/dissolve/merge/split × 4 subtypes) | NOT exposed | **NO** — gap |
+
+     The current model collapses T1 + T2 + T3 + T4 into a single bearer-token equivalence class. T0 is correctly distinct (the `/healthz` exemption). T1 vs T2 distinction is moot at single-tenant inception (the producer and operator share the same token). T3 + T4 require structural advance.
+
+  2. **Candidate auth-model evolutions for T3 + T4 (recorded; not selected).** The follow-on RFC chooses among these; this entry records the choice space.
+
+     - **α — Multi-token files mapped to scopes.** Operationally simplest extension of [`§0035`](#0035--bearertoken-authentication-added-to-ingestion-http-interface-0034-authdeferred-discharged) `--http-auth-token-file`: add `--http-auth-tier-N-token-file` per tier; the handler checks tier-N tokens against the per-tier path set. Pros: zero new dependencies; preserves the constant-time-comparison + file-precedence + whitespace-trim contract of [`§0035`](#0035--bearertoken-authentication-added-to-ingestion-http-interface-0034-authdeferred-discharged). Cons: N tokens means N rotation events; no per-actor attribution beyond mTLS.
+     - **β — JWT with scope claims.** Bearer token replaced by signed JWT carrying `scope` claims (e.g. `{"scope": ["operator-read", "substrate-admin"]}`). Pros: standard mechanism; revocation via short expiry + key rotation; per-actor attribution via claim payload (e.g. `sub`). Cons: new dependency (JWT library); key-rotation policy is itself a follow-on; revocation list complexity.
+     - **γ — mTLS cert subject-name-to-scope mapping.** Reuse the [`§0037`](#0037--mtls-option-added-to-ingestion-http-interface-0035--0036-mtlsdeferred-discharged) verified client certificate; map `Subject.CommonName` or `Subject Alternative Names` to a scope set via an operator-supplied policy file. Pros: PKI-grounded identity; no new auth wire format; the [`§0038`](#0038--ingestionevent-enrichment--mtls-client-identity-threaded-into-ingestion-provenance-0037-clientidentity-followon-discharged) `IngestionEvent` already records the verified identity for Cat I writes — extending the same recording to T3/T4 writes gives consistent per-actor provenance. Cons: requires PKI operations to issue/revoke certs; cert-subject-to-scope mapping policy file is itself an operator surface.
+     - **δ — HMAC request signing with scope-bound keys.** Per-request HMAC signature with timestamp; signing key carries scope attributes. Pros: replay-resistant; no token-in-flight after first leak. Cons: per-request signing complexity at producer side; key-management surface; deferred at [`§0035`](#0035--bearertoken-authentication-added-to-ingestion-http-interface-0034-authdeferred-discharged) as "operational complexity disproportionate at inception" — same calculation likely still applies.
+
+     The candidates are not mutually exclusive: α + γ could compose (multi-token at the operator surface, mTLS at the producer surface).
+
+  3. **Per-actor attribution requirement for T3 + T4.** Whatever auth model the follow-on RFC selects, T3 + T4 writes MUST commit a per-actor attribution alongside the operation. The [`§0038`](#0038--ingestionevent-enrichment--mtls-client-identity-threaded-into-ingestion-provenance-0037-clientidentity-followon-discharged) `IngestionEvent` provenance shape proves this is structurally tractable for Cat I writes; the same per-actor-attribution discipline extends to T3 (substrate-admin) + T4 (constitutional-act). The §2.5 BC5 + §2.3 + §2.1 invariants require lifecycle events to record their committer's identity at substrate-commit time; the §0038 mTLS-CN/SAN/cert-SHA fields are the working precedent. The follow-on RFC's wire-shape choice (which auth fields land in the lifecycle event's IngestionEvent pair) is a sub-question, not a Charter-level question.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. Auth is a service-tier access-control concern per the [`§0035`](#0035--bearertoken-authentication-added-to-ingestion-http-interface-0034-authdeferred-discharged) precedent ("no §2.1/§2.2/§2.3/§2.5 commitment is affected"); this entry preserves that posture. The five-tier classification is descriptive surface about existing operations, not new Charter commitments.
+
+  The decision deliberately produces no Charter-level operationalization for the tiers. T0 is exempt by [`§0035`](#0035--bearertoken-authentication-added-to-ingestion-http-interface-0034-authdeferred-discharged) `/healthz` precedent; T1-T2 are operationally indistinguishable at single-tenant inception; T3-T4 require structural advance but the choice between α/β/γ/δ is implementation-detail and operationally falsifiable (each candidate has measurable consequences at deployment; the RFC picks the candidate whose consequences best match operational pressure). [§4 frozen v0.2](../charter/constitutional-charter.md#4-constitutional-design-rule) falsifiability discipline preserved.
+
+  Canonical vocabulary used as written. New term introduced: **operation tier** — a service-tier ordinal classification of HTTP operations by minimum required authorization granularity (T0 public, T1 producer, T2 operator-read, T3 substrate-admin, T4 constitutional-act). The term is service-tier vocabulary, not Charter-level vocabulary; not added to [`docs/glossary.md`](../glossary.md). Future operationalization may promote it.
+
+- **Consequences:**
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0094 (this entry).
+  - **No code changes; no new dependencies; no new HTTP routes.** This entry is text-only — the auth-model framing antecedent to a future RFC.
+  - **[`§0035`](#0035--bearertoken-authentication-added-to-ingestion-http-interface-0034-authdeferred-discharged) "Multi-token / scoped tokens" carry-forward STRUCTURED.** Not discharged (no implementation); structured into the five-tier classification + four candidate evolutions. The follow-on RFC works against this structured antecedent rather than starting from a blank slate.
+  - **[`§0093`](#0093--http-substrate-integrity-audit-endpoint-get-v1verify-extends-0091-http-readside-arc-to-substrate-audit-category) named gap STRUCTURED.** §0093's "HTTP `orphan-cleanup` excluded by structural argument" + "Write-side HTTP for Cat III lifecycle ops" are both classified as T3 + T4 operations respectively; the gate predicate is the auth-model RFC.
+  - **Third structural-argument-class entry.** First was [`§0077`](#0077--24--26-empirical-pressure-assessment-recorded-assessment-only-no-redaction-resumption) (empirical-pressure assessment); second was [`§0092`](#0092--phase-3-lifecycleevent-replay-reframed-no-distinct-constitutional-shape-0086-carryforward-discharged-by-structural-argument) (lifecycle-event Phase 3 replay reframing); this is third. Pattern stabilizing: a structural-argument entry articulates *what* a future implementation must satisfy without making the implementation choice, then the implementation lands behind discipline.
+  - **Per-actor attribution as cross-tier requirement.** [`§0038`](#0038--ingestionevent-enrichment--mtls-client-identity-threaded-into-ingestion-provenance-0037-clientidentity-followon-discharged) mTLS-CN/SAN/cert-SHA recording extends to T3 + T4 writes as a Charter-level requirement (lifecycle events under §2.5 BC5 + §2.3). The follow-on RFC operationalizes this; the cross-tier requirement is not deferrable.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Auth-model wire-format RFC.** The α/β/γ/δ choice is the RFC's central question. Named follow-on; no implementation work proceeds for T3 + T4 HTTP exposure until the RFC lands.
+    - **HTTP `orphan-cleanup` endpoint (T3).** Blocked by auth-model RFC.
+    - **HTTP write-side for Cat III lifecycle ops (T4).** Blocked by auth-model RFC.
+    - **gRPC interface** — unchanged from [`§0091`](#0091--http-replay-endpoints-0084--00860089--0090-http-carry-forwards-discharged) carry-forward. Note: gRPC carries its own auth surface (typically mTLS + interceptors); the operation-tier classification recorded here applies analogously to a future gRPC interface. The classification is wire-protocol-agnostic.
+    - **Multi-tenant deployment.** Unchanged. Multi-token would address multi-tenant per-tenant scoping; the §Choice-space-candidate-α entry is the working precedent.
+    - **Token rotation (online).** Unchanged from [`§0035`](#0035--bearertoken-authentication-added-to-ingestion-http-interface-0034-authdeferred-discharged) carry-forward; orthogonal to tier classification.
+
+- **Supersession:** None. Structures [`§0035`](#0035--bearertoken-authentication-added-to-ingestion-http-interface-0034-authdeferred-discharged)'s multi-token/scoped-token carry-forward + [`§0093`](#0093--http-substrate-integrity-audit-endpoint-get-v1verify-extends-0091-http-readside-arc-to-substrate-audit-category)'s named auth-model gap into a single classified antecedent for a future RFC. [`§0022`](#0022--implementation-pivot-64-amendment--0003-reversal-authorization--2426-posture-shift) implementation-gate criteria continue to be satisfied; no implementation work proposed.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
