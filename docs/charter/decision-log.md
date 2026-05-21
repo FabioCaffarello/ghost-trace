@@ -2518,6 +2518,39 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0065` — Third-subtype demotion (`CampaignHypothesisDemotion`) lands; promote/demote loop closed for third subtype
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0064`](#0064--third-subtype-promotion-campaignhypothesispromotion-lands-sentinel-sharing-landscape-spans-all-three-subtypes) landed CampaignHypothesis promotion. This entry lands demotion (mirrors §0047 BC, §0058 AG), closing the promote/demote loop for the third subtype. Mechanical replay; no design decisions surface.
+
+- **Decision:** Land `CampaignHypothesisDemotion` with three structural moves:
+
+  1. **`CampaignHypothesisDemotion` Protobuf message** at [`schemas/events/v1/campaign_hypothesis_demotion.proto`](../../schemas/events/v1/campaign_hypothesis_demotion.proto). Three fields mirroring §0047 + §0058.
+
+  2. **`DemoteCampaignHypothesis` entry point** at [`services/ingestion/internal/hypothesis/campaign_hypothesis_demotion.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_demotion.go). New `campaignHypothesisPromotionMessageType` constant. Reuses shared `ErrTargetNotFound` + `ErrTargetWrongType` sentinels.
+
+  3. **`cmd/demote-campaign-hypothesis`** — 21st operational binary; 16th substrate-write.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1, §2.2, §2.3, §2.5 + §2.5 BC3 + §2.5 BC5. Respects §0011 Layer A cadence semantic (candidacy gate). Respects §0046+§0047 sentinel-sharing pattern. Cross-subtype rejection tested. Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`schemas/events/v1/campaign_hypothesis_demotion.proto`](../../schemas/events/v1/campaign_hypothesis_demotion.proto) — new file.
+  - [`services/ingestion/internal/hypothesis/campaign_hypothesis_demotion.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_demotion.go) — new file.
+  - [`services/ingestion/internal/hypothesis/campaign_hypothesis_demotion_test.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_demotion_test.go) — **7 tests** covering cadence-satisfied/unsatisfied, idempotency, unknown target, formation-hash rejection, cross-subtype promotion rejection, default demoted_at.
+  - [`services/ingestion/cmd/demote-campaign-hypothesis/main.go`](../../services/ingestion/cmd/demote-campaign-hypothesis/main.go) — new binary; 21st operational CLI; 16th substrate-write.
+  - Makefile, canonical corpus, corpus README, service README, decision-log §0065.
+  - **Test count grows.** Combined: **328 tests** (up from 321 at §0064; +7).
+  - **Promote/demote loop closed for the third subtype.** Operator can now form → promote → demote a CampaignHypothesis, mirroring §0047 closure for BC and §0058 closure for AG.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Three remaining CampaignHypothesis lifecycle operations** — dissolution (§0066), merge (§0067), split (§0068). Note: merge + split for event-centric subtype still require structural consideration (event-set partition vs actor-set).
+    - **Projection layer extension for CampaignHypothesis** — unchanged from §0063 carry-forward.
+
+- **Supersession:** None. Extends §0064; promote/demote loop closed for third subtype. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

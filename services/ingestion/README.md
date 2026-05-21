@@ -162,6 +162,22 @@ Validates the supplied `formation-event-hash` resolves to a `CampaignHypothesisF
 
 Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
 
+## `demote-campaign-hypothesis` CLI
+
+Operator-invoked tool to record the **CampaignHypothesis demotion** lifecycle operation per [`§0065`](../../docs/charter/decision-log.md). Mirrors `demote-hypothesis` (BC) and `demote-automation-group` (AG). Same Layer A cadence semantic per [`§0011`](../../docs/charter/decision-log.md).
+
+```sh
+make demote-campaign-hypothesis-build                                     # builds ./bin/demote-campaign-hypothesis
+
+./bin/demote-campaign-hypothesis \
+  -promotion-event-hash <64-hex-chars> \
+  -reason "campaign cycle close"
+```
+
+Validates the supplied `promotion-event-hash` resolves to a `CampaignHypothesisPromotion` row. Per §0011 the cadence gate is CANDIDACY, not a hard barrier; report surfaces `cadence_satisfied` + `cadence_elapsed_seconds`.
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
+
 ## `promote-automation-group` CLI
 
 Operator-invoked tool to record the **AutomationGroup promotion** lifecycle operation per [`§0057`](../../docs/charter/decision-log.md) — second lifecycle operation of the second Cat III subtype arc. Mirrors [`promote-hypothesis`](#promote-hypothesis-cli) for the AutomationGroup subtype. Same Layer A cadence semantic per [`§0011`](../../docs/charter/decision-log.md).
