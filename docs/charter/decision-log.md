@@ -4561,6 +4561,24 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0114` — §0097 CLI-side extension: dissolve-* (BC + AG + CH + CR) gain --actor option
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0113`](#0113--0097-cliside-extension-demote-clis-bc--ag--ch--cr-gain-actor-option) shipped demote CLIs. This entry continues per-op-across-subtypes CLI cadence with dissolve. [`§0108`](#0108--t4-dissolve-replicated-across-all-four-subtypes-peropacrosssubtypes-cadence-continues-0098-1224) shipped helper-side Actor extension for all 4 dissolve helpers (including BC `Dissolve`, not covered by §0097).
+
+- **Decision:** All 4 dissolve CLIs ([`cmd/dissolve-hypothesis`](../../services/ingestion/cmd/dissolve-hypothesis), [`cmd/dissolve-automation-group`](../../services/ingestion/cmd/dissolve-automation-group), [`cmd/dissolve-campaign-hypothesis`](../../services/ingestion/cmd/dissolve-campaign-hypothesis), [`cmd/dissolve-coordination-ring`](../../services/ingestion/cmd/dissolve-coordination-ring)) gain `--actor` matching the §0097 + §0112 + §0113 promote/demote-CLI shape.
+
+- **Constitutional review:** No Charter invariant amended. Pure-wiring closure of [`§0108`](#0108--t4-dissolve-replicated-across-all-four-subtypes-peropacrosssubtypes-cadence-continues-0098-1224) helper-side extension.
+
+- **Consequences:**
+  - **§0097 CLI-side: 12/24 done** (4 promote + 4 demote + 4 dissolve). Remaining: 4 merge + 4 split + 4 form = 12 CLIs.
+
+- **Supersession:** None. Partial discharge of [`§0097`](#0097--cli-peractor-attribution-pilot-promotehypothesis-actor-authscope-rfc-open-question-2-partially-discharged) (4 more → 12 remaining).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
