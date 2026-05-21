@@ -3673,6 +3673,53 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0093` — HTTP substrate-integrity audit endpoint (`GET /v1/verify`); extends §0091 HTTP read-side arc to substrate-audit category
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0091`](#0091--http-replay-endpoints-0084--00860089--0090-http-carry-forwards-discharged) closed the HTTP read-side arc for **projection-read + replay** categories (three projection-read CLIs + seven replay CLIs → eight HTTP routes). The §0091 phrasing "all operational read-side surfaces now have HTTP parity" was precise: it covered the projection-read + replay categories. The **substrate-audit/maintenance** category — `cmd/verify` (per [`§0039`](#0039--substrate-integrity-audit-tool-cmdverify-0033-followon-discharged) + [`§0040`](#0040--orphanblob-detection-added-to-cmdverify)) — was deliberately not bundled into §0091 because it is structurally distinct from projection-read (which serves clients) and replay (which audits derivations): `verify` walks the entire substrate to surface §2.1 violations.
+
+  This entry brings `cmd/verify` to HTTP parity. The motivation is operational: remote operators want to trigger substrate-integrity audits via the same HTTP channel they already use for projection-read + replay (cron/systemd timer hitting a dedicated read-only token), rather than SSH'ing in to run the CLI.
+
+  `cmd/orphan-cleanup` ([`§0041`](#0041--orphan-cleanup-tool-cmdorphancleanup-0033-followon-discharged) destructive maintenance) is NOT included in this entry. Orphan-cleanup is write-side and irreversible; exposing it over HTTP without authorization beyond the inception-phase bearer token would weaken §2.1 defenses (an attacker with the bearer token could delete blobs). Orphan-cleanup remains CLI-only by structural argument; named follow-on if/when the security model gains per-operation authorization.
+
+- **Decision:** Land a single HTTP substrate-audit endpoint with three structural moves:
+
+  1. **`handleVerify` handler** at [`services/ingestion/internal/httpapi/verify.go`](../../services/ingestion/internal/httpapi/verify.go) (new file). Mirrors `cmd/verify` exactly: calls `verify.Verify(ctx, sub, verify.Options{CheckOrphans: …})` and emits the same JSON wire shape (`verified`, `hash_mismatch`, `missing_blob`, `orphan_blob`, `passed`, plus the three `_hashes` / `_paths` arrays). One helper added: `parseBoolQuery` for HTTP-parameter parity with CLI boolean options — reused for any future endpoint that mirrors a CLI boolean option.
+
+  2. **`/v1/verify` route addition** at [`services/ingestion/internal/httpapi/handler.go`](../../services/ingestion/internal/httpapi/handler.go). One new case in `ServeHTTP`; package doc updated. Auth + TLS infrastructure from [`§0034`](#0034--http-interface-added-to-ingestion-service-post-v1events--get-healthz-0030-httpgrpc-item-partially-discharged)–[`§0038`](#0038--mutual-tls-mtls-client-auth-added-to-ingestion-services-http-interface-0034-tls-followon-discharged-second-half) covers the new endpoint without extension.
+
+  3. **Substrate-integrity-failure semantic.** A failed audit (hash-mismatch OR missing-blob) returns HTTP **200** with `passed=false` — NOT an HTTP error code. This matches §0091's drift semantic: the substrate-integrity verdict is a body field, not a status code. Rationale: the audit succeeded (the walk completed); what it surfaced is a finding, not an error. CLI exit-code mapping:
+     - CLI exit 0 (pass) → HTTP 200, `passed=true`.
+     - CLI exit 1 (violation) → HTTP 200, `passed=false`.
+     - CLI exit 2 (tool/config error) → HTTP 503 (no substrate configured) or 500 (walk error).
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1 (read-only over immutable substrate; the audit recomputes hashes via the same `substrate.ReadBlob` path the live service uses). Respects §2.2 (no category-shifting). Same constitutional shape as §0091 (HTTP is a thin transport over existing read-layer functions). Canonical vocabulary used as written.
+
+  The decision deliberately scopes HTTP parity to the **non-destructive** half of the substrate-audit/maintenance category (`verify`) and excludes the **destructive** half (`orphan-cleanup`) per the §Context structural argument. The exclusion is itself structurally falsifiable: a future authorization model that distinguishes read-only-audit from substrate-mutation tokens would reopen the question for `orphan-cleanup`. The reversal predicate is auth-shape, not operator preference.
+
+- **Consequences:**
+  - [`services/ingestion/internal/httpapi/verify.go`](../../services/ingestion/internal/httpapi/verify.go) — new file. `handleVerify` handler + `verifyPayload` wire-shape type + `parseBoolQuery` helper.
+  - [`services/ingestion/internal/httpapi/verify_test.go`](../../services/ingestion/internal/httpapi/verify_test.go) — new file. **9 tests** covering: happy path (clean substrate), empty substrate, `check_orphans=true` on clean substrate, `check_orphans=true` with planted orphan blob (passes; orphans informational), hash-mismatch (corrupted blob → passed=false), missing-blob (deleted blob → passed=false), invalid `check_orphans` value (400), non-GET method (405), no `WithSubstrate` (503), auth-required (401 without token; 200 with correct token).
+  - [`services/ingestion/internal/httpapi/handler.go`](../../services/ingestion/internal/httpapi/handler.go) — package doc updated; one new route case for `/v1/verify`.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — new "HTTP verify endpoint" subsection after the existing HTTP replay endpoints section.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0093 (this entry).
+  - **Substrate-audit/maintenance category reaches HTTP parity for its non-destructive half.** `verify` now has HTTP parity; `orphan-cleanup` remains CLI-only by structural exclusion (named follow-on if/when authorization model evolves).
+  - **HTTP route tally.** Pre-§0093: 8 routes (POST /v1/events/* + GET /v1/hypotheses/* × 3 + GET /v1/replay/* × 4 + /healthz). Post-§0093: 9 routes (adds /v1/verify). Number of operational CLIs unchanged at 33 (per §0091 tally).
+  - **`parseBoolQuery` helper added.** First boolean-query-parameter parser in the httpapi package; future endpoints mirroring CLI boolean options reuse it. Per [`CLAUDE.md` §7](../../.claude/CLAUDE.md) constitutional minimalism: the helper is named once and exists to remove the next-occurrence's friction.
+  - **Drift-semantic precedent reaffirmed.** Substrate-integrity-failure-as-HTTP-200-with-passed=false is the third use of the §0091 drift-as-body-field convention (Phase 1 drift, Phase 3 drift, now substrate-audit failure). The convention is now established at three call sites; subsequent HTTP audit-like endpoints should follow the same shape rather than re-deciding.
+  - **Out of scope at this layer (carry-forwards).**
+    - **HTTP `orphan-cleanup` endpoint** — excluded by structural argument (destructive; weakens §2.1 defenses under bearer-token-only auth). Named follow-on when the security model gains per-operation authorization.
+    - **gRPC interface** — unchanged from [`§0091`](#0091--http-replay-endpoints-0084--00860089--0090-http-carry-forwards-discharged) carry-forward.
+    - **Phase 3 batch-replay performance optimization** — unchanged from [`§0090`](#0090--substrate-wide-phase-3-batch-replay-across-all-four-cat-iii-subtypes-00860089-batch-carry-forward-discharged) carry-forward.
+    - **Phase 2 + Phase 4** — unchanged. Phase 2 remains blocked by absence of an enrichment-as-of-T₁-consuming Cat II type; Phase 4 remains analytical.
+    - **Write-side HTTP for Cat III lifecycle ops** — 24 CLIs (6 ops × 4 subtypes) currently have no HTTP surface. Same authorization concern as orphan-cleanup applies: bearer-token-only auth is insufficient for constitutional acts (formation, promotion, demotion, dissolution, merge, split). Deferred until authorization model evolves.
+
+- **Supersession:** None. Extends [`§0091`](#0091--http-replay-endpoints-0084--00860089--0090-http-carry-forwards-discharged) HTTP read-side arc to the non-destructive half of the substrate-audit/maintenance category. [`§0022`](#0022--implementation-pivot-64-amendment--0003-reversal-authorization--2426-posture-shift) implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
