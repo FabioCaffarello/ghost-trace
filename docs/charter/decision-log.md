@@ -4187,6 +4187,46 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0104` — T3 HTTP orphan-cleanup endpoint lands; OrphanCleanupAudit Cat I record introduced; §0098 landing 2/3
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0098`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens) opened the T3+T4 implementation arc with three named follow-on landings. [`§0103`](#0103--multitier-token-plumbing-lands-t3t4-implementation-arc-foundational-landing-per-0098) delivered the foundational multi-tier token plumbing. This entry records landing 2: the T3 substrate-admin endpoint `POST /v1/admin/orphan-cleanup` mirroring the [`cmd/orphan-cleanup`](../../services/ingestion/cmd/orphan-cleanup) CLI tool, but with audit-on-commit discipline added per the auth-scope RFC item 4 (the CLI does NOT commit an audit per the [`§0033`](#0033--restoration-procedure-against-substrate--blobstore-divergence) local-shell-trust assumption).
+
+- **Decision:** T3 endpoint lands at [`services/ingestion/internal/httpapi/admin.go`](../../services/ingestion/internal/httpapi/admin.go); accompanied by a new Cat I primary observation type `OrphanCleanupAudit` and the orphan-package refactor that exposes the audit-then-delete contract.
+
+  1. **New Cat I proto: `OrphanCleanupAudit`.** First new Cat I record type since [`§0042`](#0042--initial-deferred-types-rendered-into-cat-i-protos-networkevent--clientstateevent) era. Proto at [`schemas/events/v1/orphan_cleanup_audit.proto`](../../schemas/events/v1/orphan_cleanup_audit.proto). Generated bindings at [`services/ingestion/internal/genproto/events/v1/orphan_cleanup_audit.pb.go`](../../services/ingestion/internal/genproto/events/v1/orphan_cleanup_audit.pb.go). Twelve fields: `invoked_at`, `dry_run`, `confirm`, `keep_newer_than_seconds`, `max_deletions`, `excluded_hashes`, `examined_count`, `orphans_found`, `planned_deletion_hashes`, `preserved_by_exclude_hashes`, `preserved_by_age_hashes`, `preserved_by_max_hashes`. The `planned_deletion_hashes` list IS the recovery contract per RFC item 4. Not registered in the dispatch registry (the audit is system-generated, not producer-ingested) — committed via `substrate.AppendPair` paired with an `IngestionEvent` through the handler's `doAppend` (which routes to `ingest.Append`).
+
+  2. **Orphan package extension: `AuditedCleanup`.** [`services/ingestion/internal/orphan/cleanup.go`](../../services/ingestion/internal/orphan/cleanup.go) `Cleanup` refactored to delegate to a new `AuditedCleanup(ctx, sub, opts, audit func(plan Report) error) (Report, error)`. The `audit` callback is invoked between the planning phase (walk + classify orphans + apply filters) and the deletion phase. A non-nil callback return aborts before deletion; the substrate is unchanged. The CLI passes nil (preserves the [`§0033`](#0033--restoration-procedure-against-substrate--blobstore-divergence) local-shell-trust contract via `Cleanup` wrapper); the HTTP T3 path passes a callback that builds + commits the `OrphanCleanupAudit` via `doAppend`.
+
+  3. **T3 endpoint: `POST /v1/admin/orphan-cleanup`.** Tier `TierSubstrateAdmin` per [`§0094`](#0094--http-authmodel-evolution-framed-operationtier-classification-recorded-tier-34-advance-deferred-to-followon-rfc) + [`§0103`](#0103--multitier-token-plumbing-lands-t3t4-implementation-arc-foundational-landing-per-0098); `routeTier` extended to classify the path. Query parameters: `dry_run` (default `true` for operator safety), `confirm` (required when `dry_run=false`), `keep_newer_than_seconds`, `max_deletions`, `excluded_hash` (repeatable). Response: `orphanCleanupResponse` JSON with `audit_event_hash`, `ingestion_event_hash`, `invoked_at_ns`, the dry-run/confirm echo, four counter fields, and the `planned_deletion_hashes` list. Response codes: 200 (success), 400 (parameter validation), 401 (auth), 405 (non-POST), 500 (audit-commit or deletion failure — audit hash returned in error message for recovery), 503 (substrate not configured).
+
+  4. **Tests.** [`services/ingestion/internal/httpapi/admin_test.go`](../../services/ingestion/internal/httpapi/admin_test.go) 11 new tests covering: dry-run no-orphans happy path; reject non-dry-run without confirm; reject non-POST; 503 without substrate; dry-run identifies orphan without deleting; confirmed delete removes orphan from disk; bad param rejection (4 sub-cases); excluded-hash preservation; T3 multi-tier auth requires substrate-admin token; T3 multi-tier substrate-admin token authorizes. All tests use a real `ingest.Append`-backed `AppendFunc` so the audit + IngestionEvent actually commit to substrate.
+
+  5. **README.** [`services/ingestion/README.md`](../../services/ingestion/README.md) gains a "HTTP T3 substrate-admin endpoint: orphan-cleanup" subsection documenting the wire shape, query parameters, response codes, per-actor attribution, and the distinction from the CLI's no-audit behavior.
+
+- **Constitutional review:** No Charter invariant amended. The audit-then-delete contract operationalizes [`§2.1`](../charter/constitutional-charter.md#21-observational-integrity) substrate-immutability — the audit is committed as a Cat I observation BEFORE any filesystem mutation; partial-mutation failure does not violate immutability because the audit's hash list is the recovery contract. The audit + its paired IngestionEvent satisfy [`§2.3`](../charter/constitutional-charter.md#23-provenance-integrity) provenance (the audit is the substrate-grounded forensic record of the orphan-cleanup invocation; the IngestionEvent records the channel + verified client identity). T3 per-actor attribution requirement per [`§0094`](#0094--http-authmodel-evolution-framed-operationtier-classification-recorded-tier-34-advance-deferred-to-followon-rfc) cross-tier obligation lands via the paired IngestionEvent's mTLS fields (when γ active) or via the channel + bearer-token presence (when α active; `token_id` follow-on per RFC item 4(b)).
+
+  Falsifiability: every claim in the README + decision-log is testable by mechanical replay of the 11 admin_test.go tests + the existing handler_test.go multi-tier classification tests. The audit-then-delete contract is exercised by `TestT3OrphanCleanupConfirmedDeletesOrphan` (audit committed; orphan blob removed). The recovery-contract semantic is exercised structurally by the audit's `planned_deletion_hashes` field being non-empty when deletion is planned.
+
+- **Consequences:**
+  - T3 endpoint reachable; commits OrphanCleanupAudit Cat I records to substrate.
+  - **§0098 landing 2 of 3 discharged.** Remaining: T4 24 lifecycle endpoints (form/promote/demote/dissolve/merge/split × 4 subtypes).
+  - First new Cat I record type since `NetworkEvent` ([`§0042`](#0042--initial-deferred-types-rendered-into-cat-i-protos-networkevent--clientstateevent) era). Substrate's heterogeneous-type discipline (`message_type` column) accommodates the new type without index-table change. Verify + orphan-cleanup CLIs are type-agnostic and continue working unchanged.
+  - The orphan package's `AuditedCleanup` is a generalization of `Cleanup`; CLI continues using `Cleanup` (preserves §0033 local-shell-trust); HTTP T3 uses `AuditedCleanup` with audit callback.
+
+  - **Methodological observation 1 — Audit-then-delete pattern.** The HTTP T3 audit-then-delete contract per RFC item 4 is a reusable structural pattern for HTTP-channel state-mutating operations: commit a Cat I audit record BEFORE the mutation; partial-mutation failure leaves the audit + surviving state recoverable. Applies to future T3 endpoints (additional substrate-admin operations) + potentially T4 endpoints with multi-step semantics. Pattern: `AuditedX(ctx, args, audit func(plan) error)` exposes the hook between planning and mutation.
+
+  - **Carry-forwards:**
+    - **T4 24 lifecycle endpoints** (§0098 landing 3/3) — depends on per-route registration + per-actor attribution wiring + per-subtype proto reuse. Larger scope than T3 (24 routes vs 1).
+    - **`token_id` field per RFC item 4(b)** — for bearer-token actor attribution. Currently per-tier token files are single-line `<token>` only; future extension is `<token>\n<token_id>\n`. Not exercised by this T3 landing (operator identity via mTLS subject when γ active; bare bearer-token equivalence class otherwise); becomes load-bearing at T4 landings + when α-only operators have multiple admins.
+    - **CLI orphan-cleanup audit symmetry** per auth-scope RFC Open Question 4 — whether to extend the audit-on-commit discipline to the CLI for symmetry + uniform forensic record. Orthogonal to T4; named follow-on.
+
+- **Supersession:** None. Second of three named follow-on landings opened by [`§0098`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

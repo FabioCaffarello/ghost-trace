@@ -733,8 +733,8 @@ func TestRouteTierClassification(t *testing.T) {
 		{"/v1/replay/formation", TierOperatorRead},
 		{"/v1/replay/formations", TierOperatorRead},
 		{"/v1/verify", TierOperatorRead},
-		// T3/T4 not yet implemented; unclassified.
-		{"/v1/admin/orphan-cleanup", ""},
+		{"/v1/admin/orphan-cleanup", TierSubstrateAdmin},
+		// T4 not yet implemented; unclassified.
 		{"/v1/hypotheses/behavioral-cluster/promote", ""},
 		{"/some-random-path", ""},
 	}

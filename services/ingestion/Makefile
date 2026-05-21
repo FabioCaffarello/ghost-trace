@@ -71,6 +71,7 @@ generate: $(PROTOC_GEN_GO)
 	  events/v1/ingestion_event.proto \
 	  events/v1/network_event.proto \
 	  events/v1/operational_session.proto \
+	  events/v1/orphan_cleanup_audit.proto \
 	  events/v1/behavioral_cluster_formation.proto \
 	  events/v1/behavioral_cluster_promotion.proto \
 	  events/v1/behavioral_cluster_demotion.proto \

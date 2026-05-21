@@ -307,12 +307,13 @@ func routeTier(r *http.Request) Tier {
 		p == "/v1/verify" {
 		return TierOperatorRead
 	}
-	// T3 substrate-admin routes (named follow-on per §0098):
-	//   /v1/admin/orphan-cleanup → TierSubstrateAdmin
+	if p == "/v1/admin/orphan-cleanup" {
+		return TierSubstrateAdmin
+	}
 	// T4 constitutional-act routes (named follow-on per §0098):
 	//   /v1/hypotheses/<subtype>/{form,promote,demote,dissolve,merge,split}
 	//   → TierConstitutionalAct
-	// Pre-positioned here for the named follow-on landings; not yet
+	// Pre-positioned here for the named follow-on landing; not yet
 	// implemented.
 	return ""
 }
@@ -356,6 +357,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleReplayAllFormations(w, r)
 	case r.URL.Path == "/v1/verify":
 		h.handleVerify(w, r)
+	case r.URL.Path == "/v1/admin/orphan-cleanup":
+		h.handleAdminOrphanCleanup(w, r)
 	default:
 		http.NotFound(w, r)
 	}
