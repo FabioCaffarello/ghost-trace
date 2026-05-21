@@ -842,6 +842,19 @@ make replay-campaign-hypothesis-formation-build                            # bui
   -target-event-hash <64-hex-chars>
 ```
 
+## `replay-coordination-ring-formation` CLI
+
+Same shape as the BC + AG + CH replay CLIs for the CoordinationRing subtype per [`§0089`](../../docs/charter/decision-log.md). Currently supports the `co-occurrence-window-v1` pattern. **Fourth (final) subtype-specific Phase 3 replay tool — closes the four-subtype Phase 3 arc opened at §0086.**
+
+```sh
+make replay-coordination-ring-formation-build                              # builds ./bin/replay-coordination-ring-formation
+
+./bin/replay-coordination-ring-formation \
+  -target-event-hash <64-hex-chars>
+```
+
+With this CLI, Phase 3 reconstructive replay covers all four §0010 Q2-resolved Cat III subtypes (BC, AG, CH, CR). Each subtype carries the same wire shape + exit-code semantic; the shared `hypothesis.CollectFormationContextAt` helper handles substrate-time filtering for all four via the interface-to-interface assertion pattern.
+
 ## `replay-all-operational-sessions` CLI
 
 Substrate-wide batch Phase 1 replay per [`§0085`](../../docs/charter/decision-log.md). Walks every `OperationalSession` in the substrate, re-derives each from its declared source, and reports aggregate match/drift/error counts. Pre-collects the `DerivationContext` once and reuses it across all per-target replays (cost: substrate walks = 2 + 1 lookup-per-record; vs N+1 walks if the per-target CLI were called naively in a loop).
