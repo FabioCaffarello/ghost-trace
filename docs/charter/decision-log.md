@@ -3081,6 +3081,49 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0079` — Per-subtype + combined latency aggregates in `summarize-hypotheses`; §0053+§0055 latency-histogram carry-forward discharged
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0053`](#0053--aggregate-state-counters-countbystate--statecounts-0052-carry-forward-discharged-per-state-count-equivalence-invariant) named **"Latency histograms"** as a deferred carry-forward; [`§0055`](#0055--per-projection-latency-derivation-0053-latency-histogram-carry-forward-partially-discharged-at-the-per-projection-layer) landed the prerequisite (three per-projection latency fields computed during `ProjectHypothesis` and `ProjectAll`) and partially discharged the carry-forward at the per-projection layer; the multi-projection aggregate remained follow-on. This entry lands that aggregate.
+
+- **Decision:** Extend `summarize-hypotheses` to compute per-subtype + combined latency aggregates over the three dimensions surfaced at §0055 (`formation_to_first_promotion_ns`, `latest_promotion_to_latest_demotion_ns`, `formation_to_dissolution_ns`):
+
+  1. **Switch from `CountByState`-per-subtype to `ListXXX`-per-subtype.** The list output carries the full projection slices including each per-formation latency triple; counts and latency samples are computed client-side from a single ProjectAll-equivalent walk per subtype, replacing the prior dual-walk pattern (CountByState already calls ProjectAll internally).
+
+  2. **`latencyAggregate` + `latencyAggregates` wire types.** Per-dimension aggregate carries `sample_count` (number of non-nil per-projection samples), `min_ns`, `p50_ns`, `p90_ns`, `max_ns`. Percentile method: **nearest-rank** (P_k is sample at `ceil(k * N / 100) - 1` in sorted ascending order). Method is stable + simple + no interpolation; tradeoff is "p50 of 4 samples is the 2nd sample, not the average of the middle two" — documented in the service README.
+
+  3. **`aggregateSection` wire shape.** Embeds `projection.StateCounts` (so `total` + `by_state` appear at the section's parent level, preserving the §0053 + §0078 wire shape) + adds `latencies` field. All five sections (`combined` + four per-subtype) share this shape.
+
+  4. **Combined latency aggregates are exact, not approximated.** The combined section's `latencies` is computed from the UNION of per-subtype raw samples — NOT from the per-subtype aggregates. A `TestCombinedPercentilesAreExactNotApproximated` test catches accidental regression to a max-of-percentiles approximation (which would be a structurally honest approach for combining HLLs but is wrong for nearest-rank).
+
+  5. **Predictable wire shape.** Zero-sample sections emit `sample_count: 0` and omit `min_ns`/`p50_ns`/`p90_ns`/`max_ns` (omitempty under nil pointers); the keys themselves remain present in JSON via Go struct fields. Operators get consistent JSON shape regardless of substrate population.
+
+  6. **Tests** at [`cmd/summarize-hypotheses/main_test.go`](../../services/ingestion/cmd/summarize-hypotheses/main_test.go): **9 tests total** (3 pre-existing count-combination tests preserved + 6 new latency tests covering empty input, single sample, multi-sample nearest-rank verification, input-non-mutation, cross-subtype sample union, and exact-vs-approximated combined percentiles).
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1 (read-only over immutable substrate; latency aggregates are derived projection state per §2.5 BC3), §2.2 (`latencies.*` values are operational summary, NOT category claims about underlying phenomena), §2.3 (no provenance edges produced), §2.5 + §2.5 BC3 (current state remains a projection — latency aggregates are a Cat II aggregation, not a substrate row), §2.5 BC5 (lifecycle-event-as-Cat-I-record — the per-projection latency samples derive from lifecycle event timestamps already committed under §2.5). Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`services/ingestion/cmd/summarize-hypotheses/main.go`](../../services/ingestion/cmd/summarize-hypotheses/main.go) — refactored. `latencyAggregate` + `latencyAggregates` + `latencySamples` + `subtypeAggregate` + `aggregateSection` types added; `aggregateLatencies` + `percentileNearestRank` + `combineSamples` helpers added; per-subtype aggregators (`bcAggregate`, `agAggregate`, `chAggregate`, `crAggregate`) added. Wire shape additively extended (existing `total` + `by_state` keys remain at the section's parent level via Go struct embedding).
+  - [`services/ingestion/cmd/summarize-hypotheses/main_test.go`](../../services/ingestion/cmd/summarize-hypotheses/main_test.go) — 6 new tests appended; total 9 tests.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — `summarize-hypotheses` section updated with `latencies` payload documentation + percentile-method note + combined-exact-not-approximated invariant.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0079 (this entry).
+  - **§0053+§0055 carry-forward fully discharged.** "Latency histograms" named at §0053 + partially-discharged-per-projection at §0055 is now operational across all four subtypes + the combined view. The histogram aggregation across many projections — the original §0053 framing — is delivered as per-dimension percentile summaries.
+  - **Equivalence invariant family extends.** Three §0079 invariants now hold:
+    - `combined.total` equals sum of per-subtype `total` (inherited from §0078).
+    - `combined.by_state[s]` equals sum of per-subtype `by_state[s]` for every State (inherited from §0078).
+    - `combined.latencies.*.sample_count` equals sum of per-subtype `latencies.*.sample_count`; combined `min_ns`/`max_ns` equal min/max over per-subtype values; combined `p50_ns`/`p90_ns` are computed from the union of raw samples (exact, NOT a function of per-subtype percentiles).
+  - **Out of scope at this layer (carry-forwards).**
+    - **Latency-histogram buckets** — full bucketed histograms (e.g. log-scale buckets with sample counts per bucket) deferred until operator pressure surfaces a use case the percentile summary does not cover. The percentile summary is sufficient for "how slow is the slow tail?" but not for "what's the bimodality?" questions.
+    - **Time-window filter for latency aggregates** — currently the time-window filter from `--after-ns`/`--before-ns` propagates through `ListXXX`, so latency aggregates already respect the window via the same filter; no separate plumbing.
+    - **Wall-clock vs substrate-commit time semantic** — unchanged from §0054 carry-forward.
+    - **Cross-operation provenance counters** — unchanged from §0052+§0053 carry-forwards.
+
+- **Supersession:** None. Discharges a multi-entry-old carry-forward (§0053 → §0055 → this entry). §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

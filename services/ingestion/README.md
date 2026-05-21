@@ -716,6 +716,26 @@ Output is structured JSON with a **top-level `combined` section** (per [`§0078`
 
 The `combined` section is the per-state-aligned sum across the four per-subtype sections: `combined.total` equals the sum of subtype totals; `combined.by_state[s]` equals the sum of each subtype's `by_state[s]` for every state. Operators that want "every Cat III hypothesis, regardless of subtype, by state" read `combined` directly. The per-subtype sections remain available for subtype-specific drill-down.
 
+**Latency aggregates per section (per [`§0079`](../../docs/charter/decision-log.md)).** Every section (the four per-subtype sections + `combined`) carries an additional `latencies` payload with three per-dimension aggregates mirroring the per-projection latency fields landed at [`§0055`](../../docs/charter/decision-log.md):
+
+- `formation_to_first_promotion_ns`
+- `latest_promotion_to_latest_demotion_ns`
+- `formation_to_dissolution_ns`
+
+Each aggregate carries:
+
+| Field | Meaning |
+|---|---|
+| `sample_count` | Number of non-nil per-projection samples contributed to this aggregate. |
+| `min_ns` | Smallest sample, or absent (omitempty) when `sample_count` is zero. |
+| `p50_ns` | Median, nearest-rank method (no interpolation). Absent when zero samples. |
+| `p90_ns` | 90th percentile, nearest-rank method. Absent when zero samples. |
+| `max_ns` | Largest sample. Absent when zero samples. |
+
+**Combined latency aggregates are exact, not approximated.** Per §0079, the combined section's `latencies` is computed from the UNION of per-subtype samples (not from per-subtype percentile values), so `combined.latencies.*.p50_ns` is the true median of all samples across the four subtypes rather than a function of the per-subtype p50s.
+
+**Percentile method:** nearest-rank. For a sorted ascending sample of length N, P_k is the value at index `ceil(k * N / 100) - 1`. Stable + simple; no interpolation between samples.
+
 **Equivalence invariant per §0053:** for every State value `s`, `by_state[s]` equals `len(list-hypotheses -state s)`. The equivalence is tested in `internal/projection/counts_test.go` and defends against precedence-rule drift between the count path and the list path. Both paths share `ProjectAll` (per [`§0052`](../../docs/charter/decision-log.md)).
 
 | Option | Default | Notes |
