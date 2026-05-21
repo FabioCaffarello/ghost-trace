@@ -293,6 +293,221 @@ func (h *Handler) handlePromoteCampaignHypothesis(w http.ResponseWriter, r *http
 	})
 }
 
+// dissolveResponse is the wire-shape of the T4 dissolve endpoints'
+// JSON response. Per §0108 T4 dissolve landing — dissolution targets
+// the formation directly (no cadence-gate state to surface, unlike
+// demote).
+type dissolveResponse struct {
+	// DissolutionEventHash is the lowercase-hex content-hash of the
+	// committed <Subtype>Dissolution event.
+	DissolutionEventHash string `json:"dissolution_event_hash"`
+
+	// IngestionEventHash is the lowercase-hex content-hash of the
+	// paired IngestionEvent. Always non-empty for HTTP T4.
+	IngestionEventHash string `json:"ingestion_event_hash"`
+
+	// AlreadyDissolved true on idempotent re-commit.
+	AlreadyDissolved bool `json:"already_dissolved"`
+}
+
+// decodeDissolvePayload is the dissolve analog of decodePromote
+// Payload / decodeDemotePayload.
+func (h *Handler) decodeDissolvePayload(r *http.Request, msg proto.Message) (int, string, bool) {
+	if r.Method != http.MethodPost {
+		return http.StatusMethodNotAllowed, "method not allowed; POST required", false
+	}
+	if h.sub == nil {
+		return http.StatusServiceUnavailable, "substrate access not configured (WithSubstrate)", false
+	}
+	if ct := r.Header.Get("Content-Type"); ct != "application/x-protobuf" {
+		return http.StatusUnsupportedMediaType, fmt.Sprintf("Content-Type must be application/x-protobuf (got %q)", ct), false
+	}
+	b, err := io.ReadAll(io.LimitReader(r.Body, h.requestBodyLimit+1))
+	if err != nil {
+		return http.StatusBadRequest, fmt.Sprintf("read body: %v", err), false
+	}
+	if int64(len(b)) > h.requestBodyLimit {
+		return http.StatusRequestEntityTooLarge, fmt.Sprintf("request body exceeds %d-byte limit", h.requestBodyLimit), false
+	}
+	if err := proto.Unmarshal(b, msg); err != nil {
+		return http.StatusBadRequest, fmt.Sprintf("decode payload: %v", err), false
+	}
+	return 0, "", true
+}
+
+// validateDissolveParams enforces the shared validation gate across
+// the four T4 dissolve handlers: 32-byte formation_event_hash.
+func validateDissolveParams(formationHash []byte) (int, string, bool) {
+	if len(formationHash) != 32 {
+		return http.StatusBadRequest, fmt.Sprintf("formation_event_hash must be 32 bytes (got %d)", len(formationHash)), false
+	}
+	return 0, "", true
+}
+
+// dissolveErrToHTTPStatus maps a hypothesis.Dissolve* error to its
+// HTTP status + body message.
+func dissolveErrToHTTPStatus(err error, formationHash [32]byte) (int, string) {
+	switch {
+	case errIs(err, hypothesis.ErrTargetNotFound):
+		return http.StatusNotFound, fmt.Sprintf("formation event hash not found: %x", formationHash)
+	case errIs(err, hypothesis.ErrTargetWrongType):
+		return http.StatusNotFound, fmt.Sprintf("formation event hash resolves to wrong type: %x", formationHash)
+	}
+	return http.StatusInternalServerError, fmt.Sprintf("dissolve: %v", err)
+}
+
+// handleDissolveBehavioralCluster implements POST
+// /v1/hypotheses/behavioral-cluster/dissolve per §0108.
+func (h *Handler) handleDissolveBehavioralCluster(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.BehavioralClusterDissolution
+	if status, errMsg, ok := h.decodeDissolvePayload(r, &msg); !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	if s, m, ok := validateDissolveParams(msg.GetFormationEventHash()); !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+	var formationHash [32]byte
+	copy(formationHash[:], msg.GetFormationEventHash())
+
+	env := envelopeForRequest(r)
+	opts := hypothesis.DissolveOptions{
+		FormationEventHash: formationHash,
+		DissolvedAt:        msg.GetDissolvedAt(),
+		Reason:             msg.GetReason(),
+		Actor:              resolveT4Actor(env, TierConstitutionalAct),
+	}
+	report, err := hypothesis.Dissolve(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		s, m := dissolveErrToHTTPStatus(err, formationHash)
+		if s == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 dissolve-behavioral-cluster: %w", err))
+		}
+		writeIngestError(w, s, m)
+		return
+	}
+	writeJSON(w, http.StatusOK, dissolveResponse{
+		DissolutionEventHash: report.DissolutionEventHashHex,
+		IngestionEventHash:   report.IngestionEventHashHex,
+		AlreadyDissolved:     report.AlreadyDissolved,
+	})
+}
+
+// handleDissolveAutomationGroup implements POST
+// /v1/hypotheses/automation-group/dissolve per §0108.
+func (h *Handler) handleDissolveAutomationGroup(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.AutomationGroupDissolution
+	if status, errMsg, ok := h.decodeDissolvePayload(r, &msg); !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	if s, m, ok := validateDissolveParams(msg.GetFormationEventHash()); !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+	var formationHash [32]byte
+	copy(formationHash[:], msg.GetFormationEventHash())
+
+	env := envelopeForRequest(r)
+	opts := hypothesis.AutomationGroupDissolveOptions{
+		FormationEventHash: formationHash,
+		DissolvedAt:        msg.GetDissolvedAt(),
+		Reason:             msg.GetReason(),
+		Actor:              resolveT4Actor(env, TierConstitutionalAct),
+	}
+	report, err := hypothesis.DissolveAutomationGroup(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		s, m := dissolveErrToHTTPStatus(err, formationHash)
+		if s == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 dissolve-automation-group: %w", err))
+		}
+		writeIngestError(w, s, m)
+		return
+	}
+	writeJSON(w, http.StatusOK, dissolveResponse{
+		DissolutionEventHash: report.DissolutionEventHashHex,
+		IngestionEventHash:   report.IngestionEventHashHex,
+		AlreadyDissolved:     report.AlreadyDissolved,
+	})
+}
+
+// handleDissolveCampaignHypothesis implements POST
+// /v1/hypotheses/campaign-hypothesis/dissolve per §0108.
+func (h *Handler) handleDissolveCampaignHypothesis(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.CampaignHypothesisDissolution
+	if status, errMsg, ok := h.decodeDissolvePayload(r, &msg); !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	if s, m, ok := validateDissolveParams(msg.GetFormationEventHash()); !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+	var formationHash [32]byte
+	copy(formationHash[:], msg.GetFormationEventHash())
+
+	env := envelopeForRequest(r)
+	opts := hypothesis.CampaignHypothesisDissolveOptions{
+		FormationEventHash: formationHash,
+		DissolvedAt:        msg.GetDissolvedAt(),
+		Reason:             msg.GetReason(),
+		Actor:              resolveT4Actor(env, TierConstitutionalAct),
+	}
+	report, err := hypothesis.DissolveCampaignHypothesis(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		s, m := dissolveErrToHTTPStatus(err, formationHash)
+		if s == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 dissolve-campaign-hypothesis: %w", err))
+		}
+		writeIngestError(w, s, m)
+		return
+	}
+	writeJSON(w, http.StatusOK, dissolveResponse{
+		DissolutionEventHash: report.DissolutionEventHashHex,
+		IngestionEventHash:   report.IngestionEventHashHex,
+		AlreadyDissolved:     report.AlreadyDissolved,
+	})
+}
+
+// handleDissolveCoordinationRing implements POST
+// /v1/hypotheses/coordination-ring/dissolve per §0108.
+func (h *Handler) handleDissolveCoordinationRing(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.CoordinationRingDissolution
+	if status, errMsg, ok := h.decodeDissolvePayload(r, &msg); !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	if s, m, ok := validateDissolveParams(msg.GetFormationEventHash()); !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+	var formationHash [32]byte
+	copy(formationHash[:], msg.GetFormationEventHash())
+
+	env := envelopeForRequest(r)
+	opts := hypothesis.CoordinationRingDissolveOptions{
+		FormationEventHash: formationHash,
+		DissolvedAt:        msg.GetDissolvedAt(),
+		Reason:             msg.GetReason(),
+		Actor:              resolveT4Actor(env, TierConstitutionalAct),
+	}
+	report, err := hypothesis.DissolveCoordinationRing(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		s, m := dissolveErrToHTTPStatus(err, formationHash)
+		if s == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 dissolve-coordination-ring: %w", err))
+		}
+		writeIngestError(w, s, m)
+		return
+	}
+	writeJSON(w, http.StatusOK, dissolveResponse{
+		DissolutionEventHash: report.DissolutionEventHashHex,
+		IngestionEventHash:   report.IngestionEventHashHex,
+		AlreadyDissolved:     report.AlreadyDissolved,
+	})
+}
+
 // demoteResponse is the wire-shape of the T4 demote endpoints' JSON
 // response. Cadence fields surface §0011 Layer A gate state for
 // operator-facing reporting (Layer A is CANDIDACY, not hard barrier).

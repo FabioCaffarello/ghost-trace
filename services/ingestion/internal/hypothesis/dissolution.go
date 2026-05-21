@@ -36,6 +36,11 @@ type DissolveOptions struct {
 	// lifecycle operation on a hypothesis; the absence of a reason
 	// removes the only record of the underlying judgment.
 	Reason string
+
+	// Actor is an optional per-actor attribution string per §0108
+	// T4 dissolve landing — non-empty triggers AppendPair with
+	// IngestionEvent (channel="cli", client_common_name=Actor).
+	Actor string
 }
 
 // DissolveReport is the per-Dissolve outcome.
@@ -48,6 +53,10 @@ type DissolveReport struct {
 	// was already in the substrate (content-hash collision). False
 	// when this Dissolve invocation committed a new row.
 	AlreadyDissolved bool
+
+	// IngestionEventHashHex is the content-hash (hex) of the paired
+	// IngestionEvent committed when Actor was non-empty.
+	IngestionEventHashHex string
 }
 
 // Dissolve records a BehavioralClusterDissolution lifecycle event
@@ -109,19 +118,51 @@ func Dissolve(ctx context.Context, sub *substrate.Substrate, opts DissolveOption
 		return DissolveReport{}, fmt.Errorf("hypothesis.Dissolve: lookup dissolution %s: %w", hex, lookupErr)
 	}
 
+	committedAt := now().UnixNano()
 	dissRow := substrate.EventRow{
 		EventHash:   hash,
 		EventTime:   dissolvedAt,
 		MessageType: string(ev.ProtoReflect().Descriptor().FullName()),
 		PayloadRef:  hex[:2] + "/" + hex[2:],
-		CommittedAt: now().UnixNano(),
+		CommittedAt: committedAt,
 	}
-	if err := sub.Append(ctx, dissRow, payload); err != nil {
-		return DissolveReport{}, fmt.Errorf("hypothesis.Dissolve: append dissolution %s: %w", hex, err)
+
+	if opts.Actor == "" {
+		if err := sub.Append(ctx, dissRow, payload); err != nil {
+			return DissolveReport{}, fmt.Errorf("hypothesis.Dissolve: append dissolution %s: %w", hex, err)
+		}
+		return DissolveReport{
+			DissolutionEventHashHex: hex,
+			AlreadyDissolved:        alreadyPresent,
+		}, nil
+	}
+
+	ingEv := &eventsv1.IngestionEvent{
+		PrimaryEventHash: hash[:],
+		ReceivedAt:       committedAt,
+		IngestedAt:       committedAt,
+		Channel:          "cli",
+		ClientCommonName: opts.Actor,
+	}
+	ingPayload, ingHash, err := canonical.MarshalAndHash(ingEv)
+	if err != nil {
+		return DissolveReport{}, fmt.Errorf("hypothesis.Dissolve: marshal ingestion event: %w", err)
+	}
+	ingHex := canonical.HashHex(ingHash)
+	ingRow := substrate.EventRow{
+		EventHash:   ingHash,
+		EventTime:   committedAt,
+		MessageType: string(ingEv.ProtoReflect().Descriptor().FullName()),
+		PayloadRef:  ingHex[:2] + "/" + ingHex[2:],
+		CommittedAt: committedAt,
+	}
+	if err := sub.AppendPair(ctx, dissRow, payload, ingRow, ingPayload); err != nil {
+		return DissolveReport{}, fmt.Errorf("hypothesis.Dissolve: append pair (dissolution %s, ingestion %s): %w", hex, ingHex, err)
 	}
 
 	return DissolveReport{
 		DissolutionEventHashHex: hex,
 		AlreadyDissolved:        alreadyPresent,
+		IngestionEventHashHex:   ingHex,
 	}, nil
 }
