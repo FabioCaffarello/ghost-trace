@@ -712,7 +712,9 @@ make summarize-hypotheses-build                                          # build
 ./bin/summarize-hypotheses -db ./ghost-trace.db -blobs ./blobs
 ```
 
-Output is structured JSON with **per-subtype sections** (per [`§0062`](../../docs/charter/decision-log.md) + [`§0069`](../../docs/charter/decision-log.md) + [`§0076`](../../docs/charter/decision-log.md)): `behavioral_cluster`, `automation_group`, `campaign_hypothesis`, and `coordination_ring` each carry `total` (formation count) + `by_state` (map from state value to count). Every State key is present (even at zero) — predictable wire shape. The projection layer now covers all four §0010 Q2-resolved Cat III subtypes.
+Output is structured JSON with a **top-level `combined` section** (per [`§0078`](../../docs/charter/decision-log.md)) followed by four **per-subtype sections** (per [`§0062`](../../docs/charter/decision-log.md) + [`§0069`](../../docs/charter/decision-log.md) + [`§0076`](../../docs/charter/decision-log.md)). `combined`, `behavioral_cluster`, `automation_group`, `campaign_hypothesis`, and `coordination_ring` each carry `total` (formation count) + `by_state` (map from state value to count). Every State key is present (even at zero) — predictable wire shape.
+
+The `combined` section is the per-state-aligned sum across the four per-subtype sections: `combined.total` equals the sum of subtype totals; `combined.by_state[s]` equals the sum of each subtype's `by_state[s]` for every state. Operators that want "every Cat III hypothesis, regardless of subtype, by state" read `combined` directly. The per-subtype sections remain available for subtype-specific drill-down.
 
 **Equivalence invariant per §0053:** for every State value `s`, `by_state[s]` equals `len(list-hypotheses -state s)`. The equivalence is tested in `internal/projection/counts_test.go` and defends against precedence-rule drift between the count path and the list path. Both paths share `ProjectAll` (per [`§0052`](../../docs/charter/decision-log.md)).
 

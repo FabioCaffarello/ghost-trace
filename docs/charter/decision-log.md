@@ -3046,6 +3046,41 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0078` — Aggregate cross-subtype `combined` section in `summarize-hypotheses`; §0062+§0069+§0076 carry-forward discharged
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0062`](#0062--projection-layer-extended-to-automationgroup-parallel-per-subtype-projection-types-per-the-typed-subtype-landings-discipline-cross-subtype-cli-dispatch), [`§0069`](#0069--projection-layer-extended-to-campaignhypothesis-typed-subtype-landings-discipline-now-validated-across-three-subtypes-at-both-write-and-read-surfaces), and [`§0076`](#0076--projection-layer-extended-to-coordinationring-typed-subtype-landings-discipline-now-validated-across-all-four-subtypes-at-both-write-and-read-surfaces) each carried a "Aggregate cross-subtype counters/histograms" carry-forward — `summarize-hypotheses` emitted per-subtype sections but no top-level combined sum. Operators that wanted "every Cat III hypothesis, regardless of subtype, by state" had to sum the per-subtype outputs themselves. This entry closes that carry-forward.
+
+- **Decision:** Extend `summarize-hypotheses` with a top-level `combined` JSON section computed as the per-state-aligned sum across the four per-subtype `StateCounts`:
+
+  1. **`combineCounts` helper** at [`cmd/summarize-hypotheses/main.go`](../../services/ingestion/cmd/summarize-hypotheses/main.go). Variadic over `projection.StateCounts`; sums `Total` and `ByState[s]` for every state. Initializes every State enum key (predictable-wire-shape commitment from [`§0053`](#0053--aggregate-state-counters-countbystate--statecounts-0052-carry-forward-discharged) carried forward).
+
+  2. **`perSubtype` JSON shape extended.** The `Combined` field is emitted first (`json:"combined"`); the four per-subtype sections follow. Wire shape is additive (existing keys unchanged); operators that read only per-subtype keys are unaffected.
+
+  3. **Stderr summary extended.** The brief human summary line now reports `combined_total` alongside per-subtype totals.
+
+  4. **Unit tests** at [`cmd/summarize-hypotheses/main_test.go`](../../services/ingestion/cmd/summarize-hypotheses/main_test.go) — **3 tests** covering empty-input zero-counts, sum-correctness across three partial inputs with bucket-sum equivalence, and predictable-wire-shape with partial-input edge case.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1 (read-only over immutable substrate; the combined section is derived projection state per §2.5 BC3), §2.2 (`combined.by_state` keys are operational summary, NOT category claims about underlying phenomena — same semantic as the per-subtype outputs), §2.3 (no provenance edges produced), §2.5 + §2.5 BC3 (current state remains a projection — the combined view is a Cat II aggregation, not a substrate row). Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`services/ingestion/cmd/summarize-hypotheses/main.go`](../../services/ingestion/cmd/summarize-hypotheses/main.go) — `combineCounts` helper added; `perSubtype` JSON shape gains `combined` field; stderr summary extended.
+  - [`services/ingestion/cmd/summarize-hypotheses/main_test.go`](../../services/ingestion/cmd/summarize-hypotheses/main_test.go) — new file; 3 unit tests.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — `summarize-hypotheses` section updated to describe the `combined` section's shape and semantic.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0078 (this entry).
+  - **§0062+§0069+§0076 carry-forward discharged.** "Aggregate cross-subtype counters/histograms" named at three prior entries is now operational. Operators consume `combined.total` and `combined.by_state[s]` directly without summing per-subtype outputs.
+  - **Equivalence invariant extends to the combined view.** `combined.total` equals the sum of subtype Totals by construction; `combined.by_state[s]` equals the sum of each subtype's `by_state[s]` by construction. The relationship is structural (the helper computes it), not asserted — the unit tests verify it on synthetic inputs.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Cross-subtype provenance queries** — unchanged from §0062+§0069+§0076 carry-forwards. The combined section is per-state aggregation, not graph traversal.
+    - **Per-subtype CLI binaries** — unchanged.
+    - **Histogram extensions** — `combined` carries `by_state` (the natural per-projection aggregation); latency histograms remain at the per-projection layer per [`§0055`](#0055--per-projection-latency-derivation-0053-latency-histogram-carry-forward-partially-discharged-at-the-per-projection-layer) without a top-level aggregate. Deferred until operator pressure surfaces.
+
+- **Supersession:** None. Discharges a UX-extension carry-forward from §0062+§0069+§0076. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

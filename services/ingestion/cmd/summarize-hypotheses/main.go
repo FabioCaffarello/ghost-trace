@@ -95,7 +95,10 @@ func run() error {
 		return err
 	}
 
+	combined := combineCounts(bcCounts, agCounts, chCounts, crCounts)
+
 	output := perSubtype{
+		Combined:           combined,
 		BehavioralCluster:  bcCounts,
 		AutomationGroup:    agCounts,
 		CampaignHypothesis: chCounts,
@@ -108,13 +111,39 @@ func run() error {
 	}
 
 	fmt.Fprintf(os.Stderr,
-		"summarize-hypotheses: bc_total=%d ag_total=%d ch_total=%d cr_total=%d after_ns=%d before_ns=%d\n",
-		bcCounts.Total, agCounts.Total, chCounts.Total, crCounts.Total,
+		"summarize-hypotheses: combined_total=%d bc_total=%d ag_total=%d ch_total=%d cr_total=%d after_ns=%d before_ns=%d\n",
+		combined.Total, bcCounts.Total, agCounts.Total, chCounts.Total, crCounts.Total,
 		*afterNs, *beforeNs)
 	return nil
 }
 
+// combineCounts returns a per-state-aligned sum across all four
+// per-subtype StateCounts. Each by_state[s] in the combined output
+// equals the sum of each subtype's by_state[s]; Total equals the
+// sum of subtype Totals. Every State enum value is present (same
+// predictable-wire-shape commitment as the per-subtype outputs).
+func combineCounts(parts ...projection.StateCounts) projection.StateCounts {
+	combined := projection.StateCounts{
+		ByState: map[projection.State]int{
+			projection.StateForming:    0,
+			projection.StatePromoted:   0,
+			projection.StateDemoted:    0,
+			projection.StateDissolved:  0,
+			projection.StateMergedInto: 0,
+			projection.StateSplitInto:  0,
+		},
+	}
+	for _, p := range parts {
+		combined.Total += p.Total
+		for state, count := range p.ByState {
+			combined.ByState[state] += count
+		}
+	}
+	return combined
+}
+
 type perSubtype struct {
+	Combined           projection.StateCounts `json:"combined"`
 	BehavioralCluster  projection.StateCounts `json:"behavioral_cluster"`
 	AutomationGroup    projection.StateCounts `json:"automation_group"`
 	CampaignHypothesis projection.StateCounts `json:"campaign_hypothesis"`
