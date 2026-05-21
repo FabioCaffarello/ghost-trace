@@ -184,9 +184,25 @@ Missing fields are marked `pending`, never omitted.
 
 - **Canonical definition.** Inferential provenance; structural declaration that an assertion was formed under the influence of a prior assertion.
 - **Introduction.** [Charter §1](./charter/constitutional-charter.md#1-thesis); [`ontology/provenance-model.md` §Inferential Provenance](./ontology/provenance-model.md).
-- **Stabilization.** pending ([Invariant 2.4](./charter/constitutional-charter.md#24-inferential-influence-disclosure) pending committee redaction).
-- **Last amendment.** pending (§2.4 not yet redacted; working text non-binding).
+- **Stabilization.** [Charter §2.4](./charter/constitutional-charter.md#24-inferential-influence-disclosure) frozen v0.5.
+- **Last amendment.** v0.5.
 - **Forbidden synonyms.** `causality` (imports philosophical commitments the project has not made — see [`ambiguity-reducer`](../.claude/skills/epistemic/ambiguity-reducer/SKILL.md)); `dependency` (when inferential influence is meant).
+
+### `observational evidence`
+
+- **Canonical definition.** The structural surface against which an Assertion's observational provenance claim is reconstructible: the substrate-grounded subject reference (`subject_ref_observation`, `subject_ref_construct`, or `subject_ref_hypothesis`) and the corresponding provenance chain back to Category I records. Operationalization of the informal vocabulary item `evidence` under [Charter §2.3 §Observational Provenance](./charter/constitutional-charter.md#23-provenance-integrity), introduced through Step 1.3 Path 1 of the §2.4 redaction per [`decision-log.md` §0099](./charter/decision-log.md).
+- **Introduction.** [`decision-log.md` §0099 — Gate §2.4 closure](./charter/decision-log.md); [Charter §2.4](./charter/constitutional-charter.md#24-inferential-influence-disclosure) (frozen v0.5).
+- **Stabilization.** Charter §2.4 v0.5.
+- **Last amendment.** v0.5.
+- **Forbidden synonyms.** `evidence` (bare term remains informal; `observational evidence` is canonical when the structural reference chain to Category I substrate is meant); `proof` (imports closure semantics the substrate does not provide); `support` (collapses observational and inferential grounds — use `observational evidence` or `inferential commitment` per the distinction `evidential independence` exists to preserve).
+
+### `inferential commitment`
+
+- **Canonical definition.** The structural declaration that an Assertion is held under inferential influence from a prior Assertion: the populated typed `subject_ref_construct` or `subject_ref_hypothesis` field on the Assertion together with the `influenced_by` chain reconstructible from substrate per [Charter §2.4](./charter/constitutional-charter.md#24-inferential-influence-disclosure). Operationalization of the informal vocabulary item `belief` under §2.4, introduced through Step 1.3 Path 1 of the §2.4 redaction per [`decision-log.md` §0099](./charter/decision-log.md).
+- **Introduction.** [`decision-log.md` §0099 — Gate §2.4 closure](./charter/decision-log.md); [Charter §2.4](./charter/constitutional-charter.md#24-inferential-influence-disclosure) (frozen v0.5).
+- **Stabilization.** Charter §2.4 v0.5.
+- **Last amendment.** v0.5.
+- **Forbidden synonyms.** `belief` (informal; the structural commitment is what is canonical, not the mental state the word suggests); `assumption` (philosophical import the project has not made; use `inferential commitment` when the structural declaration is meant); `stance` (overloaded with engineering and discourse vocabulary).
 
 ### `supersession`
 

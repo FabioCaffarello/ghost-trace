@@ -83,6 +83,12 @@ A paragraph that fails any of these is rewritten, not patched.
 
 **Rewrite.** "The Assertion declares its subject via a populated `subject_ref_observation` (Category I primary), `subject_ref_construct` (Category II construct), or `subject_ref_hypothesis` (Category III hypothesis) field; the reference chain is structurally reconstructible back to Category I substrate per [Charter §2.3](../../../../docs/charter/constitutional-charter.md#23-provenance-integrity)."
 
+### "The Assertion's inferential origin is evident from the surrounding analysis."
+
+**Violation.** Loss-of-evidence-belief-distinction failure mode (prose-side manifestation). Forbidden by [Charter §2.4](../../../../docs/charter/constitutional-charter.md#24-inferential-influence-disclosure) (Inferential Influence Disclosure, frozen v0.5): every Assertion that was formed under inferential influence declares it *structurally* via a populated typed `subject_ref_construct` or `subject_ref_hypothesis` field, with the corresponding `influenced_by` chain to substrate per [`decision-log §0021`](../../../../docs/charter/decision-log.md) (OMQ #3-α substrate-time generation). "Evident from the surrounding analysis", "implicit in the inference context", "follows from prior reasoning", and "consistent with what was already established" all describe an Assertion whose inferential origin is claimed in prose but whose `influenced_by` chain to substrate is absent — committee-mode review of downstream prose for observational-vs-inferential conflation fails this construction per AP3 of [Charter §2.4](../../../../docs/charter/constitutional-charter.md#24-inferential-influence-disclosure).
+
+**Rewrite.** "The Assertion declares its inferential origin via a populated `subject_ref_construct` (referencing the Category II construct) or `subject_ref_hypothesis` (referencing the Category III hypothesis whose promotion influenced this formation), with the corresponding `influenced_by` chain reconstructible from substrate per [Charter §2.4](../../../../docs/charter/constitutional-charter.md#24-inferential-influence-disclosure)."
+
 ## 5. Self-application test
 
 At the end of writing a paragraph that touches any category:
@@ -100,6 +106,7 @@ Failure to apply this test before commit is itself a form of drift — the disci
 - [`docs/charter/constitutional-charter.md` §2.1 Observational Integrity (Forbidden Anti-Patterns)](../../../../docs/charter/constitutional-charter.md#21-observational-integrity)
 - [`docs/charter/constitutional-charter.md` §2.2 Epistemic Separation](../../../../docs/charter/constitutional-charter.md#22-epistemic-separation)
 - [`docs/charter/constitutional-charter.md` §2.3 Provenance Integrity](../../../../docs/charter/constitutional-charter.md#23-provenance-integrity)
+- [`docs/charter/constitutional-charter.md` §2.4 Inferential Influence Disclosure](../../../../docs/charter/constitutional-charter.md#24-inferential-influence-disclosure)
 - [`docs/charter/constitutional-charter.md` §2.5 Hypothesis Lifecycle Explicitness](../../../../docs/charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness)
 - [`docs/ontology/entity-model.md` Categories I, II, III](../../../../docs/ontology/entity-model.md)
 - [`docs/ontology/lifecycle-semantics.md` §Hypothesis (Category III)](../../../../docs/ontology/lifecycle-semantics.md)

@@ -126,7 +126,29 @@ done
 
 command -v python3 >/dev/null 2>&1 || { fail_closed "python3 not found"; exit "$EXIT_CODE"; }
 
-FROZEN_RANGES=$(python3 "$PARSER" --frozen-ranges "$CHARTER" "$CLAUDE_MD") || { fail_closed "frozen-range parser failed"; exit "$EXIT_CODE"; }
+# Compute sections newly promoted pending→frozen in this change set
+# (frozen in working tree but not in HEAD) so the same PR that
+# promotes a section can also edit its binding text without the
+# frozen-section check rejecting that edit. The diff frame is the
+# same in both hook contexts: local pre-commit checks staged-vs-HEAD;
+# CI uses `git reset --soft origin/$base_ref` so HEAD is base too.
+# Per decision-log §0100 + amendment v0.5.1.
+NEWLY_FROZEN=""
+BASE_CLAUDE_TMP=$(mktemp -t "claude-md-base.XXXXXX") || BASE_CLAUDE_TMP=""
+if [ -n "$BASE_CLAUDE_TMP" ] && git show HEAD:"$CLAUDE_MD" > "$BASE_CLAUDE_TMP" 2>/dev/null && [ -s "$BASE_CLAUDE_TMP" ]; then
+  BASE_FROZEN=$(python3 "$PARSER" --frozen-sections "$BASE_CLAUDE_TMP" 2>/dev/null || true)
+  if [ -n "$BASE_FROZEN" ]; then
+    CURRENT_FROZEN=$(python3 "$PARSER" --frozen-sections "$CLAUDE_MD") || { fail_closed "frozen-sections parser failed"; rm -f "$BASE_CLAUDE_TMP"; exit "$EXIT_CODE"; }
+    NEWLY_FROZEN=$(comm -23 <(printf '%s\n' "$CURRENT_FROZEN" | sort -u) <(printf '%s\n' "$BASE_FROZEN" | sort -u) | grep -v '^$' | paste -sd, -)
+  fi
+fi
+[ -n "$BASE_CLAUDE_TMP" ] && rm -f "$BASE_CLAUDE_TMP"
+
+if [ -n "$NEWLY_FROZEN" ]; then
+  FROZEN_RANGES=$(python3 "$PARSER" --frozen-ranges "$CHARTER" "$CLAUDE_MD" --exclude-sections "$NEWLY_FROZEN") || { fail_closed "frozen-range parser failed"; exit "$EXIT_CODE"; }
+else
+  FROZEN_RANGES=$(python3 "$PARSER" --frozen-ranges "$CHARTER" "$CLAUDE_MD") || { fail_closed "frozen-range parser failed"; exit "$EXIT_CODE"; }
+fi
 FORBIDDEN=$(python3 "$PARSER" --forbidden "$VOCAB_SKILL")                 || { fail_closed "forbidden parser failed";   exit "$EXIT_CODE"; }
 MARKETING=$(python3 "$PARSER" --marketing "$MARKETING_SKILL")             || { fail_closed "marketing parser failed";    exit "$EXIT_CODE"; }
 AMBIGUITY=$(python3 "$PARSER" --ambiguity "$AMBIGUITY_SKILL")             || { fail_closed "ambiguity parser failed";    exit "$EXIT_CODE"; }
@@ -143,6 +165,9 @@ historical fact"
 if [ "${1:-}" = "--self-test" ]; then
   echo "self-test: all watchlist parsers OK"
   echo "  frozen ranges:  $(printf '%s\n' "$FROZEN_RANGES" | grep -c .) range(s)"
+  if [ -n "$NEWLY_FROZEN" ]; then
+    echo "  newly-frozen exempt (promotion in change set): $NEWLY_FROZEN"
+  fi
   echo "  forbidden:      $(printf '%s\n' "$FORBIDDEN"     | grep -c .) term(s)"
   echo "  marketing:      $(printf '%s\n' "$MARKETING"     | grep -c .) tell(s)"
   echo "  ambiguity:      $(printf '%s\n' "$AMBIGUITY"     | grep -c .) term(s)"

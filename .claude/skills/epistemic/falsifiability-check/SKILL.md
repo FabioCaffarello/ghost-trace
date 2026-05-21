@@ -105,7 +105,7 @@ If the claim is neither falsifiable nor operationally useful, it is decoration. 
 
 This skill is not optional during:
 
-- Redaction of a pending Charter invariant (§2.4, §2.6, §3). Every clause in the draft is tested before committee approval.
+- Redaction of a pending Charter invariant (§2.6, §3). Every clause in the draft is tested before committee approval.
 - Authoring of an RFC's `Constitutional Review` section. Each interaction with an invariant is tested.
 - Introduction of a new claim in the Ontology that has not been explicitly delegated by the Charter as ontological discretion.
 
