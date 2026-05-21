@@ -3466,6 +3466,38 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0088` — CampaignHypothesis Phase 3 replay; third of four subtype-specific Phase 3 tools
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0086`](#0086--first-phase-3-reconstructive-replay-tool--behavioralcluster-formation) opened the Phase 3 replay arc with BC; [`§0087`](#0087--automationgroup-phase-3-replay-second-of-four-subtype-specific-phase-3-tools) extended to AG. This entry extends to CampaignHypothesis. Same mechanical-extension pattern: shared `hypothesis.CollectFormationContextAt` helper + per-subtype pattern resolver + per-subtype CLI.
+
+- **Decision:** Land CH Phase 3 replay with three structural moves mirroring §0086+§0087:
+
+  1. **`replay.ReplayCampaignHypothesisFormation` + `replay.ResolveCHFormationPattern`** at [`services/ingestion/internal/replay/campaign_hypothesis.go`](../../services/ingestion/internal/replay/campaign_hypothesis.go) (new file). Resolves the `temporal-descriptor-cohort-v1` pattern. Two int parameters (`max_intra_event_gap_seconds`, `min_campaign_size`) — same shape as BC, no new parser helper needed.
+
+  2. **Interface-to-interface assertion** to `CampaignHypothesisFormationContext` (same pattern as §0087's AG assertion).
+
+  3. **`cmd/replay-campaign-hypothesis-formation` operator interface** (new file). 35th operational binary; 7th substrate-audit/maintenance.
+
+- **Constitutional review:** No Charter invariant amended. Same constitutional shape as §0086+§0087. Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`services/ingestion/internal/replay/campaign_hypothesis.go`](../../services/ingestion/internal/replay/campaign_hypothesis.go) — new file.
+  - [`services/ingestion/internal/replay/campaign_hypothesis_test.go`](../../services/ingestion/internal/replay/campaign_hypothesis_test.go) — new file. **7 tests** mirroring §0086+§0087: happy path, unknown target, wrong message type (BC formation → ErrTargetWrongType), unknown pattern, substrate-time-filter correctness, two resolver tests.
+  - [`services/ingestion/cmd/replay-campaign-hypothesis-formation/main.go`](../../services/ingestion/cmd/replay-campaign-hypothesis-formation/main.go) — new binary; 35th CLI; 7th substrate-audit/maintenance.
+  - Makefile + README + decision-log §0088.
+  - **Third of four subtype-specific Phase 3 tools.** CR (§0089) follows; the four-subtype Phase 3 arc closes once CR lands.
+  - **35th operational binary; 7th audit/maintenance.** `cmd/` now contains 35 binaries:
+    - substrate-write (25): unchanged.
+    - **substrate-audit/maintenance (7):** verify, orphan-cleanup, replay-operational-session, replay-all-operational-sessions, replay-behavioral-cluster-formation, replay-automation-group-formation, **replay-campaign-hypothesis-formation** (new).
+    - projection-read (3): unchanged.
+
+- **Supersession:** None. Extends §0087 with the third subtype. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

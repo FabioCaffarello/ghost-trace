@@ -831,6 +831,17 @@ make replay-automation-group-formation-build                               # bui
 
 Wire shape + exit codes identical to the BC replay CLI. The same `hypothesis.CollectFormationContextAt` helper backs both — by the §0056 typed-subtype-landings discipline, all four Cat III subtypes' formation contexts share the `DeclaredSessions()` surface, so one helper serves all four (the AG path performs an interface-to-interface assertion to convert `FormationContext` → `AutomationGroupFormationContext`).
 
+## `replay-campaign-hypothesis-formation` CLI
+
+Same shape as the BC + AG replay CLIs for the CampaignHypothesis subtype per [`§0088`](../../docs/charter/decision-log.md). Currently supports the `temporal-descriptor-cohort-v1` pattern. Third of four subtype-specific Phase 3 replay tools.
+
+```sh
+make replay-campaign-hypothesis-formation-build                            # builds ./bin/replay-campaign-hypothesis-formation
+
+./bin/replay-campaign-hypothesis-formation \
+  -target-event-hash <64-hex-chars>
+```
+
 ## `replay-all-operational-sessions` CLI
 
 Substrate-wide batch Phase 1 replay per [`§0085`](../../docs/charter/decision-log.md). Walks every `OperationalSession` in the substrate, re-derives each from its declared source, and reports aggregate match/drift/error counts. Pre-collects the `DerivationContext` once and reuses it across all per-target replays (cost: substrate walks = 2 + 1 lookup-per-record; vs N+1 walks if the per-target CLI were called naively in a loop).
