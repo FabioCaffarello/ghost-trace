@@ -257,3 +257,194 @@ func TestPromoteDefaultPromotedAt(t *testing.T) {
 		t.Errorf("promoted_at: got %d, want 1234567890 (from injected now)", promotions[0].PromotedAt)
 	}
 }
+
+// walkCLIIngestionEvents returns every IngestionEvent record with
+// channel="cli" — the CLI-channel actor-attribution pairs landed via
+// §0097, ignoring the channel="test" IngestionEvents produced by the
+// populateSubstrate ingest path (which pairs every Cat I observation
+// with an IngestionEvent per §0038).
+func walkCLIIngestionEvents(t *testing.T, sub *substrate.Substrate) []*eventsv1.IngestionEvent {
+	t.Helper()
+	ctx := context.Background()
+	var out []*eventsv1.IngestionEvent
+	if err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
+		if row.MessageType != "ghosttrace.events.v1.IngestionEvent" {
+			return nil
+		}
+		payload, err := sub.ReadBlob(ctx, row.EventHash)
+		if err != nil {
+			return err
+		}
+		ev := &eventsv1.IngestionEvent{}
+		if err := proto.Unmarshal(payload, ev); err != nil {
+			return err
+		}
+		if ev.Channel != "cli" {
+			return nil
+		}
+		out = append(out, ev)
+		return nil
+	}); err != nil {
+		t.Fatalf("WalkEvents: %v", err)
+	}
+	return out
+}
+
+func TestPromoteWithActorCommitsIngestionEventPair(t *testing.T) {
+	// With Actor non-empty, Promote uses AppendPair to commit the
+	// promotion AND an IngestionEvent atomically. The IngestionEvent
+	// records channel="cli" + client_common_name=Actor per §0097.
+	sub, formationHash := formAndCollect(t)
+
+	rep, err := Promote(context.Background(), sub, PromoteOptions{
+		FormationEventHash: formationHash,
+		PromotedAt:         1716120000000000000,
+		CadenceSeconds:     3600,
+		Reason:             "operator-attributed promotion pilot",
+		Actor:              "operator-alice",
+	}, func() time.Time { return time.Unix(0, 1716120000000000000) })
+	if err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+	if rep.PromotionEventHashHex == "" {
+		t.Errorf("missing PromotionEventHashHex")
+	}
+	if rep.IngestionEventHashHex == "" {
+		t.Errorf("expected non-empty IngestionEventHashHex (Actor was supplied)")
+	}
+
+	promotions := walkPromotions(t, sub)
+	if len(promotions) != 1 {
+		t.Fatalf("substrate carries %d promotions, want 1", len(promotions))
+	}
+
+	ingestions := walkCLIIngestionEvents(t, sub)
+	if len(ingestions) != 1 {
+		t.Fatalf("substrate carries %d IngestionEvents, want 1", len(ingestions))
+	}
+	ing := ingestions[0]
+	if ing.Channel != "cli" {
+		t.Errorf("channel: got %q, want %q", ing.Channel, "cli")
+	}
+	if ing.ClientCommonName != "operator-alice" {
+		t.Errorf("client_common_name: got %q, want %q", ing.ClientCommonName, "operator-alice")
+	}
+	if ing.ClientCertSha256 != "" {
+		t.Errorf("client_cert_sha256: got %q, want empty (CLI channel, no mTLS)", ing.ClientCertSha256)
+	}
+	if len(ing.ClientSubjectAltNames) != 0 {
+		t.Errorf("client_subject_alt_names: got %v, want empty (CLI channel, no mTLS)", ing.ClientSubjectAltNames)
+	}
+
+	// IngestionEvent.primary_event_hash must reference the promotion
+	// event's content-hash (the pair-by-reference shape per §0038).
+	if len(ing.PrimaryEventHash) != 32 {
+		t.Fatalf("primary_event_hash length: got %d, want 32", len(ing.PrimaryEventHash))
+	}
+	// Recover the promotion hash from the report's hex.
+	var promHash [32]byte
+	for i := 0; i < 32; i++ {
+		var nibble [2]byte
+		copy(nibble[:], rep.PromotionEventHashHex[2*i:2*i+2])
+		v, err := hexNibblesToByte(nibble[0], nibble[1])
+		if err != nil {
+			t.Fatalf("decode promotion hash: %v", err)
+		}
+		promHash[i] = v
+	}
+	for i := 0; i < 32; i++ {
+		if ing.PrimaryEventHash[i] != promHash[i] {
+			t.Errorf("primary_event_hash[%d]: got %x, want %x (must reference promotion event hash)", i, ing.PrimaryEventHash[i], promHash[i])
+			break
+		}
+	}
+}
+
+func TestPromoteWithoutActorPreservesSingleAppendPath(t *testing.T) {
+	// Without Actor, Promote uses the §0046 single-Append path; no
+	// IngestionEvent is committed. Backward compatibility check.
+	sub, formationHash := formAndCollect(t)
+
+	rep, err := Promote(context.Background(), sub, PromoteOptions{
+		FormationEventHash: formationHash,
+		PromotedAt:         1716120000000000000,
+		CadenceSeconds:     3600,
+		Reason:             "backward-compat path",
+	}, func() time.Time { return time.Unix(0, 1716120000000000000) })
+	if err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+	if rep.IngestionEventHashHex != "" {
+		t.Errorf("IngestionEventHashHex: got %q, want empty (no Actor supplied)", rep.IngestionEventHashHex)
+	}
+	if got := walkCLIIngestionEvents(t, sub); len(got) != 0 {
+		t.Errorf("substrate carries %d IngestionEvents, want 0", len(got))
+	}
+}
+
+func TestPromoteWithActorIdempotent(t *testing.T) {
+	// Re-running with identical (formation, cadence, reason,
+	// promoted_at, actor) is idempotent — the second invocation
+	// finds the same promotion hash + the same IngestionEvent hash,
+	// no new rows committed.
+	sub, formationHash := formAndCollect(t)
+	opts := PromoteOptions{
+		FormationEventHash: formationHash,
+		PromotedAt:         1716120000000000000,
+		CadenceSeconds:     3600,
+		Reason:             "idempotent actor pilot",
+		Actor:              "operator-bob",
+	}
+	fixedNow := func() time.Time { return time.Unix(0, 1716120000000000000) }
+
+	rep1, err := Promote(context.Background(), sub, opts, fixedNow)
+	if err != nil {
+		t.Fatalf("Promote 1: %v", err)
+	}
+	rep2, err := Promote(context.Background(), sub, opts, fixedNow)
+	if err != nil {
+		t.Fatalf("Promote 2: %v", err)
+	}
+	if rep1.PromotionEventHashHex != rep2.PromotionEventHashHex {
+		t.Errorf("promotion hash differs across invocations: %q vs %q", rep1.PromotionEventHashHex, rep2.PromotionEventHashHex)
+	}
+	if rep1.IngestionEventHashHex != rep2.IngestionEventHashHex {
+		t.Errorf("ingestion hash differs across invocations: %q vs %q", rep1.IngestionEventHashHex, rep2.IngestionEventHashHex)
+	}
+	if !rep2.AlreadyPromoted {
+		t.Errorf("expected AlreadyPromoted=true on second invocation")
+	}
+	if got := walkPromotions(t, sub); len(got) != 1 {
+		t.Errorf("substrate carries %d promotions, want 1", len(got))
+	}
+	if got := walkCLIIngestionEvents(t, sub); len(got) != 1 {
+		t.Errorf("substrate carries %d IngestionEvents, want 1", len(got))
+	}
+}
+
+// hexNibblesToByte parses two hex characters into a byte. Local helper
+// to avoid pulling encoding/hex into the test for one operation.
+func hexNibblesToByte(hi, lo byte) (byte, error) {
+	h, err := nibble(hi)
+	if err != nil {
+		return 0, err
+	}
+	l, err := nibble(lo)
+	if err != nil {
+		return 0, err
+	}
+	return h<<4 | l, nil
+}
+
+func nibble(b byte) (byte, error) {
+	switch {
+	case b >= '0' && b <= '9':
+		return b - '0', nil
+	case b >= 'a' && b <= 'f':
+		return b - 'a' + 10, nil
+	case b >= 'A' && b <= 'F':
+		return b - 'A' + 10, nil
+	default:
+		return 0, errors.New("invalid hex nibble")
+	}
+}

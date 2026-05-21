@@ -487,7 +487,7 @@ make promote-hypothesis-build                                          # builds 
 ./bin/promote-hypothesis -formation-event-hash <hash> -cadence-seconds 3600
 ```
 
-Validates the supplied `formation-event-hash` resolves to a `BehavioralClusterFormation` row in the substrate (otherwise exits 3 — preserves §2.5 lifecycle integrity: promotion references only formations, never observations or constructs). Commits the `BehavioralClusterPromotion` event via `substrate.Append` (acquires `writeMu` per [`concurrency-pattern.md`](../../docs/architecture/concurrency-pattern.md) §Substrate-Writer Serialization).
+Validates the supplied `formation-event-hash` resolves to a `BehavioralClusterFormation` row in the substrate (otherwise exits 3 — preserves §2.5 lifecycle integrity: promotion references only formations, never observations or constructs). Commits the `BehavioralClusterPromotion` event via `substrate.Append` by default (acquires `writeMu` per [`concurrency-pattern.md`](../../docs/architecture/concurrency-pattern.md) §Substrate-Writer Serialization); when `-actor` is supplied, commits via `substrate.AppendPair` paired with an `IngestionEvent` for per-actor attribution per [`§0097`](../../docs/charter/decision-log.md) (pilot CLI for the broader CLI-attribution extension named in the auth-scope RFC's Open Question 2).
 
 | Option | Default | Notes |
 |---|---|---|
@@ -495,6 +495,7 @@ Validates the supplied `formation-event-hash` resolves to a `BehavioralClusterFo
 | `-cadence-seconds` | 86400 (24 h) | Layer A parameter per [`§0011`](../../docs/charter/decision-log.md): elapsed time since `promoted_at` that opens demotion-candidacy. Layer B (deep criterion) remains deferred until §2.6 redacts. |
 | `-promoted-at-ns` | 0 (= wall-clock now) | Explicit `promoted_at` for forensic replay / deterministic test recording. |
 | `-reason` | empty | Operator-supplied forensic note; recommended at audit time. |
+| `-actor` | empty | Optional per [`§0097`](../../docs/charter/decision-log.md). When non-empty, the promotion commits paired with an `IngestionEvent` (channel="cli", `client_common_name=<actor>`) for per-actor attribution. Empty preserves the [`§0046`](../../docs/charter/decision-log.md) single-Append path (backward compatible). |
 
 Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type (the two §2.5-integrity errors).
 
