@@ -171,6 +171,30 @@ Adding a new CoordinationRing formation pattern: implement `CoordinationRingForm
 
 Exit code: **0** on success; **2** on tool/configuration error.
 
+## `promote-coordination-ring` CLI
+
+Operator-invoked tool to record the **CoordinationRing promotion** lifecycle operation per [`§0071`](../../docs/charter/decision-log.md) — second lifecycle operation of the fourth Cat III subtype arc. Mirrors `promote-hypothesis` (BC), `promote-automation-group` (AG), and `promote-campaign-hypothesis` (CH).
+
+```sh
+make promote-coordination-ring-build                                       # builds ./bin/promote-coordination-ring
+
+./bin/promote-coordination-ring \
+  -formation-event-hash <64-hex-chars> \
+  -cadence-seconds 86400 \
+  -reason "operational pilot — coordination ring enrichment"
+```
+
+Validates the supplied `formation-event-hash` resolves to a `CoordinationRingFormation` row (otherwise exits 3 — preserves §2.5-lifecycle-integrity). Cross-subtype rejection: a BC/AG/CH formation hash returns `ErrTargetWrongType` (exit 3) — the subtype-specific message_type discriminator prevents misclassification.
+
+| Option | Default | Notes |
+|---|---|---|
+| `-formation-event-hash` | (required) | Hex-encoded BLAKE3-256 of the target `CoordinationRingFormation`. |
+| `-cadence-seconds` | 86400 (24h) | Layer A parameter per [`§0011`](../../docs/charter/decision-log.md). |
+| `-promoted-at-ns` | 0 (= wall-clock now) | Explicit `promoted_at` for forensic replay. |
+| `-reason` | empty | Operator-supplied forensic note. |
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
+
 ## `promote-campaign-hypothesis` CLI
 
 Operator-invoked tool to record the **CampaignHypothesis promotion** lifecycle operation per [`§0064`](../../docs/charter/decision-log.md) — second lifecycle operation of the third Cat III subtype arc. Mirrors `promote-hypothesis` (BC) and `promote-automation-group` (AG).
