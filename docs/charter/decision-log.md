@@ -2905,6 +2905,53 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0075` — Sixth (final) CoordinationRing lifecycle operation (`CoordinationRingSplit`) lands; fourth-subtype §2.5 lifecycle surface complete; §2.5 lifecycle surface COMPLETE across ALL FOUR Cat III subtypes (24 of 24 lifecycle event types landed)
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0074`](#0074--fourth-subtype-merge-coordinationringmerge-lands-0049-option-b--symmetric-relation-idempotency-transfer-to-interaction-centric-subtype) landed CR merge. This entry lands CR split — the **sixth (final) lifecycle operation** of the fourth Cat III subtype arc opened at [`§0070`](#0070--fourth-and-final-category-iii-concrete-subtype-coordinationring-formation-lands-first-interaction-centric-edge-list-subtype-fourth-subtype-lifecycle-arc-opens). With this landing, **the §2.5 lifecycle surface is now complete for ALL FOUR Cat III concrete subtypes** named at §0010 (Q2 resolution): BehavioralCluster (§0045–§0050), AutomationGroup (§0056–§0061), CampaignHypothesis (§0063–§0068), CoordinationRing (§0070–§0075). Twenty-four lifecycle event types in total (6 × 4); twenty-four entry points; twenty-four operational CLIs.
+
+  Four structural observations close this entry:
+
+  - **§0010 Q2 resolution fully implemented at the lifecycle layer.** The four-subtype family is no longer a structural commitment — it is operational across the entire §2.5 surface. Operators can express formation, promotion, demotion, dissolution, merge, and split for any of the four Cat III subtypes.
+  - **Typed-subtype-landings discipline validated across 24 PRs spanning four complete arcs.** Each subtype carries ~150 lines of subtype-specific boilerplate per lifecycle op; the wire types remain distinct; cross-subtype rejection is enforced by per-subtype message_type discriminators. The duplication is bounded and structurally meaningful. Generic abstraction would have lost the subtype distinction the Charter is structured to preserve.
+  - **Sentinel-sharing pattern proven across all four subtypes.** `ErrTargetNotFound`, `ErrTargetWrongType`, `ErrMergeAntecedentsIdentical`, `ErrSplitInsufficientSuccessors`, `ErrSplitSuccessorsNotDistinct` — five operation-agnostic sentinels reused across 24 lifecycle ops without modification. Subtype-specific message_type constants enforce rejection at the per-subtype layer.
+  - **Wire-shape transfer validated across three distinct membership shapes.** The §0046–§0050 lifecycle wire shapes (designed for actor-set BC) transferred cleanly to AG (also actor-set), CH (event-set), and CR (edge-list) without modification — the subtype distinction lives in the FORMATION shape; the lifecycle event shapes are subtype-agnostic.
+
+- **Decision:** Land `CoordinationRingSplit` with three structural moves mirroring §0050+§0061+§0068:
+
+  1. **`CoordinationRingSplit` Protobuf message** at [`schemas/events/v1/coordination_ring_split.proto`](../../schemas/events/v1/coordination_ring_split.proto). Four fields identical to §0068's shape.
+
+  2. **`SplitCoordinationRing` entry point** at [`services/ingestion/internal/hypothesis/coordination_ring_split.go`](../../services/ingestion/internal/hypothesis/coordination_ring_split.go). Reuses shared `ErrTargetNotFound` + `ErrTargetWrongType` + `ErrSplitInsufficientSuccessors` + `ErrSplitSuccessorsNotDistinct` sentinels. Validates antecedent + every successor resolves to `CoordinationRingFormation`. Sorts successors ascending (set-equality idempotency).
+
+  3. **`cmd/split-coordination-ring` operator interface** — 30th operational binary; 25th substrate-write.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1, §2.2, §2.3, §2.5 + §2.5 BC3 + §2.5 BC5. Respects §0045+§0056+§0063+§0070 hypothesis-identity invariant. Respects §0050 structural-inverse-of-merge pattern + §0049+§0050 set-equality idempotency. Respects §0070 typed-subtype-landings + edge-list-on-the-wire modeling commitments. Respects entity-model.md §Cross-subtype operations deferral. Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`schemas/events/v1/coordination_ring_split.proto`](../../schemas/events/v1/coordination_ring_split.proto) — new file.
+  - [`services/ingestion/internal/hypothesis/coordination_ring_split.go`](../../services/ingestion/internal/hypothesis/coordination_ring_split.go) — new file.
+  - [`services/ingestion/internal/hypothesis/coordination_ring_split_test.go`](../../services/ingestion/internal/hypothesis/coordination_ring_split_test.go) — **9 tests** covering happy-path, successor-order invariance, insufficient successors, duplicate successors, antecedent-equals-successor, idempotency, unknown antecedent, default `split_at`, and a terminal **all-six-CR-lifecycle-ops-in-substrate** test. With this test, ALL FOUR Cat III subtypes now have a verified all-six-ops-coexist end-to-end test (BC: §0050, AG: §0061, CH: §0068, CR: §0075).
+  - [`services/ingestion/cmd/split-coordination-ring/main.go`](../../services/ingestion/cmd/split-coordination-ring/main.go) — new binary; 30th CLI; 25th substrate-write.
+  - Makefile, canonical corpus, corpus README, service README, decision-log §0075.
+  - **§2.5 lifecycle surface complete for all four Cat III subtypes.** Twenty-four lifecycle event types (6 × 4) operationally observable: formation, promotion, demotion, dissolution, merge, split for each of BehavioralCluster + AutomationGroup + CampaignHypothesis + CoordinationRing.
+  - **30th operational binary lands; 25th substrate-write.** `cmd/` now contains 30 binaries across three classifications:
+    - substrate-write (25): all 6 BC + all 6 AG + all 6 CH + all 6 CR lifecycle operators + `derive-operational-session`.
+    - substrate-audit/maintenance (2): `verify`, `orphan-cleanup`.
+    - projection-read (3): `hypothesis-state`, `list-hypotheses`, `summarize-hypotheses`.
+  - **§0010 Q2 resolution implementation closure.** Q2 named four concrete Cat III subtypes; this entry completes the lifecycle-landing arc for the fourth. All commitments from §0010 are now operationally realized — the four-subtype family is no longer a structural commitment but a structural reality.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Projection layer extension for CoordinationRing** — `internal/projection` still does NOT carry a `CoordinationRingProjection` type. The §0070 carry-forward remains open. Natural §0076 candidate (mirrors §0062 AG + §0069 CH).
+    - **Per-subtype CLI binaries** — unchanged from §0062+§0069 carry-forwards.
+    - **Cross-subtype operations** — unchanged. Cross-subtype merge/split across e.g. BC + CR remains the open Ontology question per Q4 deferral.
+    - **Layer B deep-criterion** — unchanged from §0047 carry-forward; blocked on §2.6 redaction.
+    - **Edge-weight / multi-edge / directed-coordination semantics** — unchanged from §0070 carry-forwards.
+
+- **Supersession:** None. Closes the fourth Cat III subtype's lifecycle arc opened at §0070. With this entry, the §2.5 lifecycle surface is operationally complete across all four §0010 Q2-resolved subtypes. §0022 implementation-gate criteria continue to be satisfied; the implementation-gate scope expands organically as subsequent RFC discipline proceeds.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
