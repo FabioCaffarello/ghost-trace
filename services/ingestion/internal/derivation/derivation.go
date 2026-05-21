@@ -149,34 +149,9 @@ func DeriveAll(ctx context.Context, sub *substrate.Substrate, def OperationalDef
 		now = time.Now
 	}
 
-	// Pass 1: pre-collect every NetworkEvent grouped by actor_ref,
-	// each group sorted ascending by observed_at. This makes
-	// DerivationContext.NetworkEventsForActor O(1); the cost is one
-	// extra substrate walk.
-	dctx := &walkerContext{networkEventsByActor: map[string][]*eventsv1.NetworkEvent{}}
-	if err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
-		if row.MessageType != networkEventMessageType {
-			return nil
-		}
-		payload, err := sub.ReadBlob(ctx, row.EventHash)
-		if err != nil {
-			return fmt.Errorf("read network event %x: %w", row.EventHash, err)
-		}
-		ne := &eventsv1.NetworkEvent{}
-		if err := proto.Unmarshal(payload, ne); err != nil {
-			return fmt.Errorf("unmarshal network event %x: %w", row.EventHash, err)
-		}
-		if actor := ne.GetActorRef(); actor != "" {
-			dctx.networkEventsByActor[actor] = append(dctx.networkEventsByActor[actor], ne)
-		}
-		return nil
-	}); err != nil {
-		return Report{}, fmt.Errorf("derivation.DeriveAll: collect network events: %w", err)
-	}
-	for actor := range dctx.networkEventsByActor {
-		evts := dctx.networkEventsByActor[actor]
-		sort.SliceStable(evts, func(i, j int) bool { return evts[i].GetObservedAt() < evts[j].GetObservedAt() })
-		dctx.networkEventsByActor[actor] = evts
+	dctx, err := CollectDerivationContext(ctx, sub)
+	if err != nil {
+		return Report{}, fmt.Errorf("derivation.DeriveAll: %w", err)
 	}
 
 	// Pass 2: walk DeclaredSession rows and derive.
@@ -239,4 +214,45 @@ func DeriveAll(ctx context.Context, sub *substrate.Substrate, def OperationalDef
 		return rep, fmt.Errorf("derivation.DeriveAll: %w", walkErr)
 	}
 	return rep, nil
+}
+
+// CollectDerivationContext walks the substrate once to pre-collect
+// every NetworkEvent grouped by actor_ref (each group sorted
+// ascending by observed_at). Returns a DerivationContext suitable
+// for passing to OperationalDefinition.Derive. Exported so the
+// replay package can re-derive an OperationalSession from its
+// declared source under the same context the original DeriveAll
+// used.
+//
+// Cost: one substrate walk + one sort per actor. Same complexity
+// as the pass-1 step DeriveAll runs internally; reused here so the
+// derivation + replay paths agree on the context-construction logic
+// without duplication (per §0083 single-source-of-truth pattern).
+func CollectDerivationContext(ctx context.Context, sub *substrate.Substrate) (DerivationContext, error) {
+	dctx := &walkerContext{networkEventsByActor: map[string][]*eventsv1.NetworkEvent{}}
+	if err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
+		if row.MessageType != networkEventMessageType {
+			return nil
+		}
+		payload, err := sub.ReadBlob(ctx, row.EventHash)
+		if err != nil {
+			return fmt.Errorf("read network event %x: %w", row.EventHash, err)
+		}
+		ne := &eventsv1.NetworkEvent{}
+		if err := proto.Unmarshal(payload, ne); err != nil {
+			return fmt.Errorf("unmarshal network event %x: %w", row.EventHash, err)
+		}
+		if actor := ne.GetActorRef(); actor != "" {
+			dctx.networkEventsByActor[actor] = append(dctx.networkEventsByActor[actor], ne)
+		}
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("CollectDerivationContext: %w", err)
+	}
+	for actor := range dctx.networkEventsByActor {
+		evts := dctx.networkEventsByActor[actor]
+		sort.SliceStable(evts, func(i, j int) bool { return evts[i].GetObservedAt() < evts[j].GetObservedAt() })
+		dctx.networkEventsByActor[actor] = evts
+	}
+	return dctx, nil
 }

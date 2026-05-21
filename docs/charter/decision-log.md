@@ -3288,6 +3288,52 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0084` — First Phase 1 replay tool lands; deterministic OperationalSession re-derivation verified
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`docs/architecture/replay-model.md`](../architecture/replay-model.md) (Scaffold) names four replay phases. Phase 1 — *deterministic over observation alone* (L17-19) — is the only phase whose contract can be verified structurally today: "re-running the same rules over the same observations yields the same Phase 1 assertions". The Cat II `OperationalSession` introduced at [`§0043`](#0043--first-category-ii-operational-construct-operationalsession-lands-padded-v1-canonical-operational-definition-internalderivation--cmdderive-operational-session-introduced) self-describes its derivation rule via three fields — `definition_version`, `definition_parameters`, `source_event_hash` — making structural verification straightforward: re-derive from the declared source under the declared rule + parameters, recompute the canonical content-hash, compare to the substrate's committed hash.
+
+  This entry lands the first replay tool: a `replay-operational-session` CLI that performs that verification for any committed OperationalSession.
+
+- **Decision:** Land Phase 1 replay for OperationalSession with three structural moves:
+
+  1. **`internal/replay` package** at [`services/ingestion/internal/replay/replay.go`](../../services/ingestion/internal/replay/replay.go) (new file). Exposes `ReplayOperationalSession(ctx, sub, targetHash) (OperationalSessionReport, error)` + `ResolveOperationalDefinition(version, parameters) (OperationalDefinition, error)` + six sentinel errors (`ErrTargetNotFound`, `ErrTargetWrongType`, `ErrDefinitionUnknown`, `ErrDefinitionParameterMismatch`, `ErrSourceNotFound`, `ErrSourceWrongType`).
+
+  2. **`derivation.CollectDerivationContext` exported** at [`services/ingestion/internal/derivation/derivation.go`](../../services/ingestion/internal/derivation/derivation.go). The pass-1 NetworkEvent-by-actor collection step that `DeriveAll` previously did inline is extracted to an exported helper. `DeriveAll` refactored to call it (~30 LOC moved). Per the [`§0083`](#0083--aggregation-helper-consolidation-0082-named-carry-forward-discharged) single-source-of-truth pattern: the derivation + replay paths share one context-construction implementation.
+
+  3. **`cmd/replay-operational-session` operator interface** at [`services/ingestion/cmd/replay-operational-session/main.go`](../../services/ingestion/cmd/replay-operational-session/main.go) (new file). 31st operational binary. Two-failure-mode exit code semantic: **0** = match (Phase 1 contract holds); **1** = drift detected (replay ran, hashes differ); **2** = tool/config error; **3** = substrate-precondition failure (one of the six sentinels). Distinguishing exit 1 from exit 3 lets monitoring systems treat derivation drift differently from substrate-precondition errors.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1 (substrate immutability — replay is read-only; the OperationalSession committed at the original derivation time is authoritative; replay verifies whether the derivation *implementation* matches, not whether the substrate is right). Respects §2.2 (Cat I/Cat II separation preserved — replay does not commit any new Cat II record; the recomputed hash exists only in the report). Respects §2.5 + §2.5 BC3 (no lifecycle-event changes; OperationalSession is Cat II, not Cat III). Canonical vocabulary used as written. Replay-model.md Phase 1 contract operationalized per L37 "deterministic replay (Phases 1-2): exact reproduction given the substrate and the version of computation logic" — the version is recorded in the OperationalSession's `definition_version` field; the parameters in `definition_parameters`; the substrate in the referenced `source_event_hash`.
+
+- **Consequences:**
+  - [`services/ingestion/internal/replay/replay.go`](../../services/ingestion/internal/replay/replay.go) — new file. `ReplayOperationalSession` entry point + `ResolveOperationalDefinition` registry + six sentinel errors + `OperationalSessionReport` struct.
+  - [`services/ingestion/internal/replay/replay_test.go`](../../services/ingestion/internal/replay/replay_test.go) — new file. **11 tests** covering: happy-path padded-v1 replay, happy-path inactivity-window-v1 replay, unknown target, wrong message type, all-OS-replay-cleanly invariant across multiple substrate rows, parameter-drift via hand-injected divergent OS, unknown definition version, missing source observation, and three resolver-level tests.
+  - [`services/ingestion/internal/derivation/derivation.go`](../../services/ingestion/internal/derivation/derivation.go) — `CollectDerivationContext` exported; `DeriveAll` refactored to call it. No behavioral change; the existing derivation tests continue to pass.
+  - [`services/ingestion/cmd/replay-operational-session/main.go`](../../services/ingestion/cmd/replay-operational-session/main.go) — new binary; 31st operational CLI; 3rd substrate-audit/maintenance binary (alongside `verify`, `orphan-cleanup`).
+  - [`services/ingestion/Makefile`](../../services/ingestion/Makefile) — help echo + PHONY target.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — new `replay-operational-session` CLI section with two-failure-mode exit-code semantic explained.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0084 (this entry).
+  - **Phase 1 replay contract structurally verified.** The replay-model.md scaffold's Phase 1 claim is no longer just prose — operators can issue a single command against any OperationalSession to verify the contract holds for that record. The substrate-wide invariant ("every OS in the substrate replays cleanly") is a discipline operators can apply against a populated substrate.
+  - **31st operational binary; 3rd audit/maintenance.** `cmd/` now contains 31 binaries across three classifications:
+    - substrate-write (25): all four Cat III subtypes × 6 lifecycle ops + `derive-operational-session`.
+    - **substrate-audit/maintenance (3):** `verify`, `orphan-cleanup`, **`replay-operational-session`** (new).
+    - projection-read (3): `hypothesis-state`, `list-hypotheses`, `summarize-hypotheses`.
+  - **Operational definition registry extracted.** The replay package's `ResolveOperationalDefinition` is the second registration site for the two currently-implemented operational definitions (the first being `cmd/derive-operational-session`'s `resolvePattern`). Future operational definitions register here too. A future refactor may consolidate the registry into `internal/derivation` itself (with reverse-parsing as an `OperationalDefinition` interface method); deferred until pressure surfaces.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Phase 2 replay** — *deterministic given a temporal enrichment snapshot* (replay-model.md L21-23). No Cat II type that depends on enrichment-as-of-T₁ exists today; Phase 2 work is deferred until such a type is introduced (e.g. enrichment-aware constructs).
+    - **Phase 3 replay** — *reconstructive* (replay-model.md L25-27). Cat III hypothesis replay where the hypothesis's formation depended on graph state at commit time. The replay-model.md scaffold acknowledges that exact re-derivation may be impossible; what's preserved is "the historical truth of what was concluded". Implementation deferred.
+    - **Phase 4 replay** — *retrospective analytical* (replay-model.md L29-31). New analyses over historical substrate records; not reproduction. Implementation deferred until analytical workloads surface.
+    - **HTTP replay endpoint** — `POST /v1/replay/operational-session` or similar to mirror the CLI. Deferred until operator pressure surfaces.
+    - **Substrate-wide replay scan** — a tool that replays *every* OperationalSession in the substrate and reports aggregate match/drift counts. The current per-target CLI is sufficient for operator-driven investigation; a batch-replay would be a UX add-on.
+    - **Operational-definition registry consolidation** — the replay-time parameter-reverse-parser is duplicated logic relative to the derive-time parameter-emission. A future refactor adds a `ParseParameters(s string) (OperationalDefinition, error)` method to the `OperationalDefinition` interface; deferred.
+    - **Replay model open questions** — `replay-model.md` L43-47 names three (graph snapshot frequency; hot vs cold replay; computation versioning). All three are Phase 2/3/4 territory; not §0084 scope.
+
+- **Supersession:** None. Lands the first concrete replay tool, operationalizing the replay-model.md scaffold's Phase 1 contract. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
