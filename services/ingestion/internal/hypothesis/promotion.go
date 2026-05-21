@@ -59,6 +59,17 @@ type PromoteOptions struct {
 	// Reason is an operator-supplied free-form note. Optional;
 	// recorded for forensic replay.
 	Reason string
+
+	// Actor is an optional CLI-channel per-actor attribution per
+	// decision-log §0097. When non-empty, Promote commits the
+	// BehavioralClusterPromotion event paired with an IngestionEvent
+	// (channel="cli", client_common_name=Actor) via AppendPair,
+	// extending the §0038 mTLS-identity-threading discipline to
+	// CLI-channel lifecycle ops. Empty preserves the §0046 single-
+	// Append path (backward compatible). Per the auth-scope RFC Open
+	// Question 2: CLI attribution is operator opt-in, not enforced —
+	// the CLI operator is trusted by virtue of local shell access.
+	Actor string
 }
 
 // PromoteReport is the per-Promote outcome.
@@ -72,6 +83,12 @@ type PromoteReport struct {
 	// already in the substrate (content-hash collision). False when
 	// this Promote invocation committed a new row.
 	AlreadyPromoted bool
+
+	// IngestionEventHashHex is the content-hash (hex) of the paired
+	// IngestionEvent committed when PromoteOptions.Actor was non-empty.
+	// Empty when no Actor was supplied (single-Append path). Stable
+	// identifier for per-actor-attribution audits.
+	IngestionEventHashHex string
 }
 
 // Promote records a BehavioralClusterPromotion lifecycle event
@@ -128,19 +145,59 @@ func Promote(ctx context.Context, sub *substrate.Substrate, opts PromoteOptions,
 		return PromoteReport{}, fmt.Errorf("hypothesis.Promote: lookup promotion %s: %w", hex, lookupErr)
 	}
 
+	committedAt := now().UnixNano()
 	promRow := substrate.EventRow{
 		EventHash:   hash,
 		EventTime:   promotedAt,
 		MessageType: string(ev.ProtoReflect().Descriptor().FullName()),
 		PayloadRef:  hex[:2] + "/" + hex[2:],
-		CommittedAt: now().UnixNano(),
+		CommittedAt: committedAt,
 	}
-	if err := sub.Append(ctx, promRow, payload); err != nil {
-		return PromoteReport{}, fmt.Errorf("hypothesis.Promote: append promotion %s: %w", hex, err)
+
+	// Single-Append path: no CLI per-actor attribution requested.
+	// Preserves §0046 backward compatibility.
+	if opts.Actor == "" {
+		if err := sub.Append(ctx, promRow, payload); err != nil {
+			return PromoteReport{}, fmt.Errorf("hypothesis.Promote: append promotion %s: %w", hex, err)
+		}
+		return PromoteReport{
+			PromotionEventHashHex: hex,
+			AlreadyPromoted:       alreadyPresent,
+		}, nil
+	}
+
+	// AppendPair path: pair the lifecycle event with an IngestionEvent
+	// carrying CLI-channel actor attribution per §0097. Reuses the
+	// §0038 IngestionEvent shape — channel="cli" + client_common_name=
+	// opts.Actor. The IngestionEvent's primary_event_hash references
+	// the lifecycle event's content-hash (the pair-by-reference shape
+	// preserved per Charter §2.1 Boundary Conditions).
+	ingEv := &eventsv1.IngestionEvent{
+		PrimaryEventHash: hash[:],
+		ReceivedAt:       committedAt,
+		IngestedAt:       committedAt,
+		Channel:          "cli",
+		ClientCommonName: opts.Actor,
+	}
+	ingPayload, ingHash, err := canonical.MarshalAndHash(ingEv)
+	if err != nil {
+		return PromoteReport{}, fmt.Errorf("hypothesis.Promote: marshal ingestion event: %w", err)
+	}
+	ingHex := canonical.HashHex(ingHash)
+	ingRow := substrate.EventRow{
+		EventHash:   ingHash,
+		EventTime:   committedAt,
+		MessageType: string(ingEv.ProtoReflect().Descriptor().FullName()),
+		PayloadRef:  ingHex[:2] + "/" + ingHex[2:],
+		CommittedAt: committedAt,
+	}
+	if err := sub.AppendPair(ctx, promRow, payload, ingRow, ingPayload); err != nil {
+		return PromoteReport{}, fmt.Errorf("hypothesis.Promote: append pair (promotion %s, ingestion %s): %w", hex, ingHex, err)
 	}
 
 	return PromoteReport{
 		PromotionEventHashHex: hex,
 		AlreadyPromoted:       alreadyPresent,
+		IngestionEventHashHex: ingHex,
 	}, nil
 }

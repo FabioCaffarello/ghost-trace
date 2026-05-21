@@ -17,6 +17,11 @@
 //     non-idempotency at wall-clock granularity).
 //   - Changing cadence_seconds re-records the cadence gate without
 //     mutating the prior promotion event (§2.5 immutability).
+//   - Optional --actor records per-actor attribution per decision-log
+//     §0097 (pilot CLI; mechanical extension to the other 23 lifecycle
+//     CLIs is named follow-on). When supplied, the promotion is paired
+//     with an IngestionEvent (channel="cli", client_common_name=
+//     <actor>) committed atomically via substrate.AppendPair.
 //
 // Output: structured JSON to stdout + brief human summary to stderr.
 // Exit codes: 0 success, 2 tool/config error, 3 target-not-found or
@@ -59,6 +64,7 @@ func run() error {
 	cadenceSeconds := flag.Int64("cadence-seconds", 86400, "Layer A cadence parameter per decision-log §0011: elapsed seconds since promoted_at that opens demotion-candidacy")
 	promotedAtNs := flag.Int64("promoted-at-ns", 0, "explicit promoted_at as Unix nanoseconds; 0 = use wall-clock now()")
 	reason := flag.String("reason", "", "operator-supplied forensic note; optional but recommended at audit time")
+	actor := flag.String("actor", "", "OPTIONAL per decision-log §0097: when non-empty, pairs the promotion with an IngestionEvent (channel=\"cli\", client_common_name=<actor>) for per-actor attribution. Empty preserves the §0046 single-Append path.")
 	flag.Parse()
 
 	if *formationHashHex == "" {
@@ -86,6 +92,7 @@ func run() error {
 		PromotedAt:         *promotedAtNs,
 		CadenceSeconds:     *cadenceSeconds,
 		Reason:             *reason,
+		Actor:              *actor,
 	}, time.Now)
 	if err != nil {
 		return err
@@ -98,13 +105,20 @@ func run() error {
 		PromotionEventHashHex: report.PromotionEventHashHex,
 		CadenceSeconds:        *cadenceSeconds,
 		AlreadyPromoted:       report.AlreadyPromoted,
+		IngestionEventHashHex: report.IngestionEventHashHex,
 	}); err != nil {
 		return fmt.Errorf("encode json: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr,
-		"promote-hypothesis: formation=%s promotion=%s cadence_seconds=%d already_promoted=%v\n",
-		*formationHashHex, report.PromotionEventHashHex, *cadenceSeconds, report.AlreadyPromoted)
+	if *actor != "" {
+		fmt.Fprintf(os.Stderr,
+			"promote-hypothesis: formation=%s promotion=%s ingestion=%s cadence_seconds=%d actor=%q already_promoted=%v\n",
+			*formationHashHex, report.PromotionEventHashHex, report.IngestionEventHashHex, *cadenceSeconds, *actor, report.AlreadyPromoted)
+	} else {
+		fmt.Fprintf(os.Stderr,
+			"promote-hypothesis: formation=%s promotion=%s cadence_seconds=%d already_promoted=%v\n",
+			*formationHashHex, report.PromotionEventHashHex, *cadenceSeconds, report.AlreadyPromoted)
+	}
 	return nil
 }
 
@@ -113,4 +127,5 @@ type payload struct {
 	PromotionEventHashHex string `json:"promotion_event_hash"`
 	CadenceSeconds        int64  `json:"cadence_seconds"`
 	AlreadyPromoted       bool   `json:"already_promoted"`
+	IngestionEventHashHex string `json:"ingestion_event_hash,omitempty"`
 }
