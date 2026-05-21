@@ -749,6 +749,40 @@ Each aggregate carries:
 
 Exit codes: **0** success (including empty substrate); **2** tool/configuration error (e.g. negative `-after-ns`/`-before-ns`, `-after-ns > -before-ns`).
 
+## `replay-operational-session` CLI
+
+Operator-invoked tool to verify deterministic **Phase 1 replay** of a Category II `OperationalSession` per [`§0084`](../../docs/charter/decision-log.md) + [`docs/architecture/replay-model.md`](../../docs/architecture/replay-model.md) L17-19. Re-derives the OperationalSession from its declared Cat I `DeclaredSession` source under the same operational definition + parameters recorded on the original record, then compares content-hashes.
+
+```sh
+make replay-operational-session-build                                      # builds ./bin/replay-operational-session
+
+# Replay a specific OperationalSession by content-hash
+./bin/replay-operational-session \
+  -target-event-hash <64-hex-chars>
+```
+
+The OperationalSession self-describes its derivation rule via three fields landed at [`§0043`](../../docs/charter/decision-log.md): `definition_version`, `definition_parameters`, `source_event_hash`. Replay walks the substrate, resolves `definition_version` to a registered `OperationalDefinition` implementation (currently `padded-v1` per [`§0043`](../../docs/charter/decision-log.md) and `inactivity-window-v1` per [`§0044`](../../docs/charter/decision-log.md)), verifies the parameter-string round-trip, looks up the source `DeclaredSession`, re-runs the derivation under a freshly-collected `DerivationContext`, canonical-marshals + hashes the recomputed record, and compares to the substrate's committed hash.
+
+| Field | Meaning |
+|---|---|
+| `target_event_hash` | Hex content-hash of the OperationalSession being replayed (input). |
+| `recomputed_event_hash` | Hex content-hash of the freshly re-derived OperationalSession. |
+| `match` | True iff `target_event_hash == recomputed_event_hash`. |
+| `definition_version` | Version string read from the original. |
+| `definition_parameters` | Canonical-parameter string read from the original. |
+| `source_event_hash` | Hex content-hash of the source DeclaredSession. |
+
+Exit codes:
+
+- **0** — replay completed AND `match=true` (Phase 1 contract holds).
+- **1** — replay completed AND `match=false` (**derivation drift detected**: the operational-definition implementation has changed since the original commit, OR the substrate's OperationalSession record is inconsistent with its declared derivation inputs).
+- **2** — tool/configuration error.
+- **3** — substrate-integrity precondition failure (`ErrTargetNotFound`, `ErrTargetWrongType`, `ErrDefinitionUnknown`, `ErrDefinitionParameterMismatch`, `ErrSourceNotFound`, `ErrSourceWrongType`).
+
+The two failure modes are structurally distinct: exit 1 means replay ran and the contract failed; exit 3 means replay couldn't run because a precondition was missing.
+
+**Scope:** this is Phase 1 replay over the only Cat II type committed today. Cat III hypothesis replay is Phase 3 reconstructive replay per [`replay-model.md`](../../docs/architecture/replay-model.md) L25-28 and is out of scope.
+
 ## `orphan-cleanup` CLI
 
 Operator-invoked tool to delete orphan blobs (per [`§0041`](../../docs/charter/decision-log.md)). Per [`§0033` Anti-Patterns](../../docs/architecture/operational-ops.md), orphan deletion MUST be operator-invoked with explicit confirmation; this tool implements that discipline.
