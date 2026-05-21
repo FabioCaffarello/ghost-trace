@@ -50,6 +50,7 @@ func run() error {
 	promotionHashHex := flag.String("promotion-event-hash", "", "REQUIRED: hex-encoded BLAKE3-256 content-hash of the target BehavioralClusterPromotion")
 	demotedAtNs := flag.Int64("demoted-at-ns", 0, "explicit demoted_at as Unix nanoseconds; 0 = wall-clock now()")
 	reason := flag.String("reason", "", "operator-supplied forensic note; strongly recommended when demoting within the cadence window")
+	actor := flag.String("actor", "", "OPTIONAL per decision-log §0097 + §0107: when non-empty, pairs the demotion with an IngestionEvent (channel=\"cli\", client_common_name=<actor>) for per-actor attribution. Empty preserves the single-Append path.")
 	flag.Parse()
 
 	if *promotionHashHex == "" {
@@ -76,6 +77,7 @@ func run() error {
 		PromotionEventHash: hash,
 		DemotedAt:          *demotedAtNs,
 		Reason:             *reason,
+		Actor:              *actor,
 	}, time.Now)
 	if err != nil {
 		return err
@@ -89,13 +91,20 @@ func run() error {
 		AlreadyDemoted:        report.AlreadyDemoted,
 		CadenceSatisfied:      report.CadenceSatisfied,
 		CadenceElapsedSeconds: report.CadenceElapsedSeconds,
+		IngestionEventHashHex: report.IngestionEventHashHex,
 	}); err != nil {
 		return fmt.Errorf("encode json: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr,
-		"demote-hypothesis: promotion=%s demotion=%s cadence_satisfied=%v elapsed_seconds=%d already_demoted=%v\n",
-		*promotionHashHex, report.DemotionEventHashHex, report.CadenceSatisfied, report.CadenceElapsedSeconds, report.AlreadyDemoted)
+	if *actor != "" {
+		fmt.Fprintf(os.Stderr,
+			"demote-hypothesis: promotion=%s demotion=%s ingestion=%s cadence_satisfied=%v elapsed_seconds=%d actor=%q already_demoted=%v\n",
+			*promotionHashHex, report.DemotionEventHashHex, report.IngestionEventHashHex, report.CadenceSatisfied, report.CadenceElapsedSeconds, *actor, report.AlreadyDemoted)
+	} else {
+		fmt.Fprintf(os.Stderr,
+			"demote-hypothesis: promotion=%s demotion=%s cadence_satisfied=%v elapsed_seconds=%d already_demoted=%v\n",
+			*promotionHashHex, report.DemotionEventHashHex, report.CadenceSatisfied, report.CadenceElapsedSeconds, report.AlreadyDemoted)
+	}
 	return nil
 }
 
@@ -105,4 +114,5 @@ type payload struct {
 	AlreadyDemoted        bool   `json:"already_demoted"`
 	CadenceSatisfied      bool   `json:"cadence_satisfied"`
 	CadenceElapsedSeconds int64  `json:"cadence_elapsed_seconds"`
+	IngestionEventHashHex string `json:"ingestion_event_hash,omitempty"`
 }
