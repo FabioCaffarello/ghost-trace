@@ -1,0 +1,52 @@
+// Category III hypothesis lifecycle event per Charter §2.5 +
+// lifecycle-semantics.md line 28 + decision-log §0067 (this entry —
+// third-subtype merge landing; mirrors §0049 BC and §0060 AG).
+//
+// SCOPE — within-subtype only. Cross-subtype merge per
+// entity-model.md §Cross-subtype operations remains deferred.
+//
+// Structural choice (mirrors §0049 Option B + §0060): each
+// antecedent + produced is a separately-committed
+// CampaignHypothesisFormation. Preserves §0045+§0056+§0063
+// hypothesis-identity invariant.
+//
+// Event-centric subtype consideration (per §0063+§0065+§0066
+// carry-forward): the §0049 wire shape transfers cleanly. The
+// produced CampaignHypothesisFormation typically has
+// source_event_hashes = union of antecedents' event sets (the
+// merged campaign claims the same events), but that's an
+// operational convention of the inference process producing the
+// merge — the merge event itself records the merge-specific
+// provenance (which two antecedent campaigns were combined).
+//
+// Per §2.5 BC3, no denormalized state field. Per §2.5 BC5, the
+// merge event is a Cat I record under §2.1.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// CampaignHypothesisMerge records the recognition that two
+// CampaignHypothesis hypotheses describe the same underlying
+// operation.
+message CampaignHypothesisMerge {
+  // antecedent_formation_event_hashes is the set of BLAKE3-256
+  // content-hashes of the CampaignHypothesisFormation events
+  // being merged. Sorted ASCENDING; cardinality MUST be exactly
+  // 2 at this layer.
+  repeated bytes antecedent_formation_event_hashes = 1;
+
+  // produced_formation_event_hash is the BLAKE3-256 content-hash
+  // of a separately-committed CampaignHypothesisFormation
+  // representing the merged hypothesis.
+  bytes produced_formation_event_hash = 2;
+
+  // merged_at is the Unix-nanoseconds time at which the merge
+  // recognition was recorded.
+  int64 merged_at = 3;
+
+  // reason is an operator-supplied free-form note. Optional but
+  // strongly recommended.
+  string reason = 4;
+}

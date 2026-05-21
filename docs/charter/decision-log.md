@@ -2584,6 +2584,46 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0067` — Third-subtype merge (`CampaignHypothesisMerge`) lands; §0049 Option B + symmetric-relation idempotency transfer to event-centric subtype
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0066`](#0066--third-subtype-dissolution-campaignhypothesisdissolution-lands-demotiondissolution-distinction-observable-across-all-three-subtypes) closed dissolution for the third subtype. This entry lands merge. The §0063+§0065+§0066 carry-forwards flagged merge+split for event-centric subtypes as requiring "structural consideration (event-set partition semantics vs actor-set)". This entry resolves that consideration: the §0049 + §0060 wire shape transfers cleanly to CampaignHypothesis. The "consideration" lives at the operational layer (the inference process producing the merge typically computes source_event_hashes_produced = union of antecedents' event sets), not the lifecycle event shape.
+
+  Two structural observations:
+
+  - **§0049 + §0060 merge wire shape transfers across the event-centric/actor-centric boundary.** The merge event references two antecedent formation hashes + one produced formation hash. The subtype distinction (events vs actors) lives in the FORMATION shape, not in the merge event. The §0049 Option B (produced is a separately-committed formation; preserves §0045 identity invariant) applies identically.
+
+  - **`ErrMergeAntecedentsIdentical` continues to be subtype-shared.** Introduced at §0049, extended to AG at §0060, now extended to CH. The sentinel reflects the merge-relation symmetry constraint which is operation-agnostic across all Cat III subtypes.
+
+- **Decision:** Land `CampaignHypothesisMerge` with three structural moves:
+
+  1. **`CampaignHypothesisMerge` Protobuf message** at [`schemas/events/v1/campaign_hypothesis_merge.proto`](../../schemas/events/v1/campaign_hypothesis_merge.proto). Four fields mirroring §0049/§0060.
+
+  2. **`MergeCampaignHypothesis` entry point** at [`services/ingestion/internal/hypothesis/campaign_hypothesis_merge.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_merge.go). Symmetric ascending-sort of antecedents. Reuses shared `ErrTargetNotFound` + `ErrTargetWrongType` + `ErrMergeAntecedentsIdentical` sentinels.
+
+  3. **`cmd/merge-campaign-hypotheses`** — 23rd operational binary; 18th substrate-write.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1, §2.2, §2.3, §2.5 + §2.5 BC3 + §2.5 BC5. Respects §0045+§0056+§0063 hypothesis-identity invariant. Respects §0049 Option B + symmetric-relation idempotency pattern. Respects entity-model.md §Cross-subtype operations deferral. Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`schemas/events/v1/campaign_hypothesis_merge.proto`](../../schemas/events/v1/campaign_hypothesis_merge.proto) — new file.
+  - [`services/ingestion/internal/hypothesis/campaign_hypothesis_merge.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_merge.go) — new file.
+  - [`services/ingestion/internal/hypothesis/campaign_hypothesis_merge_test.go`](../../services/ingestion/internal/hypothesis/campaign_hypothesis_merge_test.go) — **7 tests** covering happy-path, argument-order invariance, identical-antecedents rejection, idempotency, unknown antecedent, cross-substrate rejection, default merged_at.
+  - [`services/ingestion/cmd/merge-campaign-hypotheses/main.go`](../../services/ingestion/cmd/merge-campaign-hypotheses/main.go) — new binary; 23rd operational CLI; 18th substrate-write.
+  - Makefile, canonical corpus, corpus README, service README, decision-log §0067.
+  - **Test count grows.** Combined: **342 tests** (up from 335 at §0066; +7).
+  - **§0063+§0065+§0066 "structural consideration" carry-forward resolved.** The §0049+§0060 merge wire shape transfers cleanly to the event-centric CampaignHypothesis subtype. The operational distinction (computing the produced formation's event set as union of antecedents' event sets) lives in the inference process, not the lifecycle event.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Final CampaignHypothesis lifecycle operation** — split (§0068). Same structural transfer expected as for merge.
+    - **Projection layer extension for CampaignHypothesis** — unchanged from §0063 carry-forward.
+    - **Cross-subtype operations** — unchanged.
+
+- **Supersession:** None. Extends §0066 with the fifth CampaignHypothesis lifecycle operation. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
