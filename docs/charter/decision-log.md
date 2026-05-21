@@ -4122,6 +4122,27 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0102` — CF1 closure: `invariant-redactor` SKILL.md heading-depth transposition note
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0099`](#0099--gate-24-third-object-level-invariant-redaction-path-reading-1-full-amendment-v05) carry-forward CF1 catalogued the heading-depth transposition discipline surfaced by the charter-reviewer subagent R1 verdict during §2.4 v0.5 closure: scratch documents under `docs/charter/in-committee/` use H3 (`### Definition` et al.) but Charter §2.X sub-subsection convention places those headings at H4 (under `### 2.X` H3). At §2.4 transposition the H3→H4 demotion was a discrete mechanical step that the original `invariant-redactor` SKILL.md §3 merge checklist did not surface — easy to skip without explicit reminder. CF1 recommended either (i) drafting at H4 from start OR (ii) documenting the depth-adjustment as explicit Sessão C step.
+
+- **Decision:** Disposition (ii). [`.claude/skills/constitutional/invariant-redactor/SKILL.md`](../../.claude/skills/constitutional/invariant-redactor/SKILL.md) §3 (Final merge checklist) item 2 ("Section structure parallels §2.1 and §2.2") extended with a sub-bullet "Heading-depth transposition" instructing: scratch documents use H3 for the five sub-subsections; at Charter transposition demote each to H4 to match §2.x convention. Surfaced by charter-reviewer R1 verdict at §2.4 v0.5 closure.
+
+  Disposition (ii) over (i): drafting at H4 from start in scratch documents reads awkwardly standalone — the scratch document is a section-scope file (`§NN-<name>.md`), and starting sub-subsections at H4 implies a missing H3 layer in the standalone view. H3 in scratch + H4 at transposition matches both standalone-read coherence (scratch is read as if §NN were standalone H1/H2 root) and Charter-embedded coherence (Charter §2.X sits at H3, sub-subsections at H4). The transposition discipline is mechanical at the moment of merge.
+
+- **Constitutional review:** No Charter prose amended. Skill documentation refresh only. No version bump, no amendments.md entry needed per `invariant-redactor` is infrastructure (`.claude/skills/`), not Charter. Decision-log entry is for traceability of the CF1 closure.
+
+- **Consequences:**
+  - [`.claude/skills/constitutional/invariant-redactor/SKILL.md`](../../.claude/skills/constitutional/invariant-redactor/SKILL.md) §3 item 2 — heading-depth transposition sub-bullet added; §6 source citations refreshed if needed (decision-log §0099 + §0102 already cited via the new sub-bullet's link).
+  - [`§0099`](#0099--gate-24-third-object-level-invariant-redaction-path-reading-1-full-amendment-v05) CF1 closed; future §2.6 + §3 redactions will surface the H3→H4 transposition as an explicit merge-checklist sub-item rather than via charter-reviewer subagent surfacing.
+
+- **Supersession:** None. Discharges [`§0099`](#0099--gate-24-third-object-level-invariant-redaction-path-reading-1-full-amendment-v05) carry-forward CF1.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
