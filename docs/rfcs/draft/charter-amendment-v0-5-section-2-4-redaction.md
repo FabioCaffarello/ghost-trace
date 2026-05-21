@@ -1,6 +1,6 @@
 # RFC — Charter Amendment v0.5: §2.4 Inferential Influence Disclosure (committee-mode redaction)
 
-- **Status:** draft
+- **Status:** accepted
 - **Authors:** committee
 - **Date:** 2026-05-21
 - **Type:** charter-amendment
@@ -86,4 +86,4 @@ No prior committed records to migrate; forward-looking. §2.4 binding text inher
 
 ## Decision Record
 
-Pending. On acceptance via charter-reviewer subagent invocation (Sessão C) + Charter prose edit, this RFC is recorded in [`docs/charter/decision-log.md` §0099](../../charter/decision-log.md) (already drafted) and Charter advances to v0.5.
+Accepted. Charter-reviewer subagent verdict: PASS-WITH-REVISIONS (5 required revisions R1-R5 enacted + 4 carry-forward observations CF1-CF4 registered; see [`decision-log.md` §0099](../../charter/decision-log.md) for the enactment chain). Charter prose edit completed (§2.4 stub L142-152 replaced with H4 binding text per R1 H3 → H4 transposition discipline; banner v0.4.2 → v0.5; banner status line updated; v0.5 narrative clause appended). Skill `epistemic-separator` §4 7th construction added with "fails" verb per R3 + §2.3 AP1 precedent; §6 citations refreshed to include Charter §2.4. Glossary entries `observational evidence` + `inferential commitment` added per Step 1.3 Path 1 operationalizations. CLAUDE.md cross-doc refreshes completed (banner version v0.5; §4 status table §2.4 → frozen v0.5; canonical vocabulary `influence` entry refreshed; narrative paragraph extended with v0.5 chronological entry per [`§0017`](../../charter/decision-log.md) + [`§0022`](../../charter/decision-log.md) precedent). Skill pending-lists refreshed (`charter-guardian`: §2.4 moved to FROZEN list; `falsifiability-check` + `ontology-keeper`: §2.4 dropped from pending). Ontology citation refreshes completed (`provenance-model.md` + `entity-model.md`: "§2.4 pending" → "§2.4 frozen v0.5"). Charter advances to v0.5.
