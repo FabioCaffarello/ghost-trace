@@ -867,6 +867,103 @@ func TestT4DemoteRejectsBadHashLength(t *testing.T) {
 	}
 }
 
+// T4 form tests per §0111.
+
+// formSubstrateBC populates a substrate with two actors sharing a
+// descriptor so SessionDescriptorSharedV1{MinClusterSize:2} forms 1.
+func formSubstrateBC(t *testing.T) *substrate.Substrate {
+	t.Helper()
+	dir := t.TempDir()
+	ctx := context.Background()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Close() })
+	in := ingest.New(sub, time.Now)
+	for i, actor := range []string{"actor-a-form", "actor-b-form"} {
+		msg := &eventsv1.DeclaredSession{
+			DeclaredAt:        int64(1000 + i),
+			ActorRef:          actor,
+			SessionDescriptor: []byte("form-test"),
+		}
+		if _, err := in.Append(ctx, msg, msg.DeclaredAt, ingest.Envelope{Channel: "test"}); err != nil {
+			t.Fatalf("Append %d: %v", i, err)
+		}
+	}
+	return sub
+}
+
+func TestT4FormBehavioralClusterHappyPath(t *testing.T) {
+	sub := formSubstrateBC(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/behavioral-cluster/form?min_cluster_size=2", nil)
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Fatalf("status: got %d, want %d; body=%s", got, want, rr.Body.String())
+	}
+	var out formResponse
+	_ = json.Unmarshal(rr.Body.Bytes(), &out)
+	if out.NewlyFormed != 1 {
+		t.Errorf("NewlyFormed: got %d, want 1", out.NewlyFormed)
+	}
+}
+
+func TestT4FormBehavioralClusterIdempotent(t *testing.T) {
+	sub := formSubstrateBC(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	// First call: forms 1.
+	rr1 := httptest.NewRecorder()
+	req1 := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/behavioral-cluster/form?min_cluster_size=2", nil)
+	h.ServeHTTP(rr1, req1)
+	if rr1.Code != http.StatusOK {
+		t.Fatalf("first call: status %d; body=%s", rr1.Code, rr1.Body.String())
+	}
+
+	// Second call: idempotent (already formed).
+	rr2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/behavioral-cluster/form?min_cluster_size=2", nil)
+	h.ServeHTTP(rr2, req2)
+	if rr2.Code != http.StatusOK {
+		t.Fatalf("second call: status %d", rr2.Code)
+	}
+	var out2 formResponse
+	_ = json.Unmarshal(rr2.Body.Bytes(), &out2)
+	if out2.NewlyFormed != 0 || out2.AlreadyFormed != 1 {
+		t.Errorf("second call: NewlyFormed=%d AlreadyFormed=%d, want 0 + 1", out2.NewlyFormed, out2.AlreadyFormed)
+	}
+}
+
+func TestT4FormBehavioralClusterRejectsMissingParam(t *testing.T) {
+	sub := formSubstrateBC(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/behavioral-cluster/form", nil)
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusBadRequest; got != want {
+		t.Errorf("status: got %d, want %d", got, want)
+	}
+}
+
+func TestT4FormBehavioralClusterRejectsBadParam(t *testing.T) {
+	sub := formSubstrateBC(t)
+	h := MustNew(realT4DoAppend(t, sub), nil, WithSubstrate(sub))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/behavioral-cluster/form?min_cluster_size=abc", nil)
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusBadRequest; got != want {
+		t.Errorf("status: got %d, want %d", got, want)
+	}
+}
+
 // T4 split tests per §0110.
 
 func TestT4SplitBehavioralClusterHappyPath(t *testing.T) {

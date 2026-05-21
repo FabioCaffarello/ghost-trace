@@ -4473,6 +4473,54 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0111` — T4 form replicated across all four subtypes; §0098 arc CLOSED 24/24
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0110`](#0110--t4-split-replicated-across-all-four-subtypes-setrelation-idempotency-surface-preserved-0098-2024) completed split. Form is the final T4 op — divergent shape per [`§0105`](#0105--t4-pilot-post-v1hypothesesbehavioralclusterpromote-lands-pattern-established-for-the-23-remaining-endpoints): pattern-based invocation rather than target-hash-based; each invocation walks DeclaredSessions and forms zero or more hypotheses per the pattern config. Pattern types are Go structs (not protobuf) implementing the per-subtype `FormationPattern` interface: `SessionDescriptorSharedV1` (BC), `UniformCadenceV1` (AG), `TemporalDescriptorCohortV1` (CH), `CoOccurrenceWindowV1` (CR).
+
+- **Decision:** Coordinated two-part landing closing the T4 arc:
+
+  1. **Four `Form*All` helpers extended with `Form*AllWithActor` variants.** Adding `Actor` directly to the existing `Form*All` signatures was rejected (90+ call sites across CLIs + tests). Cleanest minimal-API-impact path: add a parallel `Form*AllWithActor(ctx, sub, pattern, now, actor)` variant for each subtype; `Form*All` becomes a thin wrapper calling `Form*AllWithActor(... "")`. The `WithActor` variants commit each formation paired with an `IngestionEvent` via `AppendPair` when `actor != ""`; otherwise the single-`Append` path is preserved (backward-compatible). All 4 subtypes follow the same pattern.
+
+  2. **Four new HTTP T4 form handlers via query parameters.** [`lifecycle.go`](../../services/ingestion/internal/httpapi/lifecycle.go) gains `handleForm{BehavioralCluster,AutomationGroup,CampaignHypothesis,CoordinationRing}`. Each accepts query parameters for the subtype-specific pattern config (no protobuf request body): `min_cluster_size` (BC); `min_observation_count` + `max_co_v_threshold` (AG); `min_campaign_size` + `max_intra_event_gap_seconds` (CH); `min_edge_support` + `max_window_seconds` (CR). Shared helpers `formCommonGate` + `parseIntQueryParam` + `parseFloatQueryParam`. Response: `formResponse{examined, newly_formed, already_formed}` JSON.
+
+  3. **Wire-shape divergence from RFC item 5.** The RFC specified `application/x-protobuf` for all T4 endpoints with `canonical-serialization-contract` enforcement. Form's pattern config is operator-supplied invocation parameters (not a committed event shape); the canonical-serialization-contract enforces committed-event semantics. Authoring 4 new request protos for the pattern configs (BehavioralClusterFormationRequest et al.) was considered but rejected as ceremony for inception phase. Query parameters were selected instead — operationally consistent with T3 [`§0104`](#0104--t3-http-orphancleanup-endpoint-lands-orphancleanupaudit-cat-i-record-introduced-0098-landing-23) orphan-cleanup (also query parameters). Future conversion to protobuf can land under ordinary RFC discipline if operational pressure surfaces.
+
+  4. **Tests.** 4 happy-path-equivalent + idempotency + missing-param + bad-param tests for BC form. Pattern + per-subtype helpers reuse the existing `formedX` factories for substrate setup.
+
+  5. **README.** T4 subsection extended with the four form endpoints + query-parameter shape documentation + idempotency + RFC-divergence note.
+
+- **Constitutional review:** No Charter invariant amended. The §2.5 BC5 lifecycle-integrity gate (formation events are committed for the matching subtype only) is preserved by each subtype's `Form*All` per-pattern dispatch. The cross-tier per-actor-attribution requirement per [`§0094`](#0094--http-authmodel-evolution-framed-operationtier-classification-recorded-tier-34-advance-deferred-to-followon-rfc) is satisfied structurally: each formed event commits paired with an `IngestionEvent` per the `WithActor` path. The RFC item 5 wire-shape divergence (query parameters vs protobuf for form's invocation parameters) is documented as deferred to ordinary RFC discipline; the §2.x invariants are unaffected.
+
+  Falsifiability: every claim in the README + decision-log is testable by mechanical replay. The idempotency property is exercised explicitly by `TestT4FormBehavioralClusterIdempotent` (second invocation returns `already_formed=1, newly_formed=0`).
+
+- **Consequences:**
+  - All four T4 form endpoints reachable.
+  - **§0098 arc CLOSED 24/24.** All three landings done: multi-tier plumbing ([`§0103`](#0103--multitier-token-plumbing-lands-t3t4-implementation-arc-foundational-landing-per-0098)), T3 orphan-cleanup ([`§0104`](#0104--t3-http-orphancleanup-endpoint-lands-orphancleanupaudit-cat-i-record-introduced-0098-landing-23)), T4 24 endpoints (promote + demote + dissolve + merge + split + form × 4 subtypes per [`§0105`](#0105--t4-pilot-post-v1hypothesesbehavioralclusterpromote-lands-pattern-established-for-the-23-remaining-endpoints)–§0111).
+  - **§0097 carry-forward EXTENDED to form helpers across all 4 subtypes** via the `WithActor` variants. All 24 lifecycle helpers (form/promote/demote/dissolve/merge/split × 4) now support the §0097 Actor + IngestionEvent pairing pattern.
+
+  - **Methodological observation 1 — `WithActor` variant pattern for high-call-site-count refactors.** The 90+ existing `Form*All` call sites made a direct-signature refactor structurally expensive. Adding parallel `*WithActor` variants preserved the existing API while adding the per-actor capability for new (HTTP T4) callers. Pattern recommended when: (a) the new behavior is opt-in; (b) the existing call sites are numerous; (c) the new behavior is structurally additive (not a semantic change). Promote/demote/dissolve/merge/split used direct field addition on Options struct because their call sites were fewer + the Options-struct pattern is the existing convention; form used `WithActor` variant because the helpers don't use an Options struct (they take `pattern` directly) and the call sites are >90.
+
+  - **Methodological observation 2 — Form's wire-shape divergence as defensible inception-phase pragmatism.** The auth-scope RFC item 5 specified protobuf for all T4 endpoints. Form's pattern config is invocation parameters (not a committed-event shape); requiring protobuf would necessitate 4 new request-proto authoring + regeneration. Query parameters are operationally consistent with T3 ([`§0104`](#0104--t3-http-orphancleanup-endpoint-lands-orphancleanupaudit-cat-i-record-introduced-0098-landing-23)) and reduce inception-phase ceremony. The divergence is documented in this decision-log entry; future RFC discipline can re-impose protobuf if operational pressure surfaces. Pattern: when an RFC's wire-shape rule encounters an operationally-divergent shape (here, parameters vs events), document the divergence + defer to ordinary RFC discipline for re-alignment.
+
+  - **Carry-forwards:**
+    - **§0097 CLI-side carry-forward** — net accumulated: 23 CLIs pending `--actor` (3 promote AG/CH/CR + 4 demote + 4 dissolve + 4 merge + 4 split + 4 form). All 24 op + subtype combinations on the helper side now support `Actor`; CLI extensions remain pure-wiring (3-5 LOC per CLI).
+    - **`token_id` field per RFC item 4(b)** — unchanged.
+    - **Wire-shape re-alignment under future RFC** — re-impose protobuf for form if operational pressure surfaces (per methodological observation 2 above).
+
+  - **Five methodological observations across the §0098 arc (§0103–§0111):**
+    1. **MustNew test-helper pattern** ([`§0103`](#0103--multitier-token-plumbing-lands-t3t4-implementation-arc-foundational-landing-per-0098)) — for inception-phase breaking signature changes.
+    2. **Audit-then-delete pattern** ([`§0104`](#0104--t3-http-orphancleanup-endpoint-lands-orphancleanupaudit-cat-i-record-introduced-0098-landing-23)) — for HTTP-channel state-mutating operations.
+    3. **T4 pilot-then-replicate pattern** ([`§0105`](#0105--t4-pilot-post-v1hypothesesbehavioralclusterpromote-lands-pattern-established-for-the-23-remaining-endpoints)) — establish wire pattern with one endpoint, replicate mechanically.
+    4. **Cross-subtype symmetry pattern** ([`§0106`](#0106--t4-promote-replicated-across-the-three-remaining-subtypes-0097-actor-pattern-extended-to-all-four)) — uniform Options + handler shape across subtypes.
+    5. **Per-op-across-subtypes cadence** ([`§0107`](#0107--t4-demote-replicated-across-all-four-subtypes-peropacrosssubtypes-cadence-continues-0098-824)–[`§0110`](#0110--t4-split-replicated-across-all-four-subtypes-setrelation-idempotency-surface-preserved-0098-2024)) — empirically validated at five ops.
+
+- **Supersession:** None. **Closes [`§0098`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens) T3+T4 implementation arc at 24/24 endpoints (100%).** Subsequent T-tier expansions (e.g., new admin endpoints beyond orphan-cleanup; cross-subtype operations per §Cross-subtype operations Q4-deferred work) proceed under ordinary RFC discipline.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
