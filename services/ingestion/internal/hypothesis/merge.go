@@ -13,17 +13,17 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
 
-// ErrMergeAntecedentsIdentical is returned by Merge when the caller
-// passes the same formation hash as both antecedents. Per
-// lifecycle-semantics.md line 28 merge combines TWO hypotheses
-// recognized as describing the same underlying phenomenon — merging
-// a hypothesis with itself is not a valid §2.5 lifecycle move.
-var ErrMergeAntecedentsIdentical = errors.New("hypothesis.Merge: antecedent formations must be distinct")
+// ErrMergeAntecedentsIdentical is returned by Merge when the two
+// antecedent formation hashes are byte-identical — a merge requires
+// two distinct hypotheses to recognize as the same underlying
+// phenomenon.
+var ErrMergeAntecedentsIdentical = errors.New("hypothesis: merge antecedents must differ")
 
-// MergeOptions configures a single within-subtype merge. The
-// (AntecedentA, AntecedentB, ProducedFormation, MergedAt, Reason)
-// tuple uniquely identifies a merge event's content-hash — re-running
-// with identical values is idempotent.
+// MergeOptions configures a single merge. The
+// (AntecedentAFormationHash, AntecedentBFormationHash,
+// ProducedFormationHash, MergedAt, Reason) tuple uniquely identifies
+// a merge event's content-hash — re-running with identical values is
+// idempotent.
 //
 // Within-subtype scope: all three formation hashes MUST resolve to
 // BehavioralClusterFormation rows. Cross-subtype merge per
@@ -69,6 +69,11 @@ type MergeOptions struct {
 	// recognition that the two antecedent hypotheses describe the
 	// same underlying phenomenon. Optional but strongly recommended.
 	Reason string
+
+	// Actor is an optional per-actor attribution string per §0109
+	// T4 merge landing — non-empty triggers AppendPair with
+	// IngestionEvent (channel="cli", client_common_name=Actor).
+	Actor string
 }
 
 // MergeReport is the per-Merge outcome.
@@ -81,6 +86,10 @@ type MergeReport struct {
 	// in the substrate (content-hash collision). False when this
 	// Merge invocation committed a new row.
 	AlreadyMerged bool
+
+	// IngestionEventHashHex is the content-hash (hex) of the paired
+	// IngestionEvent committed when Actor was non-empty.
+	IngestionEventHashHex string
 }
 
 // Merge records a BehavioralClusterMerge lifecycle event recognizing
@@ -169,19 +178,51 @@ func Merge(ctx context.Context, sub *substrate.Substrate, opts MergeOptions, now
 		return MergeReport{}, fmt.Errorf("hypothesis.Merge: lookup merge %s: %w", hex, lookupErr)
 	}
 
+	committedAt := now().UnixNano()
 	mergeRow := substrate.EventRow{
 		EventHash:   hash,
 		EventTime:   mergedAt,
 		MessageType: string(ev.ProtoReflect().Descriptor().FullName()),
 		PayloadRef:  hex[:2] + "/" + hex[2:],
-		CommittedAt: now().UnixNano(),
+		CommittedAt: committedAt,
 	}
-	if err := sub.Append(ctx, mergeRow, payload); err != nil {
-		return MergeReport{}, fmt.Errorf("hypothesis.Merge: append merge %s: %w", hex, err)
+
+	if opts.Actor == "" {
+		if err := sub.Append(ctx, mergeRow, payload); err != nil {
+			return MergeReport{}, fmt.Errorf("hypothesis.Merge: append merge %s: %w", hex, err)
+		}
+		return MergeReport{
+			MergeEventHashHex: hex,
+			AlreadyMerged:     alreadyPresent,
+		}, nil
+	}
+
+	ingEv := &eventsv1.IngestionEvent{
+		PrimaryEventHash: hash[:],
+		ReceivedAt:       committedAt,
+		IngestedAt:       committedAt,
+		Channel:          "cli",
+		ClientCommonName: opts.Actor,
+	}
+	ingPayload, ingHash, err := canonical.MarshalAndHash(ingEv)
+	if err != nil {
+		return MergeReport{}, fmt.Errorf("hypothesis.Merge: marshal ingestion event: %w", err)
+	}
+	ingHex := canonical.HashHex(ingHash)
+	ingRow := substrate.EventRow{
+		EventHash:   ingHash,
+		EventTime:   committedAt,
+		MessageType: string(ingEv.ProtoReflect().Descriptor().FullName()),
+		PayloadRef:  ingHex[:2] + "/" + ingHex[2:],
+		CommittedAt: committedAt,
+	}
+	if err := sub.AppendPair(ctx, mergeRow, payload, ingRow, ingPayload); err != nil {
+		return MergeReport{}, fmt.Errorf("hypothesis.Merge: append pair (merge %s, ingestion %s): %w", hex, ingHex, err)
 	}
 
 	return MergeReport{
-		MergeEventHashHex: hex,
-		AlreadyMerged:     alreadyPresent,
+		MergeEventHashHex:     hex,
+		AlreadyMerged:         alreadyPresent,
+		IngestionEventHashHex: ingHex,
 	}, nil
 }

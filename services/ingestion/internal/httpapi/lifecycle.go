@@ -293,6 +293,239 @@ func (h *Handler) handlePromoteCampaignHypothesis(w http.ResponseWriter, r *http
 	})
 }
 
+// mergeResponse is the wire-shape of the T4 merge endpoints' JSON
+// response. Merge identity carries the two antecedent hashes + the
+// produced formation hash; the response surfaces the merge event hash
+// + idempotency + ingestion event hash. Per §0109.
+type mergeResponse struct {
+	// MergeEventHash is the lowercase-hex content-hash of the
+	// committed <Subtype>Merge event.
+	MergeEventHash string `json:"merge_event_hash"`
+
+	// IngestionEventHash is the lowercase-hex content-hash of the
+	// paired IngestionEvent. Always non-empty for HTTP T4.
+	IngestionEventHash string `json:"ingestion_event_hash"`
+
+	// AlreadyMerged true on idempotent re-commit. Merge is symmetric
+	// (ascending-sort normalization per §0049); identical antecedent
+	// pairs in either order produce the same content-hash.
+	AlreadyMerged bool `json:"already_merged"`
+}
+
+// decodeMergePayload reads + length-limits the request body and
+// unmarshals into msg. Shared across the four T4 merge handlers.
+func (h *Handler) decodeMergePayload(r *http.Request, msg proto.Message) (int, string, bool) {
+	if r.Method != http.MethodPost {
+		return http.StatusMethodNotAllowed, "method not allowed; POST required", false
+	}
+	if h.sub == nil {
+		return http.StatusServiceUnavailable, "substrate access not configured (WithSubstrate)", false
+	}
+	if ct := r.Header.Get("Content-Type"); ct != "application/x-protobuf" {
+		return http.StatusUnsupportedMediaType, fmt.Sprintf("Content-Type must be application/x-protobuf (got %q)", ct), false
+	}
+	b, err := io.ReadAll(io.LimitReader(r.Body, h.requestBodyLimit+1))
+	if err != nil {
+		return http.StatusBadRequest, fmt.Sprintf("read body: %v", err), false
+	}
+	if int64(len(b)) > h.requestBodyLimit {
+		return http.StatusRequestEntityTooLarge, fmt.Sprintf("request body exceeds %d-byte limit", h.requestBodyLimit), false
+	}
+	if err := proto.Unmarshal(b, msg); err != nil {
+		return http.StatusBadRequest, fmt.Sprintf("decode payload: %v", err), false
+	}
+	return 0, "", true
+}
+
+// validateMergeParams enforces the shared validation gate across the
+// four T4 merge handlers: exactly two 32-byte antecedent hashes + one
+// 32-byte produced formation hash.
+func validateMergeParams(antecedents [][]byte, produced []byte) (int, string, [32]byte, [32]byte, [32]byte, bool) {
+	var a, b, p [32]byte
+	if len(antecedents) != 2 {
+		return http.StatusBadRequest, fmt.Sprintf("antecedent_formation_event_hashes must have exactly 2 entries (got %d)", len(antecedents)), a, b, p, false
+	}
+	if len(antecedents[0]) != 32 {
+		return http.StatusBadRequest, fmt.Sprintf("antecedent A must be 32 bytes (got %d)", len(antecedents[0])), a, b, p, false
+	}
+	if len(antecedents[1]) != 32 {
+		return http.StatusBadRequest, fmt.Sprintf("antecedent B must be 32 bytes (got %d)", len(antecedents[1])), a, b, p, false
+	}
+	if len(produced) != 32 {
+		return http.StatusBadRequest, fmt.Sprintf("produced_formation_event_hash must be 32 bytes (got %d)", len(produced)), a, b, p, false
+	}
+	copy(a[:], antecedents[0])
+	copy(b[:], antecedents[1])
+	copy(p[:], produced)
+	return 0, "", a, b, p, true
+}
+
+// mergeErrToHTTPStatus maps a hypothesis.Merge* error to its HTTP
+// status + body message. Shared across the four T4 merge handlers.
+func mergeErrToHTTPStatus(err error) (int, string) {
+	switch {
+	case errIs(err, hypothesis.ErrMergeAntecedentsIdentical):
+		return http.StatusBadRequest, "merge antecedents must differ (identical antecedent hashes)"
+	case errIs(err, hypothesis.ErrTargetNotFound):
+		return http.StatusNotFound, fmt.Sprintf("merge: target not found: %v", err)
+	case errIs(err, hypothesis.ErrTargetWrongType):
+		return http.StatusNotFound, fmt.Sprintf("merge: target wrong type: %v", err)
+	}
+	return http.StatusInternalServerError, fmt.Sprintf("merge: %v", err)
+}
+
+// handleMergeBehavioralCluster implements POST
+// /v1/hypotheses/behavioral-cluster/merge per §0109.
+func (h *Handler) handleMergeBehavioralCluster(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.BehavioralClusterMerge
+	if status, errMsg, ok := h.decodeMergePayload(r, &msg); !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	s, m, a, b, p, ok := validateMergeParams(msg.GetAntecedentFormationEventHashes(), msg.GetProducedFormationEventHash())
+	if !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+	env := envelopeForRequest(r)
+	opts := hypothesis.MergeOptions{
+		AntecedentAFormationHash: a,
+		AntecedentBFormationHash: b,
+		ProducedFormationHash:    p,
+		MergedAt:                 msg.GetMergedAt(),
+		Reason:                   msg.GetReason(),
+		Actor:                    resolveT4Actor(env, TierConstitutionalAct),
+	}
+	report, err := hypothesis.Merge(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		st, mm := mergeErrToHTTPStatus(err)
+		if st == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 merge-behavioral-cluster: %w", err))
+		}
+		writeIngestError(w, st, mm)
+		return
+	}
+	writeJSON(w, http.StatusOK, mergeResponse{
+		MergeEventHash:     report.MergeEventHashHex,
+		IngestionEventHash: report.IngestionEventHashHex,
+		AlreadyMerged:      report.AlreadyMerged,
+	})
+}
+
+// handleMergeAutomationGroup implements POST
+// /v1/hypotheses/automation-group/merge per §0109.
+func (h *Handler) handleMergeAutomationGroup(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.AutomationGroupMerge
+	if status, errMsg, ok := h.decodeMergePayload(r, &msg); !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	s, m, a, b, p, ok := validateMergeParams(msg.GetAntecedentFormationEventHashes(), msg.GetProducedFormationEventHash())
+	if !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+	env := envelopeForRequest(r)
+	opts := hypothesis.AutomationGroupMergeOptions{
+		AntecedentAFormationHash: a,
+		AntecedentBFormationHash: b,
+		ProducedFormationHash:    p,
+		MergedAt:                 msg.GetMergedAt(),
+		Reason:                   msg.GetReason(),
+		Actor:                    resolveT4Actor(env, TierConstitutionalAct),
+	}
+	report, err := hypothesis.MergeAutomationGroup(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		st, mm := mergeErrToHTTPStatus(err)
+		if st == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 merge-automation-group: %w", err))
+		}
+		writeIngestError(w, st, mm)
+		return
+	}
+	writeJSON(w, http.StatusOK, mergeResponse{
+		MergeEventHash:     report.MergeEventHashHex,
+		IngestionEventHash: report.IngestionEventHashHex,
+		AlreadyMerged:      report.AlreadyMerged,
+	})
+}
+
+// handleMergeCampaignHypothesis implements POST
+// /v1/hypotheses/campaign-hypothesis/merge per §0109.
+func (h *Handler) handleMergeCampaignHypothesis(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.CampaignHypothesisMerge
+	if status, errMsg, ok := h.decodeMergePayload(r, &msg); !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	s, m, a, b, p, ok := validateMergeParams(msg.GetAntecedentFormationEventHashes(), msg.GetProducedFormationEventHash())
+	if !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+	env := envelopeForRequest(r)
+	opts := hypothesis.CampaignHypothesisMergeOptions{
+		AntecedentAFormationHash: a,
+		AntecedentBFormationHash: b,
+		ProducedFormationHash:    p,
+		MergedAt:                 msg.GetMergedAt(),
+		Reason:                   msg.GetReason(),
+		Actor:                    resolveT4Actor(env, TierConstitutionalAct),
+	}
+	report, err := hypothesis.MergeCampaignHypothesis(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		st, mm := mergeErrToHTTPStatus(err)
+		if st == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 merge-campaign-hypothesis: %w", err))
+		}
+		writeIngestError(w, st, mm)
+		return
+	}
+	writeJSON(w, http.StatusOK, mergeResponse{
+		MergeEventHash:     report.MergeEventHashHex,
+		IngestionEventHash: report.IngestionEventHashHex,
+		AlreadyMerged:      report.AlreadyMerged,
+	})
+}
+
+// handleMergeCoordinationRing implements POST
+// /v1/hypotheses/coordination-ring/merge per §0109.
+func (h *Handler) handleMergeCoordinationRing(w http.ResponseWriter, r *http.Request) {
+	var msg eventsv1.CoordinationRingMerge
+	if status, errMsg, ok := h.decodeMergePayload(r, &msg); !ok {
+		writeIngestError(w, status, errMsg)
+		return
+	}
+	s, m, a, b, p, ok := validateMergeParams(msg.GetAntecedentFormationEventHashes(), msg.GetProducedFormationEventHash())
+	if !ok {
+		writeIngestError(w, s, m)
+		return
+	}
+	env := envelopeForRequest(r)
+	opts := hypothesis.CoordinationRingMergeOptions{
+		AntecedentAFormationHash: a,
+		AntecedentBFormationHash: b,
+		ProducedFormationHash:    p,
+		MergedAt:                 msg.GetMergedAt(),
+		Reason:                   msg.GetReason(),
+		Actor:                    resolveT4Actor(env, TierConstitutionalAct),
+	}
+	report, err := hypothesis.MergeCoordinationRing(r.Context(), h.sub, opts, time.Now)
+	if err != nil {
+		st, mm := mergeErrToHTTPStatus(err)
+		if st == http.StatusInternalServerError && h.fatal != nil {
+			h.fatal.ReportFatal(fmt.Errorf("T4 merge-coordination-ring: %w", err))
+		}
+		writeIngestError(w, st, mm)
+		return
+	}
+	writeJSON(w, http.StatusOK, mergeResponse{
+		MergeEventHash:     report.MergeEventHashHex,
+		IngestionEventHash: report.IngestionEventHashHex,
+		AlreadyMerged:      report.AlreadyMerged,
+	})
+}
+
 // dissolveResponse is the wire-shape of the T4 dissolve endpoints'
 // JSON response. Per §0108 T4 dissolve landing — dissolution targets
 // the formation directly (no cadence-gate state to surface, unlike

@@ -22,6 +22,9 @@ type CoordinationRingMergeOptions struct {
 	ProducedFormationHash    [32]byte
 	MergedAt                 int64
 	Reason                   string
+
+	// Actor per §0109 — non-empty triggers AppendPair.
+	Actor string
 }
 
 // CoordinationRingMergeReport is the per-MergeCoordinationRing
@@ -29,6 +32,9 @@ type CoordinationRingMergeOptions struct {
 type CoordinationRingMergeReport struct {
 	MergeEventHashHex string
 	AlreadyMerged     bool
+
+	// IngestionEventHashHex non-empty when Actor was supplied.
+	IngestionEventHashHex string
 }
 
 // MergeCoordinationRing records a CoordinationRingMerge lifecycle
@@ -110,19 +116,51 @@ func MergeCoordinationRing(ctx context.Context, sub *substrate.Substrate, opts C
 		return CoordinationRingMergeReport{}, fmt.Errorf("hypothesis.MergeCoordinationRing: lookup merge %s: %w", hex, lookupErr)
 	}
 
+	committedAt := now().UnixNano()
 	mergeRow := substrate.EventRow{
 		EventHash:   hash,
 		EventTime:   mergedAt,
 		MessageType: string(ev.ProtoReflect().Descriptor().FullName()),
 		PayloadRef:  hex[:2] + "/" + hex[2:],
-		CommittedAt: now().UnixNano(),
+		CommittedAt: committedAt,
 	}
-	if err := sub.Append(ctx, mergeRow, payload); err != nil {
-		return CoordinationRingMergeReport{}, fmt.Errorf("hypothesis.MergeCoordinationRing: append merge %s: %w", hex, err)
+
+	if opts.Actor == "" {
+		if err := sub.Append(ctx, mergeRow, payload); err != nil {
+			return CoordinationRingMergeReport{}, fmt.Errorf("hypothesis.MergeCoordinationRing: append merge %s: %w", hex, err)
+		}
+		return CoordinationRingMergeReport{
+			MergeEventHashHex: hex,
+			AlreadyMerged:     alreadyPresent,
+		}, nil
+	}
+
+	ingEv := &eventsv1.IngestionEvent{
+		PrimaryEventHash: hash[:],
+		ReceivedAt:       committedAt,
+		IngestedAt:       committedAt,
+		Channel:          "cli",
+		ClientCommonName: opts.Actor,
+	}
+	ingPayload, ingHash, err := canonical.MarshalAndHash(ingEv)
+	if err != nil {
+		return CoordinationRingMergeReport{}, fmt.Errorf("hypothesis.MergeCoordinationRing: marshal ingestion event: %w", err)
+	}
+	ingHex := canonical.HashHex(ingHash)
+	ingRow := substrate.EventRow{
+		EventHash:   ingHash,
+		EventTime:   committedAt,
+		MessageType: string(ingEv.ProtoReflect().Descriptor().FullName()),
+		PayloadRef:  ingHex[:2] + "/" + ingHex[2:],
+		CommittedAt: committedAt,
+	}
+	if err := sub.AppendPair(ctx, mergeRow, payload, ingRow, ingPayload); err != nil {
+		return CoordinationRingMergeReport{}, fmt.Errorf("hypothesis.MergeCoordinationRing: append pair (merge %s, ingestion %s): %w", hex, ingHex, err)
 	}
 
 	return CoordinationRingMergeReport{
-		MergeEventHashHex: hex,
-		AlreadyMerged:     alreadyPresent,
+		MergeEventHashHex:     hex,
+		AlreadyMerged:         alreadyPresent,
+		IngestionEventHashHex: ingHex,
 	}, nil
 }

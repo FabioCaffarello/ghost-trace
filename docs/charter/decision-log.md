@@ -4397,6 +4397,45 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0109` — T4 merge replicated across all four subtypes; symmetric-relation idempotency surface preserved (§0098 16/24)
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0108`](#0108--t4-dissolve-replicated-across-all-four-subtypes-peropacrosssubtypes-cadence-continues-0098-1224) shipped dissolve across all 4 subtypes; the per-op-across-subtypes cadence continues with merge. Merge has a structurally distinct wire shape from promote/demote/dissolve: three formation hashes (2 antecedents + 1 produced), symmetric-relation idempotency via ascending-sort normalization per [`§0049`](#0049--mergesplit-design-options-deferred-pending-q4--q5-resolution).
+
+- **Decision:** Coordinated two-part landing parallel to §0107 + §0108:
+
+  1. **Four `Merge*` helpers extended with `Actor` + `IngestionEventHashHex`.** BC `Merge` + `MergeAutomationGroup` / `MergeCampaignHypothesis` / `MergeCoordinationRing` all gain the §0097-equivalent extension.
+
+  2. **Four new HTTP T4 merge handlers.** [`lifecycle.go`](../../services/ingestion/internal/httpapi/lifecycle.go) gains `handleMergeBehavioralCluster` / `handleMergeAutomationGroup` / `handleMergeCampaignHypothesis` / `handleMergeCoordinationRing` + 3 shared merge helpers (`decodeMergePayload`, `validateMergeParams`, `mergeErrToHTTPStatus`) + `mergeResponse` JSON shape. The merge-specific validator enforces exactly two 32-byte antecedent hashes + one 32-byte produced hash. The error mapper handles `ErrMergeAntecedentsIdentical` (400) in addition to `ErrTargetNotFound` / `ErrTargetWrongType` (404).
+
+  3. **Tests.** Three new tests: BC merge happy-path (forms 3 distinct BCs via different `session_descriptor` values, merges two with the third as produced); rejection on identical antecedents (400); rejection on wrong antecedent count (400). The shared `threeFormedBC` helper sets up the three-formation precondition.
+
+  4. **README.** T4 subsection extended with the four merge endpoints + symmetric-relation idempotency note + validation rules.
+
+- **Constitutional review:** No Charter invariant amended. The §2.5 BC5 lifecycle-integrity gate (merge references three correctly-typed formation predecessors of the matching subtype) is preserved by each subtype's `Merge*` per-message-type loop check. The merge-relation symmetry constraint per [`§0049`](#0049--mergesplit-design-options-deferred-pending-q4--q5-resolution) (ascending-sort normalization → invariant content-hash under caller argument order) is preserved unchanged. Cross-subtype merge per `entity-model.md` §Cross-subtype operations remains deferred to `lifecycle-semantics.md` post-Q4 redaction.
+
+  Falsifiability: every claim in the README + decision-log is testable by mechanical replay. Symmetric-relation idempotency is exercised structurally by the existing `hypothesis.Merge*` package tests; the HTTP T4 layer inherits the property by delegation.
+
+- **Consequences:**
+  - All four T4 merge endpoints reachable.
+  - **§0098 landing 3/3: 16/24 T4 endpoints done.** Remaining: 8 — split × 4 subtypes; form × 4 subtypes.
+  - **§0097 carry-forward EXTENDED to merge helpers across all 4 subtypes.** 4 more `Merge*` helpers gain Actor + IngestionEvent pairing. All 16 promote/demote/dissolve/merge helpers across the 4 subtypes now share the same Options-with-Actor + Report-with-IngestionEventHashHex shape.
+
+  - **Methodological observation 1 — Per-op-across-subtypes cadence validated at four ops.** Promote + demote + dissolve + merge confirm the pattern across structurally distinct wire shapes (1 target hash for promote/demote/dissolve; 3 hashes for merge). The compressibility holds: shared decode + validation + error helpers reduce per-handler boilerplate to ~30 LOC even for the 3-hash merge case.
+
+  - **Methodological observation 2 — Op-specific validation surfaces structural variation.** Promote/demote/dissolve share `validatePromoteParams`/`validateDemoteParams`/`validateDissolveParams` shape (single 32-byte hash). Merge introduces `validateMergeParams` with three hashes + count check. Split (next landing) introduces N successor hashes — likely requires `validateSplitParams` with a per-element loop. Pattern: per-op validator hides structural variation behind a uniform call site in each handler.
+
+  - **Carry-forwards:**
+    - **8 remaining T4 endpoints** — split × 4 subtypes; form × 4 subtypes (form has divergent shape per §0105 — pattern-based, not target-hash-based).
+    - **§0097 CLI-side carry-forward** — net accumulated: 15 CLIs pending `--actor` (3 promote AG/CH/CR + 4 demote + 4 dissolve + 4 merge).
+    - **`token_id` field per RFC item 4(b)** — unchanged.
+
+- **Supersession:** None. Extends [`§0098`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens) landing 3 from 12/24 to 16/24 endpoints (67% of T4).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
