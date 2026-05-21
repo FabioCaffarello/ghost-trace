@@ -194,6 +194,24 @@ Validates the supplied `formation-event-hash` resolves to a `CampaignHypothesisF
 
 Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
 
+## `merge-campaign-hypotheses` CLI
+
+Operator-invoked tool to record the **CampaignHypothesis merge** lifecycle operation per [`§0067`](../../docs/charter/decision-log.md). Mirrors `merge-hypotheses` (BC) and `merge-automation-groups` (AG). Within-subtype only; cross-subtype merge deferred.
+
+```sh
+make merge-campaign-hypotheses-build                                       # builds ./bin/merge-campaign-hypotheses
+
+./bin/merge-campaign-hypotheses \
+  -antecedent-a-hash <64-hex-chars> \
+  -antecedent-b-hash <64-hex-chars> \
+  -produced-formation-hash <64-hex-chars> \
+  -reason "campaigns recognized as same operation"
+```
+
+Symmetric (ascending-sort of antecedents). Validates all three hashes resolve to CampaignHypothesisFormation rows; identical antecedents return `ErrMergeAntecedentsIdentical` (exit 3). Per §0049 Option B, produced is a separately-committed CampaignHypothesisFormation.
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found, target-wrong-type, or identical-antecedents.
+
 ## `promote-automation-group` CLI
 
 Operator-invoked tool to record the **AutomationGroup promotion** lifecycle operation per [`§0057`](../../docs/charter/decision-log.md) — second lifecycle operation of the second Cat III subtype arc. Mirrors [`promote-hypothesis`](#promote-hypothesis-cli) for the AutomationGroup subtype. Same Layer A cadence semantic per [`§0011`](../../docs/charter/decision-log.md).
