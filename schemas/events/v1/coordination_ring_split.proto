@@ -1,0 +1,53 @@
+// Category III hypothesis lifecycle event per Charter §2.5 +
+// lifecycle-semantics.md line 29 + decision-log §0075 (this entry —
+// SIXTH (final) lifecycle operation of the fourth Cat III subtype
+// arc; mirrors §0050 BC, §0061 AG, §0068 CH; closes the
+// CoordinationRing lifecycle surface AND the entire §2.5 surface
+// across all four Cat III subtypes).
+//
+// SCOPE — within-subtype only. Cross-subtype split per
+// entity-model.md §Cross-subtype operations remains deferred.
+//
+// Structural choice (mirrors §0050+§0061+§0068): each successor is
+// a separately-committed CoordinationRingFormation. Preserves
+// §0045+§0056+§0063+§0070 hypothesis-identity invariant.
+//
+// The §0050 wire shape transfers cleanly to the interaction-centric
+// (edge-list) subtype: each successor ring is independently
+// identified by its formation hash; the split event records only
+// the antecedent + successor references. Operational convention:
+// each successor's `interactions` field typically carries a
+// partition of the antecedent's edges, but that's an
+// inference-process detail.
+//
+// Per Charter §2.5 BC5, the split event is a Cat I record under §2.1.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// CoordinationRingSplit records the recognition that a
+// CoordinationRing contained multiple distinct coordinated-action
+// phenomena and has been divided into successor rings.
+message CoordinationRingSplit {
+  // antecedent_formation_event_hash is the BLAKE3-256 content-
+  // hash of the CoordinationRingFormation being split. Single
+  // antecedent (1-to-N shape, asymmetric vs merge's 2-to-1).
+  bytes antecedent_formation_event_hash = 1;
+
+  // successor_formation_event_hashes is the set of BLAKE3-256
+  // content-hashes of the CoordinationRingFormation events
+  // representing the successor hypotheses. Sorted ASCENDING;
+  // cardinality MUST be >= 2; all entries MUST be byte-distinct
+  // from each other AND from antecedent_formation_event_hash.
+  repeated bytes successor_formation_event_hashes = 2;
+
+  // split_at is the Unix-nanoseconds time at which the split
+  // recognition was recorded.
+  int64 split_at = 3;
+
+  // reason is an operator-supplied free-form note. Optional but
+  // strongly recommended.
+  string reason = 4;
+}

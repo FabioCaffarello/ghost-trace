@@ -257,6 +257,26 @@ Symmetric (ascending-sort of antecedents). Validates all three hashes resolve to
 
 Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found, target-wrong-type, or identical-antecedents.
 
+## `split-coordination-ring` CLI
+
+Operator-invoked tool to record the **CoordinationRing split** lifecycle operation per [`§0075`](../../docs/charter/decision-log.md) — **sixth (final) lifecycle operation of the fourth Cat III subtype arc**. Mirrors `split-hypothesis` (BC), `split-automation-group` (AG), `split-campaign-hypothesis` (CH). Within-subtype only.
+
+Closes the fourth Cat III subtype's §2.5 lifecycle surface — **all four subtypes (BehavioralCluster, AutomationGroup, CampaignHypothesis, CoordinationRing) now have 6 of 6 lifecycle operations structurally observable** (24 of 24 lifecycle event types across the §0010 four-subtype family).
+
+```sh
+make split-coordination-ring-build                                         # builds ./bin/split-coordination-ring
+
+./bin/split-coordination-ring \
+  -antecedent-formation-hash <64-hex-chars> \
+  -successor-formation-hash <64-hex-chars> \
+  -successor-formation-hash <64-hex-chars> \
+  -reason "antecedent ring conflated two distinct coordinated phenomena"
+```
+
+Successors form a SET (ascending-sort idempotency per §0050). Cardinality MUST be ≥ 2; all entries MUST be byte-distinct from each other AND from the antecedent.
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found, target-wrong-type, insufficient-successors, or successors-not-distinct.
+
 ## `promote-campaign-hypothesis` CLI
 
 Operator-invoked tool to record the **CampaignHypothesis promotion** lifecycle operation per [`§0064`](../../docs/charter/decision-log.md) — second lifecycle operation of the third Cat III subtype arc. Mirrors `promote-hypothesis` (BC) and `promote-automation-group` (AG).
