@@ -10,7 +10,7 @@ import (
 func TestHypothesisListHappyPathReturnsBC(t *testing.T) {
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/hypotheses", nil)
 	rr := httptest.NewRecorder()
@@ -39,7 +39,7 @@ func TestHypothesisListEmptySubstrate(t *testing.T) {
 	// Use a different empty substrate to test empty case.
 	_ = sub
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	// Use a state filter that matches nothing (forming exists, but
 	// promoted does not — the BC formation is in forming state).
@@ -58,7 +58,7 @@ func TestHypothesisListEmptySubstrate(t *testing.T) {
 func TestHypothesisListSubtypeFilter(t *testing.T) {
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	// Filter to AG → no BC entries should appear → empty result.
 	req := httptest.NewRequest(http.MethodGet,
@@ -77,7 +77,7 @@ func TestHypothesisListSubtypeFilter(t *testing.T) {
 func TestHypothesisListInvalidSubtype(t *testing.T) {
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/hypotheses?subtype=not_a_subtype", nil)
@@ -91,7 +91,7 @@ func TestHypothesisListInvalidSubtype(t *testing.T) {
 func TestHypothesisListInvalidState(t *testing.T) {
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/hypotheses?state=not_a_state", nil)
@@ -105,7 +105,7 @@ func TestHypothesisListInvalidState(t *testing.T) {
 func TestHypothesisListInvalidNumericParam(t *testing.T) {
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/hypotheses?limit=not-an-int", nil)
@@ -119,7 +119,7 @@ func TestHypothesisListInvalidNumericParam(t *testing.T) {
 func TestHypothesisListNegativeNumericParam(t *testing.T) {
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/hypotheses?limit=-5", nil)
@@ -133,7 +133,7 @@ func TestHypothesisListNegativeNumericParam(t *testing.T) {
 func TestHypothesisListAfterAfterBefore(t *testing.T) {
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/hypotheses?after_ns=2000&before_ns=1000", nil)
@@ -146,7 +146,7 @@ func TestHypothesisListAfterAfterBefore(t *testing.T) {
 
 func TestHypothesisListRejectsNonGet(t *testing.T) {
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil)
+	h := MustNew(doAppend, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses", nil)
 	rr := httptest.NewRecorder()
@@ -158,7 +158,7 @@ func TestHypothesisListRejectsNonGet(t *testing.T) {
 
 func TestHypothesisListRequiresSubstrateConfigured(t *testing.T) {
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil) // WithSubstrate NOT supplied
+	h := MustNew(doAppend, nil) // WithSubstrate NOT supplied
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/hypotheses", nil)
 	rr := httptest.NewRecorder()
@@ -173,7 +173,7 @@ func TestHypothesisListPagingLimitAndOffset(t *testing.T) {
 	// limit=1 → 1 entry; offset=1 → 0 entries.
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	for _, tc := range []struct {
 		query   string

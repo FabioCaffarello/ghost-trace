@@ -10,7 +10,7 @@ import (
 func TestHypothesisSummaryHappyPathBC(t *testing.T) {
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/hypotheses/summary", nil)
 	rr := httptest.NewRecorder()
@@ -93,7 +93,7 @@ func TestHypothesisSummaryEveryStateKeyPresent(t *testing.T) {
 	// at zero.
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/hypotheses/summary", nil)
 	rr := httptest.NewRecorder()
@@ -124,7 +124,7 @@ func TestHypothesisSummaryEveryStateKeyPresent(t *testing.T) {
 func TestHypothesisSummaryInvalidNumericParam(t *testing.T) {
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/hypotheses/summary?after_ns=not-an-int", nil)
@@ -138,7 +138,7 @@ func TestHypothesisSummaryInvalidNumericParam(t *testing.T) {
 func TestHypothesisSummaryNegativeNumericParam(t *testing.T) {
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/hypotheses/summary?after_ns=-5", nil)
@@ -152,7 +152,7 @@ func TestHypothesisSummaryNegativeNumericParam(t *testing.T) {
 func TestHypothesisSummaryAfterAfterBefore(t *testing.T) {
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/hypotheses/summary?after_ns=2000&before_ns=1000", nil)
@@ -165,7 +165,7 @@ func TestHypothesisSummaryAfterAfterBefore(t *testing.T) {
 
 func TestHypothesisSummaryRejectsNonGet(t *testing.T) {
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil)
+	h := MustNew(doAppend, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/summary", nil)
 	rr := httptest.NewRecorder()
@@ -177,7 +177,7 @@ func TestHypothesisSummaryRejectsNonGet(t *testing.T) {
 
 func TestHypothesisSummaryRequiresSubstrateConfigured(t *testing.T) {
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil) // WithSubstrate NOT supplied
+	h := MustNew(doAppend, nil) // WithSubstrate NOT supplied
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/hypotheses/summary", nil)
 	rr := httptest.NewRecorder()
@@ -194,7 +194,7 @@ func TestHypothesisSummaryTimeWindowExcludesAll(t *testing.T) {
 	// zero values.
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/hypotheses/summary?after_ns=9999999999999", nil)
@@ -218,7 +218,7 @@ func TestHypothesisSummaryEquivalenceWithListCount(t *testing.T) {
 	// combined.by_state[s] equals the sum of per-subtype by_state[s].
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/hypotheses/summary", nil)
 	rr := httptest.NewRecorder()

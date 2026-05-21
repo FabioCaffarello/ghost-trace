@@ -61,7 +61,7 @@ func substrateWithOSDerivedReplay(t *testing.T) (*substrate.Substrate, string) {
 func TestReplayOperationalSessionHTTPHappyPath(t *testing.T) {
 	sub, osHex := substrateWithOSDerivedReplay(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/replay/operational-session?target_event_hash="+osHex, nil)
@@ -86,7 +86,7 @@ func TestReplayOperationalSessionHTTPHappyPath(t *testing.T) {
 func TestReplayOperationalSessionHTTPMissingParam(t *testing.T) {
 	sub, _ := substrateWithOSDerivedReplay(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/replay/operational-session", nil)
 	rr := httptest.NewRecorder()
@@ -99,7 +99,7 @@ func TestReplayOperationalSessionHTTPMissingParam(t *testing.T) {
 func TestReplayOperationalSessionHTTPUnknownTarget(t *testing.T) {
 	sub, _ := substrateWithOSDerivedReplay(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	bogus := strings.Repeat("ff", 32)
 	req := httptest.NewRequest(http.MethodGet,
@@ -114,7 +114,7 @@ func TestReplayOperationalSessionHTTPUnknownTarget(t *testing.T) {
 func TestReplayAllOperationalSessionsHTTPHappyPath(t *testing.T) {
 	sub, _ := substrateWithOSDerivedReplay(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/replay/operational-sessions", nil)
 	rr := httptest.NewRecorder()
@@ -145,7 +145,7 @@ func substrateWithBCFormationReplay(t *testing.T) (*substrate.Substrate, string)
 func TestReplayFormationHTTPHappyPathBC(t *testing.T) {
 	sub, formationHex := substrateWithBCFormationReplay(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/replay/formation?target_event_hash="+formationHex, nil)
@@ -205,7 +205,7 @@ func TestReplayFormationHTTPAutoDetectsAGSubtype(t *testing.T) {
 	}
 
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/replay/formation?target_event_hash="+hex.EncodeToString(agHash[:]), nil)
@@ -240,7 +240,7 @@ func TestReplayFormationHTTPRejectsNonFormationTarget(t *testing.T) {
 	}
 
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/replay/formation?target_event_hash="+hex.EncodeToString(dsHash[:]), nil)
@@ -254,7 +254,7 @@ func TestReplayFormationHTTPRejectsNonFormationTarget(t *testing.T) {
 func TestReplayAllFormationsHTTPHappyPath(t *testing.T) {
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/replay/formations", nil)
 	rr := httptest.NewRecorder()
@@ -281,7 +281,7 @@ func TestReplayAllFormationsHTTPHappyPath(t *testing.T) {
 func TestReplayAllFormationsHTTPSubtypeFilter(t *testing.T) {
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	// Filter to AG → BC section should be absent; AG section should be
 	// present with total=0.
@@ -311,7 +311,7 @@ func TestReplayAllFormationsHTTPSubtypeFilter(t *testing.T) {
 func TestReplayAllFormationsHTTPInvalidSubtype(t *testing.T) {
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/replay/formations?subtype=not_a_subtype", nil)
@@ -324,7 +324,7 @@ func TestReplayAllFormationsHTTPInvalidSubtype(t *testing.T) {
 
 func TestReplayHTTPRequiresSubstrate(t *testing.T) {
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil) // no WithSubstrate
+	h := MustNew(doAppend, nil) // no WithSubstrate
 
 	for _, path := range []string{
 		"/v1/replay/operational-session",
@@ -343,7 +343,7 @@ func TestReplayHTTPRequiresSubstrate(t *testing.T) {
 
 func TestReplayHTTPRejectsNonGet(t *testing.T) {
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil)
+	h := MustNew(doAppend, nil)
 
 	for _, path := range []string{
 		"/v1/replay/operational-session",
@@ -363,7 +363,7 @@ func TestReplayHTTPRejectsNonGet(t *testing.T) {
 func TestReplayHTTPAuthRequired(t *testing.T) {
 	sub, _ := substrateWithOSDerivedReplay(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub), WithAuthToken("secret"))
+	h := MustNew(doAppend, nil, WithSubstrate(sub), WithAuthToken("secret"))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/replay/operational-sessions", nil)
 	rr := httptest.NewRecorder()

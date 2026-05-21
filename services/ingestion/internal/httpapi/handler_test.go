@@ -78,7 +78,7 @@ func newTestMsg() *eventsv1.DeclaredSession {
 
 func TestHealthz(t *testing.T) {
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil)
+	h := MustNew(doAppend, nil)
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -95,7 +95,7 @@ func TestHealthz(t *testing.T) {
 
 func TestHealthzRejectsNonGet(t *testing.T) {
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil)
+	h := MustNew(doAppend, nil)
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/healthz", nil)
@@ -111,7 +111,7 @@ func TestHealthzRejectsNonGet(t *testing.T) {
 
 func TestUnknownPath(t *testing.T) {
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil)
+	h := MustNew(doAppend, nil)
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
@@ -125,7 +125,7 @@ func TestUnknownPath(t *testing.T) {
 func TestPostEventsHappyPath(t *testing.T) {
 	doAppend, callCount := stubAppendFunc(nil)
 	fatal := &recordingFatalReporter{}
-	h := New(doAppend, fatal)
+	h := MustNew(doAppend, fatal)
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
@@ -158,7 +158,7 @@ func TestPostEventsHappyPath(t *testing.T) {
 
 func TestPostEventsRejectsWrongMethod(t *testing.T) {
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil)
+	h := MustNew(doAppend, nil)
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/events/declared-session", nil)
@@ -171,7 +171,7 @@ func TestPostEventsRejectsWrongMethod(t *testing.T) {
 
 func TestPostEventsRejectsWrongContentType(t *testing.T) {
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil)
+	h := MustNew(doAppend, nil)
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", strings.NewReader("plain text"))
@@ -185,7 +185,7 @@ func TestPostEventsRejectsWrongContentType(t *testing.T) {
 
 func TestPostEventsRejectsEmptyBody(t *testing.T) {
 	doAppend, callCount := stubAppendFunc(nil)
-	h := New(doAppend, nil)
+	h := MustNew(doAppend, nil)
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", strings.NewReader(""))
@@ -202,7 +202,7 @@ func TestPostEventsRejectsEmptyBody(t *testing.T) {
 
 func TestPostEventsRejectsInvalidProtobuf(t *testing.T) {
 	doAppend, callCount := stubAppendFunc(nil)
-	h := New(doAppend, nil)
+	h := MustNew(doAppend, nil)
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", strings.NewReader("not-a-protobuf-message"))
@@ -226,7 +226,7 @@ func TestPostEventsUnrecoverableTriggersFatal(t *testing.T) {
 		fmt.Errorf("at /blobs/de/ad: %w", substrate.ErrBlobCollision),
 	})
 	fatal := &recordingFatalReporter{}
-	h := New(doAppend, fatal)
+	h := MustNew(doAppend, fatal)
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
@@ -262,7 +262,7 @@ func TestPostEventsRecoverableErrorReturns400(t *testing.T) {
 		errors.New("simulated transient: database is locked"),
 	})
 	fatal := &recordingFatalReporter{}
-	h := New(doAppend, fatal)
+	h := MustNew(doAppend, fatal)
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
@@ -284,7 +284,7 @@ func TestPostEventsHashMismatchAlsoUnrecoverable(t *testing.T) {
 		fmt.Errorf("substrate.ReadBlob at /blobs/be/ef: %w", substrate.ErrHashMismatch),
 	})
 	fatal := &recordingFatalReporter{}
-	h := New(doAppend, fatal)
+	h := MustNew(doAppend, fatal)
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
@@ -306,7 +306,7 @@ func TestPostEventsHashMismatchAlsoUnrecoverable(t *testing.T) {
 
 func TestRequestBodyLimitEnforced(t *testing.T) {
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil)
+	h := MustNew(doAppend, nil)
 	h.requestBodyLimit = 64 // tighten for this test
 
 	// Body larger than the limit triggers a MaxBytesReader error,
@@ -333,7 +333,7 @@ func TestPostEventsNoAuthRequiredByDefault(t *testing.T) {
 	// Sanity: backward-compat check. Without WithAuthToken, requests
 	// without an Authorization header succeed.
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil)
+	h := MustNew(doAppend, nil)
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
@@ -348,7 +348,7 @@ func TestPostEventsNoAuthRequiredByDefault(t *testing.T) {
 
 func TestPostEventsRequiresAuthWhenConfigured(t *testing.T) {
 	doAppend, callCount := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithAuthToken("secret-token"))
+	h := MustNew(doAppend, nil, WithAuthToken("secret-token"))
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
@@ -370,7 +370,7 @@ func TestPostEventsRequiresAuthWhenConfigured(t *testing.T) {
 
 func TestPostEventsAuthWrongToken(t *testing.T) {
 	doAppend, callCount := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithAuthToken("secret-token"))
+	h := MustNew(doAppend, nil, WithAuthToken("secret-token"))
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
@@ -389,7 +389,7 @@ func TestPostEventsAuthWrongToken(t *testing.T) {
 
 func TestPostEventsAuthWrongTokenDifferentLength(t *testing.T) {
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithAuthToken("secret-token"))
+	h := MustNew(doAppend, nil, WithAuthToken("secret-token"))
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
@@ -405,7 +405,7 @@ func TestPostEventsAuthWrongTokenDifferentLength(t *testing.T) {
 
 func TestPostEventsAuthCorrectToken(t *testing.T) {
 	doAppend, callCount := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithAuthToken("secret-token"))
+	h := MustNew(doAppend, nil, WithAuthToken("secret-token"))
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
@@ -426,7 +426,7 @@ func TestPostEventsAuthBadHeaderFormat(t *testing.T) {
 	// Authorization header present but not "Bearer <token>" — e.g.,
 	// "Basic ..." or raw token without scheme.
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithAuthToken("secret-token"))
+	h := MustNew(doAppend, nil, WithAuthToken("secret-token"))
 
 	cases := []struct {
 		name   string
@@ -460,7 +460,7 @@ func TestHealthzExemptFromAuth(t *testing.T) {
 	// so that orchestrators (Kubernetes, etc.) can liveness-probe
 	// without credentials.
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithAuthToken("secret-token"))
+	h := MustNew(doAppend, nil, WithAuthToken("secret-token"))
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -477,7 +477,7 @@ func TestUnknownPathReturns401WhenAuthConfigured(t *testing.T) {
 	// when auth is configured, so the path structure is not leaked
 	// to unauthenticated clients.
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithAuthToken("secret-token"))
+	h := MustNew(doAppend, nil, WithAuthToken("secret-token"))
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/some-random-path", nil)
@@ -506,7 +506,7 @@ func TestEnvelopeForRequestPlainHTTP(t *testing.T) {
 // response carries both hashes (primary + paired enrichment) per §0038.
 func TestPostEventsSuccessIncludesIngestionEventHash(t *testing.T) {
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil)
+	h := MustNew(doAppend, nil)
 
 	payload := encodePayload(t, newTestMsg())
 	rr := httptest.NewRecorder()
@@ -548,7 +548,7 @@ func TestPostNetworkEventHappyPath(t *testing.T) {
 			PayloadBytes:          16,
 		}, nil
 	}
-	h := New(doAppend, nil)
+	h := MustNew(doAppend, nil)
 
 	netEvt := &eventsv1.NetworkEvent{
 		ObservedAt:      1716120000000000777,
@@ -582,7 +582,7 @@ func TestPostNetworkEventHappyPath(t *testing.T) {
 // types — the operator-facing migration hint.
 func TestPostEventsUnknownTypeReturns404(t *testing.T) {
 	doAppend, callCount := stubAppendFunc(nil)
-	h := New(doAppend, nil)
+	h := MustNew(doAppend, nil)
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/events/fingerprint-snapshot", bytes.NewReader([]byte("anything")))
@@ -609,7 +609,7 @@ func TestPostEventsUnknownTypeReturns404(t *testing.T) {
 // producers at the new typed path layout.
 func TestPostEventsUntypedPathReturns404WithMigrationHint(t *testing.T) {
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil)
+	h := MustNew(doAppend, nil)
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader([]byte("anything")))
@@ -622,6 +622,140 @@ func TestPostEventsUntypedPathReturns404WithMigrationHint(t *testing.T) {
 	body := rr.Body.String()
 	if !strings.Contains(body, "/v1/events/") {
 		t.Errorf("error body should point at /v1/events/<type>: %q", body)
+	}
+}
+
+// Multi-tier auth tests per decision-log §0098 + RFC architecture-http-
+// auth-scope-model item 1.
+
+func TestNewRejectsSingleTokenPlusTierTokens(t *testing.T) {
+	doAppend, _ := stubAppendFunc(nil)
+	_, err := New(doAppend, nil,
+		WithAuthToken("legacy-token"),
+		WithAuthTierToken(TierProducer, "producer-token"),
+	)
+	if err == nil {
+		t.Fatal("New: expected error on single-token + per-tier combination, got nil")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("error message should mention mutual exclusion: %q", err.Error())
+	}
+}
+
+func TestNewRejectsUnknownTier(t *testing.T) {
+	doAppend, _ := stubAppendFunc(nil)
+	_, err := New(doAppend, nil, WithAuthTierToken(Tier("not-a-real-tier"), "tok"))
+	if err == nil {
+		t.Fatal("New: expected error on unknown tier, got nil")
+	}
+	if !strings.Contains(err.Error(), "unknown tier") {
+		t.Errorf("error message should mention unknown tier: %q", err.Error())
+	}
+}
+
+func TestNewRejectsNilDoAppend(t *testing.T) {
+	_, err := New(nil, nil)
+	if err == nil {
+		t.Fatal("New: expected error on nil doAppend, got nil")
+	}
+}
+
+func TestMultiTierProducerTokenAuthorizesPostEvents(t *testing.T) {
+	doAppend, _ := stubAppendFunc(nil)
+	h := MustNew(doAppend, nil, WithAuthTierToken(TierProducer, "prod-token"))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", bytes.NewReader([]byte{}))
+	req.Header.Set("Authorization", "Bearer prod-token")
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if rr.Code == http.StatusUnauthorized {
+		t.Fatalf("status: got 401; producer token should authorize T1 (body: %s)", rr.Body.String())
+	}
+}
+
+func TestMultiTierOperatorReadTokenDoesNotAuthorizePostEvents(t *testing.T) {
+	doAppend, _ := stubAppendFunc(nil)
+	h := MustNew(doAppend, nil, WithAuthTierToken(TierOperatorRead, "operator-token"))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", bytes.NewReader([]byte{}))
+	req.Header.Set("Authorization", "Bearer operator-token")
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusUnauthorized; got != want {
+		t.Errorf("status: got %d, want %d (operator-read token must not authorize T1; body: %s)", got, want, rr.Body.String())
+	}
+}
+
+func TestMultiTierProducerTokenDoesNotAuthorizeT3AdminRoute(t *testing.T) {
+	doAppend, _ := stubAppendFunc(nil)
+	h := MustNew(doAppend, nil, WithAuthTierToken(TierProducer, "prod-token"))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/admin/orphan-cleanup", bytes.NewReader([]byte{}))
+	req.Header.Set("Authorization", "Bearer prod-token")
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusUnauthorized; got != want {
+		t.Errorf("status: got %d, want %d (unclassified T3 path must 401 under multi-tier; body: %s)", got, want, rr.Body.String())
+	}
+}
+
+func TestMultiTierHealthzExemptFromAuth(t *testing.T) {
+	doAppend, _ := stubAppendFunc(nil)
+	h := MustNew(doAppend, nil, WithAuthTierToken(TierProducer, "prod-token"))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	h.ServeHTTP(rr, req)
+
+	if got, want := rr.Code, http.StatusOK; got != want {
+		t.Errorf("status: got %d, want %d (healthz must remain T0 exempt under multi-tier; body: %s)", got, want, rr.Body.String())
+	}
+}
+
+func TestRouteTierClassification(t *testing.T) {
+	cases := []struct {
+		path string
+		want Tier
+	}{
+		{"/healthz", ""},
+		{"/v1/events/declared-session", TierProducer},
+		{"/v1/events/network-event", TierProducer},
+		{"/v1/hypotheses", TierOperatorRead},
+		{"/v1/hypotheses/state", TierOperatorRead},
+		{"/v1/hypotheses/summary", TierOperatorRead},
+		{"/v1/replay/operational-session", TierOperatorRead},
+		{"/v1/replay/operational-sessions", TierOperatorRead},
+		{"/v1/replay/formation", TierOperatorRead},
+		{"/v1/replay/formations", TierOperatorRead},
+		{"/v1/verify", TierOperatorRead},
+		// T3/T4 not yet implemented; unclassified.
+		{"/v1/admin/orphan-cleanup", ""},
+		{"/v1/hypotheses/behavioral-cluster/promote", ""},
+		{"/some-random-path", ""},
+	}
+	for _, c := range cases {
+		req := httptest.NewRequest(http.MethodGet, c.path, nil)
+		if got := routeTier(req); got != c.want {
+			t.Errorf("routeTier(%q): got %q, want %q", c.path, got, c.want)
+		}
+	}
+}
+
+func TestAllTiersOrdinalOrder(t *testing.T) {
+	want := []Tier{TierProducer, TierOperatorRead, TierSubstrateAdmin, TierConstitutionalAct}
+	got := AllTiers()
+	if len(got) != len(want) {
+		t.Fatalf("AllTiers length: got %d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("AllTiers[%d]: got %q, want %q", i, got[i], want[i])
+		}
 	}
 }
 
