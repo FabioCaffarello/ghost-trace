@@ -1,0 +1,30 @@
+// Category III hypothesis lifecycle event per Charter §2.5 +
+// decision-log §0011 (Layer A cadence consumed) + decision-log
+// §0065 (this entry — third-subtype demotion landing; mirrors §0047
+// for BC and §0058 for AG).
+//
+// Per Charter §2.5 BC5, CampaignHypothesisDemotion is a Cat I
+// record committed under §2.1 immutability. Two-hop chain
+// reconstruction (mirrors §0047/§0058):
+//   demotion.promotion_event_hash → CampaignHypothesisPromotion
+//   promotion.formation_event_hash → CampaignHypothesisFormation
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// CampaignHypothesisDemotion records the transition of a
+// CampaignHypothesis OUT of operational use as enrichment context.
+message CampaignHypothesisDemotion {
+  // promotion_event_hash is the BLAKE3-256 content-hash of the
+  // CampaignHypothesisPromotion event being ended.
+  bytes promotion_event_hash = 1;
+
+  // demoted_at is the Unix-nanoseconds time at which demotion was
+  // recorded. Cadence-gate state computed at consumer time.
+  int64 demoted_at = 2;
+
+  // reason is an operator-supplied free-form note. Optional.
+  string reason = 3;
+}
