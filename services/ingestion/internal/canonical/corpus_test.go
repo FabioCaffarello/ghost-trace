@@ -49,6 +49,7 @@ var messageFactory = map[string]func() proto.Message{
 	"campaign-hypothesis-formation": func() proto.Message { return &eventsv1.CampaignHypothesisFormation{} },
 	"campaign-hypothesis-promotion": func() proto.Message { return &eventsv1.CampaignHypothesisPromotion{} },
 	"campaign-hypothesis-demotion":  func() proto.Message { return &eventsv1.CampaignHypothesisDemotion{} },
+	"campaign-hypothesis-dissolution": func() proto.Message { return &eventsv1.CampaignHypothesisDissolution{} },
 }
 
 // TestCanonicalCorpus is the CI golden-file gate per
