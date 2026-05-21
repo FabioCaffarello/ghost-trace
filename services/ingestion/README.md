@@ -239,6 +239,24 @@ Validates the supplied `formation-event-hash` resolves to a `CoordinationRingFor
 
 Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
 
+## `merge-coordination-rings` CLI
+
+Operator-invoked tool to record the **CoordinationRing merge** lifecycle operation per [`§0074`](../../docs/charter/decision-log.md) — fifth lifecycle operation of the fourth Cat III subtype arc. Mirrors [`merge-hypotheses`](#merge-hypotheses-cli) (BC), [`merge-automation-groups`](#merge-automation-groups-cli) (AG), [`merge-campaign-hypotheses`](#merge-campaign-hypotheses-cli) (CH). Within-subtype only; cross-subtype merge deferred.
+
+```sh
+make merge-coordination-rings-build                                        # builds ./bin/merge-coordination-rings
+
+./bin/merge-coordination-rings \
+  -antecedent-a-hash <64-hex-chars> \
+  -antecedent-b-hash <64-hex-chars> \
+  -produced-formation-hash <64-hex-chars> \
+  -reason "rings recognized as same coordinated-action phenomenon"
+```
+
+Symmetric (ascending-sort of antecedents). Validates all three hashes resolve to `CoordinationRingFormation` rows; identical antecedents return `ErrMergeAntecedentsIdentical` (exit 3). Per §0049 Option B, produced is a separately-committed `CoordinationRingFormation`.
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found, target-wrong-type, or identical-antecedents.
+
 ## `promote-campaign-hypothesis` CLI
 
 Operator-invoked tool to record the **CampaignHypothesis promotion** lifecycle operation per [`§0064`](../../docs/charter/decision-log.md) — second lifecycle operation of the third Cat III subtype arc. Mirrors `promote-hypothesis` (BC) and `promote-automation-group` (AG).
