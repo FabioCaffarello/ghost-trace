@@ -145,6 +145,23 @@ Adding a new CampaignHypothesis formation pattern: implement `CampaignHypothesis
 
 Exit code: **0** on success; **2** on tool/configuration error.
 
+## `promote-campaign-hypothesis` CLI
+
+Operator-invoked tool to record the **CampaignHypothesis promotion** lifecycle operation per [`§0064`](../../docs/charter/decision-log.md) — second lifecycle operation of the third Cat III subtype arc. Mirrors `promote-hypothesis` (BC) and `promote-automation-group` (AG).
+
+```sh
+make promote-campaign-hypothesis-build                                     # builds ./bin/promote-campaign-hypothesis
+
+./bin/promote-campaign-hypothesis \
+  -formation-event-hash <64-hex-chars> \
+  -cadence-seconds 86400 \
+  -reason "campaign promoted to operational enrichment"
+```
+
+Validates the supplied `formation-event-hash` resolves to a `CampaignHypothesisFormation` row (otherwise exits 3). Cross-subtype rejection: BC or AG formation hashes return `ErrTargetWrongType`.
+
+Exit codes: **0** success; **2** tool/configuration error; **3** target-not-found or target-wrong-type.
+
 ## `promote-automation-group` CLI
 
 Operator-invoked tool to record the **AutomationGroup promotion** lifecycle operation per [`§0057`](../../docs/charter/decision-log.md) — second lifecycle operation of the second Cat III subtype arc. Mirrors [`promote-hypothesis`](#promote-hypothesis-cli) for the AutomationGroup subtype. Same Layer A cadence semantic per [`§0011`](../../docs/charter/decision-log.md).
