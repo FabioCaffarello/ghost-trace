@@ -4078,6 +4078,50 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0101` — Patch amendment v0.5.2: hook amendment-in-progress exemption + §2.3 BC5 vocabulary tightening
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** Two carry-forwards from prior decisions converged at enactment:
+  1. **§0099 obs 3 + §0100 deferred-disposition list (CF4):** §2.3 BC5 v0.4 used the umbrella phrase `multi-category traversal`, which the §2.4 redaction (Q3 ratification per [`§0099`](#0099--gate-24-third-object-level-invariant-redaction-path-reading-1-full-amendment-v05)) restricted from §2.x binding text. The resulting asymmetry — §2.3 (v0.4) uses the umbrella, §2.4 (v0.5) avoids it — is corrosive of vocabulary discipline if left in place. §0099 obs 3 named two dispositions: (A) reformulate §2.3 BC5 with canonical vocabulary; (B) add `multi-category traversal` to glossary as cross-§2.x methodological term.
+  2. **Third pre-existing hook gap surfaced during enactment:** v0.5.1's newly-frozen exemption covers `pending→frozen` promotion PRs (e.g., §2.4 v0.5 in [`§0100`](#0100--patch-amendment-v051-hook-handles-pendingfrozen-promotion-prs--level-2-frozen-range-tightened)) but does NOT cover patches to already-frozen prose — when this RFC drafted the §2.3 BC5 reformulation, the hook correctly blocked the edit as `BLOCK [frozen-section-edit]` with no exemption path for legitimate amendment-via-RFC-touching-frozen-prose. The gap is structurally analogous to the v0.5.1 case (parser-correct hook catches a procedure the discipline allows): same patch-via-pressure pattern as [`§0018`](#0018--v041-patch-fix-hook-frozen-section-parser-to-accept-the-amendment-qualified-status-cell) and [`§0100`](#0100--patch-amendment-v051-hook-handles-pendingfrozen-promotion-prs--level-2-frozen-range-tightened).
+
+- **Decision:** Coordinated two-part patch v0.5.2 bundling the §2.3 BC5 prose reformulation (Disposition A from §0099 obs 3) with the hook amendment-in-progress exemption that makes the prose change structurally possible. Bundling is necessary because the Charter prose change cannot land without the hook extension — `--no-verify` bypass would degrade discipline (recorded bypass is technically permitted per CLAUDE.md §5.3 but ceremony-without-structural-improvement is rejected per CLAUDE.md §7 minimalism).
+
+  1. **Hook amendment-in-progress exemption.** `.claude/hooks/pre-commit-doc-check.sh` parses staged-diff additions to `docs/charter/amendments.md` for new `**Sections affected:**` lines, extracts §N.M markers via regex, and passes them to the parser as `--exclude-sections` (combined with the v0.5.1 newly-frozen set). Sections with `**Sections affected:**` mention in a new amendments.md entry in the same change set are exempt from the frozen-section-edit check IN THAT CHANGE SET ONLY. The hook trusts the amendments.md `**Sections affected:**` line as the structural declaration of legitimate amendment scope; substantive verification (RFC exists, falsifiability-check pass, version bump correct) remains committee/reviewer territory above the mechanical hook. After merge to main, the amendments.md entry is in HEAD, so the diff line is empty and the exemption does not apply — the protection becomes active immediately after the amendment lands.
+
+  2. **§2.3 BC5 scope sentence reformulation (Disposition A).** Frozen v0.4 prose `"§2.3 governs the structural commitment of multi-category traversal; not the runtime mechanics of traversal."` → `"§2.3 governs the structural shape of provenance chains crossing category boundaries; not the runtime mechanics of chain traversal."` BC5 sentences S2 + S3 unchanged. No other §2.3 text amended.
+
+  Three grounds for selecting Disposition A over Disposition B:
+  1. **Constitutional consistency.** Disposition B elevates `multi-category traversal` to canonical status, contradicting the §2.4 Q3 committee judgment that the phrase is not suitable for §2.x binding text.
+  2. **Asymmetry resolution.** §2.4 BC7 uses substantive-named-shape language (`"the typed reference edges connecting an Assertion to a Cat II construct ... or to a Cat III hypothesis"`); aligning §2.3 BC5 to the same pattern resolves the prose asymmetry.
+  3. **Pre-§2.6 load reduction.** §0100 deferred-disposition CF4 anticipated a future pre-§2.6 vocabulary sweep batching analogous carry-forwards; closing this single-clause patch now removes one item from the future sweep load.
+
+- **Constitutional review:** No identity-changing amendment to §2.3. The reformulation is semantically equivalent: both old and new scope sentences claim the same scope-vs-mechanics partition; S2 articulates the substantive content unchanged. Per [`amendments.md`](./amendments.md) §Amendment Discipline, "patch for clarifications that do not alter meaning" — meaning-preserving prose tightening qualifies as patch. §2.3 status row in CLAUDE.md §4 status table remains `frozen — minor amendment v0.4` (v0.4 is still the last identity-affecting amendment); v0.5.2 is tracked in the narrative paragraph + amendments.md only.
+
+  Falsifiability discipline applies to both parts: (a) the reformulation's S1 retains structural-falsifiability — mechanical detection of `multi-category traversal` in §2.x binding text becomes the canonical detection mechanism for future §2.x redactions per the CF4 sweep pattern; (b) the hook amendment-in-progress exemption is falsifiable by mechanical replay — simulate a frozen-prose edit without a corresponding amendments.md entry in the same diff, and the exemption correctly does not apply.
+
+- **Consequences:**
+  - Charter banner version line `v0.5.1` → `v0.5.2`.
+  - Charter §2.3 BC5 S1 reformulated; S2 + S3 unchanged.
+  - [`.claude/hooks/pre-commit-doc-check.sh`](../../.claude/hooks/pre-commit-doc-check.sh) — amendment-in-progress exemption added; self-test output extended.
+  - [`docs/charter/amendments.md`](./amendments.md) — v0.5.2 entry added after v0.5.1.
+  - [`docs/rfcs/draft/charter-amendment-v0-5-2-section-2-3-bc5-vocabulary-tightening.md`](../rfcs/draft/charter-amendment-v0-5-2-section-2-3-bc5-vocabulary-tightening.md) — new RFC draft.
+  - [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md) §4 status table narrative — v0.5.2 chronological clause appended.
+  - §0099 obs 3 closing decision recorded as Disposition (A) selected; §0100 deferred-disposition CF4 sweep load reduced by one item.
+  - Third entry in the patch-via-pressure pattern catalogue ([`§0018`](#0018--v041-patch-fix-hook-frozen-section-parser-to-accept-the-amendment-qualified-status-cell) → [`§0100`](#0100--patch-amendment-v051-hook-handles-pendingfrozen-promotion-prs--level-2-frozen-range-tightened) → §0101): each newly-discovered hook gap surfaces during a procedure the hook does not yet model. Methodological observation 1 below confirms pattern.
+
+  - **Methodological observation 1 — Patch-via-pressure pattern confirmed at three instances.** §0018 (v0.4.1, regex parser missed amendment-qualified cells), §0100 (v0.5.1, hook blocked the very PR completing the promotion), and now §0101 (v0.5.2, hook blocked legitimate amendment-via-RFC to already-frozen prose). Each instance was caught at CI time, requiring re-roll of the closure PR. Pattern: the hook only models the procedures already-exercised; new procedures surface latent gaps. Pre-Gate dependency assessment per `feedback_hook_patch_via_pressure.md` should now ALSO include "is there frozen prose I anticipate editing as part of a non-promotion amendment?" — the amendment-in-progress exemption covers this case after v0.5.2. Future gaps may still surface for procedures not yet exercised (e.g., un-freezing a section; cross-section amendment touching multiple frozen ranges).
+
+  - **Methodological observation 2 — Cross-§2.x vocabulary tightening confirmed as recurring sweep pattern.** This v0.5.2 patch is the first instance of the §0100 CF4 sweep pattern enacted as a standalone patch. Generalization: each §2.x redaction may discover prior §2.x prose carrying vocabulary the current §2.x discipline excludes; the disposition is patch-amendment-per-instance OR bundle-patch-at-next-pre-Gate. Standalone enactment (this v0.5.2) reduces accumulation; bundled enactment (future) consolidates committee bandwidth. No structural preference between the two; cadence-driven choice per pressure.
+
+  - **Methodological observation 3 — Bundling hook fix with Charter prose change.** When a Charter prose change requires a hook extension to land structurally, bundling the two in a single patch amendment is the natural disposition. The alternative (separate hook-patch v0.X.Y followed by prose-patch v0.X.Z) doubles PR count for a single conceptual change and creates ordering dependencies. The bundle pattern is parallel to §0018's bundling of qualifier-parser fix with self-test report change (both required for the parser correctness end-to-end). Useful for future cases: if a Charter procedure surfaces a hook gap during enactment, bundle the hook extension with the Charter procedure in the same patch amendment.
+
+- **Supersession:** None. Discharges [`§0099`](#0099--gate-24-third-object-level-invariant-redaction-path-reading-1-full-amendment-v05) Methodological Observation 3 carry-forward + [`§0100`](#0100--patch-amendment-v051-hook-handles-pendingfrozen-promotion-prs--level-2-frozen-range-tightened) deferred-disposition CF4 sweep load (one item).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
