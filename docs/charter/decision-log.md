@@ -2952,6 +2952,60 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0076` — Projection layer extended to CoordinationRing; typed-subtype-landings discipline now validated across ALL FOUR subtypes at BOTH write and read surfaces
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0075`](#0075--sixth-final-coordinationring-lifecycle-operation-coordinationringsplit-lands-fourth-subtype-25-lifecycle-surface-complete-25-lifecycle-surface-complete-across-all-four-cat-iii-subtypes-24-of-24-lifecycle-event-types-landed) closed the CoordinationRing write surface (6 of 6 lifecycle operations). The §0070–§0075 arc each carried a "Projection layer extension for CoordinationRing" carry-forward. This entry closes that gap, mirroring §0062 AG + §0069 CH discharges.
+
+  With this landing, the projection layer covers all four §0010 Q2-resolved Cat III concrete subtypes. The typed-subtype-landings discipline (§0045+§0056+§0063+§0070) now spans **both write and read surfaces × four subtypes** — eight surface-subtype pairs total.
+
+  One structural confirmation: §0062's parallel-per-subtype projection discipline transferred cleanly to CH (§0069, event-centric) and now to CR (this entry, interaction-centric). The projection structure carries the same lifecycle event pointer set + same State enum + same precedence rules + same latency derivation across all four subtypes; the subtype distinction lives in the FORMATION shape and the typed event pointers, not in the projection's lifecycle dimensions.
+
+- **Decision:** Extend the projection layer for CoordinationRing with parallel per-subtype types + functions, plus cross-subtype CLI dispatch:
+
+  1. **`CoordinationRingProjection` struct** at [`services/ingestion/internal/projection/coordination_ring.go`](../../services/ingestion/internal/projection/coordination_ring.go). Mirrors prior three projection types with CR-typed lifecycle event pointers. Six new CR-subtype `coordinationRingXxxMessageType` constants.
+
+  2. **`ProjectCoordinationRing`** at the same file. Two-pass walk parallel to §0051+§0062+§0069. Validates the formation row's message_type is `CoordinationRingFormation`; cross-subtype rejection structurally enforced.
+
+  3. **`computeCoordinationRingState`** + **`computeCoordinationRingLatencies`** at the same file. Same precedence rules + latency-derivation patterns.
+
+  4. **`ProjectAllCoordinationRings`** + **`ListCoordinationRings`** + **`CountCoordinationRingsByState`** at [`services/ingestion/internal/projection/coordination_ring_list.go`](../../services/ingestion/internal/projection/coordination_ring_list.go). New `CoordinationRingListOptions` struct.
+
+  5. **CLI dispatch** extended in [`cmd/hypothesis-state`](../../services/ingestion/cmd/hypothesis-state/main.go), [`cmd/list-hypotheses`](../../services/ingestion/cmd/list-hypotheses/main.go), and [`cmd/summarize-hypotheses`](../../services/ingestion/cmd/summarize-hypotheses/main.go):
+     - `hypothesis-state`: new `CoordinationRingFormation` case + `buildCROutput`.
+     - `list-hypotheses`: `-subtype` validator accepts `coordination_ring`; new CR aggregation branch + `buildCREntry`.
+     - `summarize-hypotheses`: emits a fourth per-subtype section (`coordination_ring`).
+
+  6. **Tests** at [`internal/projection/coordination_ring_test.go`](../../services/ingestion/internal/projection/coordination_ring_test.go) — **9 tests** covering forming/promoted/dissolved states, unknown formation, cross-subtype rejection (BC formation hash → `ErrTargetNotFormation`), list ordering, count-equivalent-to-list-filter, ProjectAll-equivalent-to-ProjectCoordinationRing, latency derivation.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1 (read-only over immutable substrate), §2.2 (`State` is operational summary across subtypes, NOT a category claim), §2.3 (projection entries reference producing lifecycle events by content-hash), §2.5 + §2.5 BC3 + §2.5 BC5. Respects §0045+§0056+§0063+§0070 hypothesis-identity invariant — CoordinationRingProjection always anchors at a CoordinationRingFormation hash. Respects §0056+§0062 typed-subtype-landings + parallel-per-subtype-projection commitments. Cross-subtype rejection structurally enforced via per-subtype message_type discriminators in all four projection entry points. Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`services/ingestion/internal/projection/coordination_ring.go`](../../services/ingestion/internal/projection/coordination_ring.go) — new file. `CoordinationRingProjection`, `ProjectCoordinationRing`, `computeCoordinationRingState`, `computeCoordinationRingLatencies`, 6 CR message_type constants.
+  - [`services/ingestion/internal/projection/coordination_ring_list.go`](../../services/ingestion/internal/projection/coordination_ring_list.go) — new file. `CoordinationRingListOptions`, `ProjectAllCoordinationRings`, `ListCoordinationRings`, `CountCoordinationRingsByState`.
+  - [`services/ingestion/internal/projection/coordination_ring_test.go`](../../services/ingestion/internal/projection/coordination_ring_test.go) — 9 tests as enumerated.
+  - [`services/ingestion/cmd/hypothesis-state/main.go`](../../services/ingestion/cmd/hypothesis-state/main.go) — CR dispatch + `buildCROutput`.
+  - [`services/ingestion/cmd/list-hypotheses/main.go`](../../services/ingestion/cmd/list-hypotheses/main.go) — CR branch + `buildCREntry` + `-subtype` validator extended.
+  - [`services/ingestion/cmd/summarize-hypotheses/main.go`](../../services/ingestion/cmd/summarize-hypotheses/main.go) — fourth CR section in JSON output.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — three read-CLI sections updated.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0076 (this entry).
+  - **§0070+§0071+§0072+§0073+§0074+§0075 carry-forward fully discharged.** "Projection layer extension for CoordinationRing" named at every §0070-arc entry is now landed.
+  - **Equivalence invariant family extends to fourth subtype.** Two new invariants tested:
+    - `ProjectAllCoordinationRings[hash]` byte-equal to `ProjectCoordinationRing(sameHash)` (mirrors §0052 + §0062 + §0069 invariant).
+    - For every State `s`, `CountCoordinationRingsByState.ByState[s]` equals `len(ListCoordinationRings{StateFilter: s})` (mirrors §0053 + §0062 + §0069 invariant).
+  - **Typed-subtype-landings discipline now spans FOUR subtypes × TWO surfaces.** All four Cat III subtypes have parallel-per-subtype types + functions at BOTH the writer side (formation + 5 lifecycle ops) AND the reader side (projection + list + count). Eight surface-subtype pairs total; the discipline is structurally complete for the §0010 Q2-resolved four-subtype family.
+  - **§0010 Q2 implementation closure across both surfaces.** The implementation surface mirrors the ontology's four-subtype commitment without abstraction collapse. Future modeling work (cross-subtype operations per Q4, edge-weight semantics per §0070 carry-forward, directed coordination per §0070 carry-forward) extends this surface rather than restructuring it.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Per-subtype CLI binaries** — unchanged from §0062+§0069 carry-forwards.
+    - **Cross-subtype provenance queries** — unchanged.
+    - **Aggregate cross-subtype counters/histograms** — `summarize-hypotheses` now emits four per-subtype sections without a top-level combined sum.
+
+- **Supersession:** None. Extends the projection layer (§0051–§0055 + §0062 + §0069) to the fourth subtype following the parallel-per-subtype-projection discipline established at §0062. The §0070+§0071+§0072+§0073+§0074+§0075 "Projection layer extension for CoordinationRing" carry-forward is fully discharged. The typed-subtype-landings discipline is structurally complete across both write and read surfaces for all four §0010 Q2-resolved Cat III subtypes. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
