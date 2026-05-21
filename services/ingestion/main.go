@@ -71,8 +71,12 @@ func run() error {
 	dbPath := flag.String("db", "./ghost-trace.db", "SQLite primary-event-log path")
 	blobDir := flag.String("blobs", "./blobs", "content-addressed blob-store directory")
 	httpAddr := flag.String("http", "", "HTTP listen address (e.g. :8080); empty disables the HTTP server")
-	httpAuthToken := flag.String("http-auth-token", "", "bearer token for HTTP authentication (inline; prefer --http-auth-token-file for production). Empty disables auth (default).")
-	httpAuthTokenFile := flag.String("http-auth-token-file", "", "path to a file containing the bearer token (single line; trailing whitespace trimmed). Takes precedence over --http-auth-token.")
+	httpAuthToken := flag.String("http-auth-token", "", "bearer token for HTTP authentication (inline; prefer --http-auth-token-file for production). Empty disables auth (default). Mutually exclusive with --http-auth-{tier}-token-file flags (multi-tier mode per decision-log §0098).")
+	httpAuthTokenFile := flag.String("http-auth-token-file", "", "path to a file containing the bearer token (single line; trailing whitespace trimmed). Takes precedence over --http-auth-token. Mutually exclusive with --http-auth-{tier}-token-file flags.")
+	httpAuthProducerTokenFile := flag.String("http-auth-producer-token-file", "", "path to a file containing the producer-tier bearer token (T1: POST /v1/events/{type}). Per decision-log §0098. Mutually exclusive with --http-auth-token{,-file}.")
+	httpAuthOperatorReadTokenFile := flag.String("http-auth-operator-read-token-file", "", "path to a file containing the operator-read-tier bearer token (T2: GET /v1/hypotheses/*, /v1/replay/*, /v1/verify). Per decision-log §0098.")
+	httpAuthSubstrateAdminTokenFile := flag.String("http-auth-substrate-admin-token-file", "", "path to a file containing the substrate-admin-tier bearer token (T3: /v1/admin/*; routes ship under named follow-on per decision-log §0098).")
+	httpAuthConstitutionalActTokenFile := flag.String("http-auth-constitutional-act-token-file", "", "path to a file containing the constitutional-act-tier bearer token (T4: Cat III lifecycle HTTP endpoints; routes ship under named follow-on per decision-log §0098).")
 	httpTLSCert := flag.String("http-tls-cert", "", "path to PEM-encoded TLS certificate (server cert + optional intermediate chain). Required with --http-tls-key.")
 	httpTLSKey := flag.String("http-tls-key", "", "path to PEM-encoded TLS private key. Required with --http-tls-cert.")
 	httpTLSClientCA := flag.String("http-tls-client-ca", "", "path to PEM-encoded CA bundle used to verify client certificates (enables mTLS). Empty disables client-cert verification. Requires --http-tls-cert + --http-tls-key.")
@@ -115,6 +119,15 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("resolve HTTP auth token: %w", err)
 		}
+		tierTokens, err := resolveTierTokens(map[httpapi.Tier]string{
+			httpapi.TierProducer:          *httpAuthProducerTokenFile,
+			httpapi.TierOperatorRead:      *httpAuthOperatorReadTokenFile,
+			httpapi.TierSubstrateAdmin:    *httpAuthSubstrateAdminTokenFile,
+			httpapi.TierConstitutionalAct: *httpAuthConstitutionalActTokenFile,
+		})
+		if err != nil {
+			return fmt.Errorf("resolve HTTP per-tier auth tokens: %w", err)
+		}
 		tlsCfg, err := resolveHTTPTLS(*httpTLSCert, *httpTLSKey, *httpTLSClientCA)
 		if err != nil {
 			return fmt.Errorf("resolve HTTP TLS config: %w", err)
@@ -123,11 +136,17 @@ func run() error {
 		if token != "" {
 			handlerOpts = append(handlerOpts, httpapi.WithAuthToken(token))
 		}
+		for tier, tk := range tierTokens {
+			handlerOpts = append(handlerOpts, httpapi.WithAuthTierToken(tier, tk))
+		}
 		// Per decision-log §0080: enable projection-read endpoints
 		// (GET /v1/hypotheses/state and follow-ons). Same substrate
 		// backs the write side.
 		handlerOpts = append(handlerOpts, httpapi.WithSubstrate(sub))
-		handler := httpapi.New(in.Append, reporter, handlerOpts...)
+		handler, err := httpapi.New(in.Append, reporter, handlerOpts...)
+		if err != nil {
+			return fmt.Errorf("construct HTTP handler: %w", err)
+		}
 		srv := &http.Server{
 			Addr:              *httpAddr,
 			Handler:           handler,
@@ -258,6 +277,35 @@ func resolveAuthToken(tokenInline, tokenFile string) (string, error) {
 		return token, nil
 	}
 	return tokenInline, nil
+}
+
+// resolveTierTokens reads per-tier token files and returns the map of
+// tiers with configured tokens. Tiers whose file path is empty are
+// omitted (operator opt-out per RFC architecture-http-auth-scope-model
+// item 1). Each file is read + whitespace-trimmed + rejected if empty,
+// matching the §0035 resolveAuthToken contract.
+//
+// The returned map is empty when no per-tier file is configured (i.e.,
+// the operator is using the legacy single-token mode or no auth at
+// all); httpapi.New rejects the combination of per-tier + single-token
+// at construction. Per decision-log §0098 + RFC item 1.
+func resolveTierTokens(tierFiles map[httpapi.Tier]string) (map[httpapi.Tier]string, error) {
+	out := make(map[httpapi.Tier]string)
+	for tier, file := range tierFiles {
+		if file == "" {
+			continue
+		}
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			return nil, fmt.Errorf("read %s token file %q: %w", tier, file, err)
+		}
+		token := strings.TrimSpace(string(raw))
+		if token == "" {
+			return nil, fmt.Errorf("%s token file %q is empty after whitespace trim", tier, file)
+		}
+		out[tier] = token
+	}
+	return out, nil
 }
 
 // fatalReporter implements httpapi.FatalReporter. The HTTP handler calls

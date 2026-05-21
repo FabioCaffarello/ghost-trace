@@ -1046,6 +1046,36 @@ chmod 0600 /etc/ghost-trace/ingestion.token
 
 Producers MUST send `Authorization: Bearer <token>` with every `POST /v1/events/{type}`. Missing or wrong tokens return `401 Unauthorized` + JSON `ingestError` + `WWW-Authenticate: Bearer realm="ghost-trace-ingestion"`. Token comparison uses constant-time equality (`crypto/subtle.ConstantTimeCompare`); a length-mismatch leak channel exists but is acceptable at inception per [`§0035`](../../docs/charter/decision-log.md). `/healthz` is exempt from auth (orchestrator-friendly liveness probing); unknown paths return `401` (not `404`) when auth is configured, so the path structure is not leaked. Bearer tokens transmit credentials in plaintext on the wire — production deployments SHOULD also terminate TLS via reverse proxy (or a follow-on TLS RFC).
 
+**HTTP with multi-tier bearer-token authentication (opt-in, per [`§0098`](../../docs/charter/decision-log.md)):**
+
+Per the [auth-scope RFC](../../docs/rfcs/draft/architecture-http-auth-scope-model.md) (accepted at [`§0098`](../../docs/charter/decision-log.md)) and the [`§0094`](../../docs/charter/decision-log.md) operation-tier classification, the HTTP interface supports per-tier bearer tokens. Each route is annotated with its tier; incoming requests must present the per-tier token for the route's tier.
+
+```sh
+# Per-tier token files. Each file: single line, trailing whitespace trimmed.
+echo -n "producer-secret"          > /etc/ghost-trace/ingestion.producer.token
+echo -n "operator-read-secret"     > /etc/ghost-trace/ingestion.operator-read.token
+chmod 0600 /etc/ghost-trace/ingestion.*.token
+
+./bin/ingestion -http :8080 \
+  -http-auth-producer-token-file       /etc/ghost-trace/ingestion.producer.token \
+  -http-auth-operator-read-token-file  /etc/ghost-trace/ingestion.operator-read.token
+```
+
+Four per-tier options, one per [`§0094`](../../docs/charter/decision-log.md) tier:
+
+| Option | Tier | Routes |
+|---|---|---|
+| `--http-auth-producer-token-file` | T1 producer | `POST /v1/events/{type}` |
+| `--http-auth-operator-read-token-file` | T2 operator-read | `GET /v1/hypotheses/*`, `GET /v1/replay/*`, `GET /v1/verify` |
+| `--http-auth-substrate-admin-token-file` | T3 substrate-admin | `POST /v1/admin/*` (named follow-on per [`§0098`](../../docs/charter/decision-log.md); not yet shipped) |
+| `--http-auth-constitutional-act-token-file` | T4 constitutional-act | Cat III lifecycle endpoints (named follow-on per [`§0098`](../../docs/charter/decision-log.md); not yet shipped) |
+
+Tiers without a configured token are unreachable: requests to those routes return `401 Unauthorized` regardless of which token they present. T0 (`/healthz`) remains exempt per [`§0094`](../../docs/charter/decision-log.md) classification. Per-tier mode and single-token mode (`--http-auth-token{,-file}`) are mutually exclusive — configuring both makes the service exit non-zero at startup with a clear error.
+
+Tier conflation defense: under multi-tier mode, routes not yet in the classification (e.g., paths shipped by future follow-on PRs but not yet annotated) return `401` rather than silently passing. The [`§0094`](../../docs/charter/decision-log.md) AP1 defense per the auth-scope RFC.
+
+**Backward compatibility.** [`§0035`](../../docs/charter/decision-log.md) single-token deployments continue to work unchanged. The single token is treated as the union of all four tiers; all currently-shipped routes (T0–T2) retain identical behavior. Operators opt into multi-tier mode by configuring at least one per-tier token; the single-token form must then be removed (concurrent configuration is rejected at startup).
+
 Signals (SIGINT, SIGTERM) trigger graceful shutdown via context cancellation; in-flight HTTP requests drain up to a 10-second grace window before the server returns from `Shutdown`.
 
 ### HTTP projection-read endpoints

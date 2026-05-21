@@ -390,6 +390,78 @@ func TestResolveAuthToken(t *testing.T) {
 	})
 }
 
+func TestResolveTierTokens(t *testing.T) {
+	// resolveTierTokens reads per-tier token files; empty paths are
+	// skipped (operator opt-out); read errors + empty-after-trim
+	// surface as errors. Per decision-log §0098.
+
+	t.Run("all empty paths returns empty map", func(t *testing.T) {
+		got, err := resolveTierTokens(map[httpapi.Tier]string{
+			httpapi.TierProducer:          "",
+			httpapi.TierOperatorRead:      "",
+			httpapi.TierSubstrateAdmin:    "",
+			httpapi.TierConstitutionalAct: "",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("got %v, want empty map", got)
+		}
+	})
+
+	t.Run("subset of tiers configured", func(t *testing.T) {
+		dir := t.TempDir()
+		prodFile := dir + "/prod"
+		opFile := dir + "/op"
+		if err := os.WriteFile(prodFile, []byte("prod-secret\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(opFile, []byte("op-secret\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := resolveTierTokens(map[httpapi.Tier]string{
+			httpapi.TierProducer:     prodFile,
+			httpapi.TierOperatorRead: opFile,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got[httpapi.TierProducer] != "prod-secret" {
+			t.Errorf("producer: got %q, want %q", got[httpapi.TierProducer], "prod-secret")
+		}
+		if got[httpapi.TierOperatorRead] != "op-secret" {
+			t.Errorf("operator-read: got %q, want %q", got[httpapi.TierOperatorRead], "op-secret")
+		}
+		if _, ok := got[httpapi.TierSubstrateAdmin]; ok {
+			t.Errorf("substrate-admin should not be present (file path empty)")
+		}
+	})
+
+	t.Run("missing file returns error", func(t *testing.T) {
+		_, err := resolveTierTokens(map[httpapi.Tier]string{
+			httpapi.TierProducer: "/nonexistent/path/to/token",
+		})
+		if err == nil {
+			t.Fatal("expected error for missing file, got nil")
+		}
+	})
+
+	t.Run("empty file returns error", func(t *testing.T) {
+		dir := t.TempDir()
+		path := dir + "/empty"
+		if err := os.WriteFile(path, []byte("   \n\n  "), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := resolveTierTokens(map[httpapi.Tier]string{
+			httpapi.TierProducer: path,
+		})
+		if err == nil {
+			t.Fatal("expected error for whitespace-only file, got nil")
+		}
+	})
+}
+
 func TestResolveHTTPTLS(t *testing.T) {
 	t.Run("both empty returns disabled", func(t *testing.T) {
 		cfg, err := resolveHTTPTLS("", "", "")
@@ -536,7 +608,7 @@ func TestHTTPTLSEndToEnd(t *testing.T) {
 	defer func() { _ = sub.Close() }()
 
 	in := ingest.New(sub, time.Now)
-	handler := httpapi.New(in.Append, nil)
+	handler := httpapi.MustNew(in.Append, nil)
 
 	srv := &http.Server{
 		Handler:           handler,
@@ -657,7 +729,7 @@ func TestHTTPmTLSEndToEnd(t *testing.T) {
 	defer func() { _ = sub.Close() }()
 
 	in := ingest.New(sub, time.Now)
-	handler := httpapi.New(in.Append, nil)
+	handler := httpapi.MustNew(in.Append, nil)
 
 	srv := &http.Server{
 		Handler: handler,

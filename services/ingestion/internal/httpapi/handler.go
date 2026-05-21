@@ -88,6 +88,40 @@ type FatalReporter interface {
 	ReportFatal(err error)
 }
 
+// Tier identifies the operation tier of an HTTP route per decision-log
+// §0094 classification. The four canonical tiers correspond to distinct
+// authorization scopes: T1 producers commit Cat I observations; T2
+// operator-read consumes projections + replay; T3 substrate-admin
+// performs storage-layer maintenance; T4 constitutional-act commits
+// Cat III lifecycle events. T0 (/healthz) is exempt — no Tier value.
+//
+// Tier is string-typed for forward-compatibility with the §0094
+// classification's textual tier names. Unknown tier values are rejected
+// at handler construction per decision-log §0098 + RFC item 6.
+type Tier string
+
+// The four canonical operation tiers per decision-log §0094.
+const (
+	TierProducer          Tier = "producer"
+	TierOperatorRead      Tier = "operator-read"
+	TierSubstrateAdmin    Tier = "substrate-admin"
+	TierConstitutionalAct Tier = "constitutional-act"
+)
+
+// AllTiers returns the four canonical tiers in §0094 ordinal order.
+func AllTiers() []Tier {
+	return []Tier{TierProducer, TierOperatorRead, TierSubstrateAdmin, TierConstitutionalAct}
+}
+
+// validTier reports whether t is one of the four canonical tiers.
+func validTier(t Tier) bool {
+	switch t {
+	case TierProducer, TierOperatorRead, TierSubstrateAdmin, TierConstitutionalAct:
+		return true
+	}
+	return false
+}
+
 // Handler is the HTTP request multiplexer.
 type Handler struct {
 	doAppend AppendFunc
@@ -107,10 +141,26 @@ type Handler struct {
 
 	// authToken, when non-empty, requires producers to send
 	// "Authorization: Bearer <authToken>" on every protected request.
+	// Per §0035 single-token mode; the single token authorizes every
+	// non-/healthz route (treated as the union of all four tiers per
+	// RFC architecture-http-auth-scope-model item 1 backward-compat).
 	// Empty disables authentication (backward-compatible default for
 	// inception phase where producers are local + trusted). /healthz
-	// is exempt unconditionally for liveness probing.
+	// is exempt unconditionally for liveness probing. Mutually
+	// exclusive with tierTokens — both configured returns an error at
+	// New.
 	authToken string
+
+	// tierTokens, when non-empty, activates multi-tier dispatch per
+	// decision-log §0098 + RFC architecture-http-auth-scope-model
+	// item 1. Each route's tier (per §0094 classification, encoded in
+	// routeTier) selects the per-tier token to compare against the
+	// request's Authorization: Bearer header. Tiers without a
+	// configured token are unreachable — operators can opt out of
+	// exposing T3 + T4 routes by omitting the corresponding tier
+	// tokens. Mutually exclusive with authToken — both configured
+	// returns an error at New.
+	tierTokens map[Tier]string
 
 	// authRealm is the value advertised in WWW-Authenticate on 401
 	// responses. Defaults to "ghost-trace-ingestion".
@@ -118,7 +168,7 @@ type Handler struct {
 }
 
 // Option configures a Handler at construction. See WithAuthToken,
-// WithRequestBodyLimit.
+// WithAuthTierToken, WithRequestBodyLimit.
 type Option func(*Handler)
 
 // WithAuthToken enables bearer-token authentication on protected
@@ -130,8 +180,37 @@ type Option func(*Handler)
 // SHOULD also terminate TLS (reverse proxy or follow-on TLS RFC) and
 // store the token in a file with mode 0600 rather than passing it on
 // the command line.
+//
+// Per RFC architecture-http-auth-scope-model item 1 backward-compat
+// clause, WithAuthToken is the §0035 single-token mode — the configured
+// token is treated as the union of all four tiers. Mutually exclusive
+// with WithAuthTierToken; both configured returns an error at New.
 func WithAuthToken(token string) Option {
 	return func(h *Handler) { h.authToken = token }
+}
+
+// WithAuthTierToken enables per-tier bearer-token authentication on
+// protected endpoints. Each call adds the token for one tier; multiple
+// calls compose. Each protected route is annotated with its tier per
+// the §0094 classification (encoded in routeTier); incoming requests
+// must present the per-tier token for the route's tier or receive 401.
+//
+// Tiers without a configured token are unreachable — operators opt out
+// of exposing T3 + T4 routes by omitting the corresponding tier
+// tokens. /healthz remains unauthenticated regardless of multi-tier
+// configuration (T0 exemption per §0035 + §0094).
+//
+// Mutually exclusive with WithAuthToken; both configured returns an
+// error at New. Unknown tier values (not in AllTiers) return an error
+// at New. Per decision-log §0098 + RFC architecture-http-auth-scope-
+// model item 1.
+func WithAuthTierToken(tier Tier, token string) Option {
+	return func(h *Handler) {
+		if h.tierTokens == nil {
+			h.tierTokens = make(map[Tier]string)
+		}
+		h.tierTokens[tier] = token
+	}
 }
 
 // WithAuthRealm overrides the WWW-Authenticate realm string. Operator
@@ -158,9 +237,16 @@ func WithSubstrate(sub *substrate.Substrate) Option {
 // in tests where unrecoverable-error escalation is not exercised; in
 // production main wires a real FatalReporter. Options apply
 // configuration overrides in order.
-func New(doAppend AppendFunc, fatal FatalReporter, opts ...Option) *Handler {
+//
+// Returns an error when configuration is invalid: (a) doAppend is nil;
+// (b) both WithAuthToken and WithAuthTierToken are configured (single-
+// token and multi-tier modes are mutually exclusive per RFC
+// architecture-http-auth-scope-model item 1); (c) WithAuthTierToken
+// names a tier outside AllTiers (forward-compat guard against typos in
+// future tier names). Per decision-log §0098 + RFC item 6.
+func New(doAppend AppendFunc, fatal FatalReporter, opts ...Option) (*Handler, error) {
 	if doAppend == nil {
-		panic("httpapi.New: doAppend must not be nil")
+		return nil, errors.New("httpapi.New: doAppend must not be nil")
 	}
 	h := &Handler{
 		doAppend:         doAppend,
@@ -171,7 +257,64 @@ func New(doAppend AppendFunc, fatal FatalReporter, opts ...Option) *Handler {
 	for _, opt := range opts {
 		opt(h)
 	}
+	if h.authToken != "" && len(h.tierTokens) > 0 {
+		return nil, errors.New("httpapi.New: WithAuthToken and WithAuthTierToken are mutually exclusive (configure single-token OR per-tier, not both)")
+	}
+	for t := range h.tierTokens {
+		if !validTier(t) {
+			return nil, fmt.Errorf("httpapi.New: unknown tier %q (valid: %v)", t, AllTiers())
+		}
+	}
+	return h, nil
+}
+
+// MustNew is a New variant that panics on validation error. Intended
+// for test setup where configuration is statically known-valid; the
+// validation panic surfaces a test misconfiguration immediately.
+// Production code calls New and handles the returned error.
+func MustNew(doAppend AppendFunc, fatal FatalReporter, opts ...Option) *Handler {
+	h, err := New(doAppend, fatal, opts...)
+	if err != nil {
+		panic(err)
+	}
 	return h
+}
+
+// routeTier returns the operation tier of a route per the §0094
+// classification, or empty Tier for T0 routes (/healthz exemption) and
+// unknown paths (returns 404 below).
+//
+// The classification is wire-format-agnostic (per §0094): the same
+// tiers apply to a future gRPC interface (§0095 reframing). Routes not
+// yet implemented (T3 admin endpoints, T4 lifecycle endpoints) are
+// listed below; their tier annotations are pre-positioned for the
+// named follow-on landings.
+func routeTier(r *http.Request) Tier {
+	p := r.URL.Path
+	if p == "/healthz" {
+		return ""
+	}
+	if strings.HasPrefix(p, eventsPathPrefix) {
+		return TierProducer
+	}
+	if p == "/v1/hypotheses" ||
+		p == "/v1/hypotheses/state" ||
+		p == "/v1/hypotheses/summary" ||
+		p == "/v1/replay/operational-session" ||
+		p == "/v1/replay/operational-sessions" ||
+		p == "/v1/replay/formation" ||
+		p == "/v1/replay/formations" ||
+		p == "/v1/verify" {
+		return TierOperatorRead
+	}
+	// T3 substrate-admin routes (named follow-on per §0098):
+	//   /v1/admin/orphan-cleanup → TierSubstrateAdmin
+	// T4 constitutional-act routes (named follow-on per §0098):
+	//   /v1/hypotheses/<subtype>/{form,promote,demote,dissolve,merge,split}
+	//   → TierConstitutionalAct
+	// Pre-positioned here for the named follow-on landings; not yet
+	// implemented.
+	return ""
 }
 
 // ServeHTTP implements http.Handler. Auth check is mux-level: if a
@@ -219,21 +362,33 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // requiresAuth reports whether the request must carry a valid bearer
-// token. Returns false when no token is configured (auth disabled) or
-// when the path is the exempt /healthz liveness probe.
+// token. Returns false when no token is configured (auth disabled —
+// single-token AND tier-tokens both empty) or when the path is the
+// exempt /healthz liveness probe.
 func (h *Handler) requiresAuth(r *http.Request) bool {
-	if h.authToken == "" {
+	if r.URL.Path == "/healthz" {
 		return false
 	}
-	if r.URL.Path == "/healthz" {
+	if h.authToken == "" && len(h.tierTokens) == 0 {
 		return false
 	}
 	return true
 }
 
 // authorized reports whether the request's Authorization header carries
-// "Bearer <token>" matching the configured authToken under constant-time
-// comparison.
+// "Bearer <token>" matching the route's expected token under constant-
+// time comparison.
+//
+// In single-token mode (h.authToken non-empty, h.tierTokens empty), the
+// configured token is the union of all four tiers per RFC architecture-
+// http-auth-scope-model item 1 backward-compat clause.
+//
+// In multi-tier mode (h.tierTokens non-empty, h.authToken empty), the
+// route's tier per routeTier selects the per-tier token; tiers without
+// a configured token are unreachable (operator opt-out).
+//
+// Routes not in routeTier's classification (T0 /healthz exempt; unknown
+// paths reach ServeHTTP's 404 path) do not exercise this function.
 func (h *Handler) authorized(r *http.Request) bool {
 	const prefix = "Bearer "
 	header := r.Header.Get("Authorization")
@@ -241,16 +396,36 @@ func (h *Handler) authorized(r *http.Request) bool {
 		return false
 	}
 	provided := header[len(prefix):]
-	// Pad lengths to enable constant-time comparison even when the
-	// provided token has a different length than the configured one.
-	// subtle.ConstantTimeCompare requires equal lengths; using fixed-
-	// length comparison via SHA-equivalent would be stricter, but for
-	// inception phase the length-leak channel (attacker learns token
-	// length on length mismatch) is acceptable.
-	if len(provided) != len(h.authToken) {
+
+	if len(h.tierTokens) > 0 {
+		// Multi-tier dispatch: lookup route's tier; reject if route is
+		// unclassified under multi-tier mode (defense per RFC AP1 tier
+		// conflation — unknown routes must not silently pass).
+		tier := routeTier(r)
+		if tier == "" {
+			return false
+		}
+		token, ok := h.tierTokens[tier]
+		if !ok {
+			return false
+		}
+		return constantTimeMatch(provided, token)
+	}
+
+	// Single-token mode: legacy §0035 behavior.
+	return constantTimeMatch(provided, h.authToken)
+}
+
+// constantTimeMatch compares two strings under constant-time semantics.
+// Returns true iff lengths match AND bytes match. Length mismatch
+// short-circuits (subtle.ConstantTimeCompare requires equal-length
+// inputs). The length-leak channel (attacker learns token length on
+// length mismatch) is acceptable at inception phase.
+func constantTimeMatch(provided, expected string) bool {
+	if len(provided) != len(expected) {
 		return false
 	}
-	return subtle.ConstantTimeCompare([]byte(provided), []byte(h.authToken)) == 1
+	return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
 }
 
 // writeUnauthorized emits a 401 with a WWW-Authenticate header advertising

@@ -4143,6 +4143,50 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0103` — Multi-tier token plumbing lands; T3+T4 implementation arc foundational landing per §0098
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0098`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens) opened the T3+T4 implementation arc with three named follow-on landings: (1) multi-tier token plumbing — foundational; (2) T3 `POST /v1/admin/orphan-cleanup`; (3) T4 24 lifecycle endpoints. The arc's auth-model selection was α (multi-tier token files mapped to tier scopes) + γ (mTLS subject-to-scope as optional upgrade). This entry records the first landing.
+
+- **Decision:** [`services/ingestion/internal/httpapi`](../../services/ingestion/internal/httpapi) extended with multi-tier dispatch infrastructure per RFC [architecture-http-auth-scope-model](../rfcs/draft/architecture-http-auth-scope-model.md) item 1:
+  - **`Tier` type + four canonical constants.** String-typed (`TierProducer`, `TierOperatorRead`, `TierSubstrateAdmin`, `TierConstitutionalAct`) per [`§0094`](#0094--http-authmodel-evolution-framed-operationtier-classification-recorded-tier-34-advance-deferred-to-followon-rfc) tier names; `AllTiers()` returns the four in ordinal order; `validTier()` guards forward-compat against unknown tier values.
+  - **`WithAuthTierToken(tier, token)` Option.** Adds a per-tier token. Multiple calls compose. Mutually exclusive with `WithAuthToken` (single-token mode); both configured returns an error at `New`.
+  - **`New(...) (*Handler, error)` signature change.** Previously panicked on `doAppend == nil`; now returns error on (a) nil `doAppend`, (b) single-token + per-tier combination, (c) unknown tier value. Per RFC item 6.
+  - **`MustNew(...)` test helper.** Wraps `New` and panics on error; intended for test setup where configuration is statically known-valid.
+  - **`routeTier(r)` classification function.** Maps request path to `Tier` per [`§0094`](#0094--http-authmodel-evolution-framed-operationtier-classification-recorded-tier-34-advance-deferred-to-followon-rfc): `/healthz` → empty (T0 exempt); `/v1/events/*` → `TierProducer`; `/v1/hypotheses/*`, `/v1/replay/*`, `/v1/verify` → `TierOperatorRead`; T3/T4 paths pre-positioned in source comments for the named follow-on landings.
+  - **`authorized(r)` dispatch.** Multi-tier mode: lookup route's tier via `routeTier`; reject unclassified routes (RFC AP1 defense — no silent pass); lookup per-tier token; constant-time compare against `Authorization: Bearer <token>` header. Single-token mode preserved (RFC item 1 backward-compat — single token = union of all tiers).
+  - **`constantTimeMatch` helper.** Extracted from the previous `authorized` to share length-check + `subtle.ConstantTimeCompare` between single-token and multi-tier paths.
+
+  [`services/ingestion/main.go`](../../services/ingestion/main.go) extended with four new CLI options: `--http-auth-{producer,operator-read,substrate-admin,constitutional-act}-token-file <path>`. Each follows the same contract as `--http-auth-token-file` ([`§0035`](#0035--bearertoken-authentication-added-to-ingestion-http-interface-0034-authdeferred-discharged)): file read + whitespace-trim + reject-if-empty. `resolveTierTokens` helper returns the map of configured tiers; empty file paths are skipped (operator opt-out). `httpapi.New` returns error; `main.run` propagates.
+
+  [`services/ingestion/internal/httpapi/handler_test.go`](../../services/ingestion/internal/httpapi/handler_test.go) gains 7 new tests covering: `New` error paths (single + per-tier combination; unknown tier; nil doAppend); multi-tier producer token authorizes T1; multi-tier operator-read token rejects T1; multi-tier rejects unclassified T3 route; multi-tier preserves T0 `/healthz` exemption; `routeTier` classification table; `AllTiers` ordinal order. [`services/ingestion/main_test.go`](../../services/ingestion/main_test.go) gains 4 new tests for `resolveTierTokens` (empty paths; subset configured; missing file; whitespace-only file).
+
+  [`services/ingestion/README.md`](../../services/ingestion/README.md) gains a multi-tier authentication subsection documenting the four CLI options, the per-tier route mapping (cross-referencing [`§0094`](#0094--http-authmodel-evolution-framed-operationtier-classification-recorded-tier-34-advance-deferred-to-followon-rfc) tier classifications), backward-compatibility with [`§0035`](#0035--bearertoken-authentication-added-to-ingestion-http-interface-0034-authdeferred-discharged) single-token deployments, and the tier conflation defense per RFC AP1.
+
+- **Constitutional review:** No Charter invariant amended. The RFC's pre-acceptance constitutional review (Q1-Q6 verbatim in the RFC's §Constitutional Review and recorded at [`§0098`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens)) concluded no Charter invariant is touched; this landing inherits that conclusion. Backward-compat preserved: [`§0035`](#0035--bearertoken-authentication-added-to-ingestion-http-interface-0034-authdeferred-discharged) single-token deployments continue to work unchanged; `WithAuthToken` retained; `--http-auth-token{,-file}` retained.
+
+  The `New` signature change (panic → error return) is breaking for in-package callers — 78 call sites updated mechanically via `MustNew` substitution. Out-of-package production callers (only `services/ingestion/main.go`) updated to handle the error explicitly. No external consumers exist at this phase (httpapi is internal).
+
+  Falsifiability discipline: every claim in the README and decision-log is testable by mechanical replay of the handler unit tests + the CLI integration tests. The RFC AP1 tier conflation defense is exercised by `TestMultiTierProducerTokenDoesNotAuthorizeT3AdminRoute` (unclassified routes 401 under multi-tier mode); RFC AP4 backward-compatibility-silence is exercised by the unchanged `TestHealthzExemptFromAuth` + `TestPostEventsAuthCorrectToken` single-token tests.
+
+- **Consequences:**
+  - Multi-tier dispatch is opt-in via the four per-tier CLI options. Single-token deployments unaffected.
+  - T3 + T4 endpoints are now reachable for landing as separate PRs — the auth infrastructure is in place. Routes ship under their tier annotation by extending `routeTier` to recognize the new path.
+  - **§0098 landing 1 of 3 discharged.** Remaining: T3 orphan-cleanup endpoint + new `OrphanCleanupAudit` Cat I proto + per-actor attribution wiring; T4 24 lifecycle endpoints.
+
+  - **Methodological observation 1 — `MustNew` test-helper pattern.** Breaking the `New` signature (return error vs panic) is structurally tractable in inception phase but mechanically expensive at the call-site frontier (78 sites here). Pattern: introduce a `Must*` variant that wraps the error-returning constructor and panics; tests use `Must*`; production handles error explicitly. Mass sed-replace `New(` → `MustNew(` in test files completes the migration. Pattern reusable for future inception-phase breaking signature changes.
+
+  - **Carry-forwards:**
+    - **T3 orphan-cleanup endpoint** (§0098 landing 2) — depends on `OrphanCleanupAudit` Cat I proto authoring; per-actor attribution via `IngestionEvent` paired with audit record per RFC item 4(c). Named follow-on.
+    - **T4 24 lifecycle endpoints** (§0098 landing 3) — depends on per-route registration + per-actor attribution wiring + per-subtype proto reuse. Named follow-on; larger scope than T3.
+    - **`token_id` field in per-tier token files** per RFC item 4(b) — currently the per-tier token files are single-line `<token>` only; future extension is `<token>\n<token_id>\n` for bearer-token per-actor attribution. Not exercised by this landing (no T3/T4 routes yet); becomes load-bearing at T3 + T4 landings.
+
+- **Supersession:** None. First of three named follow-on landings opened by [`§0098`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

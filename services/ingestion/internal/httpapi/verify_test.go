@@ -45,7 +45,7 @@ func substrateWithDeclaredSessionsHTTPVerify(t *testing.T, count int) *substrate
 func TestVerifyHTTPHappyPath(t *testing.T) {
 	sub := substrateWithDeclaredSessionsHTTPVerify(t, 3)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/verify", nil)
 	rr := httptest.NewRecorder()
@@ -77,7 +77,7 @@ func TestVerifyHTTPHappyPath(t *testing.T) {
 func TestVerifyHTTPEmptySubstrate(t *testing.T) {
 	sub := substrateWithDeclaredSessionsHTTPVerify(t, 0)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/verify", nil)
 	rr := httptest.NewRecorder()
@@ -99,7 +99,7 @@ func TestVerifyHTTPEmptySubstrate(t *testing.T) {
 func TestVerifyHTTPCheckOrphansClean(t *testing.T) {
 	sub := substrateWithDeclaredSessionsHTTPVerify(t, 2)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/verify?check_orphans=true", nil)
 	rr := httptest.NewRecorder()
@@ -140,7 +140,7 @@ func TestVerifyHTTPCheckOrphansDetectsOrphan(t *testing.T) {
 	}
 
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/verify?check_orphans=true", nil)
 	rr := httptest.NewRecorder()
@@ -187,7 +187,7 @@ func TestVerifyHTTPDetectsCorruption(t *testing.T) {
 	}
 
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/verify", nil)
 	rr := httptest.NewRecorder()
@@ -235,7 +235,7 @@ func TestVerifyHTTPDetectsMissingBlob(t *testing.T) {
 	}
 
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/verify", nil)
 	rr := httptest.NewRecorder()
@@ -257,7 +257,7 @@ func TestVerifyHTTPDetectsMissingBlob(t *testing.T) {
 func TestVerifyHTTPInvalidCheckOrphans(t *testing.T) {
 	sub := substrateWithDeclaredSessionsHTTPVerify(t, 1)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/verify?check_orphans=garbage", nil)
 	rr := httptest.NewRecorder()
@@ -271,7 +271,7 @@ func TestVerifyHTTPInvalidCheckOrphans(t *testing.T) {
 func TestVerifyHTTPNonGetRejected(t *testing.T) {
 	sub := substrateWithDeclaredSessionsHTTPVerify(t, 1)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/verify", nil)
 	rr := httptest.NewRecorder()
@@ -287,7 +287,7 @@ func TestVerifyHTTPSubstrateNotConfigured(t *testing.T) {
 	// 503 — the route remains registered but is structurally
 	// unavailable on this handler.
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil)
+	h := MustNew(doAppend, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/verify", nil)
 	rr := httptest.NewRecorder()
@@ -301,7 +301,7 @@ func TestVerifyHTTPSubstrateNotConfigured(t *testing.T) {
 func TestVerifyHTTPAuthRequired(t *testing.T) {
 	sub := substrateWithDeclaredSessionsHTTPVerify(t, 1)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub), WithAuthToken("secret"))
+	h := MustNew(doAppend, nil, WithSubstrate(sub), WithAuthToken("secret"))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/verify", nil)
 	rr := httptest.NewRecorder()

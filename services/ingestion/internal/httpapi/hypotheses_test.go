@@ -67,7 +67,7 @@ func substrateWithBCFormation(t *testing.T) (*substrate.Substrate, [32]byte, str
 func TestHypothesisStateHappyPathBC(t *testing.T) {
 	sub, _, formationHex := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/hypotheses/state?formation_event_hash="+formationHex, nil)
@@ -94,7 +94,7 @@ func TestHypothesisStateHappyPathBC(t *testing.T) {
 
 func TestHypothesisStateRejectsNonGet(t *testing.T) {
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil)
+	h := MustNew(doAppend, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/hypotheses/state", nil)
 	rr := httptest.NewRecorder()
@@ -106,7 +106,7 @@ func TestHypothesisStateRejectsNonGet(t *testing.T) {
 
 func TestHypothesisStateRequiresSubstrateConfigured(t *testing.T) {
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil) // WithSubstrate NOT supplied
+	h := MustNew(doAppend, nil) // WithSubstrate NOT supplied
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/hypotheses/state?formation_event_hash="+strings.Repeat("0", 64), nil)
@@ -120,7 +120,7 @@ func TestHypothesisStateRequiresSubstrateConfigured(t *testing.T) {
 func TestHypothesisStateMissingFormationHash(t *testing.T) {
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/hypotheses/state", nil)
 	rr := httptest.NewRecorder()
@@ -133,7 +133,7 @@ func TestHypothesisStateMissingFormationHash(t *testing.T) {
 func TestHypothesisStateInvalidHex(t *testing.T) {
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/hypotheses/state?formation_event_hash=xyz-not-hex", nil)
@@ -147,7 +147,7 @@ func TestHypothesisStateInvalidHex(t *testing.T) {
 func TestHypothesisStateWrongHashLength(t *testing.T) {
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/hypotheses/state?formation_event_hash=abcd1234", nil) // 4 bytes, not 32
@@ -161,7 +161,7 @@ func TestHypothesisStateWrongHashLength(t *testing.T) {
 func TestHypothesisStateUnknownFormation(t *testing.T) {
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	bogus := strings.Repeat("ff", 32)
 	req := httptest.NewRequest(http.MethodGet,
@@ -179,7 +179,7 @@ func TestHypothesisStateNotAFormation(t *testing.T) {
 	// Cat III formation. Must return 404 with target-not-formation.
 	sub, _, _ := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub))
+	h := MustNew(doAppend, nil, WithSubstrate(sub))
 
 	var ingHash [32]byte
 	if err := sub.WalkEvents(context.Background(), func(row substrate.EventRow) error {
@@ -213,7 +213,7 @@ func TestHypothesisStateAuthRequired(t *testing.T) {
 	// a Bearer token (same as /v1/events/*). Probes the auth path.
 	sub, _, formationHex := substrateWithBCFormation(t)
 	doAppend, _ := stubAppendFunc(nil)
-	h := New(doAppend, nil, WithSubstrate(sub), WithAuthToken("secret"))
+	h := MustNew(doAppend, nil, WithSubstrate(sub), WithAuthToken("secret"))
 
 	// No Authorization header → 401.
 	req := httptest.NewRequest(http.MethodGet,
