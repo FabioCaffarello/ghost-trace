@@ -42,6 +42,7 @@ func run() error {
 	formationHashHex := flag.String("formation-event-hash", "", "REQUIRED: hex-encoded BLAKE3-256 of the target CoordinationRingFormation")
 	dissolvedAtNs := flag.Int64("dissolved-at-ns", 0, "explicit dissolved_at as Unix nanoseconds; 0 = wall-clock now()")
 	reason := flag.String("reason", "", "operator-supplied forensic note; strongly recommended")
+	actor := flag.String("actor", "", "OPTIONAL per decision-log §0097 + §0108: when non-empty, pairs the dissolution with an IngestionEvent for per-actor attribution.")
 	flag.Parse()
 
 	if *formationHashHex == "" {
@@ -68,6 +69,7 @@ func run() error {
 		FormationEventHash: hash,
 		DissolvedAt:        *dissolvedAtNs,
 		Reason:             *reason,
+		Actor:              *actor,
 	}, time.Now)
 	if err != nil {
 		return err
@@ -79,13 +81,20 @@ func run() error {
 		FormationEventHash:   *formationHashHex,
 		DissolutionEventHash: report.DissolutionEventHashHex,
 		AlreadyDissolved:     report.AlreadyDissolved,
+		IngestionEventHash:   report.IngestionEventHashHex,
 	}); err != nil {
 		return fmt.Errorf("encode json: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr,
-		"dissolve-coordination-ring: formation=%s dissolution=%s already_dissolved=%v\n",
-		*formationHashHex, report.DissolutionEventHashHex, report.AlreadyDissolved)
+	if *actor != "" {
+		fmt.Fprintf(os.Stderr,
+			"dissolve-coordination-ring: formation=%s dissolution=%s ingestion=%s actor=%q already_dissolved=%v\n",
+			*formationHashHex, report.DissolutionEventHashHex, report.IngestionEventHashHex, *actor, report.AlreadyDissolved)
+	} else {
+		fmt.Fprintf(os.Stderr,
+			"dissolve-coordination-ring: formation=%s dissolution=%s already_dissolved=%v\n",
+			*formationHashHex, report.DissolutionEventHashHex, report.AlreadyDissolved)
+	}
 	return nil
 }
 
@@ -93,4 +102,5 @@ type payload struct {
 	FormationEventHash   string `json:"formation_event_hash"`
 	DissolutionEventHash string `json:"dissolution_event_hash"`
 	AlreadyDissolved     bool   `json:"already_dissolved"`
+	IngestionEventHash   string `json:"ingestion_event_hash,omitempty"`
 }
