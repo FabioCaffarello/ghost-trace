@@ -48,7 +48,7 @@ func main() {
 func run() error {
 	dbPath := flag.String("db", "./ghost-trace.db", "SQLite primary-event-log path")
 	blobDir := flag.String("blobs", "./blobs", "content-addressed blob-store directory")
-	subtypeFilter := flag.String("subtype", "", "filter by Cat III subtype: behavioral_cluster|automation_group|campaign_hypothesis (empty = all subtypes)")
+	subtypeFilter := flag.String("subtype", "", "filter by Cat III subtype: behavioral_cluster|automation_group|campaign_hypothesis|coordination_ring (empty = all subtypes)")
 	stateFilter := flag.String("state", "", "filter by projected state: forming|promoted|demoted|dissolved|merged_into|split_into (empty = all)")
 	afterNs := flag.Int64("after-ns", 0, "inclusive lower bound (Unix nanoseconds) on the latest event_time of each projection; 0 disables the lower bound")
 	beforeNs := flag.Int64("before-ns", 0, "inclusive upper bound (Unix nanoseconds) on the latest event_time of each projection; 0 disables the upper bound")
@@ -59,8 +59,8 @@ func run() error {
 	if *stateFilter != "" && !validState(*stateFilter) {
 		return fmt.Errorf("--state %q is not one of: forming, promoted, demoted, dissolved, merged_into, split_into", *stateFilter)
 	}
-	if *subtypeFilter != "" && *subtypeFilter != "behavioral_cluster" && *subtypeFilter != "automation_group" && *subtypeFilter != "campaign_hypothesis" {
-		return fmt.Errorf("--subtype %q is not one of: behavioral_cluster, automation_group, campaign_hypothesis", *subtypeFilter)
+	if *subtypeFilter != "" && *subtypeFilter != "behavioral_cluster" && *subtypeFilter != "automation_group" && *subtypeFilter != "campaign_hypothesis" && *subtypeFilter != "coordination_ring" {
+		return fmt.Errorf("--subtype %q is not one of: behavioral_cluster, automation_group, campaign_hypothesis, coordination_ring", *subtypeFilter)
 	}
 	if *limit < 0 {
 		return fmt.Errorf("--limit must be non-negative; got %d", *limit)
@@ -129,6 +129,21 @@ func run() error {
 		for _, p := range chResults {
 			e := buildCHEntry(p)
 			e.Subtype = "campaign_hypothesis"
+			out = append(out, e)
+		}
+	}
+	if *subtypeFilter == "" || *subtypeFilter == "coordination_ring" {
+		crResults, err := projection.ListCoordinationRings(ctx, sub, projection.CoordinationRingListOptions{
+			StateFilter:  projection.State(*stateFilter),
+			TimeAfterNs:  *afterNs,
+			TimeBeforeNs: *beforeNs,
+		})
+		if err != nil {
+			return err
+		}
+		for _, p := range crResults {
+			e := buildCREntry(p)
+			e.Subtype = "coordination_ring"
 			out = append(out, e)
 		}
 	}
@@ -268,6 +283,62 @@ type splitView struct {
 	SplitAt         int64    `json:"split_at"`
 	SuccessorHashes []string `json:"successor_formation_event_hashes"`
 	Reason          string   `json:"reason,omitempty"`
+}
+
+func buildCREntry(p projection.CoordinationRingProjection) entry {
+	e := entry{
+		FormationHash:    hex.EncodeToString(p.FormationHash[:]),
+		State:            string(p.State),
+		LifecycleEntries: len(p.LifecycleHistory),
+	}
+	if p.LatestPromotion != nil {
+		e.LatestPromotion = &promotionView{
+			PromotedAt:     p.LatestPromotion.PromotedAt,
+			CadenceSeconds: p.LatestPromotion.CadenceSeconds,
+			Reason:         p.LatestPromotion.Reason,
+		}
+	}
+	if p.LatestDemotion != nil {
+		e.LatestDemotion = &demotionView{
+			DemotedAt: p.LatestDemotion.DemotedAt,
+			Reason:    p.LatestDemotion.Reason,
+		}
+	}
+	if p.Dissolution != nil {
+		e.Dissolution = &eventView{
+			At:     p.Dissolution.DissolvedAt,
+			Reason: p.Dissolution.Reason,
+		}
+	}
+	if p.MergedInto != nil {
+		ants := make([]string, len(p.MergedInto.AntecedentFormationEventHashes))
+		for i, h := range p.MergedInto.AntecedentFormationEventHashes {
+			ants[i] = hex.EncodeToString(h)
+		}
+		e.MergedInto = &mergeView{
+			MergedAt:              p.MergedInto.MergedAt,
+			ProducedFormationHash: hex.EncodeToString(p.MergedInto.ProducedFormationEventHash),
+			AntecedentHashes:      ants,
+			Reason:                p.MergedInto.Reason,
+		}
+	}
+	if p.SplitInto != nil {
+		succs := make([]string, len(p.SplitInto.SuccessorFormationEventHashes))
+		for i, h := range p.SplitInto.SuccessorFormationEventHashes {
+			succs[i] = hex.EncodeToString(h)
+		}
+		e.SplitInto = &splitView{
+			SplitAt:         p.SplitInto.SplitAt,
+			SuccessorHashes: succs,
+			Reason:          p.SplitInto.Reason,
+		}
+	}
+	e.Latencies = latencyView{
+		FormationToFirstPromotionNs:       p.FormationToFirstPromotionLatencyNs,
+		LatestPromotionToLatestDemotionNs: p.LatestPromotionToLatestDemotionLatencyNs,
+		FormationToDissolutionNs:          p.FormationToDissolutionLatencyNs,
+	}
+	return e
 }
 
 func buildCHEntry(p projection.CampaignHypothesisProjection) entry {

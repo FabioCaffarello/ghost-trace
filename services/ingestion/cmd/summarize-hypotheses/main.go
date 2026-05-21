@@ -87,11 +87,19 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	crCounts, err := projection.CountCoordinationRingsByState(ctx, sub, projection.CoordinationRingListOptions{
+		TimeAfterNs:  *afterNs,
+		TimeBeforeNs: *beforeNs,
+	})
+	if err != nil {
+		return err
+	}
 
 	output := perSubtype{
-		BehavioralCluster:   bcCounts,
-		AutomationGroup:     agCounts,
-		CampaignHypothesis:  chCounts,
+		BehavioralCluster:  bcCounts,
+		AutomationGroup:    agCounts,
+		CampaignHypothesis: chCounts,
+		CoordinationRing:   crCounts,
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
@@ -100,8 +108,8 @@ func run() error {
 	}
 
 	fmt.Fprintf(os.Stderr,
-		"summarize-hypotheses: bc_total=%d ag_total=%d ch_total=%d after_ns=%d before_ns=%d\n",
-		bcCounts.Total, agCounts.Total, chCounts.Total,
+		"summarize-hypotheses: bc_total=%d ag_total=%d ch_total=%d cr_total=%d after_ns=%d before_ns=%d\n",
+		bcCounts.Total, agCounts.Total, chCounts.Total, crCounts.Total,
 		*afterNs, *beforeNs)
 	return nil
 }
@@ -110,4 +118,5 @@ type perSubtype struct {
 	BehavioralCluster  projection.StateCounts `json:"behavioral_cluster"`
 	AutomationGroup    projection.StateCounts `json:"automation_group"`
 	CampaignHypothesis projection.StateCounts `json:"campaign_hypothesis"`
+	CoordinationRing   projection.StateCounts `json:"coordination_ring"`
 }
