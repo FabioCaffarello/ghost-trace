@@ -69,7 +69,7 @@ These terms are constitutional. Substituting a synonym for any of them introduce
 | §2.1 Observational Integrity | frozen |
 | §2.2 Epistemic Separation | frozen |
 | §2.3 Provenance Integrity | frozen — minor amendment v0.4 |
-| §2.4 Inferential Influence Disclosure | pending — empirical pressure phase |
+| §2.4 Inferential Influence Disclosure | frozen — minor amendment v0.5 |
 | §2.5 Hypothesis Lifecycle Explicitness | frozen — minor amendment v0.3 |
 | §2.6 Evidential Independence Integrity | pending — empirical pressure phase |
 | §3 Non-Goals | pending |
