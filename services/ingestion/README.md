@@ -1221,6 +1221,43 @@ Response codes: **200** on success (audit committed; deletion either performed o
 
 **Distinction from CLI orphan-cleanup.** [`cmd/orphan-cleanup`](#orphan-cleanup-cli) does NOT commit a substrate audit record — the CLI runs under the §0033 local-shell-trust assumption per the auth-scope RFC Open Question 4. The HTTP T3 path adds the audit-on-commit discipline as a forensic record + recovery contract.
 
+### HTTP T4 constitutional-act endpoints (pilot: behavioral-cluster promote)
+
+Per [`§0105`](../../docs/charter/decision-log.md) + the auth-scope RFC at [`§0098`](../../docs/charter/decision-log.md), the HTTP interface gains T4 constitutional-act endpoints mirroring the Cat III lifecycle CLIs. This landing ships the pilot endpoint — `POST /v1/hypotheses/behavioral-cluster/promote` — establishing the wire pattern for the 23 remaining endpoints (form/demote/dissolve/merge/split × 4 subtypes; promote × 3 remaining subtypes).
+
+- **`POST /v1/hypotheses/behavioral-cluster/promote`** — tier T4 (`constitutional-act`); requires the constitutional-act bearer token (or single-token under §0035 backward-compat). Accepts `application/x-protobuf` with a `BehavioralClusterPromotion` message; canonical-serialization-contract enforcement matches §0034 `POST /v1/events`. Commits the promotion event paired with an `IngestionEvent` via `substrate.AppendPair` (the AppendPair path is unconditional for HTTP T4 per the auth-scope RFC's cross-tier per-actor-attribution requirement).
+
+Wire shape — request:
+
+```sh
+# Construct the BehavioralClusterPromotion protobuf payload (e.g., via
+# protoc-decode or a client library). 32-byte formation_event_hash;
+# int64 promoted_at + cadence_seconds; string reason.
+curl -sS -X POST \
+  -H "Authorization: Bearer $CA_TOKEN" \
+  -H "Content-Type: application/x-protobuf" \
+  --data-binary @promotion.bin \
+  "http://localhost:8080/v1/hypotheses/behavioral-cluster/promote"
+```
+
+Wire shape — response (JSON):
+
+```json
+{
+  "promotion_event_hash": "<hex>",
+  "ingestion_event_hash": "<hex>",
+  "already_promoted": false
+}
+```
+
+Response codes: **200** on success; **400** on body decode failure or invalid parameters (formation hash wrong length, cadence_seconds <= 0); **401** missing or wrong token; **404** formation event hash not found OR wrong type (§2.5 lifecycle integrity); **405** non-POST; **413** body exceeds request size limit; **415** wrong Content-Type; **500** substrate failure; **503** substrate not configured.
+
+**Per-actor attribution.** The paired `IngestionEvent` carries the channel (`http`, `https`, or `https+mtls`) and the verified client identity (mTLS CN + SAN + cert SHA-256) when mTLS is configured. For bearer-token-only deployments, the per-actor field falls back to the literal `unattributed-token-constitutional-act` per the auth-scope RFC item 4(c). This fallback is operationally discouraged; a follow-on landing will support `token_id` annotations per RFC item 4(b).
+
+**Idempotency.** Identical request bodies (same `formation_event_hash` + `promoted_at` + `cadence_seconds` + `reason`) produce identical promotion-event content-hashes; the second commit is a no-op (`already_promoted: true`). Matches the [`§0027`](../../docs/charter/decision-log.md) AP6 content-addressed idempotency contract.
+
+**Distinction from `promote-hypothesis` CLI.** The CLI's per-actor attribution is operator opt-in via `--actor`; the HTTP T4 path's per-actor attribution is unconditional (cross-tier requirement per [`§0094`](../../docs/charter/decision-log.md)). Otherwise the two paths share the same `hypothesis.Promote` core, the same validation gates, and the same substrate writes.
+
 ## Required Properties
 
 Per the original constitutional placeholder ([decision-log §0022](../../docs/charter/decision-log.md) implementation pivot):
