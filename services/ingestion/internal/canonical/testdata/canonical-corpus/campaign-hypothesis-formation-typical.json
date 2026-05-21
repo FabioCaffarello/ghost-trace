@@ -1,0 +1,11 @@
+{
+  "patternSignature": "temporal-descriptor-cohort-v1",
+  "patternParameters": "max_intra_event_gap_seconds=300;min_campaign_size=3",
+  "formationAt": "1716120500000000000",
+  "confidence": 0.85,
+  "sourceEventHashes": [
+    "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+    "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=",
+    "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8="
+  ]
+}

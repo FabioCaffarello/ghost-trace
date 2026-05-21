@@ -119,6 +119,32 @@ Adding a new AutomationGroup formation pattern: implement `AutomationGroupFormat
 
 Exit code: **0** on success (including zero-newly-formed); **2** on tool/configuration error.
 
+## `form-campaign-hypothesis` CLI
+
+Operator-invoked tool to form `CampaignHypothesis` hypotheses — the **third Category III concrete subtype** per [`§0063`](../../docs/charter/decision-log.md). Mirrors [`form-hypothesis`](#form-hypothesis-cli) and [`form-automation-group`](#form-automation-group-cli) for the new subtype's formation step. Distinct subtype identity per [entity-model.md §Category III](../../docs/ontology/entity-model.md): a CampaignHypothesis is "a set of EVENTS whose patterns suggest membership in a unified operation" — **event-centric** (NOT actor-centric like BC/AG).
+
+```sh
+make form-campaign-hypothesis-build                                        # builds ./bin/form-campaign-hypothesis
+
+# Default temporal-descriptor-cohort-v1 pattern (min 3 events, max 300s gap)
+./bin/form-campaign-hypothesis -db ./ghost-trace.db -blobs ./blobs
+
+# Stricter cohort criteria
+./bin/form-campaign-hypothesis -min-campaign-size 5 -max-intra-event-gap-seconds 60
+```
+
+The CLI walks every `DeclaredSession`, applies the formation pattern, and commits each resulting `CampaignHypothesisFormation` event via `substrate.Append`. Same idempotency + versioning semantics as `form-hypothesis` per §0045.
+
+Registered formation patterns:
+
+| Signature | Parameters | Inference |
+|---|---|---|
+| `temporal-descriptor-cohort-v1` | `min_campaign_size=<int>` (default 3), `max_intra_event_gap_seconds=<int>` (default 300) | Groups `DeclaredSession` rows by byte-equal `session_descriptor`; within each group, scans chronologically and emits one `CampaignHypothesisFormation` per cohort of ≥ `min_campaign_size` events where consecutive events are within `max_intra_event_gap_seconds` of each other. |
+
+Adding a new CampaignHypothesis formation pattern: implement `CampaignHypothesisFormationPattern` in [`internal/hypothesis`](./internal/hypothesis), register it in `cmd/form-campaign-hypothesis/main.go`'s `resolvePattern`. Same incremental-extension pathway as §0045 + §0056.
+
+Exit code: **0** on success; **2** on tool/configuration error.
+
 ## `promote-automation-group` CLI
 
 Operator-invoked tool to record the **AutomationGroup promotion** lifecycle operation per [`§0057`](../../docs/charter/decision-log.md) — second lifecycle operation of the second Cat III subtype arc. Mirrors [`promote-hypothesis`](#promote-hypothesis-cli) for the AutomationGroup subtype. Same Layer A cadence semantic per [`§0011`](../../docs/charter/decision-log.md).
