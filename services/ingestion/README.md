@@ -893,7 +893,22 @@ curl -sS \
   "http://localhost:8080/v1/hypotheses/state?formation_event_hash=<64-hex-chars>"
 ```
 
-`list-hypotheses` and `summarize-hypotheses` equivalent endpoints are follow-on landings (named carry-forward).
+- **`GET /v1/hypotheses?subtype=...&state=...&after_ns=...&before_ns=...&limit=...&offset=...`** (per [`§0081`](../../docs/charter/decision-log.md)) — multi-projection list mirroring `list-hypotheses` CLI. All query parameters optional; empty `subtype` / `state` disables that filter; `limit=0` is unbounded; `offset=0` starts at the first entry. Returns a JSON array of entries (each entry: `subtype`, `formation_event_hash`, `state`, optional per-lifecycle-type payloads, `lifecycle_event_count`, `latencies`). Response codes: **200** on success (including empty array); **400** for invalid parameter (unknown subtype/state, non-integer numeric, negative numeric, `after_ns > before_ns`); **405** non-GET; **503** substrate not configured.
+
+```sh
+# All subtypes, all states
+curl -sS -H "Authorization: Bearer $TOKEN" "http://localhost:8080/v1/hypotheses"
+
+# Filter to promoted CR hypotheses
+curl -sS -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/v1/hypotheses?subtype=coordination_ring&state=promoted"
+
+# Page through 50 at a time
+curl -sS -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/v1/hypotheses?limit=50&offset=100"
+```
+
+`summarize-hypotheses` equivalent endpoint is a follow-on landing (named carry-forward).
 
 ## Required Properties
 

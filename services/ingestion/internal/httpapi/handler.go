@@ -11,6 +11,10 @@
 //     keyed by formation event hash; per decision-log §0080. Mirrors
 //     the cmd/hypothesis-state CLI's wire shape. Subtype auto-detect.
 //     Requires substrate read access (injected via WithSubstrate).
+//   - GET  /v1/hypotheses — multi-projection list with subtype/state/
+//     time-window/limit/offset filters; per decision-log §0081.
+//     Mirrors the cmd/list-hypotheses CLI's wire shape. Requires
+//     substrate read access.
 //   - GET  /healthz    — liveness probe; returns 200 + {"status":"ok"}.
 //
 // All other paths return 404; non-matching methods return 405.
@@ -171,6 +175,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleEvents(w, r)
 	case r.URL.Path == "/v1/hypotheses/state":
 		h.handleHypothesisState(w, r)
+	case r.URL.Path == "/v1/hypotheses":
+		h.handleHypothesisList(w, r)
 	default:
 		http.NotFound(w, r)
 	}
