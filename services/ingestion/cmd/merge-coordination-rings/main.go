@@ -50,6 +50,7 @@ func run() error {
 	producedHex := flag.String("produced-formation-hash", "", "REQUIRED: hex-encoded BLAKE3-256 of the produced CoordinationRingFormation")
 	mergedAtNs := flag.Int64("merged-at-ns", 0, "explicit merged_at as Unix nanoseconds; 0 = wall-clock now()")
 	reason := flag.String("reason", "", "operator-supplied forensic note")
+	actor := flag.String("actor", "", "OPTIONAL per decision-log §0097 + §0109: when non-empty, pairs the merge with an IngestionEvent for per-actor attribution.")
 	flag.Parse()
 
 	if *antecedentAHex == "" {
@@ -88,6 +89,7 @@ func run() error {
 		ProducedFormationHash:    produced,
 		MergedAt:                 *mergedAtNs,
 		Reason:                   *reason,
+		Actor:                    *actor,
 	}, time.Now)
 	if err != nil {
 		return err
@@ -101,13 +103,20 @@ func run() error {
 		ProducedFormationHash: *producedHex,
 		MergeEventHash:        report.MergeEventHashHex,
 		AlreadyMerged:         report.AlreadyMerged,
+		IngestionEventHash:    report.IngestionEventHashHex,
 	}); err != nil {
 		return fmt.Errorf("encode json: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr,
-		"merge-coordination-rings: produced=%s merge=%s already_merged=%v\n",
-		*producedHex, report.MergeEventHashHex, report.AlreadyMerged)
+	if *actor != "" {
+		fmt.Fprintf(os.Stderr,
+			"merge-coordination-rings: produced=%s merge=%s ingestion=%s actor=%q already_merged=%v\n",
+			*producedHex, report.MergeEventHashHex, report.IngestionEventHashHex, *actor, report.AlreadyMerged)
+	} else {
+		fmt.Fprintf(os.Stderr,
+			"merge-coordination-rings: produced=%s merge=%s already_merged=%v\n",
+			*producedHex, report.MergeEventHashHex, report.AlreadyMerged)
+	}
 	return nil
 }
 
@@ -130,4 +139,5 @@ type payload struct {
 	ProducedFormationHash string `json:"produced_formation_hash"`
 	MergeEventHash        string `json:"merge_event_hash"`
 	AlreadyMerged         bool   `json:"already_merged"`
+	IngestionEventHash    string `json:"ingestion_event_hash,omitempty"`
 }

@@ -4579,6 +4579,21 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0115` — §0097 CLI-side extension: merge-* (BC + AG + CH + CR) gain --actor option
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** Continues per-op-across-subtypes CLI cadence after [`§0112`](#0112--0097-clisetension-promote-clis-for-agchcr-gain-actor-option) (promote) + [`§0113`](#0113--0097-cliside-extension-demote-clis-bc--ag--ch--cr-gain-actor-option) (demote) + [`§0114`](#0114--0097-cliside-extension-dissolve-bc--ag--ch--cr-gain-actor-option) (dissolve). Helper-side per [`§0109`](#0109--t4-merge-replicated-across-all-four-subtypes-symmetricrelation-idempotency-surface-preserved-0098-1624).
+
+- **Decision:** All 4 merge CLIs gain `--actor` matching the established pattern.
+
+- **Consequences:** **§0097 CLI-side: 16/24 done (67%).** Remaining: 4 split + 4 form = 8 CLIs.
+
+- **Supersession:** None. Partial discharge of [`§0097`](#0097--cli-peractor-attribution-pilot-promotehypothesis-actor-authscope-rfc-open-question-2-partially-discharged) (4 more → 8 remaining).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
