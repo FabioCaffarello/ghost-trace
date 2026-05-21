@@ -144,8 +144,38 @@ if [ -n "$BASE_CLAUDE_TMP" ] && git show HEAD:"$CLAUDE_MD" > "$BASE_CLAUDE_TMP" 
 fi
 [ -n "$BASE_CLAUDE_TMP" ] && rm -f "$BASE_CLAUDE_TMP"
 
-if [ -n "$NEWLY_FROZEN" ]; then
-  FROZEN_RANGES=$(python3 "$PARSER" --frozen-ranges "$CHARTER" "$CLAUDE_MD" --exclude-sections "$NEWLY_FROZEN") || { fail_closed "frozen-range parser failed"; exit "$EXIT_CODE"; }
+# Compute sections in amendment-in-progress in this change set.
+# An amendment-in-progress is a new entry in docs/charter/amendments.md
+# (a new `### `vX.Y`` heading added to the staged diff). The
+# `**Sections affected:**` line of that entry lists the section markers
+# (§N or §N.M) that the amendment legitimately touches in
+# constitutional-charter.md. Those sections' frozen ranges are exempt
+# from the frozen-section-edit check IN THIS CHANGE SET ONLY — the
+# substantive verification (RFC exists, falsifiability-check pass,
+# version bump correct) is committee/reviewer territory; the hook
+# trusts the amendments.md "Sections affected" line as the structural
+# declaration of legitimate amendment scope. Per decision-log §0101 +
+# amendment v0.5.2.
+AMENDMENT_SECTIONS=""
+SECTIONS_AFFECTED_LINES=$(git diff --cached -- docs/charter/amendments.md 2>/dev/null | grep -E '^\+\*\*Sections affected:\*\*' || true)
+if [ -n "$SECTIONS_AFFECTED_LINES" ]; then
+  # Charter section markers start with [1-9]; decision-log entry markers
+  # are 4-digit with leading zero (§0001, §0099 etc.) and are excluded.
+  AMENDMENT_SECTIONS=$(printf '%s' "$SECTIONS_AFFECTED_LINES" | grep -oE '§[1-9][0-9]*(\.[0-9]+)?' | sort -u | paste -sd, -)
+fi
+
+# Combine the two exempt sources.
+EXEMPT_SECTIONS="$NEWLY_FROZEN"
+if [ -n "$AMENDMENT_SECTIONS" ]; then
+  if [ -n "$EXEMPT_SECTIONS" ]; then
+    EXEMPT_SECTIONS="${EXEMPT_SECTIONS},${AMENDMENT_SECTIONS}"
+  else
+    EXEMPT_SECTIONS="$AMENDMENT_SECTIONS"
+  fi
+fi
+
+if [ -n "$EXEMPT_SECTIONS" ]; then
+  FROZEN_RANGES=$(python3 "$PARSER" --frozen-ranges "$CHARTER" "$CLAUDE_MD" --exclude-sections "$EXEMPT_SECTIONS") || { fail_closed "frozen-range parser failed"; exit "$EXIT_CODE"; }
 else
   FROZEN_RANGES=$(python3 "$PARSER" --frozen-ranges "$CHARTER" "$CLAUDE_MD") || { fail_closed "frozen-range parser failed"; exit "$EXIT_CODE"; }
 fi
@@ -167,6 +197,9 @@ if [ "${1:-}" = "--self-test" ]; then
   echo "  frozen ranges:  $(printf '%s\n' "$FROZEN_RANGES" | grep -c .) range(s)"
   if [ -n "$NEWLY_FROZEN" ]; then
     echo "  newly-frozen exempt (promotion in change set): $NEWLY_FROZEN"
+  fi
+  if [ -n "$AMENDMENT_SECTIONS" ]; then
+    echo "  amendment-in-progress exempt (amendments.md entry added): $AMENDMENT_SECTIONS"
   fi
   echo "  forbidden:      $(printf '%s\n' "$FORBIDDEN"     | grep -c .) term(s)"
   echo "  marketing:      $(printf '%s\n' "$MARKETING"     | grep -c .) tell(s)"
