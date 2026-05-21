@@ -3428,6 +3428,44 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0087` — AutomationGroup Phase 3 replay; second of four subtype-specific Phase 3 tools
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0086`](#0086--first-phase-3-reconstructive-replay-tool--behavioralcluster-formation) opened the Phase 3 replay arc with BehavioralCluster formation. This entry extends mechanically to AutomationGroup. The same `hypothesis.CollectFormationContextAt` helper backs both: per the [`§0056`](#0056--second-category-iii-concrete-subtype-automationgroup-formation-lands-second-subtype-lifecycle-arc-opens-typed-subtype-landings-commitment-reaffirmed) typed-subtype-landings discipline, all four Cat III subtypes' formation-context interfaces share the `DeclaredSessions()` surface — one helper serves all four via interface-to-interface assertion.
+
+- **Decision:** Land AG Phase 3 replay with three structural moves mirroring §0086:
+
+  1. **`replay.ReplayAutomationGroupFormation` + `replay.ResolveAGFormationPattern`** at [`services/ingestion/internal/replay/automation_group.go`](../../services/ingestion/internal/replay/automation_group.go) (new file). Same shape as §0086 but for AG. Resolves the `uniform-cadence-v1` pattern (currently the only AG formation pattern). Adds `parseFloatParam` helper (UC1's `max_cov_threshold` is a float64; the BC `min_cluster_size` is int — different parameter shapes, hence separate helper).
+
+  2. **Interface-to-interface assertion.** `hypothesis.CollectFormationContextAt` returns `FormationContext` (the BC interface). The AG replay calls `bcFctx.(hypothesis.AutomationGroupFormationContext)` — Go's runtime structural-subtyping check succeeds because the underlying `walkerContext` satisfies both (both interfaces require only `DeclaredSessions()`). The assertion is wrapped with an explicit failure message in case the typed-subtype-landings discipline ever diverges the contexts.
+
+  3. **`cmd/replay-automation-group-formation` operator interface** at [`services/ingestion/cmd/replay-automation-group-formation/main.go`](../../services/ingestion/cmd/replay-automation-group-formation/main.go) (new file). 34th operational binary; 6th substrate-audit/maintenance. Same four-exit-code semantic as §0086.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1, §2.2, §2.3, §2.5 + §2.5 BC3 + §2.5 BC5. Respects the §0021 OMQ #3 substrate-time-generation resolution (same `committed_at` filter as §0086). Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`services/ingestion/internal/replay/automation_group.go`](../../services/ingestion/internal/replay/automation_group.go) — new file. `ReplayAutomationGroupFormation`, `ResolveAGFormationPattern`, `AutomationGroupFormationReport`, `parseFloatParam` helper.
+  - [`services/ingestion/internal/replay/automation_group_test.go`](../../services/ingestion/internal/replay/automation_group_test.go) — new file. **7 tests** mirroring §0086's: happy path, unknown target, wrong message type (passing a BC formation hash → ErrTargetWrongType), unknown pattern, substrate-time-filter correctness, plus two resolver tests.
+  - [`services/ingestion/cmd/replay-automation-group-formation/main.go`](../../services/ingestion/cmd/replay-automation-group-formation/main.go) — new binary; 34th operational CLI; 6th substrate-audit/maintenance.
+  - [`services/ingestion/Makefile`](../../services/ingestion/Makefile) — help echo + PHONY target.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — new CLI section noting the shared helper across subtypes.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0087 (this entry).
+  - **Second of four subtype-specific Phase 3 tools.** Two more (CH §0088, CR §0089) follow with the same mechanical-extension pattern.
+  - **34th operational binary; 6th audit/maintenance.** `cmd/` now contains 34 binaries:
+    - substrate-write (25): unchanged.
+    - **substrate-audit/maintenance (6):** `verify`, `orphan-cleanup`, `replay-operational-session`, `replay-all-operational-sessions`, `replay-behavioral-cluster-formation`, **`replay-automation-group-formation`** (new).
+    - projection-read (3): unchanged.
+  - **Interface-to-interface assertion pattern.** This entry is the first to apply Go's structural-subtyping runtime check across the typed-subtype-landings discipline. The pattern (one shared helper returning the BC interface; per-subtype callers assert across) keeps the helper count bounded at 1 while preserving each subtype's pattern-specific interface. If a future subtype adds a context method beyond `DeclaredSessions()`, the shared helper would need extending OR splitting per §0083 single-source-of-truth carry-forward.
+  - **Out of scope at this layer (carry-forwards).**
+    - **CH / CR Phase 3 replay** — mechanical extension; named §0088 and §0089.
+    - **Other §0086 carry-forwards** (lifecycle-event replay, batch BC/AG/CH/CR replay, HTTP endpoints, Phase 2, Phase 4) — unchanged.
+
+- **Supersession:** None. Extends §0086 with the second subtype. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

@@ -45,6 +45,7 @@ help:
 	@echo "  replay-operational-session-build  go build -trimpath -o $(BIN_DIR)/replay-operational-session ./cmd/replay-operational-session"
 	@echo "  replay-all-operational-sessions-build  go build -trimpath -o $(BIN_DIR)/replay-all-operational-sessions ./cmd/replay-all-operational-sessions"
 	@echo "  replay-behavioral-cluster-formation-build  go build -trimpath -o $(BIN_DIR)/replay-behavioral-cluster-formation ./cmd/replay-behavioral-cluster-formation"
+	@echo "  replay-automation-group-formation-build  go build -trimpath -o $(BIN_DIR)/replay-automation-group-formation ./cmd/replay-automation-group-formation"
 	@echo "  test           go test -race ./..."
 	@echo "  golden-corpus  regenerate canonical-corpus golden files (schemas-evolution event)"
 	@echo "  clean          remove $(GEN_OUT) + $(BIN_DIR)"
@@ -264,6 +265,11 @@ replay-all-operational-sessions-build:
 replay-behavioral-cluster-formation-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/replay-behavioral-cluster-formation ./cmd/replay-behavioral-cluster-formation
+
+.PHONY: replay-automation-group-formation-build
+replay-automation-group-formation-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/replay-automation-group-formation ./cmd/replay-automation-group-formation
 
 .PHONY: test
 test:
