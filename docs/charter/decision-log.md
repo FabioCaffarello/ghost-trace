@@ -2769,6 +2769,41 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0071` — Fourth-subtype promotion (`CoordinationRingPromotion`) lands; sentinel-sharing landscape spans all four subtypes
+
+- **Status:** accepted.
+- **Date:** 2026-05-20.
+
+- **Context:** [`§0070`](#0070--fourth-and-final-category-iii-concrete-subtype-coordinationring-formation-lands-first-interaction-centric-edge-list-subtype-fourth-subtype-lifecycle-arc-opens) opened the fourth Cat III subtype lifecycle arc. This entry lands the second lifecycle operation — promotion — mirroring §0046 BC + §0057 AG + §0064 CH. The promotion structure carries no novel modeling decisions; the four-field wire shape (`formation_event_hash`, `promoted_at`, `cadence_seconds`, `reason`) and the Layer A mandatory-cadence rule established at §0011 transfer cleanly.
+
+  Sentinel-sharing pattern validation: §0046 introduced `ErrTargetNotFound` + `ErrTargetWrongType`; §0057+§0064 extended the pattern to AG and CH respectively. This entry extends it to CR — all four subtypes' promotion operators share these operation-agnostic sentinels, with the subtype-specific message_type discriminator (`coordinationRingFormationMessageType`) enforcing cross-subtype rejection. A BC/AG/CH formation hash passed to `PromoteCoordinationRing` returns `ErrTargetWrongType`.
+
+- **Decision:** Land `CoordinationRingPromotion` with three structural moves mirroring §0064:
+
+  1. **`CoordinationRingPromotion` Protobuf message** at [`schemas/events/v1/coordination_ring_promotion.proto`](../../schemas/events/v1/coordination_ring_promotion.proto). Four fields identical to §0064's shape (only the documented subtype identity differs).
+
+  2. **`PromoteCoordinationRing` entry point** at [`services/ingestion/internal/hypothesis/coordination_ring_promotion.go`](../../services/ingestion/internal/hypothesis/coordination_ring_promotion.go). Reuses shared `ErrTargetNotFound` + `ErrTargetWrongType` sentinels. Validates `cadence_seconds > 0`. Wrong-type check uses `coordinationRingFormationMessageType` from §0070.
+
+  3. **`cmd/promote-coordination-ring`** — 26th operational binary; 21st substrate-write.
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1, §2.2, §2.3, §2.5 + §2.5 BC3 + §2.5 BC5. Respects §0011 Layer A mandatory-cadence semantic. Respects §0045+§0056+§0063+§0070 hypothesis-identity invariant. Respects the sentinel-sharing pattern established at §0046+§0057+§0064. Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`schemas/events/v1/coordination_ring_promotion.proto`](../../schemas/events/v1/coordination_ring_promotion.proto) — new file.
+  - [`services/ingestion/internal/hypothesis/coordination_ring_promotion.go`](../../services/ingestion/internal/hypothesis/coordination_ring_promotion.go) — new file.
+  - [`services/ingestion/internal/hypothesis/coordination_ring_promotion_test.go`](../../services/ingestion/internal/hypothesis/coordination_ring_promotion_test.go) — **8 tests** covering happy-path, idempotency, cadence-versioning produces new record, non-positive-cadence rejection, unknown-target, cross-subtype rejection (BC + CH formations), default `promoted_at`.
+  - [`services/ingestion/cmd/promote-coordination-ring/main.go`](../../services/ingestion/cmd/promote-coordination-ring/main.go) — new binary; 26th CLI; 21st substrate-write.
+  - Makefile, canonical corpus, corpus README, service README, decision-log §0071.
+  - **Sentinel-sharing landscape spans all four subtypes.** The §0046 sentinels (`ErrTargetNotFound`, `ErrTargetWrongType`) now serve four subtypes' promotion operators without modification. The pattern carries forward to the remaining CR lifecycle ops (demotion §0072, dissolution §0073, merge §0074, split §0075) without additional generalization.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Four remaining CoordinationRing lifecycle operations** — demotion (§0072), dissolution (§0073), merge (§0074), split (§0075).
+    - **Projection layer extension for CoordinationRing** — unchanged from §0070 carry-forward.
+    - **Layer B deep-criterion** — unchanged from §0047 carry-forward.
+
+- **Supersession:** None. Extends §0070 with the second CoordinationRing lifecycle operation. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
