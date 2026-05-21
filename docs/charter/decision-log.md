@@ -3167,6 +3167,45 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0081` — HTTP list endpoint `GET /v1/hypotheses`; second read-side surface on the HTTP channel
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0080`](#0080--http-projection-read-endpoint-lands-get-v1hypothesesstate-first-read-side-surface-on-the-http-channel) landed the single-projection state endpoint. This entry lands the multi-projection list endpoint — second of three planned HTTP read endpoints (single state, list, summary). Same pattern: thin transport layer over the existing read-layer functions; wire shape mirrors the corresponding CLI exactly.
+
+- **Decision:** Add `GET /v1/hypotheses` to the HTTP interface:
+
+  1. **`handleHypothesisList` handler** at [`internal/httpapi/hypotheses_list.go`](../../services/ingestion/internal/httpapi/hypotheses_list.go) (new file). Calls `ListXXX`-per-subtype with the supplied filters; concatenates per-subtype slices into a cross-subtype response; applies limit/offset on the combined slice. Same paging semantic as the `list-hypotheses` CLI.
+
+  2. **Query-parameter parsing.** `subtype` (validates against the four-subtype enum); `state` (validates against the six-state enum); `after_ns`, `before_ns`, `limit`, `offset` (parsed as base-10 integers, non-negative, `after_ns ≤ before_ns` invariant when both non-zero). Invalid parameter → 400 with structured `ingestError` body.
+
+  3. **Wire shape.** Each entry mirrors the `list-hypotheses` CLI entry: `subtype`, `formation_event_hash`, `state`, optional `latest_promotion` / `latest_demotion` / `dissolution` / `merged_into` / `split_into`, `lifecycle_event_count`, `latencies` (per [`§0055`](#0055--per-projection-latency-derivation-0053-latency-histogram-carry-forward-partially-discharged-at-the-per-projection-layer)).
+
+  4. **Empty population.** Returns `[]\n` (empty JSON array) with status 200. Operators get a parseable response regardless of substrate population.
+
+  5. **Tests** at [`internal/httpapi/hypotheses_list_test.go`](../../services/ingestion/internal/httpapi/hypotheses_list_test.go) — **11 tests** covering happy-path return, empty substrate (via state filter), subtype-filter exclusion, invalid subtype, invalid state, invalid numeric, negative numeric, after-after-before validation, non-GET method, substrate-not-configured 503, paging with 6 sub-cases (limit=0/1/10, offset=0/1/10).
+
+- **Constitutional review:** No Charter invariant amended. Respects §2.1 (read-only over immutable substrate), §2.2 (the JSON array surfaces operational state via projection; not a substrate row), §2.3 (no provenance edges produced), §2.5 + §2.5 BC3 (current state remains a projection — the HTTP endpoint is a thin transport over `ListXXX` per-subtype functions), §2.5 BC5 (lifecycle-event-as-Cat-I-record preserved). Canonical vocabulary used as written.
+
+- **Consequences:**
+  - [`services/ingestion/internal/httpapi/handler.go`](../../services/ingestion/internal/httpapi/handler.go) — ServeHTTP route table extended with `/v1/hypotheses`; package doc updated.
+  - [`services/ingestion/internal/httpapi/hypotheses_list.go`](../../services/ingestion/internal/httpapi/hypotheses_list.go) — new file. `handleHypothesisList` + `listEntry` wire type + four per-subtype `buildXXListEntry` helpers + `parseInt64Param` / `parseIntParam` / `isValidState` query-parsing helpers.
+  - [`services/ingestion/internal/httpapi/hypotheses_list_test.go`](../../services/ingestion/internal/httpapi/hypotheses_list_test.go) — new file; 11 tests.
+  - [`services/ingestion/README.md`](../../services/ingestion/README.md) — `list-hypotheses` HTTP endpoint documentation appended; example curl invocations.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0081 (this entry).
+  - **Second of three HTTP read endpoints.** With §0080 (state) + §0081 (list), two of three CLI surfaces have HTTP parity. §0082 (summary) is the natural next.
+  - **Cross-subtype concatenation order.** The endpoint returns entries grouped by subtype (BC → AG → CH → CR), preserving per-subtype internal order (ascending lex by formation hash, per the projection package). Limit/offset apply to the concatenated ordering, matching the `list-hypotheses` CLI semantic.
+  - **Out of scope at this layer (carry-forwards).**
+    - **Summary endpoint** — `GET /v1/hypotheses/summary` mirroring `summarize-hypotheses` CLI. Natural §0082 candidate.
+    - **Cursor-based pagination** — unchanged from §0052 carry-forward; limit/offset is sufficient for inception-phase substrate sizes.
+    - **Streaming / chunked encoding** — current implementation buffers the full response before encoding; for very large substrates a streaming encoder would be a future optimization.
+    - **gRPC interface** — unchanged.
+
+- **Supersession:** None. Extends §0080 with the second projection-read surface. §0022 implementation-gate criteria continue to be satisfied.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
