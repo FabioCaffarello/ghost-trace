@@ -15,6 +15,10 @@
 //     time-window/limit/offset filters; per decision-log §0081.
 //     Mirrors the cmd/list-hypotheses CLI's wire shape. Requires
 //     substrate read access.
+//   - GET  /v1/hypotheses/summary — aggregate counters + latency
+//     aggregates across all four subtypes with combined section;
+//     per decision-log §0082. Mirrors the cmd/summarize-hypotheses
+//     CLI's wire shape. Requires substrate read access.
 //   - GET  /healthz    — liveness probe; returns 200 + {"status":"ok"}.
 //
 // All other paths return 404; non-matching methods return 405.
@@ -177,6 +181,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleHypothesisState(w, r)
 	case r.URL.Path == "/v1/hypotheses":
 		h.handleHypothesisList(w, r)
+	case r.URL.Path == "/v1/hypotheses/summary":
+		h.handleHypothesisSummary(w, r)
 	default:
 		http.NotFound(w, r)
 	}

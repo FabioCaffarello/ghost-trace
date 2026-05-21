@@ -908,7 +908,18 @@ curl -sS -H "Authorization: Bearer $TOKEN" \
   "http://localhost:8080/v1/hypotheses?limit=50&offset=100"
 ```
 
-`summarize-hypotheses` equivalent endpoint is a follow-on landing (named carry-forward).
+- **`GET /v1/hypotheses/summary?after_ns=...&before_ns=...`** (per [`§0082`](../../docs/charter/decision-log.md)) — aggregate counters + latency aggregates mirroring `summarize-hypotheses` CLI. Output JSON has a top-level `combined` section + four per-subtype sections (`behavioral_cluster`, `automation_group`, `campaign_hypothesis`, `coordination_ring`), each carrying `total`, `by_state` (every State key present), and `latencies` (three per-dimension percentile aggregates with `sample_count` + `min_ns`/`p50_ns`/`p90_ns`/`max_ns`). Combined percentiles are exact (computed from union of per-subtype raw samples) per [`§0079`](../../docs/charter/decision-log.md). Response codes: **200** on success; **400** for invalid numeric or `after_ns > before_ns`; **405** non-GET; **503** substrate not configured.
+
+```sh
+curl -sS -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/v1/hypotheses/summary"
+
+# Time-windowed summary
+curl -sS -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/v1/hypotheses/summary?after_ns=1700000000000000000&before_ns=1800000000000000000"
+```
+
+**All three CLI surfaces now have HTTP parity.** `hypothesis-state` (§0080), `list-hypotheses` (§0081), and `summarize-hypotheses` (§0082) are reachable over HTTP with the same wire shapes as their CLI counterparts.
 
 ## Required Properties
 
