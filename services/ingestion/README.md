@@ -1161,6 +1161,66 @@ Response codes: **200** (audit completed; check `passed`); **400** invalid `chec
 
 **Operational cost.** This endpoint walks every substrate row + reads every blob. For large substrates the call is slow. Operators SHOULD run it on a schedule (cron / systemd timer) against a dedicated read-only auth token rather than from interactive dashboards. Concurrent invocations are safe under SQLite WAL but each multiplies the read load.
 
+### HTTP T3 substrate-admin endpoint: orphan-cleanup
+
+Per [`§0104`](../../docs/charter/decision-log.md) + the auth-scope RFC at [`§0098`](../../docs/charter/decision-log.md), the HTTP interface gains a T3 substrate-admin endpoint mirroring [`cmd/orphan-cleanup`](#orphan-cleanup-cli):
+
+- **`POST /v1/admin/orphan-cleanup`** — tier T3 (`substrate-admin`); requires the substrate-admin bearer token (or single-token under §0035 backward-compat). Commits a Cat I `OrphanCleanupAudit` record paired with an `IngestionEvent` via `substrate.AppendPair` BEFORE any blob deletion (audit-then-delete contract per RFC item 4). The audit's `planned_deletion_hashes` list IS the recovery contract: partial-deletion failure leaves the audit + surviving blobs recoverable; operator re-runs against the audit's hash list.
+
+Query parameters (all optional unless noted):
+
+| Parameter | Type | Default | Notes |
+|---|---|---|---|
+| `dry_run` | bool | `true` | Set to `false` to perform deletion. The default is `true` for operator safety. |
+| `confirm` | bool | `false` | Required when `dry_run=false`. Mirrors the CLI's `-confirm` safety belt. |
+| `keep_newer_than_seconds` | int64 | `0` | Preserves orphans whose file mtime is newer than `(invoked_at - this * 1e9 ns)`. `0` disables. |
+| `max_deletions` | int64 | `0` | Caps the deletion count per invocation. `0` disables. Excess orphans recorded in `preserved_by_max_hashes`. |
+| `excluded_hash` | string | (none) | Repeatable; lowercase-hex BLAKE3-256. Marks the orphan as preserved-by-exclude regardless of other filters. |
+
+Example:
+
+```sh
+# Dry-run (default) — identifies orphans without deleting.
+curl -sS -X POST \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  "http://localhost:8080/v1/admin/orphan-cleanup"
+
+# Actual deletion with safety belts.
+curl -sS -X POST \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  "http://localhost:8080/v1/admin/orphan-cleanup?dry_run=false&confirm=true&keep_newer_than_seconds=3600&max_deletions=100"
+
+# Preserve specific orphans via exclusion list.
+curl -sS -X POST \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  "http://localhost:8080/v1/admin/orphan-cleanup?dry_run=false&confirm=true&excluded_hash=<hex1>&excluded_hash=<hex2>"
+```
+
+Response shape:
+
+```json
+{
+  "audit_event_hash": "<hex>",
+  "ingestion_event_hash": "<hex>",
+  "invoked_at_ns": 1716120000000000000,
+  "dry_run": true,
+  "confirm": false,
+  "examined": 42,
+  "orphans_found": 3,
+  "deleted": 2,
+  "preserved_by_exclude": 1,
+  "preserved_by_age": 0,
+  "preserved_by_max": 0,
+  "planned_deletion_hashes": ["<hex>", "<hex>"]
+}
+```
+
+Response codes: **200** on success (audit committed; deletion either performed or skipped per `dry_run`); **400** parameter validation failure (non-int parameters, negative values, missing `confirm` when `dry_run=false`); **401** missing or wrong token; **405** non-POST; **500** audit-commit failure or per-orphan deletion failure (the audit's `planned_deletion_hashes` is the recovery contract — operator retrieves the audit by hash + re-runs deletion against the surviving subset); **503** substrate not configured.
+
+**Per-actor attribution.** The paired `IngestionEvent` carries the channel (`http`, `https`, or `https+mtls`) and the verified client identity (mTLS CN + SAN + cert SHA-256) when mTLS is configured. Bearer-token-only deployments record the channel; per-token actor attribution via `token_id` is a follow-on per the auth-scope RFC item 4(b). The substrate-admin tier token authorizes T3 writes; the audit record's existence + the paired `IngestionEvent`'s client identity are the substrate-time evidentiary record.
+
+**Distinction from CLI orphan-cleanup.** [`cmd/orphan-cleanup`](#orphan-cleanup-cli) does NOT commit a substrate audit record — the CLI runs under the §0033 local-shell-trust assumption per the auth-scope RFC Open Question 4. The HTTP T3 path adds the audit-on-commit discipline as a forensic record + recovery contract.
+
 ## Required Properties
 
 Per the original constitutional placeholder ([decision-log §0022](../../docs/charter/decision-log.md) implementation pivot):

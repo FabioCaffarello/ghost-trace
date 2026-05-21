@@ -1,0 +1,103 @@
+// Category I primary observation per Charter §2.2 + entity-model.md
+// §Category I. Records an HTTP-T3-initiated orphan-cleanup invocation
+// PRIOR to any blob deletion: the operator-supplied invocation
+// parameters, the orphan hashes the system inspected, and the subset
+// the system intends to delete. The audit + its paired IngestionEvent
+// commit before any blob is deleted; deletion follows. Partial-deletion
+// failure leaves the audit + surviving blobs recoverable — operator
+// re-runs the deletion against the audit's hash list. The audit's
+// hash list IS the recovery contract per RFC architecture-http-auth-
+// scope-model item 4 + decision-log §0098 acceptance + §0104 landing.
+//
+// First new Cat I record type since §0042-era NetworkEvent. Registered
+// via the same dispatch registry the existing Cat I types use; commits
+// via the same substrate.AppendPair path as IngestionEvent.
+//
+// Encoded under the canonical-serialization-contract at
+// docs/architecture/canonical-serialization-contract.md.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// OrphanCleanupAudit is the substrate-committed pre-deletion record of
+// an HTTP-T3 orphan-cleanup invocation per RFC architecture-http-auth-
+// scope-model item 4(b) + decision-log §0104.
+message OrphanCleanupAudit {
+  // invoked_at is the operator-supplied invocation time as Unix
+  // nanoseconds since epoch. Captured at endpoint entry, before
+  // orphan identification. int64 chosen per decision-log §0024
+  // modification 6 (canonical-form-load-bearing time fields use int64
+  // Unix nanoseconds, not google.protobuf.Timestamp, for content-hash
+  // stability).
+  int64 invoked_at = 1;
+
+  // dry_run records the operator's --dry-run choice. When true, the
+  // audit records the would-be-deletion set but no deletion follows
+  // (defensible by replay: the audit hash list set === the
+  // PreservedByMissing-deletion set). When false, deletion follows
+  // the audit-commit per RFC item 4 audit-then-delete contract.
+  bool dry_run = 2;
+
+  // confirm records the operator's explicit confirm choice (HTTP
+  // query parameter, see services/ingestion/internal/httpapi). The
+  // CLI mirror requires -confirm=true when -dry-run=false; the HTTP
+  // T3 path requires query confirm=true when dry_run=false. Recorded
+  // here as evidentiary record of operator intent at the audit-
+  // commit moment.
+  bool confirm = 3;
+
+  // keep_newer_than_seconds is the operator-supplied age-floor
+  // (--keep-newer-than CLI mirror) in whole seconds. Orphans with
+  // file mtime newer than (invoked_at - keep_newer_than_seconds * 1e9
+  // ns) are preserved. Zero disables the age floor. int64 chosen for
+  // proto3 portability and ns-precision arithmetic at the consumer.
+  int64 keep_newer_than_seconds = 4;
+
+  // max_deletions caps the deletion count per invocation. Orphans
+  // beyond the cap are recorded in preserved_by_max_hashes. Zero
+  // disables the cap. int64 chosen for proto3 portability.
+  int64 max_deletions = 5;
+
+  // excluded_hashes is the operator-supplied exclusion-list — orphan
+  // hashes the operator wants preserved regardless of other filters.
+  // Each entry is lowercase-hex BLAKE3-256 of the blob contents.
+  repeated string excluded_hashes = 6;
+
+  // examined_count is the total blob count walked by the planning
+  // phase (regardless of orphan status). Recorded for forensic
+  // completeness — a fast-changing examined_count between successive
+  // audits surfaces high-churn substrate periods.
+  int64 examined_count = 7;
+
+  // orphans_found is the total orphan count the planning phase
+  // identified (i.e., blobs whose hash does NOT appear in the events
+  // table). Equals len(planned_deletion_hashes) +
+  // len(preserved_by_exclude_hashes) + len(preserved_by_age_hashes) +
+  // len(preserved_by_max_hashes). Recorded as a top-level summary
+  // counter.
+  int64 orphans_found = 8;
+
+  // planned_deletion_hashes is the orphan hash subset the deletion
+  // phase WILL attempt to delete (or WOULD attempt under dry_run).
+  // Each entry is lowercase-hex BLAKE3-256. THIS LIST IS THE
+  // RECOVERY CONTRACT per RFC item 4: partial-deletion failure
+  // leaves the audit + surviving blobs recoverable; operator re-runs
+  // deletion against this list.
+  repeated string planned_deletion_hashes = 9;
+
+  // preserved_by_exclude_hashes are orphans matched + preserved by
+  // the excluded_hashes filter. Recorded for replay completeness.
+  repeated string preserved_by_exclude_hashes = 10;
+
+  // preserved_by_age_hashes are orphans preserved by the
+  // keep_newer_than_seconds age floor. Recorded for replay
+  // completeness.
+  repeated string preserved_by_age_hashes = 11;
+
+  // preserved_by_max_hashes are orphans preserved because the
+  // max_deletions cap was reached. Recorded for replay completeness;
+  // operator can re-invoke without the cap to delete the remainder.
+  repeated string preserved_by_max_hashes = 12;
+}

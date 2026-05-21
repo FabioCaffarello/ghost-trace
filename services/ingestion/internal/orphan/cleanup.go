@@ -103,6 +103,27 @@ type Report struct {
 // fails; per-orphan filesystem errors during deletion abort the run
 // (a partial run is less safe than a fail-fast).
 func Cleanup(ctx context.Context, sub *substrate.Substrate, opts Options) (Report, error) {
+	return AuditedCleanup(ctx, sub, opts, nil)
+}
+
+// AuditedCleanup is Cleanup with an audit-callback hook invoked between
+// the planning and deletion phases per RFC architecture-http-auth-
+// scope-model item 4 audit-then-delete contract. The callback receives
+// the planned deletion Report (with Deleted populated as the
+// would-be-deleted set, identical to what DryRun=true would produce).
+// Returning a non-nil error from the callback aborts before any
+// deletion occurs (the substrate is unchanged).
+//
+// The HTTP-T3 path passes a callback that commits an OrphanCleanupAudit
+// record (paired with an IngestionEvent) via substrate.AppendPair; the
+// CLI path passes nil and uses the unaudited Cleanup behavior per
+// decision-log §0041 local-shell-trust assumption.
+//
+// When opts.DryRun is true, no deletion occurs regardless of the
+// audit callback's return value. When opts.DryRun is false and the
+// callback returns nil (or is nil), the planned deletions are
+// performed.
+func AuditedCleanup(ctx context.Context, sub *substrate.Substrate, opts Options, audit func(plan Report) error) (Report, error) {
 	var report Report
 	now := opts.now()
 
@@ -146,16 +167,33 @@ func Cleanup(ctx context.Context, sub *substrate.Substrate, opts Options) (Repor
 			return nil
 		}
 
-		if !opts.DryRun {
-			if err := os.Remove(path); err != nil {
-				return fmt.Errorf("orphan.Cleanup: remove %s: %w", path, err)
-			}
-		}
+		// Planned for deletion — recorded but not yet deleted.
 		report.Deleted = append(report.Deleted, rec)
 		return nil
 	})
 	if err != nil {
 		return report, err
+	}
+
+	// Audit hook between planning and deletion (RFC item 4
+	// audit-then-delete contract). A non-nil error aborts before any
+	// deletion; the substrate is unchanged.
+	if audit != nil {
+		if err := audit(report); err != nil {
+			return report, fmt.Errorf("orphan.AuditedCleanup: audit hook: %w", err)
+		}
+	}
+
+	// Deletion phase: perform deletions of the planned set. DryRun
+	// skips deletion entirely. Per-orphan filesystem errors abort the
+	// run; the audit's hash list (committed by the audit hook before
+	// this point) is the recovery contract for the surviving subset.
+	if !opts.DryRun {
+		for _, rec := range report.Deleted {
+			if err := os.Remove(rec.Path); err != nil {
+				return report, fmt.Errorf("orphan.AuditedCleanup: remove %s: %w", rec.Path, err)
+			}
+		}
 	}
 	return report, nil
 }
