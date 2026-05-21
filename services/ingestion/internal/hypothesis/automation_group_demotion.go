@@ -37,6 +37,13 @@ type AutomationGroupDemoteOptions struct {
 	// Reason is an operator-supplied free-form note. Optional;
 	// strongly recommended when demoting within the cadence window.
 	Reason string
+
+	// Actor is an optional per-actor attribution string per §0107
+	// T4 demote landing — mirrors PromoteOptions.Actor pattern. When
+	// non-empty, DemoteAutomationGroup commits the demotion event
+	// paired with an IngestionEvent via AppendPair. Empty preserves
+	// the single-Append path.
+	Actor string
 }
 
 // AutomationGroupDemoteReport is the per-DemoteAutomationGroup outcome.
@@ -58,6 +65,10 @@ type AutomationGroupDemoteReport struct {
 	// the source promotion's promoted_at and this demotion's
 	// demoted_at.
 	CadenceElapsedSeconds int64
+
+	// IngestionEventHashHex is the content-hash (hex) of the paired
+	// IngestionEvent committed when Actor was non-empty.
+	IngestionEventHashHex string
 }
 
 // DemoteAutomationGroup records an AutomationGroupDemotion lifecycle
@@ -124,15 +135,48 @@ func DemoteAutomationGroup(ctx context.Context, sub *substrate.Substrate, opts A
 		return AutomationGroupDemoteReport{}, fmt.Errorf("hypothesis.DemoteAutomationGroup: lookup demotion %s: %w", hex, lookupErr)
 	}
 
+	committedAt := now().UnixNano()
 	demoRow := substrate.EventRow{
 		EventHash:   hash,
 		EventTime:   demotedAt,
 		MessageType: string(ev.ProtoReflect().Descriptor().FullName()),
 		PayloadRef:  hex[:2] + "/" + hex[2:],
-		CommittedAt: now().UnixNano(),
+		CommittedAt: committedAt,
 	}
-	if err := sub.Append(ctx, demoRow, demotionPayload); err != nil {
-		return AutomationGroupDemoteReport{}, fmt.Errorf("hypothesis.DemoteAutomationGroup: append demotion %s: %w", hex, err)
+
+	if opts.Actor == "" {
+		if err := sub.Append(ctx, demoRow, demotionPayload); err != nil {
+			return AutomationGroupDemoteReport{}, fmt.Errorf("hypothesis.DemoteAutomationGroup: append demotion %s: %w", hex, err)
+		}
+		return AutomationGroupDemoteReport{
+			DemotionEventHashHex:  hex,
+			AlreadyDemoted:        alreadyPresent,
+			CadenceSatisfied:      cadenceSatisfied,
+			CadenceElapsedSeconds: elapsedSeconds,
+		}, nil
+	}
+
+	ingEv := &eventsv1.IngestionEvent{
+		PrimaryEventHash: hash[:],
+		ReceivedAt:       committedAt,
+		IngestedAt:       committedAt,
+		Channel:          "cli",
+		ClientCommonName: opts.Actor,
+	}
+	ingPayload, ingHash, err := canonical.MarshalAndHash(ingEv)
+	if err != nil {
+		return AutomationGroupDemoteReport{}, fmt.Errorf("hypothesis.DemoteAutomationGroup: marshal ingestion event: %w", err)
+	}
+	ingHex := canonical.HashHex(ingHash)
+	ingRow := substrate.EventRow{
+		EventHash:   ingHash,
+		EventTime:   committedAt,
+		MessageType: string(ingEv.ProtoReflect().Descriptor().FullName()),
+		PayloadRef:  ingHex[:2] + "/" + ingHex[2:],
+		CommittedAt: committedAt,
+	}
+	if err := sub.AppendPair(ctx, demoRow, demotionPayload, ingRow, ingPayload); err != nil {
+		return AutomationGroupDemoteReport{}, fmt.Errorf("hypothesis.DemoteAutomationGroup: append pair (demotion %s, ingestion %s): %w", hex, ingHex, err)
 	}
 
 	return AutomationGroupDemoteReport{
@@ -140,5 +184,6 @@ func DemoteAutomationGroup(ctx context.Context, sub *substrate.Substrate, opts A
 		AlreadyDemoted:        alreadyPresent,
 		CadenceSatisfied:      cadenceSatisfied,
 		CadenceElapsedSeconds: elapsedSeconds,
+		IngestionEventHashHex: ingHex,
 	}, nil
 }
