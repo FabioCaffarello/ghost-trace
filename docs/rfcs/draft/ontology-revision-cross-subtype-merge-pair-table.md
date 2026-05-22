@@ -1,8 +1,8 @@
 # RFC — Cross-subtype merge + split pair-table contents (§0122 + §0124 follow-on)
 
-- **Status:** discussion
+- **Status:** accepted
 - **Authors:** Ghost Trace committee
-- **Date:** 2026-05-22 (placeholder opened); 2026-05-22 (substantive deliberation opened)
+- **Date:** 2026-05-22 (placeholder opened); 2026-05-22 (substantive deliberation opened); 2026-05-22 (fully resolved per §0125 + §0126)
 - **Type:** ontology-revision
 - **Affects:** [`docs/ontology/entity-model.md`](../../ontology/entity-model.md) §Cross-subtype operations (the §0122-deferred per-pair canonical-merge-target table + the §0124-deferred per-source split permitted-target-set table; co-located per the merge typing RFC §Combined-table option).
 
@@ -68,7 +68,7 @@ For each of the 6 unordered pair cells, this section presents the candidate targ
 
 **Recommendation:** `→ AG` is the leading candidate — the stricter-claim-absorbs-weaker framing aligns with §4 falsifiability (the AG target is more constrained and therefore more falsifiable). `→ BC` is the conservative alternative if the committee weighs hierarchy-by-broadness over hierarchy-by-specificity.
 
-**Open status:** open.
+**Open status:** RESOLVED (→ AG per [`§0126`](../../charter/decision-log.md) on 2026-05-22).
 
 ### Cell 2 — `{BC, CR}`
 
@@ -80,7 +80,7 @@ For each of the 6 unordered pair cells, this section presents the candidate targ
 
 **Recommendation:** `→ CR` is the leading candidate — preserves more structural information; aligns with the "merge produces the richer record" intuition. `→ BC` is the alternative if the committee weighs flat-set simplicity over relational richness.
 
-**Open status:** open.
+**Open status:** RESOLVED (→ CR per [`§0126`](../../charter/decision-log.md) on 2026-05-22).
 
 ### Cell 3 — `{BC, CH}`
 
@@ -92,7 +92,7 @@ For each of the 6 unordered pair cells, this section presents the candidate targ
 
 **Recommendation:** `→ CH` is the leading candidate per the same "richer surface wins" framing as Cell 2.
 
-**Open status:** open.
+**Open status:** RESOLVED (→ CH per [`§0126`](../../charter/decision-log.md) on 2026-05-22).
 
 ### Cell 4 — `{AG, CR}` (RESOLVED: → CR per §0125)
 
@@ -118,7 +118,7 @@ For each of the 6 unordered pair cells, this section presents the candidate targ
 
 **Recommendation:** `→ CH` is the leading candidate per the "richer surface wins" pattern. Less ambiguous than Cell 4 because AG's surface is simpler than CR's.
 
-**Open status:** open.
+**Open status:** RESOLVED (→ CH per [`§0126`](../../charter/decision-log.md) on 2026-05-22).
 
 ### Cell 6 — `{CR, CH}`
 
@@ -130,22 +130,22 @@ For each of the 6 unordered pair cells, this section presents the candidate targ
 
 **Recommendation:** `→ CH` is the leading candidate per "richer surface wins". This is the strongest candidate-recommendation in the table because the event-actor derivation is direct.
 
-**Open status:** open.
+**Open status:** RESOLVED (→ CH per [`§0126`](../../charter/decision-log.md) on 2026-05-22).
 
 ### Aggregated leading recommendations
 
 If the leading candidate in each cell is adopted:
 
-| Cell | Leading target | Conservative alternative | Ambiguity | Status |
-|---|---|---|---|---|
-| `{BC, AG}` | AG | BC | low | open |
-| `{BC, CR}` | CR | BC | low | open |
-| `{BC, CH}` | CH | BC | low | open |
-| `{AG, CR}` | CR | AG | (was HIGH) | **RESOLVED → CR per [`§0125`](../../charter/decision-log.md)** |
-| `{AG, CH}` | CH | AG | low | open |
-| `{CR, CH}` | CH | CR | very low | open |
+| Cell | Target | Status |
+|---|---|---|
+| `{BC, AG}` | → AG | **RESOLVED per [`§0126`](../../charter/decision-log.md)** |
+| `{BC, CR}` | → CR | **RESOLVED per [`§0126`](../../charter/decision-log.md)** |
+| `{BC, CH}` | → CH | **RESOLVED per [`§0126`](../../charter/decision-log.md)** |
+| `{AG, CR}` | → CR | **RESOLVED per [`§0125`](../../charter/decision-log.md)** |
+| `{AG, CH}` | → CH | **RESOLVED per [`§0126`](../../charter/decision-log.md)** |
+| `{CR, CH}` | → CH | **RESOLVED per [`§0126`](../../charter/decision-log.md)** |
 
-The table is now 1/6 resolved. The remaining 5 cells stand at their leading-recommendation, open status per the per-cell analysis above. Cell 4 → CR preserved cross-cell coherence with Cells 2 + 6's relational-richness pattern; per-cell resolutions for the other 5 cells await separate committee direction (or may be batched as an aggregate-table resolution per the §Cross-cell coherence question).
+The table is now **6/6 resolved.** [`§0125`](../../charter/decision-log.md) resolved Cell 4 (the table's genuinely-ambiguous cell) per cross-cell coherence preservation; [`§0126`](../../charter/decision-log.md) resolved the remaining 5 cells as an aggregate-batch ratifying the "richer surface wins" pattern as the table's coherent committee-defended structure. The form-adopt + parameters-defer pattern from [`§0122`](../../charter/decision-log.md) reaches full closure (form + all 6 parameters).
 
 ## Split permitted-target-set analysis (§0124)
 
@@ -228,4 +228,14 @@ The [Phase 3 / Phase 4 replay contracts](../../architecture/replay-model.md) req
 
 ## Decision Record
 
-Pending. The substantive discussion phase is now open per committee direction. Resolution will record per-cell targets + split permitted-target-set table + an explicit position on the Cell 4 ambiguity + the BC-as-split-target-terminal question.
+Resolved across two decision-log entries:
+
+- [`§0125`](../../charter/decision-log.md) — Cell 4 `{AG, CR} → CR` (per-cell resolution shape; the table's genuinely-ambiguous cell)
+- [`§0126`](../../charter/decision-log.md) — Cells 1, 2, 3, 5, 6 → leading recommendations (aggregate-batch resolution shape; ratifies "richer surface wins" pattern)
+
+Merge γ pair-table fully resolved (6/6 cells). Symmetric split γ' permitted-target-set table derived by inverse-symmetry per [`§0124`](../../charter/decision-log.md) (AG permits {BC, AG}; CR permits {BC, CR}, {AG, CR}; CH permits {BC, CH}, {AG, CH}, {CR, CH}; BC is structurally terminal for cross-subtype split).
+
+Carry-forwards (implementation-RFC discipline):
+
+- **Extension-field attachment mechanism** — each non-canonical-antecedent surface needs an attachment at the merged record (BC's pattern-signature under Cells 1-3; AG's automation-signature under Cells 4-5; CR's pairwise structure under Cell 6). Unified mechanism question for implementation-RFC.
+- **Cross-subtype merge + split helper-layer implementation** — under §0123 + §0124 + §0125 + §0126.

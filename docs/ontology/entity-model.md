@@ -93,7 +93,25 @@ The resolved RFCs:
 
 Their paired discussion-phase evidence documents at [`cross-subtype-merge-typing-evidence.md`](../rfcs/discussion/cross-subtype-merge-typing-evidence.md) + [`cross-subtype-merge-enablement-evidence.md`](../rfcs/discussion/cross-subtype-merge-enablement-evidence.md) + [`cross-subtype-split-evidence.md`](../rfcs/discussion/cross-subtype-split-evidence.md) record the two-stage convergence patterns + convergence-by-inheritance pattern that produced the resolutions.
 
-The pair-table follow-on at [`ontology-revision-cross-subtype-merge-pair-table.md`](../rfcs/draft/ontology-revision-cross-subtype-merge-pair-table.md) (`Status: discussion`, active substantive deliberation) carries the per-cell deliberation for both tables. **Cell 4 `{AG, CR}` resolved at [`§0125`](../charter/decision-log.md) as `→ CR`** (1/6 cells resolved); the remaining 5 cells stand at "leading recommendation, open" status per the per-cell analysis. Per-cell resolutions land independently per the [`§0125`](../charter/decision-log.md)-established per-cell-resolution shape.
+The pair-table follow-on at [`ontology-revision-cross-subtype-merge-pair-table.md`](../rfcs/draft/ontology-revision-cross-subtype-merge-pair-table.md) (`Status: accepted`) carries the per-cell resolution + the symmetric split γ' permitted-target-set table. **Pair-table fully closed (6/6 cells resolved)** across two decision-log entries:
+
+- [`§0125`](../charter/decision-log.md) — Cell 4 `{AG, CR} → CR` (per-cell resolution shape; the table's genuinely-ambiguous cell)
+- [`§0126`](../charter/decision-log.md) — Cells 1, 2, 3, 5, 6 → leading recommendations (aggregate-batch resolution shape)
+
+The full pair-table:
+
+| Cell | Target |
+|---|---|
+| `{BC, AG}` | → AG |
+| `{BC, CR}` | → CR |
+| `{BC, CH}` | → CH |
+| `{AG, CR}` | → CR |
+| `{AG, CH}` | → CH |
+| `{CR, CH}` | → CH |
+
+Symmetric split γ' permitted-target-set table derived by inverse-symmetry per [`§0124`](../charter/decision-log.md): AG permits `{BC, AG}`; CR permits `{BC, CR}`, `{AG, CR}`; CH permits `{BC, CH}`, `{AG, CH}`, `{CR, CH}`; BC is structurally terminal for cross-subtype split (BC is not the target of any merge cell, so BC cross-subtype split is structurally absent — within-subtype BC split remains unaffected).
+
+Remaining carry-forward: extension-field attachment mechanism for each non-canonical-antecedent surface (BC's pattern-signature under Cells 1-3; AG's automation-signature under Cells 4-5; CR's pairwise structure under Cell 6). Implementation-RFC discipline.
 
 ## The Assertion Type and Cross-Category References
 
