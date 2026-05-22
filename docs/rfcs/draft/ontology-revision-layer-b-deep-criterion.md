@@ -1,6 +1,6 @@
 # RFC — Layer B Deep Criterion (Q4 follow-on)
 
-- **Status:** discussion (active; all 4 pre-Gate dependencies discharged — §2.4 v0.5 + §2.6 v0.6 + Q3-α at [`§0133`](../../charter/decision-log.md) + Q5-τ at [`§0134`](../../charter/decision-log.md); substantive content drafting opens)
+- **Status:** discussion (substantive deliberation complete — recommendation: Candidate L-BC-OR with L-C structural-exclusion commitment; formal resolution pending committee ratification)
 - **Authors:** Ghost Trace committee
 - **Date:** 2026-05-15
 - **Type:** ontology-revision
@@ -130,4 +130,14 @@ No historical Category III records exist at this point. Layer B's specification 
 
 ## Decision Record
 
-Pending. This RFC is on hold; its substantive content will be drafted when §2.4 and §2.6 are redacted and ontology.md Q3 and Q5 resolved. A decision-log entry will be assigned when the RFC advances and the committee resolves Layer B's deep criterion.
+Substantive deliberation complete; formal resolution pending. The discussion-phase deliberation recorded in [`layer-b-deep-criterion-evidence.md`](../discussion/layer-b-deep-criterion-evidence.md) Phases 3–5 recommends **Candidate L-BC-OR (disjunctive — `Layer B(H) := (freshness_B(H) < T_B) OR (saturation_C(H) > K_C)`)** with the **L-C structural-exclusion commitment** (saturation denominator excludes H's own enrichment outputs per §2.4 v0.5 chain inspection).
+
+Full demotion-candidacy predicate:
+
+> `DEMOTE-CANDIDATE(H) := Layer A(H) AND ((freshness_B(H) < T_B) OR (saturation_C(H) > K_C))`
+
+The recommendation rests on Phase 4 Findings 1 (only L-BC-OR / L-BC-staged structurally cover both §1 Thesis failure modes), 2 (L-BC-AND systematically under-defends — admits single-half violations as structurally-undefended states), 3 (L-BC-staged blurs form-vs-parameter discipline; L-BC-OR preserves it), 4 (false-positive resistance concern is parameter-calibration-addressable; structural-coverage gap is not), 5 (L-C structural-exclusion commitment is constitutional, not operational), 6 (L-B's transitive-reading requirement pre-satisfied by §0134).
+
+Two committee extensions: (a) L-C structural-exclusion commitment — saturation denominator excludes H's own enrichment outputs (structural mirror of Q4 Phase 3 Finding 6 for the C-family); (b) form-vs-parameter discipline preserved — T_B / K_C / N values open as operational-specification follow-on RFC.
+
+Resolution lands at a future `decision-log` entry that fully discharges the §2.5 binding-text Layer B forward-reference per [`§0011`](../../charter/decision-log.md) contract, completes the two-cascade chain Q3 → Q5 → Layer B, and feeds the canonical-serialization-contract revision (consolidated architecture-document RFC crystallizing α + τ + L-BC-OR per [`§0133`](../../charter/decision-log.md) + [`§0134`](../../charter/decision-log.md) follow-on schedule). Parameter-calibration operational-specification RFC opens as separate follow-on.
