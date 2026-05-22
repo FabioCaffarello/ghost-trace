@@ -235,13 +235,175 @@ Two cross-sub-decision asymmetries will likely organize substantive deliberation
 
 ---
 
-## Phases 3+ — Deferred to substantive deliberation
+## Phase 3 — Apply epistemic skills
 
-The following phases are drafted in subsequent RFC commits:
+Per the Q3 / Q5 / Layer B Phase 3 precedent, three skills ([`falsifiability-check`](../../../.claude/skills/epistemic/falsifiability-check/SKILL.md), [`epistemic-separator`](../../../.claude/skills/epistemic/epistemic-separator/SKILL.md), [`ambiguity-reducer`](../../../.claude/skills/epistemic/ambiguity-reducer/SKILL.md)) applied. Operational-spec RFCs admit a lighter Phase 3 than structural RFCs because the structural form is fixed at [`§0135`](../../charter/decision-log.md) and the canonical-serialization-contract enforces type/range at the marshalling boundary per [`§0136`](../../charter/decision-log.md). The epistemic-skill questions therefore focus on the candidate's posture-fit at inception phase rather than on structural admissibility.
 
-- **Phase 3 — Epistemic-skill application.** Apply [`falsifiability-check`](../../../.claude/skills/epistemic/falsifiability-check/SKILL.md), [`epistemic-separator`](../../../.claude/skills/epistemic/epistemic-separator/SKILL.md), and [`ambiguity-reducer`](../../../.claude/skills/epistemic/ambiguity-reducer/SKILL.md) to each candidate per the Q3 / Q5 / Layer B Phase 3 precedent. Note: this RFC is OPERATIONAL specification, not structural; the epistemic-skill application is lighter than for ontology RFCs (the structural form is fixed at §0135).
-- **Phase 4 — Comparison synthesis.** Rank candidates against §1 Thesis coverage at conservative defaults, false-positive resistance, inception-phase posture, and form-vs-parameter discipline.
-- **Phase 5 — Recommendation.** Single recommendation per sub-decision; explicit reversal-conditions record for empirical-pressure-phase triggers; canonical-serialization-contract LayerBParameters proto values.
+### Sub-decision 1 — T_B (freshness threshold)
+
+| Candidate | `falsifiability-check` | `epistemic-separator` | `ambiguity-reducer` |
+|---|---|---|---|
+| **T_B-loose (0.3)** | Pass at form-level. The threshold is structurally observable (firing predicate per [`§0136`](../../charter/decision-log.md)); a hypothesis with freshness_B(H) < 0.3 not in demotion-candidate set is detectable via projection-replay. Falsifiability is independent of value choice. | Pass per category boundary. α values per [`§0133`](../../charter/decision-log.md) operate at the Cat I root layer; no cross-category mixing introduced by threshold value. | Pass. `0.3` is a deterministic rational value; no ambiguity. |
+| **T_B-medium (0.5)** | Same form-level pass as T_B-loose. | Same as T_B-loose. | Same as T_B-loose. Additionally: the midpoint matches §1 Thesis half (a) framing — "majority of recent supporting evidence is influenced" is structurally meaningful at the 0.5 boundary. |
+| **T_B-strict (0.7)** | Same form-level pass. | Same as T_B-loose. | Pass. |
+| **T_B-derived (rejected)** | FAIL — falsifiability at the canonical-serialization-contract layer requires the value to be a structural constant per [`§0136`](../../charter/decision-log.md) parameter-mutability prohibition. A runtime-derived value is not contract-falsifiable; projection-replay byte-for-byte match against a moving target is structurally undefined. | Fail. Runtime derivation introduces a cross-layer dependency (substrate → runtime metric → substrate) that the contract layer cannot enforce. | N/A — rejected at falsifiability + epistemic-separator. |
+
+### Sub-decision 2 — K_C (saturation ratio)
+
+| Candidate | `falsifiability-check` | `epistemic-separator` | `ambiguity-reducer` |
+|---|---|---|---|
+| **K_C-very-low (0.1)** | Pass at form-level. | Pass. saturation_C reads closure_hashes per [`§0134`](../../charter/decision-log.md); the structural exclusion of H's direct enrichment outputs is the L-C commitment per [`§0135`](../../charter/decision-log.md); both invariant under value choice. | Pass. |
+| **K_C-low (0.25)** | Pass. | Pass. | Pass. Quartile boundary is a natural empirical threshold but does not encode constitutional meaning. |
+| **K_C-medium (0.5)** | Pass. | Pass. | Pass. Midpoint matches §1 Thesis half (b) framing — "promoted hypotheses re-enter as enrichment and silently reinforce themselves" is structurally meaningful at the majority boundary. |
+| **K_C-high (0.75)** | Pass. | Pass. | Pass. |
+
+### Sub-decision 3 — N (window size)
+
+| Candidate | `falsifiability-check` | `epistemic-separator` | `ambiguity-reducer` |
+|---|---|---|---|
+| **N-small (100)** | Pass at form-level. Window-size choice does not affect structural falsifiability. | Pass. Window scope is the recent-assertion set; no cross-category mixing. | Pass. `100` is deterministic. |
+| **N-medium (1000)** | Pass. | Pass. | Pass. |
+| **N-large (10000)** | Pass. | Pass. | Pass. |
+
+### Sub-decision 4 — Window structural form
+
+| Candidate | `falsifiability-check` | `epistemic-separator` | `ambiguity-reducer` |
+|---|---|---|---|
+| **W-count (fixed-count)** | Pass at form-level. The window is deterministically the last N assertions per substrate-commit order; falsifiability via projection-replay over the same set. | Pass. No clock-time semantics; no §2.1 substrate-immutability interaction. | Pass. Window semantics are deterministic. |
+| **W-time (fixed-time)** | Pass-with-concern. Window is the assertions committed in the last T duration; falsifiability requires deterministic clock-time semantics at projection-replay. **Risk:** clock-time interpretation across replay environments may diverge (timezone, NTP drift); the contract would need to specify clock-time semantics explicitly. | **Risk:** clock-time introduces a temporal-arithmetic dependency that interacts with [§2.1](../../charter/constitutional-charter.md#21-observational-integrity) substrate-immutability. The substrate's content-addressable identifier per [`§0021`](../../charter/decision-log.md) does not include clock-time; introducing clock-time-dependent windows creates a parallel temporal axis the substrate does not natively carry. | **Ambiguity-flagged on `T` operationalization.** Window duration's semantic (wall-clock vs substrate-commit time) is itself a structural sub-decision — Response 3 (raise as open modeling question). |
+| **W-hybrid (max of count + time)** | Pass-with-concern (inherits W-time concerns). | Inherits W-time concerns. | Inherits W-time ambiguities; additionally introduces two-parameter calibration (N + T). |
+
+### Sub-decision 5 — Per-subtype divergence
+
+| Candidate | `falsifiability-check` | `epistemic-separator` | `ambiguity-reducer` |
+|---|---|---|---|
+| **U-uniform** | Pass at form-level. Single parameter set is contract-structural per [`§0136`](../../charter/decision-log.md) LayerBParameters proto; falsifiability via single value comparison. | Pass. Uniform parameters operate at the abstract `Hypothesis` level; no per-subtype category-boundary commitment introduced. | Pass. |
+| **P-per-subtype** | Pass at form-level. Per-subtype parameters extend the LayerBParameters proto with subtype-indexed fields. | **Risk:** per-subtype divergence at inception phase requires per-subtype rationale not currently available; without empirical evidence, the divergence introduces structural-asymmetry across the four concrete subtypes that the abstract `Hypothesis` type's uniform lifecycle (per [`§0010`](../../charter/decision-log.md) Q2-A.2) does not motivate. | **Ambiguity-flagged on per-subtype rationale.** Each subtype's parameter set requires justification; without justification, the values are operationally arbitrary. Response 3 — raise as open modeling question for empirical-pressure-phase reversal. |
+
+### Most consequential epistemic finding across the matrix
+
+**Primary finding — W-time / W-hybrid carry clock-time semantic risk that W-count avoids.** Per Phase 3 sub-decision 4: W-time and W-hybrid introduce a temporal-arithmetic dependency that interacts with §2.1 substrate-immutability (the substrate's content-addressable identifier does not include clock-time per [`§0021`](../../charter/decision-log.md); introducing clock-time-dependent windows creates a parallel temporal axis). W-count uses substrate-commit-order, which is the substrate's native ordering per [`§0024`](../../charter/decision-log.md) + [`§0027`](../../charter/decision-log.md). **W-count is the only candidate without a structural risk surface.**
+
+**Secondary finding — P-per-subtype carries an empirical-justification burden U-uniform does not.** Per Phase 3 sub-decision 5: per-subtype divergence at inception phase requires per-subtype rationale not available. The candidate is not structurally rejected (the LayerBParameters proto admits per-subtype extension via additional fields), but the operational discipline (rationale-per-subtype) is unmet at inception. U-uniform inherits the Q3 / Q5 / Layer B precedent of uniform-at-inception per their respective Phase 4 findings.
+
+**Tertiary finding — T_B-derived is structurally precluded, not just operationally suboptimal.** Per Phase 3 sub-decision 1: T_B-derived violates [`§0136`](../../charter/decision-log.md) parameter-mutability prohibition. The candidate is not a value choice; it's a structural-layer violation. The committee's rejection at framing per the form-vs-parameter respect asymmetry is upheld at Phase 3.
+
+### Calibration carry-forward to future operational-spec RFCs
+
+Layer-B-parameter-calibration-1 confirms and extends prior calibrations:
+
+- **Confirmed: falsifiability §1.3 (operationalization) does most of the work on substrate-touching propositions.** All operational candidates decide cleanly at §1.3; the value choices are independent of structural falsifiability, which lands at the form layer.
+- **Confirmed: ambiguity-reducer surfaces residual carry-forwards that are themselves structural deferrals.** W-time / W-hybrid surface the clock-time operationalization as Response-3.
+- **New observation — Operational-spec Phase 3 is lighter than ontology-revision Phase 3.** The structural form is fixed; the epistemic-skill matrix focuses on posture-fit at inception phase rather than on structural admissibility. **Future operational-spec RFCs may apply this lighter Phase 3 pattern.**
+
+## Phase 4 — Comparison synthesis
+
+Findings synthesized from Phase 1 (dependency surface + inception-phase posture), Phase 2 (parameter-by-parameter candidate enumeration), and Phase 3 (epistemic-skill matrix). Classified as **asymmetry** / **apparent trade-off that resolves** / **genuine trade-off** / **tension**. Numbered in order of consequence.
+
+### Finding 1 — Asymmetry: inception-phase posture favors medium-zone candidates across all parameter sub-decisions
+
+Per Phase 1's inception-phase posture commitment + [`§0022`](../../charter/decision-log.md) empirical-pressure-phase discipline + [`§0023`](../../charter/decision-log.md) inception-phase precedent: the system has NO empirical observations of α distributions, closure-membership counts, or hypothesis lifecycle dynamics. Parameter calibration is **committee-judgment-over-conservative-defaults**, not observation-driven. Medium-zone candidates (T_B-medium = 0.5, K_C-medium = 0.5, N-medium = 1000) minimize the asymmetry between false-positive and false-negative rates — both extremes (T_B-strict / K_C-very-low / large N for aggressive; T_B-loose / K_C-high / small N for permissive) require empirical justification not available. **Medium-zone is the structurally-disciplined inception-phase default.**
+
+### Finding 2 — Asymmetry: T_B-medium and K_C-medium align with §1 Thesis framing
+
+Per Phase 3 sub-decision 1 (T_B-medium) + sub-decision 2 (K_C-medium): the midpoint thresholds match the §1 Thesis framing of the two failure modes. T_B = 0.5 fires when "majority of recent supporting evidence is influenced" (Thesis half (a)); K_C = 0.5 fires when "promoted hypotheses influence majority of recent assertions" (Thesis half (b)). The midpoints are not arbitrary defaults — they encode the structural-meaningfulness of the boundary in [§1 Thesis](../../charter/constitutional-charter.md#1-thesis) terms. **Defaulting to medium-zone in this case carries constitutional alignment beyond mere conservatism.**
+
+### Finding 3 — Apparent trade-off that resolves: W-time / W-hybrid clock-time concerns eliminate them at inception
+
+Per Phase 3 sub-decision 4: W-time and W-hybrid introduce a clock-time semantic risk (parallel temporal axis the substrate does not natively carry per [`§0021`](../../charter/decision-log.md)). The apparent benefit (time-awareness, temporal pattern handling) does not survive the inception-phase posture — at inception, the substrate's commit-order is the only temporal axis structurally defined. **W-count is the only candidate without a structural risk surface; the trade-off resolves toward W-count at inception, with W-time / W-hybrid available as empirical-pressure-phase reversal options if temporal patterns matter operationally.**
+
+### Finding 4 — Asymmetry: P-per-subtype carries empirical-justification burden U-uniform does not
+
+Per Phase 3 sub-decision 5 + [CLAUDE.md §7](../../../.claude/CLAUDE.md) constitutional minimalism: per-subtype divergence at inception phase requires per-subtype rationale not available. The four concrete Cat III subtypes (per [`§0010`](../../charter/decision-log.md) Q2-A.2) inherit the abstract `Hypothesis` lifecycle uniformly; per-subtype parameter sets would impose structural asymmetry without empirical justification. **U-uniform inherits the established inception-phase pattern from Q3 / Q5 / Layer B Phase 4 Findings 9 / 7 / 8 respectively.**
+
+### Finding 5 — Genuine trade-off: N-medium vs N-small/N-large requires committee-judgment on reactivity-vs-stability balance
+
+Per Phase 2 sub-decision 3: N-small (100) is more reactive but statistically thin; N-large (10000) is more stable but slow to react; N-medium (1000) balances. At inception, there's no empirical guidance on the right balance — it's a values judgment about whether faster reaction or higher confidence matters more. **Defaulting to N-medium per the conservative-defaults posture is committee-judgment, with reversal-conditions naming the empirical signals that would trigger N-small (false-negative on staleness that develops faster than 1000 cycles allows detection) or N-large (false-positive on transient variance that 1000 cycles is too sensitive to).**
+
+### Finding 6 — N_A bundling: include in this RFC for operational coherence
+
+Per Phase 1's N_A bundling open question: Layer A's `N_A` cadence parameter is the third operational parameter alongside T_B and K_C in the full demotion-candidacy predicate. Bundling N_A into this RFC's resolution produces a single source of truth for the LayerBParameters proto VALUES; deferring N_A to a separate RFC creates split operational ownership for the same predicate. **Bundling is structurally coherent.** N_A candidates inherit the same medium-zone-default pattern:
+
+- N_A-short (1 hour) — high reactivity; risks Layer A firing constantly
+- N_A-medium (1 day) — balanced; aligns with inception-phase observable substrate scale
+- N_A-long (1 week) — slow cadence; matches stable-operations posture
+- N_A-very-long (1 month) — quarterly-rotation cadence
+
+**N_A-medium (1 day) is the conservative-defaults choice** — long enough to avoid Layer A firing on minor cadence variations, short enough to permit reaction within a working week.
+
+### Finding 7 — Reversal-conditions per-parameter granularity is more rigorous
+
+Per Phase 1's reversal-conditions record granularity open question: per-parameter granularity (one reversal condition per parameter) is more rigorous than parameter-set granularity (one reversal condition for the entire set). The per-parameter form admits independent revision — if empirical pressure surfaces on T_B but not on K_C, the resolution can revise T_B without re-opening K_C. **Per-parameter is structurally aligned with the form-vs-parameter discipline — each parameter is independent at the contract layer, so the reversal-conditions record should be independent at the operational-specification layer.**
+
+### Finding 8 — Carry-forward: empirical-pressure-phase triggers must be observable, not predictive
+
+Per [`§0022`](../../charter/decision-log.md) empirical-pressure-phase discipline: reversal triggers are empirical signals, not predictions. The reversal-conditions record names what would be observed in operation to trigger a revision RFC; it does NOT predict what those observations will show. **The triggers are observation-based, not hypothesis-based** — the structural commitment is "if we observe X, revise"; not "we predict X will be observed".
+
+### Finding 9 — Methodological observation: operational-spec RFCs admit lighter Phase 3
+
+Per Phase 3's calibration carry-forward (third bullet): operational-spec RFCs admit a lighter Phase 3 than ontology-revision RFCs because the structural form is fixed at upstream resolutions. The epistemic-skill matrix focuses on posture-fit at inception phase rather than on structural admissibility. **This is the first operational-spec RFC to instantiate the pattern; the methodology is recorded for future operational-spec RFCs.**
+
+## Phase 5 — Recommendation
+
+The discussion phase recommends the following parameter values:
+
+| Sub-decision | Recommendation | Reversal trigger (per Finding 7) |
+|---|---|---|
+| **T_B** | **0.5** (T_B-medium) | Revise if observed α-distribution median over substantial promoted-hypothesis substrate exhibits systematic bias above 0.7 (false-negative on staleness) or below 0.3 (false-positive on productive hypotheses) |
+| **K_C** | **0.5** (K_C-medium) | Revise if observed saturation distribution shows productive hypotheses firing Layer B (false-positive) or clearly-saturating hypotheses persisting beyond multiple Layer A cycles without firing (false-negative) |
+| **N** | **1000** (N-medium) | Revise if Layer B's reactivity proves observably misaligned — false-negatives on staleness developing faster than 1000-assertion cycles allow detection (reduce N), or false-positives on transient variance (increase N) |
+| **Window form** | **W-count** (fixed-count) | Revise to W-time or W-hybrid if substrate-commit-order proves inadequate for capturing operationally-significant temporal patterns (e.g., burst activity, periodic dormancy) |
+| **Per-subtype divergence** | **U-uniform** (single set at abstract Hypothesis level) | Revise to P-per-subtype if observed α / closure / lifecycle distributions diverge substantially across the four Cat III subtypes |
+| **N_A bundling** | **Bundle into this RFC** for operational coherence | (Bundling decision; no per-parameter reversal) |
+| **N_A (cadence parameter)** | **1 day** (N_A-medium) | Revise if Layer A's firing rate proves observably misaligned — false-negatives on stale hypotheses persisting beyond a working week without Layer A firing (reduce N_A), or false-positives on Layer A firing more frequently than operational team can review (increase N_A) |
+| **Reversal-conditions granularity** | **Per-parameter** (one condition per parameter) | (Structural choice; no reversal-of-reversal-conditions) |
+
+Full demotion-candidacy predicate under the recommendation:
+
+> `DEMOTE-CANDIDATE(H) := (elapsed_time_since_H.promotion > 1 day) AND ((freshness_B(H) < 0.5) OR (saturation_C(H) > 0.5))`
+
+with `freshness_B` and `saturation_C` computed over the last 1000 assertions referencing H (transitively per Q5-τ for freshness_B; transitively excluding H's direct enrichment outputs per L-C commitment for saturation_C). Uniform across all four Cat III concrete subtypes.
+
+### Rationale by Phase 4 finding
+
+- **F1 (medium-zone)** — T_B-medium, K_C-medium, N-medium, N_A-medium all default to the medium-zone per inception-phase posture.
+- **F2 (Thesis framing)** — T_B-medium and K_C-medium specifically encode §1 Thesis half-boundary structural meaning.
+- **F3 (W-count)** — W-count avoids clock-time semantic risk; W-time / W-hybrid retained as empirical-pressure-phase reversal options.
+- **F4 (U-uniform)** — U-uniform inherits the established Q3 / Q5 / Layer B inception-phase pattern.
+- **F5 (N-medium)** — N-medium is the conservative-defaults balance between reactivity and stability.
+- **F6 (N_A bundled)** — Bundling produces a single source of truth for LayerBParameters proto VALUES.
+- **F7 (per-parameter granularity)** — Per-parameter reversal-conditions admit independent revision.
+- **F8 (observation-based triggers)** — All reversal triggers are observation-based, not hypothesis-based.
+
+### What would reverse this set of recommendations
+
+The recommendations flip or substantially change if any of the following emerges:
+
+- **Empirical observations on substrate-state distributions** — once the substrate has accumulated promoted hypotheses, α distributions, closure-membership counts, and lifecycle event rates may show patterns that argue for non-medium values. The reversal-conditions record per-parameter names specific triggers.
+- **Operational tolerance feedback** — operator review of Layer B firings may show systematic mis-firings or persistent failures-to-fire; per-parameter reversal conditions admit targeted revision.
+- **Temporal-pattern dominance** — if substrate exhibits substantial temporal patterns (burst, periodic), W-count may prove insufficient and W-time or W-hybrid may need to be revisited.
+- **Per-subtype divergence empirically observed** — if measured α / closure / lifecycle distributions diverge substantially across the four concrete subtypes, P-per-subtype becomes preferred.
+- **Form-level reversal** — if a future RFC reverses [`§0011`](../../charter/decision-log.md) Layer A AND Layer B → Layer A OR Layer B, the entire parameter set may need re-calibration. The Q4 reversal-conditions record is operative; this RFC's parameter choices remain valid under the AND composition.
+
+### Implication for canonical-serialization-contract LayerBParameters proto
+
+Per [`§0136`](../../charter/decision-log.md): the `LayerBParameters` proto fields receive the recommended values:
+
+```proto
+LayerBParameters {
+    t_b: EvidentialIndependence { numerator: 1, denominator: 2 }      # 0.5
+    k_c: EvidentialIndependence { numerator: 1, denominator: 2 }      # 0.5
+    n_window: 1000
+    // N_A bundling adds:
+    n_a_duration_nanoseconds: 86400000000000                          # 1 day in nanoseconds
+}
+```
+
+The contract revision to add `n_a_duration_nanoseconds` is a sub-decision of this resolution; the proto change is committed alongside this RFC's resolution at the canonical-serialization-contract layer per the [`§0028`](../../charter/decision-log.md) + [`§0034`](../../charter/decision-log.md) AP5 step (b) precedent.
+
+### Implication for §0022 empirical-pressure-phase discipline
+
+The reversal-conditions record committed with this resolution names the observable signals that would trigger a revision RFC. Per [`§0022`](../../charter/decision-log.md) discipline: implementation work proceeds under the recommended values; substrate-state observations are collected; if any reversal trigger fires, a revision RFC opens at the operational-specification layer.
 
 ---
 

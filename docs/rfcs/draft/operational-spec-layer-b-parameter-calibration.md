@@ -1,8 +1,8 @@
 # RFC — Operational specification: Layer B parameter calibration
 
-- **Status:** discussion
-- **Authors:** Ghost Trace committee (per [`decision-log §0135`](../../charter/decision-log.md) Layer B form-vs-parameter discipline + [`§0136`](../../charter/decision-log.md) canonical-serialization-contract crystallization)
-- **Date:** 2026-05-22 (opened)
+- **Status:** discussion (substantive deliberation complete — recommendation: T_B=0.5, K_C=0.5, N=1000, W-count, U-uniform, N_A=1 day bundled, per-parameter reversal-conditions; formal resolution pending committee ratification)
+- **Authors:** Ghost Trace committee (per [`decision-log §0135`](../../charter/decision-log.md) Layer B form-vs-parameter discipline + [`§0136`](../../charter/decision-log.md) canonical-serialization-contract crystallization; discussion-phase deliberation Phases 3–5 recorded in [`layer-b-parameter-calibration-evidence.md`](../discussion/layer-b-parameter-calibration-evidence.md))
+- **Date:** 2026-05-22 (opened); 2026-05-22 (deliberation complete)
 - **Type:** operational-spec
 - **Affects:** [`docs/architecture/canonical-serialization-contract.md`](../../architecture/canonical-serialization-contract.md) Demotion-Candidacy Predicate section (parameter VALUES; type/range surface unchanged); [`docs/ontology/lifecycle-semantics.md`](../../ontology/lifecycle-semantics.md) §The Promotion Mechanism + §Demotion (operational parameter values become concrete); no Charter prose modification (form-level resolution already at [`§0135`](../../charter/decision-log.md))
 
@@ -132,4 +132,23 @@ No historical Cat III hypothesis records carry promotion events at this point. T
 
 ## Decision Record
 
-Pending. The RFC is at discussion status; substantive resolution lands at a future `decision-log` entry that specifies the parameter values + window form + per-subtype divergence + N_A bundling + reversal-conditions record. The contract's `LayerBParameters` proto consumes the resolution's values per [`§0136`](../../charter/decision-log.md); no Charter prose modification.
+Substantive deliberation complete; formal resolution pending. The discussion-phase deliberation recorded in [`layer-b-parameter-calibration-evidence.md`](../discussion/layer-b-parameter-calibration-evidence.md) Phases 3–5 recommends:
+
+| Sub-decision | Recommendation |
+|---|---|
+| `T_B` | **0.5** (T_B-medium) |
+| `K_C` | **0.5** (K_C-medium) |
+| `N` | **1000** (N-medium) |
+| Window form | **W-count** (fixed-count) |
+| Per-subtype divergence | **U-uniform** |
+| N_A bundling | **Bundled** into this RFC |
+| `N_A` (Layer A cadence) | **1 day** (N_A-medium) |
+| Reversal-conditions granularity | **Per-parameter** |
+
+Full demotion-candidacy predicate under the recommendation:
+
+> `DEMOTE-CANDIDATE(H) := (elapsed_time_since_H.promotion > 1 day) AND ((freshness_B(H) < 0.5) OR (saturation_C(H) > 0.5))`
+
+The recommendation rests on Phase 4 findings: F1 (medium-zone across all sub-decisions at inception phase), F2 (T_B-medium + K_C-medium align with §1 Thesis half boundaries), F3 (W-count avoids clock-time semantic risk), F4 (U-uniform inherits Q3/Q5/Layer B precedent), F5 (N-medium balances reactivity-vs-stability), F6 (N_A bundling produces single source of truth), F7 (per-parameter reversal-conditions granularity), F8 (observation-based reversal triggers per [`§0022`](../../charter/decision-log.md) discipline).
+
+Per-parameter reversal-conditions record committed with the resolution names empirical-pressure-phase triggers per [`§0022`](../../charter/decision-log.md) discipline. Resolution lands at a future `decision-log` entry that specifies the parameter values + window form + per-subtype divergence + N_A bundling + reversal-conditions record. The contract's `LayerBParameters` proto consumes the resolution's values per [`§0136`](../../charter/decision-log.md) — addition of `n_a_duration_nanoseconds` field to the proto is a sub-decision of this resolution; no Charter prose modification.
