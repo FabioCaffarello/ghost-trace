@@ -24,6 +24,8 @@ syntax = "proto3";
 
 package ghosttrace.events.v1;
 
+import "common/v1/evidential_independence.proto";
+
 option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
 
 // BehavioralClusterFormation records the formation of a Category III
@@ -69,12 +71,14 @@ message BehavioralClusterFormation {
   int64 formation_at = 4;
 
   // confidence is a scalar in [0.0, 1.0] expressing the formation
-  // pattern's confidence in the hypothesis. PLACEHOLDER pending
-  // Charter §2.6 (Evidential Independence Integrity) redaction —
-  // §2.6 will introduce the paired evidential_independence dimension
-  // per Charter §1 + entity-model.md line 58. Until then this scalar
-  // is computed deterministically by each formation pattern (no
-  // semantic interpretation beyond ordering).
+  // pattern's confidence in the hypothesis. Paired with
+  // evidential_independence (field 7) per Charter §2.6 (Evidential
+  // Independence Integrity, frozen v0.6 + patched v0.7.1 per
+  // decision-log §0137). Both dimensions must be set on records
+  // subject to the paired-dimension commitment per §2.6 anti-pattern
+  // 1; canonical-serialization-contract enforcement per
+  // decision-log §0136. Confidence is computed deterministically by
+  // each formation pattern.
   float confidence = 5;
 
   // source_event_hashes is the set of Category I observation
@@ -84,4 +88,37 @@ message BehavioralClusterFormation {
   // (or other Cat I primary) that contributed to the formation
   // decision. Sorted ASCENDING for content-hash stability.
   repeated bytes source_event_hashes = 6;
+
+  // evidential_independence is the paired dimension to confidence
+  // (field 5) per Charter §2.6 (frozen v0.6 + patched v0.7.1 per
+  // decision-log §0137). Computed per Q3-α (decision-log §0133):
+  // ratio of Cat I roots NOT reachable via influenced_by from a
+  // promoted hypothesis, divided by total Cat I roots in the
+  // subject_ref_* chain. Rational-pair encoding (numerator /
+  // denominator) preserves the bounded-resolution structural
+  // commitment per §0133 Phase 4 Finding 4. Canonical-serialization-
+  // contract enforcement per decision-log §0136.
+  ghosttrace.common.v1.EvidentialIndependence evidential_independence = 7;
+
+  // direct_influenced_by is the list of Cat III hypothesis content-
+  // hashes that the producer directly declares as influencing this
+  // formation's inference per Charter §2.4 (Inferential Influence
+  // Disclosure, frozen v0.5). Each element is the 32-byte BLAKE3
+  // content-hash of a Cat III hypothesis record. Sorted ASCENDING
+  // lexicographic order for content-hash stability per
+  // decision-log §0136 Influence Storage section. Empty when the
+  // formation pattern operates on Cat I observations only (no
+  // promoted-hypothesis enrichment context).
+  repeated bytes direct_influenced_by = 8;
+
+  // closure_hashes is the transitive closure of direct_influenced_by
+  // per Q5-τ (decision-log §0134 — Candidate τ transitive closure
+  // with β-graph storage). Computed at substrate write time by
+  // merging the closures of input records' closure_hashes per
+  // §0136 Influence Storage. Sorted ASCENDING lexicographic order;
+  // elements are 32-byte BLAKE3 content-hashes of Cat III hypotheses.
+  // Empty when the formation pattern has no transitive promoted-
+  // hypothesis influences in its provenance subgraph (the typical
+  // case at inception phase).
+  repeated bytes closure_hashes = 9;
 }
