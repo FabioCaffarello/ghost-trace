@@ -50,6 +50,7 @@ func run() error {
 	patternSignature := flag.String("pattern-signature", hypothesis.UniformCadenceV1Signature, "formation pattern signature identifier")
 	minObservationCount := flag.Int64("min-observation-count", 5, "uniform-cadence-v1: minimum DeclaredSessions per actor for cadence evaluation")
 	maxCovThreshold := flag.Float64("max-cov-threshold", 0.15, "uniform-cadence-v1: coefficient-of-variation ceiling below which an actor matches the automation signature")
+	actor := flag.String("actor", "", "OPTIONAL per decision-log §0097 + §0111: when non-empty, pairs each formed event with an IngestionEvent for per-actor attribution. Empty preserves the single-Append path.")
 	flag.Parse()
 
 	pattern, err := resolvePattern(*patternSignature, *minObservationCount, *maxCovThreshold)
@@ -64,7 +65,7 @@ func run() error {
 	}
 	defer func() { _ = sub.Close() }()
 
-	report, err := hypothesis.FormAutomationGroupAll(ctx, sub, pattern, time.Now)
+	report, err := hypothesis.FormAutomationGroupAllWithActor(ctx, sub, pattern, time.Now, *actor)
 	if err != nil {
 		return fmt.Errorf("form: %w", err)
 	}
@@ -81,9 +82,15 @@ func run() error {
 		return fmt.Errorf("encode json: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr,
-		"form-automation-group: pattern=%s params=%q examined=%d newly_formed=%d already_formed=%d\n",
-		pattern.Signature(), pattern.Parameters(), report.Examined, report.NewlyFormed, report.AlreadyFormed)
+	if *actor != "" {
+		fmt.Fprintf(os.Stderr,
+			"form-automation-group: pattern=%s params=%q examined=%d newly_formed=%d already_formed=%d actor=%q\n",
+			pattern.Signature(), pattern.Parameters(), report.Examined, report.NewlyFormed, report.AlreadyFormed, *actor)
+	} else {
+		fmt.Fprintf(os.Stderr,
+			"form-automation-group: pattern=%s params=%q examined=%d newly_formed=%d already_formed=%d\n",
+			pattern.Signature(), pattern.Parameters(), report.Examined, report.NewlyFormed, report.AlreadyFormed)
+	}
 	return nil
 }
 

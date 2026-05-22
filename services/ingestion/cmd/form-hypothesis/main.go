@@ -44,6 +44,7 @@ func run() error {
 	blobDir := flag.String("blobs", "./blobs", "content-addressed blob-store directory")
 	patternSignature := flag.String("pattern-signature", hypothesis.SessionDescriptorSharedV1Signature, "formation pattern signature identifier")
 	minClusterSize := flag.Int64("min-cluster-size", 2, "session-descriptor-shared-v1 parameter: minimum distinct actor_refs for a cluster to form")
+	actor := flag.String("actor", "", "OPTIONAL per decision-log §0097 + §0111: when non-empty, pairs each formed event with an IngestionEvent for per-actor attribution. Empty preserves the single-Append path.")
 	flag.Parse()
 
 	pattern, err := resolvePattern(*patternSignature, *minClusterSize)
@@ -58,7 +59,7 @@ func run() error {
 	}
 	defer func() { _ = sub.Close() }()
 
-	report, err := hypothesis.FormAll(ctx, sub, pattern, time.Now)
+	report, err := hypothesis.FormAllWithActor(ctx, sub, pattern, time.Now, *actor)
 	if err != nil {
 		return fmt.Errorf("form: %w", err)
 	}
@@ -75,9 +76,15 @@ func run() error {
 		return fmt.Errorf("encode json: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr,
-		"form-hypothesis: pattern=%s params=%q examined=%d newly_formed=%d already_formed=%d\n",
-		pattern.Signature(), pattern.Parameters(), report.Examined, report.NewlyFormed, report.AlreadyFormed)
+	if *actor != "" {
+		fmt.Fprintf(os.Stderr,
+			"form-hypothesis: pattern=%s params=%q examined=%d newly_formed=%d already_formed=%d actor=%q\n",
+			pattern.Signature(), pattern.Parameters(), report.Examined, report.NewlyFormed, report.AlreadyFormed, *actor)
+	} else {
+		fmt.Fprintf(os.Stderr,
+			"form-hypothesis: pattern=%s params=%q examined=%d newly_formed=%d already_formed=%d\n",
+			pattern.Signature(), pattern.Parameters(), report.Examined, report.NewlyFormed, report.AlreadyFormed)
+	}
 	return nil
 }
 

@@ -40,6 +40,7 @@ func run() error {
 	patternSignature := flag.String("pattern-signature", hypothesis.TemporalDescriptorCohortV1Signature, "formation pattern signature identifier")
 	minCampaignSize := flag.Int64("min-campaign-size", 3, "temporal-descriptor-cohort-v1: minimum events in a cohort")
 	maxIntraEventGapSeconds := flag.Int64("max-intra-event-gap-seconds", 300, "temporal-descriptor-cohort-v1: max elapsed seconds between consecutive events to keep them in the same cohort")
+	actor := flag.String("actor", "", "OPTIONAL per decision-log §0097 + §0111: when non-empty, pairs each formed event with an IngestionEvent for per-actor attribution. Empty preserves the single-Append path.")
 	flag.Parse()
 
 	pattern, err := resolvePattern(*patternSignature, *minCampaignSize, *maxIntraEventGapSeconds)
@@ -54,7 +55,7 @@ func run() error {
 	}
 	defer func() { _ = sub.Close() }()
 
-	report, err := hypothesis.FormCampaignHypothesisAll(ctx, sub, pattern, time.Now)
+	report, err := hypothesis.FormCampaignHypothesisAllWithActor(ctx, sub, pattern, time.Now, *actor)
 	if err != nil {
 		return fmt.Errorf("form: %w", err)
 	}
@@ -71,9 +72,15 @@ func run() error {
 		return fmt.Errorf("encode json: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr,
-		"form-campaign-hypothesis: pattern=%s params=%q examined=%d newly_formed=%d already_formed=%d\n",
-		pattern.Signature(), pattern.Parameters(), report.Examined, report.NewlyFormed, report.AlreadyFormed)
+	if *actor != "" {
+		fmt.Fprintf(os.Stderr,
+			"form-campaign-hypothesis: pattern=%s params=%q examined=%d newly_formed=%d already_formed=%d actor=%q\n",
+			pattern.Signature(), pattern.Parameters(), report.Examined, report.NewlyFormed, report.AlreadyFormed, *actor)
+	} else {
+		fmt.Fprintf(os.Stderr,
+			"form-campaign-hypothesis: pattern=%s params=%q examined=%d newly_formed=%d already_formed=%d\n",
+			pattern.Signature(), pattern.Parameters(), report.Examined, report.NewlyFormed, report.AlreadyFormed)
+	}
 	return nil
 }
 
