@@ -1,6 +1,6 @@
 # Canonical Serialization Contract
 
-**Status:** Active. First non-scaffold architecture document. Discharges the follow-on commitment named in [`decision-log §0024`](../charter/decision-log.md) AP5 mitigation step (b) and [`§0027`](../charter/decision-log.md) Consequences. Extended at [`decision-log §0136`](../charter/decision-log.md) to consolidate the paired-dimension commitment ([§2.6](../charter/constitutional-charter.md#26-evidential-independence-integrity) operational discharge), the α derivation rule (per [`§0133`](../charter/decision-log.md) Q3 resolution), the τ + β-graph influence storage (per [`§0134`](../charter/decision-log.md) Q5 resolution), and the Layer B L-BC-OR firing predicate (per [`§0135`](../charter/decision-log.md) Layer B resolution).
+**Status:** Active. First non-scaffold architecture document. Discharges the follow-on commitment named in [`decision-log §0024`](../charter/decision-log.md) AP5 mitigation step (b) and [`§0027`](../charter/decision-log.md) Consequences. Extended at [`decision-log §0136`](../charter/decision-log.md) to consolidate the paired-dimension commitment ([§2.6](../charter/constitutional-charter.md#26-evidential-independence-integrity) operational discharge), the α derivation rule (per [`§0133`](../charter/decision-log.md) Q3 resolution), the τ + β-graph influence storage (per [`§0134`](../charter/decision-log.md) Q5 resolution), and the Layer B L-BC-OR firing predicate (per [`§0135`](../charter/decision-log.md) Layer B resolution). Further extended at [`decision-log §0138`](../charter/decision-log.md) to bundle Layer A's `N_A` cadence parameter into the LayerBParameters proto + fix inception-phase parameter values (T_B = K_C = 0.5; N = 1000; window form = W-count; per-subtype divergence = U-uniform; N_A = 1 day; per-parameter reversal-conditions record).
 
 > This document specifies the canonical-serialization contract for Ghost Trace: the bit-stable mapping from a Protobuf message instance to a byte sequence to a content-addressable identifier. The mapping is the falsifiability predicate for [Charter §2.1 Observational Integrity](../charter/constitutional-charter.md#21-observational-integrity) at the substrate; without bit-stability, content-hash recomputation on read cannot serve as the mutation-detection mechanism.
 
@@ -251,17 +251,35 @@ The `H.hash ∉ r.direct_influenced_by` clause is the L-C structural-exclusion c
 
 ### Parameter ranges
 
-The contract enforces type/range at marshalling but defers parameter VALUES to operational specification:
+The contract enforces type/range at marshalling:
 
 ```proto
 message LayerBParameters {
-    EvidentialIndependence t_b = 1;  // 0 ≤ T_B ≤ 1; freshness threshold
-    EvidentialIndependence k_c = 2;  // 0 ≤ K_C ≤ 1; saturation ratio
-    uint64 n_window = 3;             // N > 0; recent-window size
+    EvidentialIndependence t_b = 1;                  // 0 ≤ T_B ≤ 1; freshness threshold
+    EvidentialIndependence k_c = 2;                  // 0 ≤ K_C ≤ 1; saturation ratio
+    uint64 n_window = 3;                             // N > 0; recent-window size (assertion count)
+    uint64 n_a_duration_nanoseconds = 4;             // N_A > 0; Layer A cadence (nanoseconds since promotion event commit)
 }
 ```
 
-`T_B` and `K_C` use the same rational encoding as `evidential_independence` (numerator/denominator pair). `N` is a positive integer. Specific values are operational-specification follow-on per [`§0135`](../charter/decision-log.md) form-vs-parameter discipline.
+`T_B` and `K_C` use the same rational encoding as `evidential_independence` (numerator/denominator pair). `N` is a positive integer (count of recent assertions per the W-count window form). `n_a_duration_nanoseconds` is a positive integer encoding the Layer A cadence as nanoseconds elapsed since the promotion event's `committed_at` substrate timestamp (per [`§0138`](../charter/decision-log.md) N_A bundling).
+
+### Values (§0138 inception-phase)
+
+Per [`§0138`](../charter/decision-log.md) Layer B parameter-calibration resolution, the inception-phase values are:
+
+```proto
+LayerBParameters {
+    t_b: EvidentialIndependence { numerator: 1, denominator: 2 }   // 0.5
+    k_c: EvidentialIndependence { numerator: 1, denominator: 2 }   // 0.5
+    n_window: 1000
+    n_a_duration_nanoseconds: 86400000000000                        // 1 day
+}
+```
+
+Window structural form: W-count (fixed-count — last `n_window` assertions by substrate-commit order; clock-time-independent per [§2.1](../charter/constitutional-charter.md#21-observational-integrity) substrate-immutability). Per-subtype divergence: U-uniform (single LayerBParameters message at the abstract `Hypothesis` level; the four concrete Cat III subtypes — `BehavioralCluster`, `AutomationGroup`, `CampaignHypothesis`, `CoordinationRing` — share the same parameter set per [`§0010`](../charter/decision-log.md) Q2-A.2 + [`§0138`](../charter/decision-log.md) F4).
+
+Per-parameter reversal-conditions record per [`§0138`](../charter/decision-log.md) F7: each parameter carries its own empirical-pressure-phase trigger; revision of one parameter does not require revisiting the others. The reversal-conditions record is the canonical reference for value revisions per [`§0022`](../charter/decision-log.md) discipline — observation-based, not hypothesis-based.
 
 ### Validation discipline
 
@@ -284,6 +302,7 @@ A change is a **schemas-evolution event** when any of the following hold:
 7. The closure_hashes encoding or computation algorithm (Influence Storage section) changes — hash element shape, sort order, deduplication, or merge algorithm.
 8. The L-BC-OR predicate's structural form (Demotion-Candidacy Predicate section) changes — Layer A composition, Layer B inner predicate, or L-C structural-exclusion semantic.
 9. The paired-dimension required-fields shape (Paired-Dimension Commitment section) changes — which record types are subject to the commitment, which fields are required, validation discipline.
+10. The LayerBParameters proto field shape changes — adding/removing fields, changing type/range, or modifying the bundling discipline (e.g., un-bundling N_A from LayerBParameters back to a separate proto). Parameter VALUES per [`§0138`](../charter/decision-log.md) are operational; their revision per the per-parameter reversal-conditions record does NOT trigger a schemas-evolution event unless the proto field shape itself changes.
 
 A change is NOT a schemas-evolution event when:
 
@@ -365,11 +384,14 @@ By analogy to Charter [§2.1 Forbidden Anti-Patterns](../charter/constitutional-
 - [`docs/charter/decision-log.md` §0133](../charter/decision-log.md) — Q3-α resolution (source-count ratio); this contract's Evidential Independence section operationalizes.
 - [`docs/charter/decision-log.md` §0134](../charter/decision-log.md) — Q5-τ resolution (transitive closure + β-graph storage + Cat II structural transmission); this contract's Influence Storage section operationalizes.
 - [`docs/charter/decision-log.md` §0135](../charter/decision-log.md) — Layer B L-BC-OR resolution (disjunctive + L-C structural-exclusion); this contract's Demotion-Candidacy Predicate section operationalizes.
-- [`docs/charter/decision-log.md` §0136](../charter/decision-log.md) — this contract revision consolidating §0133 + §0134 + §0135 at the contract layer.
+- [`docs/charter/decision-log.md` §0136](../charter/decision-log.md) — first contract revision consolidating §0133 + §0134 + §0135 at the contract layer.
+- [`docs/charter/decision-log.md` §0137](../charter/decision-log.md) — Charter v0.7.1 patch amendment correcting §2.6 + §3 `§0034` → `§0136` stale anchors (closes §0136 Anchor-fidelity observation).
+- [`docs/charter/decision-log.md` §0138](../charter/decision-log.md) — Layer B parameter-calibration resolution; LayerBParameters proto extension (n_a_duration_nanoseconds field) + inception-phase values fixed.
 - [`docs/rfcs/draft/architecture-schemas-technology-selection.md`](../rfcs/draft/architecture-schemas-technology-selection.md) — accepted at [`§0024`](../charter/decision-log.md).
 - [`docs/rfcs/draft/architecture-implementation-language-selection.md`](../rfcs/draft/architecture-implementation-language-selection.md) — accepted at [`§0025`](../charter/decision-log.md).
 - [`docs/rfcs/draft/architecture-storage-technology-selection.md`](../rfcs/draft/architecture-storage-technology-selection.md) — accepted at [`§0027`](../charter/decision-log.md).
 - [`docs/rfcs/draft/ontology-revision-q3-independence.md`](../rfcs/draft/ontology-revision-q3-independence.md) — Q3-α RFC; accepted at [`§0133`](../charter/decision-log.md).
 - [`docs/rfcs/draft/ontology-revision-q5-influence-propagation-transitivity.md`](../rfcs/draft/ontology-revision-q5-influence-propagation-transitivity.md) — Q5-τ RFC; accepted at [`§0134`](../charter/decision-log.md).
 - [`docs/rfcs/draft/ontology-revision-layer-b-deep-criterion.md`](../rfcs/draft/ontology-revision-layer-b-deep-criterion.md) — Layer B RFC; accepted at [`§0135`](../charter/decision-log.md).
+- [`docs/rfcs/draft/operational-spec-layer-b-parameter-calibration.md`](../rfcs/draft/operational-spec-layer-b-parameter-calibration.md) — Layer B parameter-calibration RFC; accepted at [`§0138`](../charter/decision-log.md). First operational-spec RFC.
 - [`docs/architecture/storage-model.md`](./storage-model.md) — Tier 0 substrate (which this contract's bytes inhabit) and Tier 1 archive (which inherits the contract).
