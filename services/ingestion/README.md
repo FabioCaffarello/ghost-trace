@@ -1067,14 +1067,14 @@ Four per-tier options, one per [`§0094`](../../docs/charter/decision-log.md) ti
 |---|---|---|
 | `--http-auth-producer-token-file` | T1 producer | `POST /v1/events/{type}` |
 | `--http-auth-operator-read-token-file` | T2 operator-read | `GET /v1/hypotheses/*`, `GET /v1/replay/*`, `GET /v1/verify` |
-| `--http-auth-substrate-admin-token-file` | T3 substrate-admin | `POST /v1/admin/*` (named follow-on per [`§0098`](../../docs/charter/decision-log.md); not yet shipped) |
-| `--http-auth-constitutional-act-token-file` | T4 constitutional-act | Cat III lifecycle endpoints (named follow-on per [`§0098`](../../docs/charter/decision-log.md); not yet shipped) |
+| `--http-auth-substrate-admin-token-file` | T3 substrate-admin | `POST /v1/admin/orphan-cleanup` (shipped per [`§0104`](../../docs/charter/decision-log.md)) |
+| `--http-auth-constitutional-act-token-file` | T4 constitutional-act | Cat III lifecycle endpoints `POST /v1/hypotheses/<subtype>/{form,promote,demote,dissolve,merge,split}` × 4 subtypes (all 24 shipped per [`§0105`](../../docs/charter/decision-log.md)–[`§0111`](../../docs/charter/decision-log.md)) |
 
 Tiers without a configured token are unreachable: requests to those routes return `401 Unauthorized` regardless of which token they present. T0 (`/healthz`) remains exempt per [`§0094`](../../docs/charter/decision-log.md) classification. Per-tier mode and single-token mode (`--http-auth-token{,-file}`) are mutually exclusive — configuring both makes the service exit non-zero at startup with a clear error.
 
-Tier conflation defense: under multi-tier mode, routes not yet in the classification (e.g., paths shipped by future follow-on PRs but not yet annotated) return `401` rather than silently passing. The [`§0094`](../../docs/charter/decision-log.md) AP1 defense per the auth-scope RFC.
+Tier conflation defense: under multi-tier mode, routes not in the classification (e.g., paths shipped by future RFC-driven extensions but not yet annotated in `routeTier`) return `401` rather than silently passing. The [`§0094`](../../docs/charter/decision-log.md) AP1 defense per the auth-scope RFC.
 
-**Backward compatibility.** [`§0035`](../../docs/charter/decision-log.md) single-token deployments continue to work unchanged. The single token is treated as the union of all four tiers; all currently-shipped routes (T0–T2) retain identical behavior. Operators opt into multi-tier mode by configuring at least one per-tier token; the single-token form must then be removed (concurrent configuration is rejected at startup).
+**Backward compatibility.** [`§0035`](../../docs/charter/decision-log.md) single-token deployments continue to work unchanged. The single token is treated as the union of all four tiers; all shipped routes (T0–T4) retain identical behavior. Operators opt into multi-tier mode by configuring at least one per-tier token; the single-token form must then be removed (concurrent configuration is rejected at startup).
 
 Signals (SIGINT, SIGTERM) trigger graceful shutdown via context cancellation; in-flight HTTP requests drain up to a 10-second grace window before the server returns from `Shutdown`.
 
