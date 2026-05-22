@@ -1,8 +1,8 @@
 # RFC — Ontology Open Question 5 (transitivity half): Transitivity semantic of `influence` propagation
 
-- **Status:** discussion
-- **Authors:** Ghost Trace committee (Q3-α cascade enactment; opened per [`decision-log §0133`](../../charter/decision-log.md))
-- **Date:** 2026-05-22 (opened)
+- **Status:** discussion (substantive deliberation complete — recommendation: Candidate τ / transitive closure with β-graph storage strategy; formal resolution pending committee ratification)
+- **Authors:** Ghost Trace committee (Q3-α cascade enactment; opened per [`decision-log §0133`](../../charter/decision-log.md); discussion-phase deliberation Phases 3–5 recorded in [`q5-transitivity-evidence.md`](../discussion/q5-transitivity-evidence.md))
+- **Date:** 2026-05-22 (opened); 2026-05-22 (deliberation complete)
 - **Type:** ontology-revision
 - **Affects:** [`docs/ontology/ontology.md`](../../ontology/ontology.md) (Open Question 5 transitivity half closed by resolution; decay half resolved at [`§0020`](../../charter/decision-log.md)); [Charter §2.4](../../charter/constitutional-charter.md#24-inferential-influence-disclosure) (frozen v0.5 — `influenced_by` chain structural surface; Q5 governs multi-step traversal semantic); [`ontology-revision-q3-independence`](./ontology-revision-q3-independence.md) (accepted per [`§0133`](../../charter/decision-log.md) — Q3-α's "reachable via `influenced_by` edge" predicate's structural semantic); [`docs/architecture/canonical-serialization-contract.md`](../../architecture/canonical-serialization-contract.md) (Q5 resolution feeds the contract revision per [`§0133`](../../charter/decision-log.md) follow-on schedule); [`ontology-revision-layer-b-deep-criterion`](./ontology-revision-layer-b-deep-criterion.md) (Layer B follow-on RFC consumes Q5 resolution as the final ontology-side dependency before substantive content)
 
@@ -130,4 +130,14 @@ No historical Cat II construct or Cat III hypothesis records exist that carry `i
 
 ## Decision Record
 
-Pending. The RFC is at discussion status; substantive resolution lands at a future `decision-log` entry that closes ontology.md Open Question 5 transitivity-half (decay half closed at [`§0020`](../../charter/decision-log.md)), discharges the [`§0133`](../../charter/decision-log.md) Q5-cascade, and unblocks Layer B's substantive content per the two-cascade chain Q3 → Q5 → Layer B.
+Substantive deliberation complete; formal resolution pending. The discussion-phase deliberation recorded in [`q5-transitivity-evidence.md`](../discussion/q5-transitivity-evidence.md) Phases 3–5 recommends **Candidate τ (transitive closure)** with **β-graph storage strategy** (substrate stores direct edges + per-record cached closures computed at write time). The recommendation rests on Phase 4 findings:
+
+- **F1** — τ is the only candidate structurally precluding the §1 Thesis failure mode through indirect chains (δ admits it through Cat-II-mediated invisibility; κ partially admits it for chains > K).
+- **F2** — τ is the only candidate fully aligned with §2.2 Cat II determinism (Cat II transitively transmits influence from its inputs).
+- **F3** — τ's closure-computation cost is bounded by caching (amortized O(input-set-size) per write under β-graph storage).
+- **F4** — κ is structurally weaker than τ-with-caching on both discipline and amortized cost.
+- **F8** — τ alone fully discharges the [`§0133`](../../charter/decision-log.md) Q3-α follow-on dependencies.
+
+One committee extension: Cat-II structural transmission commitment (per Finding 2, the resolution explicitly commits that Cat II constructs transmit `influenced_by` membership from their inputs).
+
+Resolution lands at a future `decision-log` entry that closes ontology.md Open Question 5 transitivity-half (decay half closed at [`§0020`](../../charter/decision-log.md)), discharges the [`§0133`](../../charter/decision-log.md) Q5-cascade, and unblocks Layer B's substantive content per the two-cascade chain Q3 → Q5 → Layer B. The canonical-serialization-contract revision opens post-resolution per [`§0133`](../../charter/decision-log.md) follow-on schedule.
