@@ -61,6 +61,7 @@ var messageFactory = map[string]func() proto.Message{
 	"coordination-ring-split":       func() proto.Message { return &eventsv1.CoordinationRingSplit{} },
 	"evidential-independence":       func() proto.Message { return &commonv1.EvidentialIndependence{} },
 	"layer-b-parameters":            func() proto.Message { return &commonv1.LayerBParameters{} },
+	"cross-subtype-merge-attachment": func() proto.Message { return &eventsv1.CrossSubtypeMergeAttachment{} },
 }
 
 // TestCanonicalCorpus is the CI golden-file gate per
