@@ -1,6 +1,6 @@
 # Contributing to Ghost Trace
 
-Ghost Trace is in pre-implementation constitutional drafting. Contribution norms reflect this stage.
+Ghost Trace is in **implementation phase** post the [`decision-log §0022`](./docs/charter/decision-log.md) implementation pivot. Constitutional sections continue to redact in committee mode in parallel with implementation work; §2.6 and §3 remain pending under the `empirical pressure phase` posture. Contribution norms reflect this dual-track stage.
 
 ## Before You Contribute
 
@@ -17,15 +17,16 @@ If your contribution does not respect what you find there, it will be rejected o
 
 At this stage:
 
-- **Critical readings of the Charter.** Identification of ambiguity, drift risk, or non-falsifiable language. These are the most valuable contributions during constitutional drafting.
+- **Critical readings of the Charter.** Identification of ambiguity, drift risk, or non-falsifiable language. Constitutional drafting remains active for §2.6 and §3 under the empirical-pressure-phase posture.
 - **Draft RFCs.** Especially those addressing open questions recorded in scaffold documents and the decision log.
-- **Ontology refinements.** Particularly around the open modeling questions in [`docs/ontology/`](./docs/ontology/).
+- **Ontology refinements.** Particularly around the open modeling questions in [`docs/ontology/`](./docs/ontology/) and the Q2-A.2 cross-subtype follow-on at discussion phase.
 - **Adversarial review.** Proposals describing how a hostile actor might exploit weaknesses in the architecture, or how the architecture might degrade under operational pressure.
+- **Implementation contributions.** Service code, schemas evolution, CLI extensions, projection/replay handlers — all under ordinary RFC discipline against the frozen Charter sections and resolved Ontology questions.
 
-What is not yet welcome:
+What is not welcome:
 
-- Implementation of services. Implementation work begins after the Ontology stabilizes.
-- Storage technology selection without an RFC.
+- Implementation that conflicts with a frozen Charter invariant. Such contributions are rejected on procedural grounds regardless of technical merit; if the contributor believes the Charter is wrong, the path is `charter-amendment` RFC, not implementation that bypasses it.
+- Storage technology, schemas technology, or implementation-language reselection without an RFC. The active technology selections are recorded in [`docs/charter/decision-log.md`](./docs/charter/decision-log.md); revision follows ordinary RFC discipline.
 - Documentation that reads like marketing.
 
 ## How to Propose a Charter Amendment
@@ -39,8 +40,8 @@ Open an RFC in [`docs/rfcs/draft/`](./docs/rfcs/draft/) using the [template](./d
 ## Style
 
 - Documentation in Markdown.
-- Code style decisions are deferred until implementation begins. They will be recorded as decisions when made.
-- All documentation must use the established vocabulary (substrate, projection, observation, operational construct, hypothesis, provenance, influence, supersession). The vocabulary is constitutional; using different words for the same concept introduces drift.
+- Code is Go for the ingestion service per [`docs/charter/decision-log.md`](./docs/charter/decision-log.md) implementation-language selection; the service-level Makefile + `go vet` + `go test` discipline applies to all Go contributions.
+- All documentation must use the established vocabulary (substrate, projection, observation, operational construct, hypothesis, provenance, influence, supersession). The vocabulary is constitutional; using different words for the same concept introduces drift. Forbidden synonyms are checked at commit time per [`docs/glossary.md`](./docs/glossary.md) + [`.claude/skills/ontology/vocabulary-discipline`](./.claude/skills/ontology/vocabulary-discipline/).
 
 ## What This Project Is Not
 
