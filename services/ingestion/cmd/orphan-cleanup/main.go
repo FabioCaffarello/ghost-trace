@@ -39,6 +39,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/canonical"
+	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/orphan"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
@@ -58,6 +60,7 @@ func run() error {
 	excludeFile := flag.String("exclude", "", "path to a file containing one orphan-hash hex per line; matching orphans preserved. Lines beginning with # are comments.")
 	keepNewerThan := flag.Duration("keep-newer-than", 24*time.Hour, "orphans newer than this duration are preserved (protection against recently-orphaned blobs).")
 	maxDeletions := flag.Int("max-deletions", 1000, "upper bound on number of orphan deletions per invocation.")
+	actor := flag.String("actor", "", "OPTIONAL per decision-log §0119 (auth-scope RFC Open Question 4 discharge): when non-empty, commits an OrphanCleanupAudit Cat I record + paired IngestionEvent (channel=\"cli\", client_common_name=<actor>) BEFORE deletion — mirrors the HTTP T3 audit-then-delete contract per §0104. When empty, preserves the §0033 local-shell-trust no-audit behavior (no substrate write).")
 	flag.Parse()
 
 	if !*dryRun && !*confirm {
@@ -76,19 +79,52 @@ func run() error {
 	}
 	defer func() { _ = sub.Close() }()
 
-	report, err := orphan.Cleanup(ctx, sub, orphan.Options{
+	opts := orphan.Options{
 		DryRun:         *dryRun,
 		ExcludedHashes: excluded,
 		KeepNewerThan:  *keepNewerThan,
 		MaxDeletions:   *maxDeletions,
-	})
+	}
+
+	invokedAt := time.Now().UnixNano()
+	excludedHashList := sortedExclusionHashes(excluded)
+	keepNewerThanSeconds := int64((*keepNewerThan).Seconds())
+
+	var auditEventHash, ingestionEventHash string
+	var auditCallback func(plan orphan.Report) error
+	if *actor != "" {
+		auditCallback = func(plan orphan.Report) error {
+			audit := &eventsv1.OrphanCleanupAudit{
+				InvokedAt:                invokedAt,
+				DryRun:                   *dryRun,
+				Confirm:                  *confirm,
+				KeepNewerThanSeconds:     keepNewerThanSeconds,
+				MaxDeletions:             int64(*maxDeletions),
+				ExcludedHashes:           excludedHashList,
+				ExaminedCount:            plan.Examined,
+				OrphansFound:             plan.OrphansFound,
+				PlannedDeletionHashes:    hashesOfDeletions(plan.Deleted),
+				PreservedByExcludeHashes: hashesOfDeletions(plan.PreservedByExclude),
+				PreservedByAgeHashes:     hashesOfDeletions(plan.PreservedByAge),
+				PreservedByMaxHashes:     hashesOfDeletions(plan.PreservedByMax),
+			}
+			hashes, err := commitAuditPair(ctx, sub, audit, *actor, invokedAt)
+			if err != nil {
+				return err
+			}
+			auditEventHash, ingestionEventHash = hashes.audit, hashes.ingestion
+			return nil
+		}
+	}
+
+	report, err := orphan.AuditedCleanup(ctx, sub, opts, auditCallback)
 	if err != nil {
 		return fmt.Errorf("cleanup: %w", err)
 	}
 
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	if err := enc.Encode(buildPayload(report, *dryRun)); err != nil {
+	if err := enc.Encode(buildPayload(report, *dryRun, auditEventHash, ingestionEventHash)); err != nil {
 		return fmt.Errorf("encode report: %w", err)
 	}
 
@@ -96,11 +132,110 @@ func run() error {
 	if !*dryRun {
 		action = "deleted"
 	}
-	fmt.Fprintf(os.Stderr,
-		"orphan-cleanup: examined %d blobs; %d orphans found; %s %d (preserved by exclude: %d; by age: %d; by max-cap: %d)\n",
-		report.Examined, report.OrphansFound, action, len(report.Deleted),
-		len(report.PreservedByExclude), len(report.PreservedByAge), len(report.PreservedByMax))
+	if *actor != "" {
+		fmt.Fprintf(os.Stderr,
+			"orphan-cleanup: examined %d blobs; %d orphans found; %s %d (preserved by exclude: %d; by age: %d; by max-cap: %d) actor=%q audit=%s ingestion=%s\n",
+			report.Examined, report.OrphansFound, action, len(report.Deleted),
+			len(report.PreservedByExclude), len(report.PreservedByAge), len(report.PreservedByMax),
+			*actor, auditEventHash, ingestionEventHash)
+	} else {
+		fmt.Fprintf(os.Stderr,
+			"orphan-cleanup: examined %d blobs; %d orphans found; %s %d (preserved by exclude: %d; by age: %d; by max-cap: %d)\n",
+			report.Examined, report.OrphansFound, action, len(report.Deleted),
+			len(report.PreservedByExclude), len(report.PreservedByAge), len(report.PreservedByMax))
+	}
 	return nil
+}
+
+// auditHashes is the per-commit hash pair returned by the audit
+// callback. Both are lowercase-hex content-hashes (32 bytes raw).
+type auditHashes struct {
+	audit     string
+	ingestion string
+}
+
+// commitAuditPair commits the OrphanCleanupAudit + a paired IngestionEvent
+// via substrate.AppendPair. Mirrors the HTTP T3 admin.go contract: the
+// audit is the recovery contract per RFC item 4; deletion follows only
+// when the audit lands. Channel is "cli" + client_common_name = actor
+// per the §0097 CLI per-actor-attribution shape.
+func commitAuditPair(ctx context.Context, sub *substrate.Substrate, audit *eventsv1.OrphanCleanupAudit, actor string, committedAt int64) (auditHashes, error) {
+	auditPayload, auditHash, err := canonical.MarshalAndHash(audit)
+	if err != nil {
+		return auditHashes{}, fmt.Errorf("marshal audit: %w", err)
+	}
+	auditHex := canonical.HashHex(auditHash)
+	auditRow := substrate.EventRow{
+		EventHash:   auditHash,
+		EventTime:   audit.InvokedAt,
+		MessageType: string(audit.ProtoReflect().Descriptor().FullName()),
+		PayloadRef:  auditHex[:2] + "/" + auditHex[2:],
+		CommittedAt: committedAt,
+	}
+
+	ingEv := &eventsv1.IngestionEvent{
+		PrimaryEventHash: auditHash[:],
+		ReceivedAt:       committedAt,
+		IngestedAt:       committedAt,
+		Channel:          "cli",
+		ClientCommonName: actor,
+	}
+	ingPayload, ingHash, err := canonical.MarshalAndHash(ingEv)
+	if err != nil {
+		return auditHashes{}, fmt.Errorf("marshal ingestion event: %w", err)
+	}
+	ingHex := canonical.HashHex(ingHash)
+	ingRow := substrate.EventRow{
+		EventHash:   ingHash,
+		EventTime:   committedAt,
+		MessageType: string(ingEv.ProtoReflect().Descriptor().FullName()),
+		PayloadRef:  ingHex[:2] + "/" + ingHex[2:],
+		CommittedAt: committedAt,
+	}
+	if err := sub.AppendPair(ctx, auditRow, auditPayload, ingRow, ingPayload); err != nil {
+		return auditHashes{}, fmt.Errorf("append pair (audit %s, ingestion %s): %w", auditHex, ingHex, err)
+	}
+	return auditHashes{audit: auditHex, ingestion: ingHex}, nil
+}
+
+// sortedExclusionHashes returns the keys of excluded sorted ascending —
+// used to build the audit record's excluded_hashes field deterministically
+// so the audit hash is invariant under map-iteration order.
+func sortedExclusionHashes(excluded map[string]bool) []string {
+	if len(excluded) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(excluded))
+	for h := range excluded {
+		out = append(out, h)
+	}
+	sortStrings(out)
+	return out
+}
+
+// sortStrings is a tiny non-import-burden ascending sort. Avoids pulling
+// "sort" purely for this single use; mirrors the §0050 "successor-set
+// ascending-sort" idempotency pattern.
+func sortStrings(s []string) {
+	for i := 1; i < len(s); i++ {
+		for j := i; j > 0 && s[j-1] > s[j]; j-- {
+			s[j-1], s[j] = s[j], s[j-1]
+		}
+	}
+}
+
+// hashesOfDeletions returns the lowercase-hex hash field of each record
+// in the order recorded by orphan.AuditedCleanup. Used to populate the
+// audit's planned_deletion_hashes + preserved_by_* fields.
+func hashesOfDeletions(records []orphan.DeletionRecord) []string {
+	if len(records) == 0 {
+		return nil
+	}
+	out := make([]string, len(records))
+	for i, r := range records {
+		out[i] = r.Hash
+	}
+	return out
 }
 
 // loadExclusions parses the exclusion file (one lowercase-hex hash
@@ -133,16 +268,20 @@ func loadExclusions(path string) (map[string]bool, error) {
 
 // reportPayload is the JSON shape written to stdout. Snake-case keys
 // for parity with the ingestion service's structured-output
-// convention.
+// convention. AuditEventHash + IngestionEventHash are surfaced ONLY
+// when --actor was non-empty (the audit-on-commit path per decision-log
+// §0119); absent under the §0033 local-shell-trust default.
 type reportPayload struct {
-	Examined              int64                   `json:"examined"`
-	OrphansFound          int64                   `json:"orphans_found"`
-	DryRun                bool                    `json:"dry_run"`
-	DeletedCount          int                     `json:"deleted_count"`
-	Deleted               []deletionPayload       `json:"deleted,omitempty"`
-	PreservedByExclude    []deletionPayload       `json:"preserved_by_exclude,omitempty"`
-	PreservedByAge        []deletionPayload       `json:"preserved_by_age,omitempty"`
-	PreservedByMax        []deletionPayload       `json:"preserved_by_max,omitempty"`
+	Examined           int64             `json:"examined"`
+	OrphansFound       int64             `json:"orphans_found"`
+	DryRun             bool              `json:"dry_run"`
+	DeletedCount       int               `json:"deleted_count"`
+	AuditEventHash     string            `json:"audit_event_hash,omitempty"`
+	IngestionEventHash string            `json:"ingestion_event_hash,omitempty"`
+	Deleted            []deletionPayload `json:"deleted,omitempty"`
+	PreservedByExclude []deletionPayload `json:"preserved_by_exclude,omitempty"`
+	PreservedByAge     []deletionPayload `json:"preserved_by_age,omitempty"`
+	PreservedByMax     []deletionPayload `json:"preserved_by_max,omitempty"`
 }
 
 type deletionPayload struct {
@@ -151,12 +290,14 @@ type deletionPayload struct {
 	Bytes int64  `json:"bytes"`
 }
 
-func buildPayload(r orphan.Report, dryRun bool) reportPayload {
+func buildPayload(r orphan.Report, dryRun bool, auditEventHash, ingestionEventHash string) reportPayload {
 	return reportPayload{
 		Examined:           r.Examined,
 		OrphansFound:       r.OrphansFound,
 		DryRun:             dryRun,
 		DeletedCount:       len(r.Deleted),
+		AuditEventHash:     auditEventHash,
+		IngestionEventHash: ingestionEventHash,
 		Deleted:            toPayload(r.Deleted),
 		PreservedByExclude: toPayload(r.PreservedByExclude),
 		PreservedByAge:     toPayload(r.PreservedByAge),

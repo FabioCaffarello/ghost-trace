@@ -4666,6 +4666,43 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0119` — CLI orphan-cleanup audit symmetry; auth-scope RFC Open Question 4 discharged via operator opt-in
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** The auth-scope RFC Open Question 4 ([`§0098`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens)) asks whether to extend the HTTP T3 audit-on-commit discipline ([`§0104`](#0104--t3-http-orphancleanup-endpoint-lands-orphancleanupaudit-cat-i-record-introduced-0098-landing-23) — every HTTP-channel orphan-cleanup invocation commits an `OrphanCleanupAudit` Cat I record before deletion) to the CLI path ([`cmd/orphan-cleanup`](../../services/ingestion/cmd/orphan-cleanup)), which under [`§0033`](#0033--restoration-procedure-against-substrate--blobstore-divergence) local-shell-trust commits NO substrate record. The RFC's R-auth-4 reversal condition names "CLI cron-job forensic-record pressure" as the typical trigger; no such pressure has been cited operationally, but the per-actor attribution surface ([`§0097`](#0097--cli-peractor-attribution-pilot-promotehypothesis-actor-authscope-rfc-open-question-2-partially-discharged) → [`§0117`](#0117--0097-cliside-extension-form-bc--ag--ch--cr-gain-actor-option--0097-cliside-closed-2424) closure) gives a natural lever for an operator-opt-in extension. This entry lands that extension.
+
+- **Decision:** [`cmd/orphan-cleanup`](../../services/ingestion/cmd/orphan-cleanup) gains an opt-in `--actor` option matching the §0097/§0117 CLI shape. Behavior split:
+
+  1. **`--actor` empty (DEFAULT)** — preserves the [`§0033`](#0033--restoration-procedure-against-substrate--blobstore-divergence) local-shell-trust no-substrate-write behavior. `orphan.AuditedCleanup` is invoked with a nil callback (equivalent to the prior `orphan.Cleanup` path); deletion proceeds with no audit record. Backward-compatible.
+
+  2. **`--actor=<id>` non-empty** — mirrors the HTTP T3 audit-then-delete contract per [`§0104`](#0104--t3-http-orphancleanup-endpoint-lands-orphancleanupaudit-cat-i-record-introduced-0098-landing-23) item 4. Before any deletion, the CLI commits an `OrphanCleanupAudit` Cat I record + a paired `IngestionEvent` (channel=`"cli"`, client_common_name=`<id>`) atomically via `substrate.AppendPair`. The audit's `planned_deletion_hashes` IS the recovery contract per RFC item 4 — partial-deletion failure leaves the audit + surviving blobs recoverable. Per-orphan filesystem errors during deletion abort the run; the audit's hash list (committed BEFORE the abort) is the operator's replay anchor.
+
+  3. **Determinism for content-addressing.** The audit's `excluded_hashes` field is sorted ascending before commit (`sortedExclusionHashes`) so the audit's content-hash is invariant under the operator-supplied exclusion-file's line order. Mirrors the [`§0050`](#0050--phase-3-replay-behavioralcluster-deterministic-rebuild-against-fixture--corpus-cross-process-with-internalreplay-package--cmdreplay-behavioralcluster-formation--first-replay-arc-anchor) successor-set ascending-sort idempotency pattern.
+
+  4. **JSON output extension.** When `--actor` is non-empty, the stdout JSON gains `audit_event_hash` + `ingestion_event_hash` fields. When empty, both fields are omitted (`,omitempty`). The stderr summary similarly extends with `actor=%q audit=%s ingestion=%s` suffix.
+
+  5. **Tests.** [`services/ingestion/cmd/orphan-cleanup/main_test.go`](../../services/ingestion/cmd/orphan-cleanup/main_test.go) adds 4 tests: `TestSortedExclusionHashesEmpty` + `TestSortedExclusionHashesAscending` (deterministic ordering); `TestHashesOfDeletions` (hash-field extraction); `TestCommitAuditPairCommitsBothRows` (end-to-end: audit + IngestionEvent commit atomically; IngestionEvent carries channel="cli" + client_common_name=`actor`; PrimaryEventHash references the audit hash).
+
+  6. **README + RFC OQ4 closure.** [`services/ingestion/README.md`](../../services/ingestion/README.md) "Distinction from CLI orphan-cleanup" updated: CLI defaults to no audit (§0033 preserved); `--actor` opt-in activates the same audit-on-commit discipline as the HTTP T3 path.
+
+- **Constitutional review:** No Charter invariant amended. The new audit path is structurally identical to the HTTP T3 audit-then-delete contract per [`§0104`](#0104--t3-http-orphancleanup-endpoint-lands-orphancleanupaudit-cat-i-record-introduced-0098-landing-23) — same proto, same pairing shape, same recovery contract; only the channel differs (`"cli"` vs `"http"`/`"https"`/`"https+mtls"`). [`§2.1`](../charter/constitutional-charter.md#21-observational-integrity) substrate-immutability + [`§2.3`](../charter/constitutional-charter.md#23-provenance-integrity) provenance-integrity surfaces are unchanged (the audit is a new Cat I record per the existing pattern, not a mutation of any prior record). Operator opt-in preserves [`§0033`](#0033--restoration-procedure-against-substrate--blobstore-divergence) local-shell-trust as the default for operators who do not want audit overhead. Falsifiability: every claim above is testable by mechanical replay of the 4 new unit tests + the existing `admin_test.go` HTTP-T3 audit-then-delete tests (the CLI's audit-callback shape is identical to the HTTP callback).
+
+- **Consequences:**
+  - **Auth-scope RFC Open Question 4 discharged.** All three named follow-ons of [`§0098`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens) (multi-tier token plumbing, T3 orphan-cleanup endpoint, T4 24 lifecycle endpoints) are closed; both of [`§0104`](#0104--t3-http-orphancleanup-endpoint-lands-orphancleanupaudit-cat-i-record-introduced-0098-landing-23)'s named carry-forwards (`token_id` per RFC item 4(b) → [`§0118`](#0118--token_id-rung-lands-per-rfc-item-4b-pertier-token-file-gains-optional-second-line); CLI orphan-cleanup audit symmetry per OQ4 → this entry) are closed.
+  - **Operator workflow extension.** Operators running CLI orphan-cleanup in production cron jobs gain the option to commit a substrate audit record alongside HTTP-channel invocations, producing a uniform forensic record across both channels. No migration: existing `cmd/orphan-cleanup` invocations without `--actor` are unchanged.
+
+  - **Methodological observation 1 — Operator-opt-in via existing per-actor option.** The §0097/§0117 `--actor` CLI shape ("when non-empty, commits an IngestionEvent") generalizes naturally to "when non-empty, commits an audit record". The same boolean (`actor != ""`) gates both (a) the substrate write itself + (b) the channel-of-attribution distinction. Future CLI extensions that require audit-on-commit can reuse this lever rather than introducing a separate `--audit` boolean (one cohesive opt-in surface vs. two correlated options).
+
+  - **Methodological observation 2 — Ascending-sort idempotency pattern reused at a new surface.** The §0050 successor-set ascending-sort pattern (recorded for hypothesis split-event content-addressing) generalizes to any content-addressed record whose payload contains a set field whose semantic equality is order-invariant. `sortedExclusionHashes` is the second documented use beyond the §0050 lifecycle ops; suggests the pattern is more broadly applicable (any future audit/operational record with a set field should sort before commit).
+
+  - **Carry-forwards:** None. The §0098 RFC arc is fully discharged (3 named follow-on landings closed via §0103/§0104/§0111; both §0104 carry-forwards closed via §0118 + this entry). Subsequent auth-scope work proceeds under ordinary RFC discipline (e.g., R-auth-1 → β JWT reversal; R-auth-2 → δ HMAC reversal; R-auth-3 → `cli_actor` proto split; R-auth-4 has been preemptively answered as an operator-opt-in rather than reversal).
+
+- **Supersession:** None. Discharges [`§0104`](#0104--t3-http-orphancleanup-endpoint-lands-orphancleanupaudit-cat-i-record-introduced-0098-landing-23)'s "CLI orphan-cleanup audit symmetry" named carry-forward. Closes auth-scope RFC Open Question 4 by extension-rather-than-reversal (the §0033 default behavior is preserved; the audit path is operator opt-in).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
