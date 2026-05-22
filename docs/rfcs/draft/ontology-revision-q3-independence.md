@@ -1,8 +1,8 @@
 # RFC — Ontology Open Question 3: Formal definition of `evidential independence` as measurable quantity
 
-- **Status:** discussion (substantive deliberation complete — recommendation: Candidate α / source-count ratio; formal resolution pending committee ratification)
-- **Authors:** Ghost Trace committee (Layer B follow-on RFC pre-Gate; opened per [`decision-log §0132`](../../charter/decision-log.md); discussion-phase deliberation Phases 3–5 recorded in [`q3-independence-evidence.md`](../discussion/q3-independence-evidence.md))
-- **Date:** 2026-05-22 (opened); 2026-05-22 (deliberation complete)
+- **Status:** accepted
+- **Authors:** Ghost Trace committee (Layer B follow-on RFC pre-Gate; opened per [`decision-log §0132`](../../charter/decision-log.md); discussion-phase deliberation Phases 3–5 recorded in [`q3-independence-evidence.md`](../discussion/q3-independence-evidence.md); resolution at [`decision-log §0133`](../../charter/decision-log.md) adopting Candidate α)
+- **Date:** 2026-05-22 (opened); 2026-05-22 (resolved)
 - **Type:** ontology-revision
 - **Affects:** [`docs/ontology/ontology.md`](../../ontology/ontology.md) (Open Question 3 closed by resolution); [Charter §2.6 BC1](../../charter/constitutional-charter.md#26-evidential-independence-integrity) (frozen v0.6 — operational specification deferred here); [Charter §2.4](../../charter/constitutional-charter.md#24-inferential-influence-disclosure) (frozen v0.5 — `influenced_by` chain is structural input to most candidate derivation rules); [`docs/architecture/canonical-serialization-contract.md`](../../architecture/canonical-serialization-contract.md) (the per-record `evidential_independence` field's type/range is contract surface per [`§0034`](../../charter/decision-log.md)); [`ontology-revision-layer-b-deep-criterion`](./ontology-revision-layer-b-deep-criterion.md) (Layer B follow-on RFC consumes Q3 resolution as the measurable quantity its deep criterion threshold-tests)
 
@@ -135,12 +135,10 @@ Pre-§2.6-freeze records do not carry the dimension and are handled per §2.6 an
 
 ## Decision Record
 
-Substantive deliberation complete; formal resolution pending. The discussion-phase deliberation recorded in [`q3-independence-evidence.md`](../discussion/q3-independence-evidence.md) Phases 3–5 recommends **Candidate α (source-count ratio over Cat I provenance roots)** under meta-shape 1 (deterministic-from-pattern), on grounds of:
+Resolved at [`decision-log §0133`](../../charter/decision-log.md) (2026-05-22): **Candidate α (source-count ratio over Cat I provenance roots) adopted** under [§2.6 BC2](../../charter/constitutional-charter.md#26-evidential-independence-integrity) meta-shape 1 (deterministic-from-pattern). The formula: `evidential_independence = (count of Cat I primary observation roots in the assertion's subject_ref_* chain NOT reachable via any influenced_by edge from a promoted hypothesis) / (total Cat I roots in the chain)`. Range `[0, 1]`; type rational.
 
-- §4 criterion 1 structural enforceability (Phase 4 Finding 1).
-- §1 Thesis defense at substrate (Phase 4 Finding 2 — eliminates ε).
-- Structural simplicity within Tier 1 (Phase 4 Finding 3 — eliminates β and γ).
-- Inception-phase posture per [`§0023`](../../charter/decision-log.md) + [`§0027`](../../charter/decision-log.md) (Phase 4 Finding 4 — α's limited resolution is honest about evidence basis).
-- Constitutional minimalism per [CLAUDE.md §7](../../../.claude/CLAUDE.md) (Phase 4 Finding 5 — eliminates ζ as inception-phase over-extension).
+The resolution rests on [`q3-independence-evidence.md`](../discussion/q3-independence-evidence.md) Phase 4 Findings 1 (Tier 1 satisfies §4 criterion 1 structurally), 2 (ε eliminated for admitting §1 Thesis failure mode at substrate), 3 (α dominates β/γ on structural simplicity), 4 (limited resolution is feature at inception phase), 5 (ζ eliminated as over-extension per CLAUDE.md §7 constitutional minimalism).
 
-Resolution lands at a future `decision-log` entry that closes ontology.md Open Question 3, activates the §2.6 BC1 "structurally falsifiable" status, and triggers Q5 transitivity-half cascade per Phase 5's "Implication for Q5 transitivity-half cascade". The Layer B follow-on RFC's substantive content advances after Q3 resolution + Q5 transitivity-half resolution per the two-cascade chain Q3 → Q5 → Layer B.
+Two committee extensions: (a) influenced-Cat-II subtraction discipline (α's "not reachable" predicate structurally subtracts Cat I roots whose only path traverses an influenced Cat II intermediate); (b) Q5-transitivity-half cascade fires in the same resolution commit per [`§0015`](../../charter/decision-log.md) + [`§0020`](../../charter/decision-log.md) precedent.
+
+With Q3 resolved, [§2.6 BC1](../../charter/constitutional-charter.md#26-evidential-independence-integrity) "structurally falsifiable" status is activated. Q5 transitivity-half opens at discussion as [`ontology-revision-q5-influence-propagation-transitivity`](./ontology-revision-q5-influence-propagation-transitivity.md). Layer B follow-on RFC remains gated on Q5 transitivity-half resolution per the two-cascade chain Q3 → Q5 → Layer B; canonical-serialization-contract revision opens post-Q5 as structural follow-on per [`§0133`](../../charter/decision-log.md) schedule.
