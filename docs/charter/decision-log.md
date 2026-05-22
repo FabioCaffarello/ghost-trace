@@ -4789,6 +4789,55 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0122` — Cross-subtype merge typing resolution: Candidate γ (per-pair canonical-merge typing); form-adopt + table-defer
+
+- **Status:** accepted.
+- **Date:** 2026-05-22.
+
+- **Context:** [`entity-model.md` §Cross-subtype operations](../ontology/entity-model.md) deferred the cross-subtype merge produced-record typing question. The question was opened as RFC [`ontology-revision-cross-subtype-merge-typing`](../rfcs/draft/ontology-revision-cross-subtype-merge-typing.md) (Status: discussion). The discussion phase produced evidence at [`docs/rfcs/discussion/cross-subtype-merge-typing-evidence.md`](../rfcs/discussion/cross-subtype-merge-typing-evidence.md) across five phases (5-dimension × 3-candidate evidence matrix; scaffold implicit-assumption surfacing; epistemic-skill application; six-finding comparison synthesis; conditional recommendation). The Phase 5 recommendation was **γ — per-pair canonical-merge typing**, conditional on committee assessment of downstream-reader patterns and pair-table defensibility.
+
+- **Decision:** The committee adopts **Candidate γ — per-pair canonical-merge typing** as the cross-subtype merge produced-record typing resolution. **Form is adopted; specific pair-table contents are deferred to a follow-on RFC** (parallel to the [`§0011`](#0011--q4-resolution-staged-combination-demotion-criterion-layer-a--deferred-layer-b) Q4 precedent — Layer A adopted as form; Layer B specific shape deferred to follow-on).
+
+  Structural commitments under γ:
+
+  1. **No new typed subtype.** The four concrete subtypes (`BehavioralCluster`, `AutomationGroup`, `CampaignHypothesis`, `CoordinationRing`) remain the complete set of Cat III concrete record types per [`§0010`](#0010--q2-resolution-hypothesis-subtypes-as-distinct-types-under-abstract-hypothesis) Q2-A.2 resolution. Cross-subtype merge produces a record of one of the four existing subtypes.
+
+  2. **Per-pair canonical target determined at entity-model level, not at merge invocation.** The pair-table is a versioned operational-definition constant (per [`§0021`](#0021--omq-3-resolution-substrate-time-generation-candidate--0020-cascade-fully-discharged) substrate-time-generation pattern) co-located with [`entity-model.md` §Cross-subtype operations](../ontology/entity-model.md). Operators do NOT pick the target type at invocation; the table determines it deterministically.
+
+  3. **Six unordered pairs** per the §0049 Option B set-shape inheritance (merge antecedents form a SET; ordered/unordered question resolves to unordered). C(4,2) = 6 cells: {BC, AG}, {BC, CR}, {BC, CH}, {AG, CR}, {AG, CH}, {CR, CH}. The within-subtype merge is unchanged (BC + BC → BC continues to produce a `BehavioralClusterFormation` per §0049).
+
+  4. **Recursive table-lookup for merge-of-merge.** A cross-subtype-merge-output (one of the four existing subtypes) that subsequently merges with another antecedent of any subtype is treated identically to any other antecedent of its declared type. Composition does not grow type structure (per the merge typing evidence Finding 2 argument favoring γ over α).
+
+- **Constitutional review:** No Charter invariant amended. The resolution operationalizes within the [`§2.5 frozen v0.3`](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) BC1 channel-agnostic lifecycle-event surface; the merge event itself remains a Cat I primary observation per §2.5 BC1 regardless of produced-record typing. [`§2.3 frozen v0.4`](../charter/constitutional-charter.md#23-provenance-integrity) antecedent-link provenance shape preserved (heterogeneous antecedent-hash list per merge typing RFC §Proposal). [`§2.4 frozen v0.5`](../charter/constitutional-charter.md#24-inferential-influence-disclosure) `subject_ref_hypothesis` payload shape is one of the four existing subtypes (no new case); [`§0016`](#0016--q3-resolution-subject-reference-polymorphism-typed-per-category-subject_ref_x-fields-with-oneofunion-exclusivity-candidate-b) per-Category granularity accommodates without modification. [`§4 criterion 1`](../charter/constitutional-charter.md#4-constitutional-design-rule) structural-enforceability discipline aligns cleanly with γ (per evidence Finding 1 — γ preserves type-system enforcement; β was the candidate compromising the discipline).
+
+  No new canonical vocabulary at the Charter level. The pair-table is an entity-model surface, not a Charter surface.
+
+- **Consequences:**
+  - **Cross-subtype merge produced-record typing resolved (form).** The Q2-A.2 cross-subtype merge deferral at [`entity-model.md` §Cross-subtype operations](../ontology/entity-model.md) is partially discharged — the typing question is closed; the pair-table contents remain a follow-on.
+  - **`docs/rfcs/draft/ontology-revision-cross-subtype-merge-typing.md`** — Status advances from `discussion` to `accepted`; Decision Record populated with this resolution.
+  - **`docs/ontology/entity-model.md`** — §Cross-subtype operations updated to record the γ resolution + the table-contents follow-on.
+  - **`docs/ontology/lifecycle-semantics.md`** — §Merge line 28 updated to reference the resolution.
+
+  - **Pair-table follow-on RFC opened as placeholder.** A new draft RFC (to be opened) at `docs/rfcs/draft/ontology-revision-cross-subtype-merge-pair-table.md` will carry the per-cell defense for each of the 6 unordered pair-table entries. The placeholder is on hold; per [`§0011`](#0011--q4-resolution-staged-combination-demotion-criterion-layer-a--deferred-layer-b) Layer B precedent, the form resolution is procedurally complete without the parameters.
+
+  - **Symmetric resolution available for split.** The cross-subtype split RFC ([`ontology-revision-cross-subtype-split.md`](../rfcs/draft/ontology-revision-cross-subtype-split.md), Status: discussion) raised the symmetric-resolution preference per [`§0050`](#0050--phase-3-replay-behavioralcluster-deterministic-rebuild-against-fixture--corpus-cross-process-with-internalreplay-package--cmdreplay-behavioralcluster-formation--first-replay-arc-anchor) inverse-symmetry. With merge typing resolved as γ, the split-typing-γ' (per-source permitted-target-set) becomes the symmetric default under that preference; split resolution remains a separate committee action.
+
+  - **Enablement RFC unaffected.** The cross-subtype merge enablement RFC ([`ontology-revision-cross-subtype-merge-enablement.md`](../rfcs/draft/ontology-revision-cross-subtype-merge-enablement.md), Status: discussion) is orthogonal to typing per the framing decomposition; this resolution does not bind enablement. The B+D recommendation from [`cross-subtype-merge-enablement-evidence.md`](../rfcs/discussion/cross-subtype-merge-enablement-evidence.md) remains available; the [§Combined-table option] at the typing RFC (co-located typing + enablement table under γ + C) is now reachable as a follow-on if the enablement RFC resolves to C.
+
+  - **Carry-forwards:**
+    - **Pair-table contents follow-on RFC** — 6 unordered cells, each requiring committee defense for its canonical target. Opens as discussion-phase placeholder per [`§0011`](#0011--q4-resolution-staged-combination-demotion-criterion-layer-a--deferred-layer-b) Layer B pattern.
+    - **Cross-subtype split typing resolution** — symmetric γ' available; committee action pending.
+    - **Cross-subtype merge enablement resolution** — B+D recommendation; committee action pending.
+    - **Cross-subtype promote/demote/dissolve** — under γ, these inherit the existing per-subtype lifecycle-op surface (no new typed subtype to define new semantics for); the prior framing-question "what are promote/demote/dissolve semantics for the new subtype?" is dissolved by γ's no-new-type commitment.
+
+  - **Methodological observation 1 — Form-adopt + parameters-defer convergence at Ontology RFCs is a recurring shape.** [`§0011`](#0011--q4-resolution-staged-combination-demotion-criterion-layer-a--deferred-layer-b) established this for Q4 (staged-combination form adopted; Layer B specific shape deferred). This entry establishes the shape for cross-subtype merge typing (γ form adopted; pair-table contents deferred). The pattern is: when a candidate has FORM + SUB-PARAMETERS, the committee may resolve the form without committing to the sub-parameters, opening a follow-on RFC for the parameters. Procedurally complete; structurally bounded.
+
+  - **Methodological observation 2 — The "two-stage filter" discussion-phase convergence pattern produces actionable resolutions.** [`cross-subtype-merge-typing-evidence.md` Phase 5](../rfcs/discussion/cross-subtype-merge-typing-evidence.md) was the first Ontology RFC discussion to converge by two-stage filter (Stage 1 disqualifies β on §4 discipline; Stage 2 chooses γ over α by committee judgment). The committee action here ratifies the Phase 5 recommendation by adopting γ; the conditional reversal-flips (Findings to α or β) remain available as reversal conditions per [§What would flip the recommendation]. The two-stage discussion-phase pattern is validated as a path to committee resolution; future Ontology RFCs with 3+ candidates may use the same convergence shape.
+
+- **Supersession:** None. First resolution of a Q2-A.2 follow-on Ontology question. Establishes pair-table follow-on as the next committee surface for cross-subtype merge.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

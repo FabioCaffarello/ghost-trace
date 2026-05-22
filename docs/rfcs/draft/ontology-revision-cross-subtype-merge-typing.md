@@ -1,8 +1,8 @@
 # RFC — Cross-subtype merge produced-record typing
 
-- **Status:** discussion
+- **Status:** accepted
 - **Authors:** Ghost Trace committee
-- **Date:** 2026-05-21
+- **Date:** 2026-05-21 (opened); 2026-05-22 (resolved)
 - **Type:** ontology-revision
 - **Affects:** [`docs/ontology/entity-model.md`](../../ontology/entity-model.md) §Cross-subtype operations; [`docs/ontology/lifecycle-semantics.md`](../../ontology/lifecycle-semantics.md) §Merge; [Charter §2.5](../../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) (frozen v0.3 — minor amendment surface only; this RFC produces no §2.5 prose change unless the resolution requires it).
 
@@ -196,4 +196,13 @@ The [Phase 3 / Phase 4 replay contracts](../../architecture/replay-model.md) req
 
 ## Decision Record
 
-Pending. The discussion phase opens with this RFC at `Status: discussion`; resolution will be recorded in `docs/charter/decision-log.md` and reflected back here on acceptance.
+Resolved at [`decision-log §0122`](../../charter/decision-log.md): **Candidate γ — per-pair canonical-merge typing** adopted as the cross-subtype merge produced-record typing. The discussion-phase recommendation from [`cross-subtype-merge-typing-evidence.md` Phase 5](../discussion/cross-subtype-merge-typing-evidence.md) (γ preferred, α as conditional fallback, β disqualified by structural-enforceability discipline) is adopted at the FORM level; the specific pair-table contents (6 unordered cells: {BC, AG}, {BC, CR}, {BC, CH}, {AG, CR}, {AG, CH}, {CR, CH} → which existing subtype each maps to) are deferred to a follow-on RFC at `docs/rfcs/draft/ontology-revision-cross-subtype-merge-pair-table.md` (placeholder). The form-adopt + parameters-defer shape parallels the [`§0011`](../../charter/decision-log.md) Q4 precedent (staged-combination Layer A adopted; Layer B specific shape deferred).
+
+### Reversal conditions
+
+The selection stands subject to the conditional reversal flips enumerated at [`cross-subtype-merge-typing-evidence.md` §What would flip the recommendation](../discussion/cross-subtype-merge-typing-evidence.md):
+
+- **Flip to α (third concrete subtype `CompositeHypothesis`)** when downstream-reader pattern of frequent merge-origin type-discrimination emerges (γ's type-vs-provenance asymmetry per Finding 4 becomes load-bearing); when committee judgment finds the pair-table over-determinative; or when anticipated subtype churn makes γ's per-pair table costly to revise.
+- **Flip to β (abstract `MergedHypothesis`)** when evidence emerges that the four subtypes share fully identical structure (Finding 1's §4 discipline collapses).
+
+No reversal condition fires at acceptance. The pair-table follow-on RFC is the named follow-on per the form-adopt + parameters-defer pattern.
