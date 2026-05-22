@@ -93,7 +93,7 @@ The resolved RFCs:
 
 Their paired discussion-phase evidence documents at [`cross-subtype-merge-typing-evidence.md`](../rfcs/discussion/cross-subtype-merge-typing-evidence.md) + [`cross-subtype-merge-enablement-evidence.md`](../rfcs/discussion/cross-subtype-merge-enablement-evidence.md) + [`cross-subtype-split-evidence.md`](../rfcs/discussion/cross-subtype-split-evidence.md) record the two-stage convergence patterns + convergence-by-inheritance pattern that produced the resolutions.
 
-The pair-table follow-on placeholder at [`ontology-revision-cross-subtype-merge-pair-table.md`](../rfcs/draft/ontology-revision-cross-subtype-merge-pair-table.md) (`Status: discussion`, on hold) carries the only structural follow-on: per-cell defense for 6 unordered merge-target cells + per-source-subtype split permitted-target sets. The placeholder is on hold pending operational pressure or committee direction.
+The pair-table follow-on at [`ontology-revision-cross-subtype-merge-pair-table.md`](../rfcs/draft/ontology-revision-cross-subtype-merge-pair-table.md) (`Status: discussion`, active substantive deliberation) carries the per-cell deliberation for both tables. **Cell 4 `{AG, CR}` resolved at [`§0125`](../charter/decision-log.md) as `→ CR`** (1/6 cells resolved); the remaining 5 cells stand at "leading recommendation, open" status per the per-cell analysis. Per-cell resolutions land independently per the [`§0125`](../charter/decision-log.md)-established per-cell-resolution shape.
 
 ## The Assertion Type and Cross-Category References
 

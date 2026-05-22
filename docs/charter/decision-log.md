@@ -4913,6 +4913,49 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0125` — Pair-table Cell 4 `{AG, CR}` resolution: `→ CR` (genuine-ambiguity cell resolved)
+
+- **Status:** accepted.
+- **Date:** 2026-05-22.
+
+- **Context:** [`§0122`](#0122--crosssubtype-merge-typing-resolution-candidate--perpair-canonicalmerge-typing-formadopt--tabledefer) form-adopted Candidate γ with the 6-cell pair-table contents deferred to [`ontology-revision-cross-subtype-merge-pair-table.md`](../rfcs/draft/ontology-revision-cross-subtype-merge-pair-table.md). The placeholder was promoted to active substantive deliberation per PR #113; six per-cell analyses were surfaced. Five cells (1, 2, 3, 5, 6) have low-ambiguity leading recommendations per "richer surface wins" pattern; Cell 4 `{AG, CR}` was flagged as GENUINELY AMBIGUOUS — neither AG nor CR strictly dominates structurally; both load-bearing surfaces require extension under the non-canonical target. Cell 4 is the table's coherence anchor per the §Cross-cell coherence analysis.
+
+- **Decision:** The committee resolves Cell 4 `{AG, CR} → CR`. Cross-subtype merge of an AutomationGroup with a CoordinationRing produces a `CoordinationRingFormation` record. AG's automation-signature is carried into the CR as an extension surface (`automation_signature_ref` or equivalent attached field, specified at implementation-RFC discipline).
+
+  Structural rationale per the pair-table RFC §Cell 4 analysis:
+
+  1. **Cross-cell coherence preserved.** Cell 4 → CR aligns with Cells 2 (`{BC, CR} → CR`) + 6 (`{CR, CH}`)'s relational-richness pattern. The whole table follows a coherent "structurally richer surface wins" shape with Cell 4 not breaking the pattern.
+
+  2. **Pairwise structure is the structurally specific commitment.** CR's pairwise actor-relationship surface asserts WHICH actors relate to WHICH others; AG's automation-signature attaches as a property of the actor-set without disrupting the pairwise structure. The converse (AG with extended pairwise field) would require the AG surface to natively carry relational structure, which is a heavier structural extension.
+
+  3. **Falsifiability per [`falsifiability-check` §1.3](../../.claude/skills/epistemic/falsifiability-check/SKILL.md):** the resolution operationalizes to a type-system check at the helper layer (a `MergeAcrossSubtypes` helper merging an AG with a CR must produce a CR). Mismatch detectable structurally.
+
+  The five other cells (1, 2, 3, 5, 6) remain at their "leading recommendation, open" status per the pair-table RFC; this resolution does NOT cascade-adopt them. Cell 4's resolution is the harder structural call (the table's primary open question); the other cells await separate committee direction.
+
+- **Constitutional review:** No Charter invariant amended. Cell 4 → CR operationalizes within [`§0122`](#0122--crosssubtype-merge-typing-resolution-candidate--perpair-canonicalmerge-typing-formadopt--tabledefer) γ form — the cell's resolution is a sub-parameter of γ, not a Charter-level commitment. [`§2.5 frozen v0.3`](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) BC1 lifecycle-event surface accommodates the resolution unchanged. No new canonical vocabulary at Charter level.
+
+  The AG-extension-on-CR-surface (`automation_signature_ref` attachment) is implementation-RFC territory; the structural commitment here is "Cell 4 produces CR" — the attachment-field mechanism is the natural follow-on.
+
+- **Consequences:**
+  - **Cell 4 `{AG, CR}` resolved as CR.** The pair-table RFC's primary open question closes. Five cells remain at open status.
+  - **`docs/rfcs/draft/ontology-revision-cross-subtype-merge-pair-table.md`** — §Cell 4 section revised to record the resolution; §Aggregated leading recommendations table revised to mark Cell 4 as resolved; §Open Questions section revised to remove Cell 4's ambiguity from the list.
+  - **`docs/ontology/entity-model.md` §Cross-subtype operations** — minor extension to note Cell 4 resolution as the first per-cell resolution under §0122 γ.
+
+  - **Symmetric split inheritance ([§0124](#0124--crosssubtype-split-resolution-candidate----b-b-d-symmetric-with-0122-and-0123)).** Under symmetric resolution, Cell 4 → CR implies the inverse split: a `CoordinationRingFormation` may split into `{AG, CR}` successors. This narrows the CR-row of the split γ' permitted-target-set table by establishing one specific permitted target multiset.
+
+  - **AG-extension-on-CR-surface implementation-RFC carry-forward.** The merged `CoordinationRingFormation` needs a structural attachment for the AG's automation-signature. Whether this is (a) an `automation_signature_ref` field on `CoordinationRingFormation` proto, (b) a separately-committed `AutomationSignatureAttachment` Cat I record paired with the CR, or (c) inferred from the merge event's antecedent structure — is implementation-RFC discipline. Recorded as carry-forward.
+
+  - **Carry-forwards:**
+    - **Cells 1, 2, 3, 5, 6** — leading recommendations stand; committee resolution pending.
+    - **AG-extension-on-CR-surface implementation** — per above; opens when cross-subtype merge implementation begins.
+    - **BC-terminal-under-split question** — unresolved; Cell 4 → CR does not foreclose it.
+
+  - **Methodological observation — Per-cell resolution shape established.** Earlier this session, [`§0011`](#0011--q4-resolution-staged-combination-demotion-criterion-layer-a--deferred-layer-b) + [`§0122`](#0122--crosssubtype-merge-typing-resolution-candidate--perpair-canonicalmerge-typing-formadopt--tabledefer) demonstrated form-adopt + parameters-defer. This entry demonstrates the *per-parameter resolution* shape: within an already-form-adopted RFC, individual parameters may be resolved independently as committee judgment surfaces, without waiting for the whole parameter set to be ready. The pattern is reusable for future form-adopt + parameters-defer RFCs (e.g., Layer B's eventual specification may resolve sub-parameters independently).
+
+- **Supersession:** None. First per-cell resolution under the §0122 γ pair-table. Establishes per-cell-resolution-shape as a procedurally complete decision-log entry form.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
