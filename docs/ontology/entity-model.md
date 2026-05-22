@@ -75,6 +75,14 @@ The subtype distinction is structurally recorded: a hypothesis record's concrete
 
 Cross-subtype merge (e.g., a `BehavioralCluster` and a `CoordinationRing` recognized as the same underlying phenomenon) is structurally permitted but requires a typed transformation: the merge operation produces a typed output record. Whether the produced record is a third concrete subtype or an abstract record with subtype-elision is a question whose resolution is deferred to [`lifecycle-semantics.md`](./lifecycle-semantics.md) post-Q4 redaction.
 
+The discussion-phase framing of this deferral is decomposed across three RFCs (all at `Status: discussion` as of [`decision-log §0119`](../charter/decision-log.md) closure of the §0098 implementation arc):
+
+- [`ontology-revision-cross-subtype-merge-typing.md`](../rfcs/draft/ontology-revision-cross-subtype-merge-typing.md) — typing question (what TYPE is the produced record). Three candidates (α / β / γ); paired evidence at [`cross-subtype-merge-typing-evidence.md`](../rfcs/discussion/cross-subtype-merge-typing-evidence.md) recommends γ (per-pair canonical-merge typing) conditional on the committee assessment of downstream-reader patterns.
+- [`ontology-revision-cross-subtype-merge-enablement.md`](../rfcs/draft/ontology-revision-cross-subtype-merge-enablement.md) — enablement question (under what criterion cross-subtype merge is permitted). Four candidates (A / B / C / D); paired evidence at [`cross-subtype-merge-enablement-evidence.md`](../rfcs/discussion/cross-subtype-merge-enablement-evidence.md) recommends B+D (shared-actor-membership AND lifecycle-state) conditional on committee judgment.
+- [`ontology-revision-cross-subtype-split.md`](../rfcs/draft/ontology-revision-cross-subtype-split.md) — consolidated typing + enablement for the symmetric split operation (split is the §0050 structural inverse of merge); paired evidence at [`cross-subtype-split-evidence.md`](../rfcs/discussion/cross-subtype-split-evidence.md) recommends γ' + B'+D' under symmetric-resolution with merge.
+
+The RFCs are non-binding discussion-phase artifacts; the entity-model commitment remains the deferral above until committee resolution.
+
 ## The Assertion Type and Cross-Category References
 
 An Assertion is a claim about a referenced entity in one of the three categories. The reference is structural: each Assertion carries exactly one of three typed reference fields, mutually exclusive, per [`decision-log.md` §0016](../charter/decision-log.md) (Q3 resolution — Candidate B with per-Category granularity and oneOf/union exclusivity):
