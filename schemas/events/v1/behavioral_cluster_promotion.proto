@@ -1,17 +1,20 @@
 // Category III hypothesis lifecycle event per Charter §2.5
 // (Hypothesis Lifecycle Explicitness, frozen v0.3) + decision-log
 // §0011 (Q4 resolution — staged-combination criterion for demotion-
-// candidacy: Layer A cadence + Layer B deep criterion; Layer A
-// parameter is MANDATORY on every promotion event). Encoded under
-// the canonical-serialization-contract at
+// candidacy: Layer A cadence AND Layer B deep criterion) + §0135
+// (Layer B L-BC-OR adopted; L-C structural-exclusion commitment) +
+// §0136 (canonical-serialization-contract operational discharge) +
+// §0138 (Layer B parameter-calibration resolution; N_A bundled into
+// LayerBParameters per F6; inception-phase values fixed). Encoded
+// under the canonical-serialization-contract at
 // docs/architecture/canonical-serialization-contract.md.
 //
 // Constitutional shape per Charter §2.5 Structural Requirement:
 // "Promotion events carry the structural parameters governing the
-// promoted hypothesis's subsequent demotion-candidacy." This entry
-// satisfies that requirement by recording cadence_seconds (Layer A)
-// on every promotion. Layer B (the deep criterion on evidential
-// independence per §2.6) remains deferred until §2.6 redacts.
+// promoted hypothesis's subsequent demotion-candidacy." Layer A's
+// N_A and Layer B's (T_B, K_C, N) are bundled into a single
+// LayerBParameters message per §0138 F6 — single source of truth at
+// the canonical-serialization-contract layer.
 //
 // Per Charter §2.5 BC5 ("Chains crossing Category III continue to
 // the hypothesis's lifecycle events, which are Category I records
@@ -25,6 +28,8 @@
 syntax = "proto3";
 
 package ghosttrace.events.v1;
+
+import "common/v1/layer_b_parameters.proto";
 
 option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
 
@@ -43,20 +48,34 @@ message BehavioralClusterPromotion {
   // promoted_at is the Unix-nanoseconds time from which the Layer A
   // cadence gate is measured. Per decision-log §0011, the cadence
   // gate opens demotion-candidacy when elapsed time since promoted_at
-  // exceeds cadence_seconds. Typically wall-clock at the operator's
-  // promotion decision; explicit values permitted for forensic
-  // replay + deterministic re-derivation.
+  // exceeds N_A (carried in layer_b_parameters per §0138 F6).
+  // Typically wall-clock at the operator's promotion decision;
+  // explicit values permitted for forensic replay + deterministic
+  // re-derivation.
   int64 promoted_at = 2;
 
-  // cadence_seconds is the Layer A parameter per decision-log §0011
-  // staged-combination criterion: elapsed time since promoted_at
-  // that opens demotion-candidacy. MANDATORY per Charter §2.5
-  // Structural Requirement. Layer B (deep criterion on evidential
-  // independence) remains deferred until §2.6 operationalization.
+  // cadence_seconds is the LEGACY Layer A parameter from pre-§0138
+  // promotion landings (per §0011 staged-combination form before
+  // Layer B's deferral was lifted). Retained as field 3 for
+  // backward-compatible canonical bytes; new emitters should
+  // populate layer_b_parameters (field 5) — its n_a_duration_
+  // nanoseconds carries the same Layer A cadence per §0138 F6
+  // bundling. When both are set, layer_b_parameters takes precedence
+  // as the canonical-serialization-contract source of truth.
   int64 cadence_seconds = 3;
 
   // reason is an operator-supplied free-form note explaining why
   // the hypothesis was promoted. Optional; recorded for forensic
   // replay. Empty is acceptable but discouraged at audit time.
   string reason = 4;
+
+  // layer_b_parameters carries the full demotion-candidacy parameter
+  // set per §0138 (T_B, K_C, N, N_A bundled). Per Charter §2.5
+  // Structural Requirement, the promotion event carries the
+  // parameters governing subsequent demotion-candidacy; per §0138 F6
+  // those parameters include Layer A's N_A (n_a_duration_nanoseconds)
+  // in addition to Layer B's (t_b, k_c, n_window). Inception-phase
+  // values per §0138: t_b = k_c = 1/2; n_window = 1000;
+  // n_a_duration_nanoseconds = 86400000000000 (1 day).
+  ghosttrace.common.v1.LayerBParameters layer_b_parameters = 5;
 }

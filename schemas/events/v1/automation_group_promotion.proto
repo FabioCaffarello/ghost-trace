@@ -1,14 +1,18 @@
 // Category III hypothesis lifecycle event per Charter §2.5
 // (Hypothesis Lifecycle Explicitness, frozen v0.3) + decision-log
 // §0011 (Q4 resolution — staged-combination criterion for demotion-
-// candidacy: Layer A cadence mandatory on every promotion) +
-// decision-log §0057 (this entry — second-subtype promotion landing;
-// mirrors §0046 for the AutomationGroup concrete subtype).
+// candidacy: Layer A cadence AND Layer B deep criterion) +
+// §0057 (this entry — second-subtype promotion landing; mirrors
+// §0046 for the AutomationGroup concrete subtype) +
+// §0135 (Layer B L-BC-OR adopted) + §0136 (canonical-serialization-
+// contract operational discharge) + §0138 (Layer B parameter-
+// calibration; N_A bundled into LayerBParameters per F6).
 //
 // Constitutional shape per Charter §2.5 Structural Requirement:
 // "Promotion events carry the structural parameters governing the
-// promoted hypothesis's subsequent demotion-candidacy." Same Layer
-// A semantic as §0046; Layer B remains deferred until §2.6.
+// promoted hypothesis's subsequent demotion-candidacy." Layer A's
+// N_A and Layer B's (T_B, K_C, N) are bundled into a single
+// LayerBParameters message per §0138 F6.
 //
 // Per Charter §2.5 BC5, AutomationGroupPromotion is a Category I
 // record committed under §2.1 immutability.
@@ -21,6 +25,8 @@
 syntax = "proto3";
 
 package ghosttrace.events.v1;
+
+import "common/v1/layer_b_parameters.proto";
 
 option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
 
@@ -39,12 +45,24 @@ message AutomationGroupPromotion {
   // replay + deterministic re-derivation.
   int64 promoted_at = 2;
 
-  // cadence_seconds is the Layer A parameter (per §0011). MANDATORY
-  // per Charter §2.5 Structural Requirement. Layer B (deep
-  // criterion on evidential independence) remains deferred until
-  // §2.6 operationalization.
+  // cadence_seconds is the LEGACY Layer A parameter from pre-§0138
+  // landings. Retained as field 3 for backward-compatible canonical
+  // bytes; new emitters should populate layer_b_parameters (field 5)
+  // — its n_a_duration_nanoseconds carries the same Layer A cadence
+  // per §0138 F6 bundling. When both are set, layer_b_parameters
+  // takes precedence per canonical-serialization-contract.
   int64 cadence_seconds = 3;
 
   // reason is an operator-supplied free-form note. Optional.
   string reason = 4;
+
+  // layer_b_parameters carries the full demotion-candidacy parameter
+  // set per §0138 (T_B, K_C, N, N_A bundled). Per Charter §2.5
+  // Structural Requirement, the promotion event carries the
+  // parameters governing subsequent demotion-candidacy; per §0138 F6
+  // those parameters include Layer A's N_A in addition to Layer B's
+  // (t_b, k_c, n_window). Inception-phase values per §0138: t_b =
+  // k_c = 1/2; n_window = 1000; n_a_duration_nanoseconds =
+  // 86400000000000 (1 day).
+  ghosttrace.common.v1.LayerBParameters layer_b_parameters = 5;
 }
