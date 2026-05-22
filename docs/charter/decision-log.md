@@ -4703,6 +4703,49 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0120` — §2.6 empirical-pressure assessment refresh (post-§2.4-frozen)
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0077`](#0077--24--26-empirical-pressure-assessment-recorded-assessment-only-no-redaction-resumption) recorded the first empirical-pressure assessment paired §2.4 + §2.6. §2.4 has since closed at frozen v0.5 per [`§0099`](#0099--gate-24-third-object-level-invariant-redaction-path-reading-1-full-amendment-v05); the §2.6 portion of the §0077 assessment is now stale on two axes: (a) the "downstream of §2.4 per [`§0008`](#0008--redaction-order-for-pending-invariants-25--23--24--26-gate-1-carry-forwards-enacted) order" condition is discharged; (b) new questions have surfaced from §2.4 binding text + the [`§0095`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens)–[`§0100`](#0119--cli-orphancleanup-audit-symmetry-authscope-rfc-open-question-4-discharged-via-operator-optin) Q2-A.2 cross-subtype merge+split framing arc.
+
+- **Decision:** Produce a §2.6-specific empirical-pressure refresh document at [`docs/charter/empirical-pressure-2-6.md`](./empirical-pressure-2-6.md). The document:
+
+  1. Records the post-§2.4-frozen status snapshot + the implementation surface accumulated since §0077.
+
+  2. Re-evaluates each Q-§2.6-1 through Q-§2.6-5 from [`empirical-pressure-2-4-2-6.md` §4](./empirical-pressure-2-4-2-6.md) in the post-§2.4 context. Q-§2.6-1 unchanged; Q-§2.6-2 gains a moderate pressure-increment (§2.4 substrate-time edge generation creates a natural co-location for independence-derivation); Q-§2.6-3 and Q-§2.6-4 gain material cross-subtype-framing-arc dependencies; Q-§2.6-5 unchanged.
+
+  3. Catalogs two NEW questions surfaced since §0077: Q-§2.6-6 (`influenced_by` edge independence contribution — chain-traversal vs per-formation independence) and Q-§2.6-7 (Layer B activation predicate — §2.4 has activated the §2.5 Layer B forward-reference contract; §2.6 redaction completes the activation).
+
+  4. Updates the pressure assessment from "moderate, downstream of §2.4" to **"strong, gated by cross-subtype-framing-arc resolution"** — §2.6 binding text needs either pre-commitment on cross-subtype-typing assumptions for Q-§2.6-3/4 OR carry-forward of all three branches with operationalization at follow-on.
+
+  5. Records the anchor-inventory pre-Gate status: §2.4 BC inheritance clean; Q5 "transitive?" half carry-forward open; Q2 forward-referenceable; Layer B activation pending §2.6 freeze.
+
+  The refresh is **non-binding**. It does **not** draft §2.6 prose, does **not** pick answers to catalogued questions, does **not** itself trigger redaction resumption. The decision whether to resume committee redaction is reserved.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. No pending-invariant working-stub modified. The refresh document is descriptive surface about §2.6's empirical-pressure state, not §2.6 content; same Charter-discipline posture as [`§0077`](#0077--24--26-empirical-pressure-assessment-recorded-assessment-only-no-redaction-resumption). Canonical vocabulary used as written. §2.6 status remains `pending — empirical pressure phase`.
+
+- **Consequences:**
+  - [`docs/charter/empirical-pressure-2-6.md`](./empirical-pressure-2-6.md) — new file. §2.6-specific refresh of the §0077 assessment.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0120 (this entry).
+  - **§2.6 status unchanged.** Remains `pending — empirical pressure phase`. The refresh ranks pressure as STRONG (up from §0077's MODERATE); the actual resumption is a separate committee decision.
+  - **Layer B follow-on RFC** ([`ontology-revision-layer-b-deep-criterion`](../rfcs/draft/ontology-revision-layer-b-deep-criterion.md)) remains on hold per [`§0011`](#0011--q4-resolution-staged-combination-demotion-criterion-layer-a--deferred-layer-b). Its activation predicate is now §2.6 freeze (§2.4 portion discharged); the on-hold status is preserved pending committee decision on §2.6 redaction resumption.
+
+  - **Methodological observation 1 — Empirical-pressure refresh pattern.** [`§0077`](#0077--24--26-empirical-pressure-assessment-recorded-assessment-only-no-redaction-resumption) established the assessment-only document at the pending-invariant level as the §0022 empirical-pressure phase's natural artifact. This entry establishes the **refresh** pattern: when an upstream pending invariant closes (here §2.4 closure at [`§0099`](#0099--gate-24-third-object-level-invariant-redaction-path-reading-1-full-amendment-v05)), the downstream assessment is refreshed in the new context. The refresh is structurally lighter than a fresh assessment (it inherits §0077's question catalogue + delta-evaluates) and produces a §2.6-specific document, not a re-paired §2.4/§2.6 document. Pattern reusable for §3 Non-Goals's eventual upstream-closure refreshes.
+
+  - **Methodological observation 2 — Cross-subtype framing arc as §2.6 input.** The [`§0098`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens) → [`§0119`](#0119--cli-orphancleanup-audit-symmetry-authscope-rfc-open-question-4-discharged-via-operator-optin) auth-scope arc and the Q2-A.2 cross-subtype merge+split framing arc (PRs #95–#100) are both upstream of §2.6 redaction in different ways: auth-scope is implementation-surface-accumulation; cross-subtype is framing-surface-accumulation. The cross-subtype arc adds COMMITTEE-PENDING dependencies to Q-§2.6-3/4 — §2.6 redaction either pre-commits on the cross-subtype RFCs' resolution OR carries the dependency forward. Whether to pre-commit is itself a Step 1.1 question.
+
+  - **Carry-forwards:**
+    - **§2.6 redaction-resumption decision** — open committee question. Pressure is now strong per this refresh; the decision to RESUME (vs. continue empirical-pressure phase indefinitely) is reserved.
+    - **Q-§2.6-3/4 cross-subtype dependency** — open. §2.6 redaction either pre-commits on cross-subtype typing (binds the typing RFC) or carries forward.
+    - **Layer B activation** — pending §2.6 freeze. §2.4 portion discharged at [`§0099`](#0099--gate-24-third-object-level-invariant-redaction-path-reading-1-full-amendment-v05).
+    - **Q5 "transitive?" half** — open carry-forward from [`§0021`](#0021--omq-3-resolution-substrate-time-generation-candidate--0020-cascade-fully-discharged); §2.4 binding text records the forward-reference marker; §2.6 inherits.
+
+- **Supersession:** None. Refreshes (does not supersede) [`§0077`](#0077--24--26-empirical-pressure-assessment-recorded-assessment-only-no-redaction-resumption) — the §0077 document remains the paired §2.4/§2.6 assessment of record at the time; this entry's document is the §2.6-specific refresh in the post-§2.4-closure context. Per [`§0019`](#0019--24-redaction-plan-provenance-model-omq-2-decay-of-influence-opened-as-pre-gate-omq-3--q2--23-bc1-inheritance-assessed-at-24-step-11) methodology, both documents are non-binding anchor-inventory artifacts.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
