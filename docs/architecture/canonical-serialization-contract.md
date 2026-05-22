@@ -1,15 +1,22 @@
 # Canonical Serialization Contract
 
-**Status:** Active. First non-scaffold architecture document. Discharges the follow-on commitment named in [`decision-log §0024`](../charter/decision-log.md) AP5 mitigation step (b) and [`§0027`](../charter/decision-log.md) Consequences.
+**Status:** Active. First non-scaffold architecture document. Discharges the follow-on commitment named in [`decision-log §0024`](../charter/decision-log.md) AP5 mitigation step (b) and [`§0027`](../charter/decision-log.md) Consequences. Extended at [`decision-log §0136`](../charter/decision-log.md) to consolidate the paired-dimension commitment ([§2.6](../charter/constitutional-charter.md#26-evidential-independence-integrity) operational discharge), the α derivation rule (per [`§0133`](../charter/decision-log.md) Q3 resolution), the τ + β-graph influence storage (per [`§0134`](../charter/decision-log.md) Q5 resolution), and the Layer B L-BC-OR firing predicate (per [`§0135`](../charter/decision-log.md) Layer B resolution).
 
 > This document specifies the canonical-serialization contract for Ghost Trace: the bit-stable mapping from a Protobuf message instance to a byte sequence to a content-addressable identifier. The mapping is the falsifiability predicate for [Charter §2.1 Observational Integrity](../charter/constitutional-charter.md#21-observational-integrity) at the substrate; without bit-stability, content-hash recomputation on read cannot serve as the mutation-detection mechanism.
 
 ## Constitutional Anchors
 
 - [Charter §2.1 Observational Integrity](../charter/constitutional-charter.md#21-observational-integrity) — requires content-addressable identifiers sufficient to detect mutation if attempted. The contract specified here is the operational mechanism.
+- [Charter §2.4 Inferential Influence Disclosure](../charter/constitutional-charter.md#24-inferential-influence-disclosure) v0.5 — requires `influenced_by` chain declaration for inferential-commitment records. The Influence Storage section below specifies the substrate encoding.
+- [Charter §2.5 Hypothesis Lifecycle Explicitness](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) v0.3 — requires `demotion` lifecycle events with a designated structural test. The Demotion-Candidacy Predicate section below specifies the test's substrate-enforceable form.
+- [Charter §2.6 Evidential Independence Integrity](../charter/constitutional-charter.md#26-evidential-independence-integrity) v0.6 — requires paired `confidence` + `evidential_independence` dimensions on inferential-commitment records. The Paired-Dimension Commitment section below specifies the substrate enforcement. (Note: §2.6 prose references `§0034` as the paired-dimension enforcement entry — this is a stale anchor per [`§0136`](../charter/decision-log.md) Anchor-fidelity observation; the actual operational discharge is [`§0136`](../charter/decision-log.md). Patch amendment to §2.6 deferred.)
 - [`decision-log §0024`](../charter/decision-log.md) — schemas-technology selection: Protocol Buffers (proto3). The canonical-serialization layer this document specifies operates against proto3-generated message types.
 - [`decision-log §0025`](../charter/decision-log.md) — implementation-language selection: Go. The Protobuf library binding specified here is the Go binding (`google.golang.org/protobuf` v2 module).
 - [`decision-log §0027`](../charter/decision-log.md) — storage-technology selection: SQLite + content-addressed blob-store. The blob-store's content addressing operates against the canonical bytes specified here.
+- [`decision-log §0133`](../charter/decision-log.md) — Q3-α resolution: `evidential_independence` = source-count ratio over Cat I provenance roots. The Evidential Independence section below specifies the substrate encoding and validation.
+- [`decision-log §0134`](../charter/decision-log.md) — Q5-τ resolution: `influenced_by` is the transitive closure of declared direct edges; storage strategy is β-graph (direct edges + per-record cached closures). The Influence Storage section below specifies the substrate encoding.
+- [`decision-log §0135`](../charter/decision-log.md) — Layer B L-BC-OR resolution: demotion-candidacy predicate is the disjunction of evidence-staleness and influence-saturation tests. The Demotion-Candidacy Predicate section below specifies the substrate-enforceable form.
+- [`decision-log §0136`](../charter/decision-log.md) — this consolidation entry.
 
 ## Subordination
 
@@ -87,6 +94,181 @@ func ContentHash(canonicalBytes []byte) [32]byte {
 
 The 32-byte array is the canonical identifier form. Encodings for non-binary contexts (filesystem paths, structured-output messages, error reports) use lowercase hex (`fmt.Sprintf("%x", h)` — 64-character string). The lowercase-hex convention is fixed; uppercase-hex or base64 encoding are NOT permitted in canonical-form-load-bearing contexts (a hash recorded as base64 in one path and as hex in another path would not compare equal as strings, which has subtle downstream effects).
 
+## Paired-Dimension Commitment
+
+Per [Charter §2.6](../charter/constitutional-charter.md#26-evidential-independence-integrity) v0.6 + [`§0136`](../charter/decision-log.md) (operational discharge): every record that is structurally inferential carries two structurally-distinct dimensions at substrate commit. The two dimensions are required by the substrate; commitment with only one is structurally precluded at the canonical-serialization-contract layer.
+
+### Records subject to the commitment
+
+The paired-dimension requirement applies to:
+
+- Category II construct records (the `Construct` message family).
+- Category III hypothesis records (the four concrete subtypes per [`§0010`](../charter/decision-log.md) Q2-A.2: `BehavioralCluster`, `CoordinationRing`, `CampaignHypothesis`, `AutomationGroup`).
+- Any Assertion record whose subject reference is `subject_ref_construct` or `subject_ref_hypothesis` per [`§0016`](../charter/decision-log.md) Q3-subject-ref resolution.
+
+Category I observation records are NOT subject to the commitment — they carry no inferential commitment per [§2.1](../charter/constitutional-charter.md#21-observational-integrity).
+
+### Required fields
+
+For records subject to the commitment, two paired fields are required:
+
+```proto
+message InferentialCommitment {
+    Confidence confidence = 1;             // Required; magnitude
+    EvidentialIndependence evidential_independence = 2; // Required; degree
+}
+```
+
+Both fields are required (`AllowPartial: false` in the canonical Marshal call rejects records missing either). Confidence and evidential_independence are structurally independent at substrate per [Charter §2.6](../charter/constitutional-charter.md#26-evidential-independence-integrity) — neither is derivable from the other at commit time.
+
+### Validation discipline
+
+Substrate-commit fails at the canonical-marshalling boundary when a record subject to the commitment is missing either dimension. The failure mode is deterministic and not bypassable at the consumer layer.
+
+## Evidential Independence (Q3-α)
+
+Per [`§0133`](../charter/decision-log.md) Q3-α resolution + [`§0136`](../charter/decision-log.md) (operational discharge): the `evidential_independence` value is computed at substrate write time per the source-count-ratio formula.
+
+### Formula
+
+```
+evidential_independence(record) =
+    (count of Cat I primary observation roots in record.subject_ref_* chain
+     NOT reachable via any influenced_by edge from a promoted hypothesis)
+    /
+    (total Cat I roots in record.subject_ref_* chain)
+```
+
+Range: `[0, 1]`. The reachability predicate uses the transitive `influenced_by` semantic per the Influence Storage section below (Q5-τ).
+
+### Encoding
+
+The `evidential_independence` field encodes as a rational number — a numerator/denominator pair — to preserve the bounded-resolution structure α commits to per [`§0133`](../charter/decision-log.md) Phase 4 Finding 4. A floating-point encoding is forbidden (it obscures the structural-resolution commitment).
+
+```proto
+message EvidentialIndependence {
+    uint64 numerator = 1;    // Cat I roots NOT reachable via influenced_by
+    uint64 denominator = 2;  // Total Cat I roots; must be > 0
+}
+```
+
+The denominator is positive; a denominator of zero (no Cat I roots in the chain) is a structural error and indicates the record's provenance chain does not terminate at Cat I per [§2.3](../charter/constitutional-charter.md#23-provenance-integrity) v0.4. Such records are rejected at the marshalling boundary.
+
+### Validation discipline
+
+Substrate recomputes the formula from the substrate-committed provenance + influence subgraphs at commit time and compares against the committed value byte-for-byte. Mismatch is rejected. Producer-side derivation is permitted (the producer must apply the same formula), but the substrate verifies the value; consumer-side acceptance of the producer's value is not required.
+
+### Cat-II structural transmission
+
+Per [`§0134`](../charter/decision-log.md) Cat II structural transmission commitment: Cat II constructs deterministically transmit `influenced_by` membership from their inputs. The α formula's reachability predicate honors this transmission — a Cat I root reachable only through an influenced Cat II intermediate is counted as influenced (excluded from the numerator).
+
+## Influence Storage (Q5-τ + β-graph)
+
+Per [`§0134`](../charter/decision-log.md) Q5-τ resolution + [`§0136`](../charter/decision-log.md) (operational discharge): the `influenced_by` relation is the transitive closure of declared direct edges. Storage strategy is β-graph: substrate stores direct edges per record + per-record cached closures.
+
+### Direct edges
+
+Each inferential-commitment record carries a `direct_influenced_by` field listing the Cat III hypothesis records whose influence the producer directly declares at formation:
+
+```proto
+message InferentialRecord {
+    // ... other fields ...
+    repeated bytes direct_influenced_by = 10; // 32-byte BLAKE3 hashes of Cat III hypothesis records
+    repeated bytes closure_hashes = 11;       // 32-byte BLAKE3 hashes of all transitively-reachable Cat III hypotheses
+}
+```
+
+Each element of `direct_influenced_by` is the 32-byte BLAKE3 content-hash of a Cat III hypothesis record. Elements are stored in ascending lexicographic order; out-of-order or duplicate entries are rejected at marshalling.
+
+### Closure encoding
+
+The `closure_hashes` field stores the transitive closure of `direct_influenced_by` — every Cat III hypothesis reachable through any chain of `influenced_by` edges. Encoding is `repeated bytes` (not `map<K,V>` per [`§0024`](../charter/decision-log.md) AP6); elements are 32-byte BLAKE3 hashes in ascending lexicographic order.
+
+### Computation algorithm
+
+Per [`§0021`](../charter/decision-log.md) substrate-time generation: at write time, the substrate computes `closure_hashes` for the new record by:
+
+1. Initializing `closure_hashes` as the union of `direct_influenced_by` elements with the `closure_hashes` of each record referenced by `subject_ref_*` AND each Cat III hypothesis in `direct_influenced_by`.
+2. Sorting the union in ascending lexicographic order.
+3. Deduplicating (closure is a set).
+
+Amortized cost is O(input-set-size) per write — the substrate reads input records' already-committed `closure_hashes` rather than recomputing the transitive traversal from scratch. The recursion terminates because `closure_hashes` is committed before the record that consumes it (§0021 substrate-time discipline).
+
+### Cat-II structural transmission
+
+Per [`§0134`](../charter/decision-log.md) Cat II structural transmission commitment + [`§0136`](../charter/decision-log.md): a Cat II construct's `closure_hashes` IS the union of the `closure_hashes` of the records it is deterministically derived from. This is structural, not optional — Cat II constructs are deterministic views of their inputs per [§2.2](../charter/constitutional-charter.md#22-epistemic-separation), so their influence chain is the union of their inputs' chains.
+
+### Validation discipline
+
+Substrate recomputes `closure_hashes` from the substrate-committed direct edges + input records' closures at commit time and compares element-by-element against the committed value. Mismatch is rejected. Out-of-order or duplicate elements in either `direct_influenced_by` or `closure_hashes` are rejected.
+
+## Demotion-Candidacy Predicate (Layer B L-BC-OR)
+
+Per [`§0135`](../charter/decision-log.md) Layer B L-BC-OR resolution + [`§0136`](../charter/decision-log.md) (operational discharge): the demotion-candidacy predicate for a promoted hypothesis is the disjunction of evidence-staleness and influence-saturation tests, composed with the outer Layer A cadence gate.
+
+### Predicate
+
+```
+DEMOTE-CANDIDATE(H) :=
+    Layer A(H)
+    AND
+    ((freshness_B(H) < T_B) OR (saturation_C(H) > K_C))
+```
+
+### Layer A — Cadence gate
+
+Per [`§0011`](../charter/decision-log.md) Q4 resolution:
+
+```
+Layer A(H) := (current_substrate_time - H.promotion_event.committed_at) > N_A
+```
+
+`N_A` is recorded on the promotion event or on the hypothesis's concrete subtype per [`§0010`](../charter/decision-log.md) Q2-A.2; operational specification per follow-on RFC.
+
+### Layer B — freshness_B (evidence-staleness)
+
+```
+freshness_B(H) =
+    avg(
+        evidential_independence(r)
+        OVER recent N assertions r WHERE H.hash ∈ r.closure_hashes
+    )
+```
+
+The recent-N window's structural form (fixed time, fixed count, hybrid) is deferred to operational specification. The `closure_hashes` field per the Influence Storage section above is what `H.hash ∈ r.closure_hashes` queries against.
+
+### Layer B — saturation_C (influence-saturation)
+
+```
+saturation_C(H) =
+    (count of recent N assertions r WHERE H.hash ∈ r.closure_hashes
+       AND H.hash ∉ r.direct_influenced_by)
+    /
+    N
+```
+
+The `H.hash ∉ r.direct_influenced_by` clause is the L-C structural-exclusion commitment per [`§0135`](../charter/decision-log.md): assertions whose direct `influenced_by` lists H are H's OWN enrichment outputs (H is the proximate influence); excluding them prevents self-reinforcing saturation. Assertions where H appears in the transitive closure but NOT in the direct edges are downstream consumers — those are what saturation_C counts.
+
+### Parameter ranges
+
+The contract enforces type/range at marshalling but defers parameter VALUES to operational specification:
+
+```proto
+message LayerBParameters {
+    EvidentialIndependence t_b = 1;  // 0 ≤ T_B ≤ 1; freshness threshold
+    EvidentialIndependence k_c = 2;  // 0 ≤ K_C ≤ 1; saturation ratio
+    uint64 n_window = 3;             // N > 0; recent-window size
+}
+```
+
+`T_B` and `K_C` use the same rational encoding as `evidential_independence` (numerator/denominator pair). `N` is a positive integer. Specific values are operational-specification follow-on per [`§0135`](../charter/decision-log.md) form-vs-parameter discipline.
+
+### Validation discipline
+
+The predicate's firing is computed at projection time (projection-replay path), not at substrate-commit time — `DEMOTE-CANDIDATE(H)` is a structural test, not a stored value. The substrate stores the components (α values + closures + direct edges + promotion timestamps); projection replay computes the predicate. The §2.6 anti-pattern 2 detection (byte-for-byte projection-replay match) applies to each component independently.
+
+When the predicate fires, the operator commits a `demotion` lifecycle event per [§2.5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) v0.3; the event references the promotion event and records the predicate's firing values for audit.
+
 ## Schemas-Evolution Events
 
 Per [`§0024`](../charter/decision-log.md) AP5 step (c), library upgrades are schemas-evolution events. This section defines the boundary.
@@ -98,6 +280,10 @@ A change is a **schemas-evolution event** when any of the following hold:
 3. The Go toolchain version is changed in a way that affects the Protobuf or BLAKE3 library's compiled behavior (rare; usually only at major Go release boundaries).
 4. The `protoc-gen-go` plugin version is changed in a way that affects generated-code marshalling behavior.
 5. Any `.proto` file's structural commitments change (new required-by-discipline field; deprecation; field number reservation).
+6. The α formula (Evidential Independence section) changes — numerator/denominator definition, reachability semantic, or rational encoding shape.
+7. The closure_hashes encoding or computation algorithm (Influence Storage section) changes — hash element shape, sort order, deduplication, or merge algorithm.
+8. The L-BC-OR predicate's structural form (Demotion-Candidacy Predicate section) changes — Layer A composition, Layer B inner predicate, or L-C structural-exclusion semantic.
+9. The paired-dimension required-fields shape (Paired-Dimension Commitment section) changes — which record types are subject to the commitment, which fields are required, validation discipline.
 
 A change is NOT a schemas-evolution event when:
 
@@ -153,6 +339,12 @@ By analogy to Charter [§2.1 Forbidden Anti-Patterns](../charter/constitutional-
 - **Hash computation against non-canonical bytes.** Computing a BLAKE3 hash against a byte slice produced by anything other than the canonical procedure produces a hash that is not the content-addressable identifier. Detectable: code review on all `blake3.Sum256(` call sites; bytes argument must trace to canonical marshal output.
 - **Golden-file mismatch tolerated.** A CI golden-file failure that is dismissed (e.g. by commenting out the test, or by regenerating without inspection) defeats the gate. Detectable: code review on golden-corpus regeneration commits; every regeneration commit identifies the schemas-evolution event explicitly.
 - **Encoding the hash in a non-canonical form in canonical-load-bearing contexts.** Mixing hex and base64 encodings of the same hash across the codebase introduces string-comparison bugs that do not surface until the comparison occurs. Detectable: lint rule on hex/base64 encoding call sites against hash values.
+- **Paired-dimension bypass.** Committing a Cat II construct, Cat III hypothesis, or Assertion with `subject_ref_construct` / `subject_ref_hypothesis` populated WITHOUT both `confidence` AND `evidential_independence` fields. Forbidden by [§2.6](../charter/constitutional-charter.md#26-evidential-independence-integrity) v0.6 anti-pattern 1. Detectable at the canonical-marshalling boundary via `AllowPartial: false` rejection on missing required fields.
+- **α computed offline / α not byte-stable.** Computing `evidential_independence` in a process other than the substrate at write time, or producing an α value that does not byte-for-byte match the recomputed value from substrate-committed provenance + influence subgraphs. Forbidden by [§2.6](../charter/constitutional-charter.md#26-evidential-independence-integrity) anti-pattern 5 (offline-only derivation) + anti-pattern 2 (projection-replay byte-for-byte match). Detectable at write-time substrate validation: substrate recomputes α and compares.
+- **closure_hashes element mis-encoded.** `closure_hashes` containing elements that are not 32-byte BLAKE3 hashes, OR not in ascending lexicographic order, OR containing duplicates. Detectable at the canonical-marshalling boundary via field-shape validation.
+- **Cat II without closure-union transmission.** A Cat II construct whose `closure_hashes` is NOT the union of its inputs' `closure_hashes`. Forbidden by [`§0134`](../charter/decision-log.md) Cat II structural transmission commitment + [`§0136`](../charter/decision-log.md) operational discharge. Detectable at write-time substrate validation: substrate recomputes the union and compares.
+- **α encoded as float.** Encoding `evidential_independence` as a floating-point value rather than as a `EvidentialIndependence` rational-pair message. Forbidden by [`§0136`](../charter/decision-log.md) (the rational encoding preserves the bounded-resolution structural commitment per [`§0133`](../charter/decision-log.md) Phase 4 Finding 4). Detectable at proto type definition review + code review.
+- **Layer B saturation_C without L-C structural-exclusion.** A `saturation_C(H)` computation that does NOT exclude assertions where H appears in `direct_influenced_by` from the numerator. Forbidden by [`§0135`](../charter/decision-log.md) L-C structural-exclusion committee extension + [`§0136`](../charter/decision-log.md) operational discharge. Detectable at projection-replay validation of the demotion-event firing conditions.
 
 ## Open Questions
 
@@ -162,12 +354,22 @@ By analogy to Charter [§2.1 Forbidden Anti-Patterns](../charter/constitutional-
 
 ## References
 
-- [`docs/charter/constitutional-charter.md` §2.1](../charter/constitutional-charter.md#21-observational-integrity) — the invariant this contract operationalizes.
+- [`docs/charter/constitutional-charter.md` §2.1](../charter/constitutional-charter.md#21-observational-integrity) — the invariant this contract operationalizes for substrate-immutability.
+- [`docs/charter/constitutional-charter.md` §2.4](../charter/constitutional-charter.md#24-inferential-influence-disclosure) v0.5 — `influenced_by` chain declaration; this contract's Influence Storage section operationalizes.
+- [`docs/charter/constitutional-charter.md` §2.5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) v0.3 — `demotion` lifecycle event with designated structural test; this contract's Demotion-Candidacy Predicate section operationalizes.
+- [`docs/charter/constitutional-charter.md` §2.6](../charter/constitutional-charter.md#26-evidential-independence-integrity) v0.6 — paired-dimension commitment; this contract's Paired-Dimension Commitment + Evidential Independence sections operationalize.
 - [`docs/charter/decision-log.md` §0024](../charter/decision-log.md) — schemas-technology selection (Protobuf proto3); AP5 mitigation steps (a), (b), (c), (d); AP6 (`map<K, V>` ban).
 - [`docs/charter/decision-log.md` §0025](../charter/decision-log.md) — implementation-language selection (Go); library-version-pinning discipline.
 - [`docs/charter/decision-log.md` §0027](../charter/decision-log.md) — storage-technology selection (SQLite + blob-store); AP6 apparent-duplicate-write byte-equality.
 - [`docs/charter/decision-log.md` §0028](../charter/decision-log.md) — introduction of this document; version-pinning policy + CI gate operationalization recorded.
+- [`docs/charter/decision-log.md` §0133](../charter/decision-log.md) — Q3-α resolution (source-count ratio); this contract's Evidential Independence section operationalizes.
+- [`docs/charter/decision-log.md` §0134](../charter/decision-log.md) — Q5-τ resolution (transitive closure + β-graph storage + Cat II structural transmission); this contract's Influence Storage section operationalizes.
+- [`docs/charter/decision-log.md` §0135](../charter/decision-log.md) — Layer B L-BC-OR resolution (disjunctive + L-C structural-exclusion); this contract's Demotion-Candidacy Predicate section operationalizes.
+- [`docs/charter/decision-log.md` §0136](../charter/decision-log.md) — this contract revision consolidating §0133 + §0134 + §0135 at the contract layer.
 - [`docs/rfcs/draft/architecture-schemas-technology-selection.md`](../rfcs/draft/architecture-schemas-technology-selection.md) — accepted at [`§0024`](../charter/decision-log.md).
 - [`docs/rfcs/draft/architecture-implementation-language-selection.md`](../rfcs/draft/architecture-implementation-language-selection.md) — accepted at [`§0025`](../charter/decision-log.md).
 - [`docs/rfcs/draft/architecture-storage-technology-selection.md`](../rfcs/draft/architecture-storage-technology-selection.md) — accepted at [`§0027`](../charter/decision-log.md).
+- [`docs/rfcs/draft/ontology-revision-q3-independence.md`](../rfcs/draft/ontology-revision-q3-independence.md) — Q3-α RFC; accepted at [`§0133`](../charter/decision-log.md).
+- [`docs/rfcs/draft/ontology-revision-q5-influence-propagation-transitivity.md`](../rfcs/draft/ontology-revision-q5-influence-propagation-transitivity.md) — Q5-τ RFC; accepted at [`§0134`](../charter/decision-log.md).
+- [`docs/rfcs/draft/ontology-revision-layer-b-deep-criterion.md`](../rfcs/draft/ontology-revision-layer-b-deep-criterion.md) — Layer B RFC; accepted at [`§0135`](../charter/decision-log.md).
 - [`docs/architecture/storage-model.md`](./storage-model.md) — Tier 0 substrate (which this contract's bytes inhabit) and Tier 1 archive (which inherits the contract).
