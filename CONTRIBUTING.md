@@ -1,6 +1,6 @@
 # Contributing to Ghost Trace
 
-Ghost Trace is in **implementation phase** post the [`decision-log §0022`](./docs/charter/decision-log.md) implementation pivot. Constitutional sections continue to redact in committee mode in parallel with implementation work; §2.6 and §3 remain pending under the `empirical pressure phase` posture. Contribution norms reflect this dual-track stage.
+Ghost Trace is in **implementation phase** post the [`decision-log §0022`](./docs/charter/decision-log.md) implementation pivot. The **Constitutional Charter is fully frozen at v0.7** as of 2026-05-22 — all sections frozen across five committee-mode redactions. Future Charter evolution proceeds via the [`amendments.md`](./docs/charter/amendments.md) §Amendment Process, not via further pending→frozen Gates.
 
 ## Before You Contribute
 
@@ -17,9 +17,9 @@ If your contribution does not respect what you find there, it will be rejected o
 
 At this stage:
 
-- **Critical readings of the Charter.** Identification of ambiguity, drift risk, or non-falsifiable language. Constitutional drafting remains active for §2.6 and §3 under the empirical-pressure-phase posture.
-- **Draft RFCs.** Especially those addressing open questions recorded in scaffold documents and the decision log.
-- **Ontology refinements.** Particularly around the open modeling questions in [`docs/ontology/`](./docs/ontology/) and the Q2-A.2 cross-subtype follow-on at discussion phase.
+- **Critical readings of the Charter.** Identification of ambiguity, drift risk, or non-falsifiable language. The Charter is fully frozen at v0.7; revisions proceed via the `charter-amendment` RFC pathway per [`amendments.md`](./docs/charter/amendments.md) §Amendment Process.
+- **Draft RFCs.** Especially those addressing open questions recorded in scaffold documents and the decision log — including the active Layer B follow-on RFC per [`§0011`](./docs/charter/decision-log.md) + [`§0129`](./docs/charter/decision-log.md) activation.
+- **Ontology refinements.** Particularly around the open modeling questions in [`docs/ontology/`](./docs/ontology/) — Q2 (Identity tiers), Q3 (formal independence), Q5 (transitive influence). The Q2-A.2 cross-subtype merge+split arc is fully committee-closed per [`§0122`](./docs/charter/decision-log.md)–[`§0127`](./docs/charter/decision-log.md); further cross-subtype work is implementation-RFC discipline.
 - **Adversarial review.** Proposals describing how a hostile actor might exploit weaknesses in the architecture, or how the architecture might degrade under operational pressure.
 - **Implementation contributions.** Service code, schemas evolution, CLI extensions, projection/replay handlers — all under ordinary RFC discipline against the frozen Charter sections and resolved Ontology questions.
 

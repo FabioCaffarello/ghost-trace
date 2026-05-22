@@ -8,14 +8,14 @@ A behavioral intelligence system designed to preserve the epistemic integrity of
 
 ## Status
 
-This repository is in **implementation phase**, post the [`decision-log §0022`](./docs/charter/decision-log.md) implementation pivot (v0.4.2 amendment, 2026-05-21). Constitutional sections continue to redact in committee mode in parallel with implementation work; §2.6 and §3 remain pending under the `empirical pressure phase` posture (redaction resumes when implementation surfaces concrete questions the Charter's stub does not already answer).
+This repository is in **implementation phase**, post the [`decision-log §0022`](./docs/charter/decision-log.md) implementation pivot (v0.4.2 amendment). The **Constitutional Charter is fully frozen at v0.7** as of 2026-05-22 — all sections frozen across five committee-mode redactions; future Charter evolution proceeds via the [`amendments.md`](./docs/charter/amendments.md) §Amendment Process.
 
 Current state:
 
 | Document | Status |
 |---|---|
-| [Constitutional Charter](./docs/charter/constitutional-charter.md) | `v0.5+` — §1 Thesis frozen; §2 qualification criteria frozen; §2.1 / §2.2 / §2.3 / §2.4 / §2.5 frozen; §2.6 pending — empirical pressure phase STRONG (per [`§0120`](./docs/charter/decision-log.md)); §3 pending — first empirical-pressure assessment recorded (per [`§0121`](./docs/charter/decision-log.md)); §4 frozen |
-| [Ontology](./docs/ontology/ontology.md) | Scaffold + multiple revisions accepted; Q1 / Q2 / Q3 / Q4 resolved; OMQ #2 / OMQ #3 resolved; Q2-A.2 cross-subtype merge+split follow-on at discussion phase (six framing documents under [`docs/rfcs/draft/`](./docs/rfcs/draft/) + [`docs/rfcs/discussion/`](./docs/rfcs/discussion/)) |
+| [Constitutional Charter](./docs/charter/constitutional-charter.md) | `v0.7` — **fully frozen.** §1 Thesis; §2 qualification criteria; §2.1; §2.2; §2.3 v0.4; §2.4 v0.5; §2.5 v0.3; §2.6 v0.6; §3 v0.7; §4 v0.2. No sections remain in pending committee redaction. |
+| [Ontology](./docs/ontology/ontology.md) | Scaffold + multiple revisions accepted; Q1 / Q2 / Q3 / Q4 resolved; OMQ #2 / OMQ #3 resolved; Q2-A.2 cross-subtype merge+split arc fully committee-closed (typing γ + enablement B+D + split symmetric γ'+B'+D' + 6/6 pair-table cells + attachment-mechanism β across [`§0122`](./docs/charter/decision-log.md)–[`§0127`](./docs/charter/decision-log.md)) |
 | Architecture | [`storage-model.md`](./docs/architecture/storage-model.md), [`projection-model.md`](./docs/architecture/projection-model.md), [`replay-model.md`](./docs/architecture/replay-model.md), [`event-flow.md`](./docs/architecture/event-flow.md), [`concurrency-pattern.md`](./docs/architecture/concurrency-pattern.md) — load-bearing for the implementation |
 | Schemas | [`schemas/events/v1/`](./schemas/events/v1/) — typed Cat I/II/III proto definitions (DeclaredSession, OperationalSession, NetworkEvent, IngestionEvent, OrphanCleanupAudit, four-subtype Cat III formation/promotion/demotion/dissolution/merge/split protos) |
 | Services | [`services/ingestion/`](./services/ingestion/) — substrate, ingest pipeline, HTTP T1–T4 endpoints, 24 lifecycle CLIs, projection + replay layers, verify + orphan-cleanup admin tools |
