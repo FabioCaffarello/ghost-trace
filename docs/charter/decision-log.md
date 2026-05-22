@@ -4746,6 +4746,49 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0121` — §3 Non-Goals empirical-pressure assessment recorded; first §3 assessment
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** [`§0077`](#0077--24--26-empirical-pressure-assessment-recorded-assessment-only-no-redaction-resumption) established the empirical-pressure-assessment pattern at the pending-invariant level + recorded the methodological observation: *"Future pending invariants (e.g. §3 Non-Goals) may follow the same pattern."* [`§0120`](#0120--26-empiricalpressure-assessment-refresh-post24frozen) refreshed the §2.6 portion in the post-§2.4-frozen context. With §2.4 frozen v0.5, §2.6 in empirical-pressure phase ranked STRONG, and the [`§0098`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens) auth-scope + Q2-A.2 cross-subtype framing arcs accumulated, §3 is the only §-level Charter section that has never received an empirical-pressure assessment. This entry executes the §0077-anticipated extension.
+
+- **Decision:** Produce a §3-specific empirical-pressure assessment at [`docs/charter/empirical-pressure-3.md`](./empirical-pressure-3.md). The document:
+
+  1. Records the implementation surface that intersects each of the five anticipated non-goals from §3's stub (§0023 identity-tier resolution; §0033 local-shell-trust default; §0049/§0050 lifecycle-event substrate; §2.4 declared `influenced_by` chains; §0104/§0119 audit-then-delete contract).
+
+  2. Catalogs five concrete questions §3 binding text must answer: Q-§3-1 (§3 first non-goal relationship to §2.4 frozen v0.5); Q-§3-2 (identity-resolution boundary); Q-§3-3 (irreversible-operational-action boundary — orphan-cleanup audit-then-delete); Q-§3-4 (operational-simplicity-vs-integrity boundary — §0033 default-no-audit vs default-audit); Q-§3-5 (generic-event-sourcing-framework boundary).
+
+  3. Catalogs three cross-cutting questions: Q-X1 (§3 / §4 overlap surface); Q-X2 (§3 redaction-order position relative to §2.6 — open per [`§0008`](#0008--redaction-order-for-pending-invariants-25--23--24--26-gate-1-carry-forwards-enacted) since §3 was not in that ordering); Q-X3 (empirical-pressure ranking).
+
+  4. Ranks §3 empirical pressure as **MODERATE-TO-STRONG** — five non-goals × concrete boundary articulation needed; comparable to §2.6's seven-question scope; two non-goals (Q-§3-3, Q-§3-4) have direct implementation-pressure analogues.
+
+  5. Records anchor-inventory pre-Gate status: §2.4 BC inheritance clean; §2.6 BC inheritance to-be-assessed (with forward-reference contract pattern available if §3 precedes §2.6 freeze); Q2 forward-referenceable; no new pre-Gate dependency surfaced.
+
+  The assessment is **non-binding**. It does **not** draft §3 prose, does **not** pick answers to catalogued questions, does **not** itself trigger redaction resumption. The decision whether to resume committee redaction is reserved.
+
+- **Constitutional review:** No Charter invariant amended. No frozen-section prose modified. No pending-invariant working-stub modified. The assessment document is descriptive surface about §3's empirical-pressure state, not §3 content; same Charter-discipline posture as [`§0077`](#0077--24--26-empirical-pressure-assessment-recorded-assessment-only-no-redaction-resumption) + [`§0120`](#0120--26-empiricalpressure-assessment-refresh-post24frozen). Canonical vocabulary used as written. §3 status remains `pending committee redaction`.
+
+- **Consequences:**
+  - [`docs/charter/empirical-pressure-3.md`](./empirical-pressure-3.md) — new file. First §3-specific empirical-pressure assessment.
+  - [`docs/charter/decision-log.md`](./decision-log.md) §0121 (this entry).
+  - **§3 status unchanged.** Remains `pending committee redaction`. The §0022 v0.4.2 amendment's `pending — empirical pressure phase` posture was framed for §2.4 / §2.6 only; whether §3's status should be re-framed to `pending — empirical pressure phase` (parallel to §2.6) is itself a committee decision recorded here for surface.
+  - **§2.6 + §3 redaction-ordering question opens.** Per Q-X2: §3 may be redacted (a) before §2.6 (independent); (b) after §2.6 (sequential); (c) parallel to §2.6 (interleaved). Recorded as carry-forward for committee decision.
+
+  - **Methodological observation 1 — Empirical-pressure pattern at full §-section coverage.** [`§0077`](#0077--24--26-empirical-pressure-assessment-recorded-assessment-only-no-redaction-resumption) established the pattern; [`§0120`](#0120--26-empiricalpressure-assessment-refresh-post24frozen) introduced the REFRESH variant; this entry extends to the third pending §-section (§3). All three pending Charter sections now have empirical-pressure documentation: §2.4 closed via [`§0099`](#0099--gate-24-third-object-level-invariant-redaction-path-reading-1-full-amendment-v05); §2.6 refresh at [`§0120`](#0120--26-empiricalpressure-assessment-refresh-post24frozen); §3 first-assessment at this entry. The pattern is now structurally complete across the Charter's pending surface.
+
+  - **Methodological observation 2 — §3 status framing.** §3 has carried `pending committee redaction` (the original) rather than `pending — empirical pressure phase` (the §0022-introduced posture). This is a structural inconsistency: §3 has received the same kind of pressure-accumulation that §2.4 / §2.6 have. Whether the [`§0022`](#0022--implementation-pivot-64-amendment--0003-reversal-authorization--2426-posture-shift) v0.4.2 posture should be retroactively extended to §3 is a patch-amendment question; this entry's document surfaces it without resolving.
+
+  - **Carry-forwards:**
+    - **§3 redaction-resumption decision** — open committee question. Pressure ranked MODERATE-TO-STRONG; decision reserved.
+    - **Q-X2 redaction-order position** — open. §3 vs §2.6 ordering committee-discretionary.
+    - **§3 status framing** — `pending committee redaction` vs `pending — empirical pressure phase` is a patch-amendment question.
+    - **§2.6 redaction-resumption** — separate open question from [`§0120`](#0120--26-empiricalpressure-assessment-refresh-post24frozen); unchanged here.
+
+- **Supersession:** None. First §3 empirical-pressure assessment; no prior document to supersede. Extends the [`§0077`](#0077--24--26-empirical-pressure-assessment-recorded-assessment-only-no-redaction-resumption) → [`§0120`](#0120--26-empiricalpressure-assessment-refresh-post24frozen) pattern to §3 per [`§0077`](#0077--24--26-empirical-pressure-assessment-recorded-assessment-only-no-redaction-resumption) Methodological Observation 1.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
