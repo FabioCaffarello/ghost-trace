@@ -5,8 +5,12 @@
 // CoordinationRing lifecycle surface AND the entire §2.5 surface
 // across all four Cat III subtypes).
 //
-// SCOPE — within-subtype only. Cross-subtype split per
-// entity-model.md §Cross-subtype operations remains deferred.
+// SCOPE — within-subtype only at this proto. Cross-subtype split
+// is committee-closed at the framing level via decision-log
+// §0122-§0127 split-merge symmetric framing; per §0127 structural
+// commitment 3 the existing target formation protos are unchanged.
+// Per-cell sub-parameters for cross-subtype split remain follow-on
+// RFC discipline; this proto retains its within-subtype shape.
 //
 // Structural choice (mirrors §0050+§0061+§0068): each successor is
 // a separately-committed CoordinationRingFormation. Preserves
