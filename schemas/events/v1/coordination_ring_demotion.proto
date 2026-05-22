@@ -1,15 +1,26 @@
 // Category III hypothesis lifecycle event per Charter §2.5 +
-// decision-log §0011 (Layer A cadence consumed) + decision-log
+// decision-log §0011 (Q4 staged-combination Layer A AND Layer B) +
 // §0072 (this entry — fourth-subtype demotion landing; mirrors
-// §0047 BC, §0058 AG, §0065 CH).
+// §0047 BC, §0058 AG, §0065 CH) + §0135 (Layer B L-BC-OR) + §0136
+// (canonical-serialization-contract operational discharge;
+// predicate firing values recorded for audit) + §0138 (Layer B
+// parameter-calibration).
 //
 // Per Charter §2.5 BC5, CoordinationRingDemotion is a Cat I record
 // committed under §2.1 immutability. Two-hop chain reconstruction:
 //   demotion.promotion_event_hash → CoordinationRingPromotion
 //   promotion.formation_event_hash → CoordinationRingFormation
+//
+// Cadence-gate + predicate-firing semantics per §0011 + §0135 +
+// §0136: Layer A outer-AND with Layer B's L-BC-OR inner disjunction.
+// Predicate firing values are recorded for audit per the canonical-
+// serialization-contract Validation discipline; operator-override
+// demotions leave the firing-value fields unset.
 syntax = "proto3";
 
 package ghosttrace.events.v1;
+
+import "common/v1/evidential_independence.proto";
 
 option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
 
@@ -21,9 +32,26 @@ message CoordinationRingDemotion {
   bytes promotion_event_hash = 1;
 
   // demoted_at is the Unix-nanoseconds time at which demotion was
-  // recorded. Cadence-gate state computed at consumer time.
+  // recorded. Cadence-gate state computed at consumer time against
+  // promotion.layer_b_parameters.n_a_duration_nanoseconds (or
+  // promotion.cadence_seconds * 1e9 for pre-§0138 promotions).
   int64 demoted_at = 2;
 
   // reason is an operator-supplied free-form note. Optional.
   string reason = 3;
+
+  // freshness_b_at_firing is the value of freshness_B(H) at the
+  // moment the L-BC-OR predicate fired per §0135 + §0136. Rational-
+  // pair encoding per §0136. Set when triggered by predicate firing;
+  // unset for operator-override demotions. Projection-replay
+  // validates against the B-branch firing condition.
+  ghosttrace.common.v1.EvidentialIndependence freshness_b_at_firing = 4;
+
+  // saturation_c_at_firing is the value of saturation_C(H) at the
+  // moment the L-BC-OR predicate fired per §0135 + §0136. L-C
+  // structural-exclusion applied per §0135. Set when triggered by
+  // predicate firing; unset for operator-override demotions.
+  // Projection-replay validates against the C-branch firing
+  // condition. Both fields may be set simultaneously under L-BC-OR.
+  ghosttrace.common.v1.EvidentialIndependence saturation_c_at_firing = 5;
 }
