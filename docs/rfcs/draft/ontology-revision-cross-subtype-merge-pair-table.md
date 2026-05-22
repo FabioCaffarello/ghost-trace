@@ -94,7 +94,7 @@ For each of the 6 unordered pair cells, this section presents the candidate targ
 
 **Open status:** open.
 
-### Cell 4 — `{AG, CR}` (GENUINELY AMBIGUOUS)
+### Cell 4 — `{AG, CR}` (RESOLVED: → CR per §0125)
 
 **Candidates:** AG (automation-signature preserved), CR (relational structure preserved), neither-strictly-dominates.
 
@@ -102,11 +102,11 @@ For each of the 6 unordered pair cells, this section presents the candidate targ
 
 **Structural argument for `→ CR`.** CR's pairwise-relationship surface is structurally richer than AG's flat actor-set. The automation-signature can be retained as an attached field (`automation_signature_ref`) on the CR. The relational structure is structurally weakened if the target is AG.
 
-**Net.** **Neither candidate strictly dominates.** Both load-bearing surfaces require extension fields under the non-canonical target. This is the cell where the merge typing RFC's "subtype-specific surface conflicts" concern surfaces most acutely.
+**Net.** **Neither candidate strictly dominates structurally.** Both load-bearing surfaces require extension fields under the non-canonical target. The committee resolved per the structural rationale below.
 
-**Recommendation:** GENUINELY OPEN. The committee may resolve either way, OR may decide that {AG, CR} represents a phenomenon that warrants a third concrete subtype (which would partially reverse [`§0122`](../../charter/decision-log.md) γ — see §Cross-cell coherence below).
+**Resolution per [`decision-log §0125`](../../charter/decision-log.md): `→ CR`.** Rationale: (a) cross-cell coherence preserved (aligns with Cells 2 + 6's relational-richness pattern); (b) pairwise structure is the structurally specific commitment (CR's surface asserts WHICH actors relate to WHICH others; the converse extension on AG would be heavier); (c) §1.3 falsifiability: the resolution operationalizes to a type-system check (a cross-subtype merge of AG with CR must produce a CR). AG's automation-signature is carried into the CR as an extension surface (`automation_signature_ref` or equivalent attached field, specified at implementation-RFC discipline).
 
-**Open status:** open with explicit ambiguity.
+**Open status:** RESOLVED (→ CR per §0125 on 2026-05-22).
 
 ### Cell 5 — `{AG, CH}`
 
@@ -136,16 +136,16 @@ For each of the 6 unordered pair cells, this section presents the candidate targ
 
 If the leading candidate in each cell is adopted:
 
-| Cell | Leading target | Conservative alternative | Ambiguity |
-|---|---|---|---|
-| `{BC, AG}` | AG | BC | low |
-| `{BC, CR}` | CR | BC | low |
-| `{BC, CH}` | CH | BC | low |
-| `{AG, CR}` | CR | AG | **HIGH** |
-| `{AG, CH}` | CH | AG | low |
-| `{CR, CH}` | CH | CR | very low |
+| Cell | Leading target | Conservative alternative | Ambiguity | Status |
+|---|---|---|---|---|
+| `{BC, AG}` | AG | BC | low | open |
+| `{BC, CR}` | CR | BC | low | open |
+| `{BC, CH}` | CH | BC | low | open |
+| `{AG, CR}` | CR | AG | (was HIGH) | **RESOLVED → CR per [`§0125`](../../charter/decision-log.md)** |
+| `{AG, CH}` | CH | AG | low | open |
+| `{CR, CH}` | CH | CR | very low | open |
 
-This is the same shape as the merge typing RFC's illustrative table, with one important difference: Cell 4 is flagged as genuinely ambiguous and may warrant a different resolution (including reversing the §0122 γ commitment for that pair specifically).
+The table is now 1/6 resolved. The remaining 5 cells stand at their leading-recommendation, open status per the per-cell analysis above. Cell 4 → CR preserved cross-cell coherence with Cells 2 + 6's relational-richness pattern; per-cell resolutions for the other 5 cells await separate committee direction (or may be batched as an aggregate-table resolution per the §Cross-cell coherence question).
 
 ## Split permitted-target-set analysis (§0124)
 
@@ -191,10 +191,10 @@ Per [`falsifiability-check` §1.3](../../../.claude/skills/epistemic/falsifiabil
 
 This RFC explicitly defers:
 
-- **Cell 4 ambiguity resolution.** The committee may adopt CR, AG, or a third option (e.g., introducing a new typed subtype that combines automation + coordination — would partially reverse §0122 γ for this cell). Recorded as the table's primary open question.
+- **Cells 1, 2, 3, 5, 6 resolution.** Leading recommendations recorded; committee resolution pending. Cell 4 resolved per [`§0125`](../../charter/decision-log.md) preserved cross-cell coherence, suggesting the leading recommendations for the other cells are structurally consistent — but each remains a separate committee call.
 - **BC-as-split-target-terminal.** Whether this is a deliberate structural commitment (BC's flat actor-set is "weaker than" the other three; BC cross-subtype split is structurally absent) OR a consequence to be revisited. Linked to Cell 1 resolution.
-- **Per-cell defense vs aggregate-table defense.** Whether the committee resolves cells independently or as a coherent table. The cross-cell coherence section raises this.
-- **Cross-cell exception cells.** If Cell 4 resolves contra the leading recommendation, are there other cells where the operationally-stronger argument differs from the structural-richness argument? Recorded.
+- **Per-cell defense vs aggregate-table defense.** Whether the committee resolves the remaining 5 cells independently (per-cell, like [`§0125`](../../charter/decision-log.md)) or as a single aggregate-table batch. The §Cross-cell coherence section raises this.
+- **AG-extension-on-CR-surface implementation.** Per [`§0125`](../../charter/decision-log.md) carry-forward: how is the AG's automation-signature carried into the merged `CoordinationRingFormation`? Three candidate mechanisms recorded; implementation-RFC discipline.
 
 ## Anti-Patterns to Avoid
 
