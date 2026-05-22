@@ -12,6 +12,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	commonv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 )
 
@@ -58,6 +59,8 @@ var messageFactory = map[string]func() proto.Message{
 	"coordination-ring-dissolution": func() proto.Message { return &eventsv1.CoordinationRingDissolution{} },
 	"coordination-ring-merge":       func() proto.Message { return &eventsv1.CoordinationRingMerge{} },
 	"coordination-ring-split":       func() proto.Message { return &eventsv1.CoordinationRingSplit{} },
+	"evidential-independence":       func() proto.Message { return &commonv1.EvidentialIndependence{} },
+	"layer-b-parameters":            func() proto.Message { return &commonv1.LayerBParameters{} },
 }
 
 // TestCanonicalCorpus is the CI golden-file gate per

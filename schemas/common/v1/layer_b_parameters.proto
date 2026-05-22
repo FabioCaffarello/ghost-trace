@@ -1,0 +1,82 @@
+// LayerBParameters proto type per decision-log §0136
+// (canonical-serialization-contract revision adding the Demotion-Candidacy
+// Predicate section) + §0138 (Layer B parameter-calibration resolution
+// fixing inception-phase values).
+//
+// Encodes the operational parameters for the Layer B firing predicate
+// per Charter §2.5 (Hypothesis Lifecycle Explicitness, frozen v0.3) +
+// §0011 (Q4 staged-combination form: Layer A AND Layer B) + §0135
+// (L-BC-OR with L-C structural-exclusion commitment).
+//
+// Full demotion-candidacy predicate under §0135 + §0138:
+//   DEMOTE-CANDIDATE(H) := (elapsed_time_since_H.promotion > N_A)
+//                         AND ((freshness_B(H) < T_B)
+//                              OR (saturation_C(H) > K_C))
+//
+// where the recent-N window is fixed-count (W-count per §0138 F3) over
+// the last n_window assertions by substrate-commit order, and the
+// parameter set is uniform at the abstract Hypothesis level (U-uniform
+// per §0138 F4) — the four concrete Cat III subtypes share the same
+// parameters per §0010 Q2-A.2.
+//
+// Per §0138 F6 (N_A bundling), Layer A's cadence parameter is bundled
+// into this message for single source of truth at the canonical-
+// serialization-contract layer. The contract enforces type/range at
+// marshalling per §0136; parameter VALUES are operational per the
+// form-vs-parameter discipline established at §0011 Methodological
+// Observation 1.
+//
+// Per-parameter reversal-conditions per §0138 F7 + F8: revision of one
+// parameter does NOT require revisiting others; triggers are
+// observation-based (per §0022 empirical-pressure-phase discipline),
+// not hypothesis-based.
+syntax = "proto3";
+
+package ghosttrace.common.v1;
+
+import "common/v1/evidential_independence.proto";
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1;commonv1";
+
+// LayerBParameters records the operational parameters governing
+// demotion-candidacy evaluation for promoted Category III hypotheses.
+//
+// Inception-phase values per §0138:
+//   t_b = EvidentialIndependence{numerator: 1, denominator: 2}  // 0.5
+//   k_c = EvidentialIndependence{numerator: 1, denominator: 2}  // 0.5
+//   n_window = 1000
+//   n_a_duration_nanoseconds = 86400000000000                    // 1 day
+message LayerBParameters {
+  // t_b is the B-family freshness threshold. Layer B fires (B branch)
+  // when freshness_B(H) < t_b, where freshness_B(H) is the average
+  // evidential_independence over the last n_window assertions whose
+  // transitive influenced_by includes H. Range [0, 1]. Per §0138
+  // inception-phase value: 0.5 (rational 1/2).
+  EvidentialIndependence t_b = 1;
+
+  // k_c is the C-family saturation ratio threshold. Layer B fires
+  // (C branch) when saturation_C(H) > k_c, where saturation_C(H) is
+  // the fraction of the last n_window assertions whose transitive
+  // influenced_by includes H EXCLUDING H's own enrichment outputs
+  // (assertions where H ∈ direct_influenced_by) per the §0135 L-C
+  // structural-exclusion commitment. Range [0, 1]. Per §0138
+  // inception-phase value: 0.5 (rational 1/2).
+  EvidentialIndependence k_c = 2;
+
+  // n_window is the recent-assertions window size — the count of most
+  // recent assertions (by substrate-commit order, W-count per §0138
+  // F3) over which freshness_B and saturation_C are evaluated.
+  // MUST be > 0. Per §0138 inception-phase value: 1000.
+  uint64 n_window = 3;
+
+  // n_a_duration_nanoseconds is the Layer A cadence parameter — the
+  // minimum elapsed time since the promotion event's committed_at
+  // substrate timestamp before Layer A fires. Per §0011 staged-
+  // combination form, demotion-candidacy requires BOTH Layer A AND
+  // Layer B; this field encodes Layer A. Per §0138 F6, N_A is bundled
+  // into LayerBParameters for single source of truth. Encoded as
+  // nanoseconds (uint64) for canonical-form-load-bearing time field
+  // consistency per §0024 modification 6. MUST be > 0. Per §0138
+  // inception-phase value: 86400000000000 (1 day in nanoseconds).
+  uint64 n_a_duration_nanoseconds = 4;
+}

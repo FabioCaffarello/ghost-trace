@@ -95,7 +95,9 @@ generate: $(PROTOC_GEN_GO)
 	  events/v1/coordination_ring_demotion.proto \
 	  events/v1/coordination_ring_dissolution.proto \
 	  events/v1/coordination_ring_merge.proto \
-	  events/v1/coordination_ring_split.proto
+	  events/v1/coordination_ring_split.proto \
+	  common/v1/evidential_independence.proto \
+	  common/v1/layer_b_parameters.proto
 
 $(PROTOC_GEN_GO):
 	$(MAKE) tools
