@@ -4956,6 +4956,78 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0126` — Pair-table aggregate-batch resolution: Cells 1, 2, 3, 5, 6 resolved per leading recommendations; merge γ table fully closed
+
+- **Status:** accepted.
+- **Date:** 2026-05-22.
+
+- **Context:** [`§0125`](#0125--pairtable-cell-4-ag-cr-resolution--cr-genuineambiguity-cell-resolved) resolved Cell 4 `{AG, CR} → CR` (the table's primary ambiguity). The remaining five cells stood at "leading recommendation, open" status per the pair-table RFC. Per the [`§0125`](#0125--pairtable-cell-4-ag-cr-resolution--cr-genuineambiguity-cell-resolved) §Cross-cell coherence discussion, the committee may resolve cells independently OR as an aggregate-table batch. The committee adopts the aggregate-batch shape for the remaining five cells.
+
+- **Decision:** The committee resolves the remaining five cells per the leading recommendations from [`ontology-revision-cross-subtype-merge-pair-table.md`](../rfcs/draft/ontology-revision-cross-subtype-merge-pair-table.md) §Aggregated leading recommendations:
+
+  | Cell | Resolution | Rationale (compressed from RFC's per-cell analysis) |
+  |---|---|---|
+  | **Cell 1 `{BC, AG}`** | **→ AG** | Strict-claim absorption: AG is structurally-stricter than BC (automated operation IS a kind of shared operatorship); convergent evidence absorbs into the stricter claim. |
+  | **Cell 2 `{BC, CR}`** | **→ CR** | Relational richness wins: CR's pairwise actor-relationship structurally accommodates BC's flat actor-set; the converse is not true. |
+  | **Cell 3 `{BC, CH}`** | **→ CH** | Event-centric richness: CH's event-set implies an actor-set; BC's flat actor-set does not imply events. |
+  | **Cell 5 `{AG, CH}`** | **→ CH** | Event-centric richness with signature attachment: CH's event-set accommodates AG's automation-signature as actor-attribute on event-derived actor index. |
+  | **Cell 6 `{CR, CH}`** | **→ CH** | Most-direct event-actor derivation: pairwise relationships between actors are derivable from event co-occurrence; CR's structure is a derived projection over the event-set. |
+
+  The full pair-table now stands:
+
+  | Cell | Resolution |
+  |---|---|
+  | `{BC, AG}` | → AG (Cell 1, this entry) |
+  | `{BC, CR}` | → CR (Cell 2, this entry) |
+  | `{BC, CH}` | → CH (Cell 3, this entry) |
+  | `{AG, CR}` | → CR (Cell 4, per [`§0125`](#0125--pairtable-cell-4-ag-cr-resolution--cr-genuineambiguity-cell-resolved)) |
+  | `{AG, CH}` | → CH (Cell 5, this entry) |
+  | `{CR, CH}` | → CH (Cell 6, this entry) |
+
+  **Aggregate-batch shape rationale:** per [`§0125`](#0125--pairtable-cell-4-ag-cr-resolution--cr-genuineambiguity-cell-resolved) preserving Cell 4 → CR aligned the genuinely-ambiguous cell with Cells 2 + 6's relational-richness pattern, suggesting the leading recommendations for the remaining cells are structurally consistent. The aggregate-batch shape ratifies the "richer surface wins" pattern as the table's coherent committee-defended structure. Individual per-cell resolution remained available; the committee chose batch for cross-cell coherence visibility.
+
+- **Constitutional review:** No Charter invariant amended. Each cell operationalizes within [`§0122`](#0122--crosssubtype-merge-typing-resolution-candidate--perpair-canonicalmerge-typing-formadopt--tabledefer) γ form. The table-as-aggregate is a versioned operational-definition constant per [`§0021`](#0021--omq-3-resolution-substrate-time-generation-candidate--0020-cascade-fully-discharged) substrate-time-generation pattern. [`§4 criterion 1`](../charter/constitutional-charter.md#4-constitutional-design-rule) structural-enforceability: each cell operationalizes to a type-system check at the helper layer per §1.3 falsifiability.
+
+  No new canonical vocabulary at Charter level. The non-canonical-antecedent surfaces (e.g., BC's pattern-signature reference under Cell 1 → AG; AG's automation-signature reference under Cells 4 + 5 with CH target; CR's pairwise structure under Cell 6 → CH) require extension-field attachments per the per-cell RFC analysis; the attachment mechanisms are implementation-RFC discipline.
+
+- **Consequences:**
+  - **Merge γ pair-table fully closed (6/6 cells resolved).** The cross-subtype merge produced-record typing is now operationalized at the parameter level. The pair-table RFC `Status: discussion` may advance to `accepted` (subject to the BC-terminal-under-split + extension-field carry-forwards below).
+  - **`docs/rfcs/draft/ontology-revision-cross-subtype-merge-pair-table.md`** — §Aggregated leading recommendations table revised: all 6 cells marked resolved; per-cell sections updated to record resolution.
+  - **`docs/ontology/entity-model.md` §Cross-subtype operations** — minor revision to record 6/6 cells resolved; the pair-table is now the operational-definition for cross-subtype merge.
+
+  - **Symmetric split γ' permitted-target-set table derived by inverse-symmetry (§0124).** Under symmetric resolution:
+    - **AG → permits {BC, AG}** (inverse of Cell 1)
+    - **CR → permits {BC, CR}, {AG, CR}** (inverses of Cells 2 + 4)
+    - **CH → permits {BC, CH}, {AG, CH}, {CR, CH}** (inverses of Cells 3 + 5 + 6)
+    - **BC → permits no cross-subtype split** (BC is not the target of any merge cell)
+
+  - **BC-terminal-under-split confirmed as structural consequence.** Per the pair-table RFC's §Open Questions: the question was whether BC-terminal-under-split is a deliberate commitment OR a consequence to be revisited. With the aggregate-batch resolution, BC is the target of no cell, so cross-subtype split into a BC-containing successor multiset is structurally absent. The committee adopts this as the structural consequence; within-subtype BC split (BC → {BC, BC, ...}) remains unaffected.
+
+  - **Extension-field attachments carry-forward.** Each non-canonical-antecedent surface needs an attachment mechanism at the merged record:
+    - Cell 1 (`{BC, AG} → AG`): BC's pattern-signature reference (operatorship) attaches to AG. Mechanism: `operatorship_signature_ref` field on `AutomationGroupFormation` OR separately-committed attachment record.
+    - Cell 2 (`{BC, CR} → CR`): BC's pattern-signature attaches to CR. Mechanism: `operatorship_signature_ref` field on `CoordinationRingFormation`.
+    - Cell 3 (`{BC, CH} → CH`): BC's pattern-signature attaches to CH. Mechanism: `actor_set_signature_attachments` on `CampaignHypothesisFormation`.
+    - Cell 4 (`{AG, CR} → CR`): AG's automation-signature attaches to CR (per [`§0125`](#0125--pairtable-cell-4-ag-cr-resolution--cr-genuineambiguity-cell-resolved) carry-forward).
+    - Cell 5 (`{AG, CH} → CH`): AG's automation-signature attaches to CH. Mechanism analogous to Cell 3.
+    - Cell 6 (`{CR, CH} → CH`): CR's pairwise structure attaches to CH (derivable from event co-occurrence, but the explicit antecedent reference is structural commitment).
+
+    The unified attachment mechanism — across all six cells — is implementation-RFC discipline. Recorded as carry-forward.
+
+  - **Cross-subtype merge implementation-RFC carry-forward unified.** Per [`§0125`](#0125--pairtable-cell-4-ag-cr-resolution--cr-genuineambiguity-cell-resolved) + this entry: the helper-layer `MergeAcrossSubtypes` implementation now has six concrete `{X, Y} → Z` cells + the unified attachment-mechanism question to address. Implementation-RFC scope is bounded.
+
+  - **Carry-forwards (remaining):**
+    - **Extension-field attachment mechanism** — six cells × per-cell attachment; implementation-RFC discipline.
+    - **Cross-subtype merge + split helper-layer implementation** — under §0123 (B+D enablement) + §0124 (split γ'+B'+D') + §0125 + §0126 cells.
+    - **Q-§2.6-3 / Q-§2.6-4 cross-subtype dependency** — per [`§0120`](#0120--26-empiricalpressure-assessment-refresh-post24frozen), §2.6 redaction's independence-under-merge / independence-under-split questions now operate against a fully-specified pair-table. §2.6 redaction may proceed without further cross-subtype-table pending-resolution.
+
+  - **Methodological observation 1 — Aggregate-batch resolution shape.** [`§0125`](#0125--pairtable-cell-4-ag-cr-resolution--cr-genuineambiguity-cell-resolved) established per-cell resolution as a procedurally complete entry form; this entry establishes the aggregate-batch resolution shape (multiple cells in a single decision-log entry) as the alternative when cross-cell coherence is the load-bearing argument. The two shapes (§0125 per-cell vs §0126 aggregate-batch) are complementary, not mutually exclusive — the committee may choose per individual resolution moment.
+
+  - **Methodological observation 2 — Form-adopt + parameters-defer pattern reaches full closure.** [`§0011`](#0011--q4-resolution-staged-combination-demotion-criterion-layer-a--deferred-layer-b) Q4 demonstrated the pattern (Layer A adopted; Layer B specific shape deferred); [`§0122`](#0122--crosssubtype-merge-typing-resolution-candidate--perpair-canonicalmerge-typing-formadopt--tabledefer) demonstrated it at cross-subtype merge typing (γ form adopted; pair-table contents deferred). With §0126, the pair-table contents are now resolved — the first pattern instance to reach full closure (form + parameters). Q4's Layer B remains the still-open instance (Layer B specific shape deferred pending §2.6).
+
+- **Supersession:** None. Closes the cross-subtype merge pair-table at the parameter level. Combines with [`§0122`](#0122--crosssubtype-merge-typing-resolution-candidate--perpair-canonicalmerge-typing-formadopt--tabledefer) + [`§0125`](#0125--pairtable-cell-4-ag-cr-resolution--cr-genuineambiguity-cell-resolved) to fully discharge the cross-subtype merge typing surface (form + all 6 parameters).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
