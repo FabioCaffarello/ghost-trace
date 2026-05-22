@@ -1,6 +1,6 @@
 # RFC — Layer B Deep Criterion (Q4 follow-on)
 
-- **Status:** discussion (active; §2.4 v0.5 + §2.6 v0.6 surfaces present per [`§0011`](../../charter/decision-log.md) contract activation completion at [`§0129`](../../charter/decision-log.md))
+- **Status:** discussion (active; all 4 pre-Gate dependencies discharged — §2.4 v0.5 + §2.6 v0.6 + Q3-α at [`§0133`](../../charter/decision-log.md) + Q5-τ at [`§0134`](../../charter/decision-log.md); substantive content drafting opens)
 - **Authors:** Ghost Trace committee
 - **Date:** 2026-05-15
 - **Type:** ontology-revision
@@ -10,18 +10,18 @@
 
 ## Status note
 
-**This RFC is a placeholder; Charter dependencies + half of Ontology dependencies are now discharged.** Substantive content was originally gated on four conditions: §2.4 redaction, §2.6 redaction, [`docs/ontology/ontology.md` §Open Questions](../../ontology/ontology.md) Q3 (formal definition of independence), and Q5 (influence propagation). Discharge status:
+**All 4 pre-Gate dependencies are now discharged; substantive content drafting opens.**
 
 - **§2.4** frozen v0.5 at [`§0099`](../../charter/decision-log.md). ✓
 - **§2.6** frozen v0.6 at [`§0129`](../../charter/decision-log.md). ✓
 - **Q3 (formal definition of `evidential_independence`)** resolved at [`§0133`](../../charter/decision-log.md): Candidate α (source-count ratio over Cat I provenance roots) adopted under [§2.6 BC2](../../charter/constitutional-charter.md#26-evidential-independence-integrity) meta-shape 1 (deterministic-from-pattern). ✓
-- **Q5 (influence propagation)** partially discharged: decay half resolved at [`§0020`](../../charter/decision-log.md); transitivity half opened at `discussion` status as RFC [`ontology-revision-q5-influence-propagation-transitivity`](./ontology-revision-q5-influence-propagation-transitivity.md) per [`§0133`](../../charter/decision-log.md) cascade-enactment from Q3, with companion discussion-phase scratch [`q5-transitivity-evidence.md`](../discussion/q5-transitivity-evidence.md). Resolution pending.
+- **Q5 (influence propagation)** fully resolved: decay half at [`§0020`](../../charter/decision-log.md) (Candidate C — via §2.5 lifecycle supersession); transitivity half at [`§0134`](../../charter/decision-log.md) (Candidate τ — transitive closure of declared direct edges, with β-graph storage: substrate stores direct edges + per-record cached closures). Committee extension: Cat II constructs structurally transmit `influenced_by` membership from their inputs per [§2.2](../../charter/constitutional-charter.md#22-epistemic-separation) determinism. ✓
 
-Layer B substantive content advances after Q5 transitivity-half resolves per the two-cascade chain Q3 → Q5 → Layer B. With Q3-α adopted, Layer B's deep criterion now has a measurable quantity to threshold-test; Q5's transitivity-half resolution determines α's "reachable" predicate's structural semantic, which is the last ontology-side dependency before Layer B's substantive content can be drafted.
+The two-cascade chain Q3 → Q5 → Layer B is fully discharged on the ontology side per [`§0134`](../../charter/decision-log.md) Methodological Observation 3. The [`§0011`](../../charter/decision-log.md) Layer B contract has reached its full activation surface. Layer B's deep criterion now has a fully-specified measurable quantity (α with transitive reachability under τ) to threshold-test. Substantive content drafting — specifying which combination of Candidate B family from Q4 (evidence-staleness using α) and/or Candidate C family from Q4 (influence-saturation using α) constitutes the deep criterion — opens as the next substantive RFC arc.
 
 ## Summary
 
-[`decision-log.md` §0011](../../charter/decision-log.md) (Q4 resolution) adopted the staged-combination form for the demotion-candidacy criterion: Layer A (time-based cadence gate, operational today) AND Layer B (deep criterion on `evidential independence` or declared `influence`). Layer B's specific structural form — which combination of evidence-staleness (Candidate B family from Q4) and/or influence-saturation (Candidate C family from Q4) constitutes the deep criterion — is deferred to this RFC. Charter-side surfaces present: §2.4 frozen v0.5; §2.6 frozen v0.6. Ontology-side: Q3 resolved at [`§0133`](../../charter/decision-log.md) (Candidate α — source-count ratio); Q5 transitivity-half opened at [`ontology-revision-q5-influence-propagation-transitivity`](./ontology-revision-q5-influence-propagation-transitivity.md) per [`§0133`](../../charter/decision-log.md) cascade-enactment. Layer B's substantive content emerges once Q5 transitivity-half resolves.
+[`decision-log.md` §0011](../../charter/decision-log.md) (Q4 resolution) adopted the staged-combination form for the demotion-candidacy criterion: Layer A (time-based cadence gate, operational today) AND Layer B (deep criterion on `evidential independence` or declared `influence`). Layer B's specific structural form — which combination of evidence-staleness (Candidate B family from Q4) and/or influence-saturation (Candidate C family from Q4) constitutes the deep criterion — is deferred to this RFC. All 4 pre-Gate dependencies are now discharged: §2.4 frozen v0.5 + §2.6 frozen v0.6 + Q3-α at [`§0133`](../../charter/decision-log.md) + Q5-τ at [`§0134`](../../charter/decision-log.md). The measurable quantity Layer B's deep criterion threshold-tests is now fully specified: `evidential_independence` per Q3-α with transitive reachability under Q5-τ.
 
 ## Motivation
 
