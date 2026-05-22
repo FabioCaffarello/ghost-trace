@@ -31,6 +31,8 @@ syntax = "proto3";
 
 package ghosttrace.events.v1;
 
+import "common/v1/evidential_independence.proto";
+
 option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
 
 // CampaignHypothesisFormation records the formation of a Category
@@ -63,8 +65,10 @@ message CampaignHypothesisFormation {
   int64 formation_at = 3;
 
   // confidence is a scalar in [0.0, 1.0] expressing the formation
-  // pattern's confidence in the hypothesis. PLACEHOLDER pending
-  // Charter §2.6 redaction (same disclaimer as §0045 + §0056).
+  // pattern's confidence in the hypothesis. Paired with
+  // evidential_independence (field 6) per Charter §2.6 (frozen v0.6
+  // + patched v0.7.1 per decision-log §0137); canonical-serialization-
+  // contract enforcement per decision-log §0136.
   float confidence = 4;
 
   // source_event_hashes is the set of Cat I observation
@@ -84,4 +88,24 @@ message CampaignHypothesisFormation {
   // attribution recover it via the substrate's Cat I observation
   // payloads referenced here.
   repeated bytes source_event_hashes = 5;
+
+  // evidential_independence is the paired dimension to confidence
+  // (field 4) per Charter §2.6 (frozen v0.6 + patched v0.7.1 per
+  // decision-log §0137). Computed per Q3-α (decision-log §0133):
+  // ratio of Cat I roots NOT reachable via influenced_by from a
+  // promoted hypothesis, divided by total Cat I roots in the
+  // subject_ref_* chain. Rational-pair encoding per §0136.
+  ghosttrace.common.v1.EvidentialIndependence evidential_independence = 6;
+
+  // direct_influenced_by is the list of Cat III hypothesis content-
+  // hashes that the producer directly declares as influencing this
+  // formation per Charter §2.4 (frozen v0.5). 32-byte BLAKE3 hashes;
+  // sorted ASCENDING per decision-log §0136 Influence Storage.
+  repeated bytes direct_influenced_by = 7;
+
+  // closure_hashes is the transitive closure of direct_influenced_by
+  // per Q5-τ (decision-log §0134) + β-graph storage. Computed at
+  // substrate write time per §0136 Influence Storage. 32-byte BLAKE3
+  // hashes; sorted ASCENDING.
+  repeated bytes closure_hashes = 8;
 }

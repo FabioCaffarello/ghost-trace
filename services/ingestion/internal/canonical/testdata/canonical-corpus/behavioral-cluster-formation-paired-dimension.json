@@ -1,0 +1,21 @@
+{
+  "patternSignature": "session-descriptor-shared-v1",
+  "patternParameters": "min_cluster_size=2",
+  "actorRefs": ["actor-corpus-alpha", "actor-corpus-beta"],
+  "formationAt": "1716120000000000000",
+  "confidence": 0.8,
+  "sourceEventHashes": [
+    "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+    "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8="
+  ],
+  "evidentialIndependence": {
+    "numerator": "2",
+    "denominator": "3"
+  },
+  "directInfluencedBy": [
+    "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8="
+  ],
+  "closureHashes": [
+    "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8="
+  ]
+}
