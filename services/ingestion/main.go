@@ -300,7 +300,7 @@ func resolveAuthToken(tokenInline, tokenFile string) (string, error) {
 // resolution. Legacy single-line files (no line 2) are preserved per
 // RFC item 4(c) "discouraged-but-permitted" fallback to the
 // `unattributed-token-<tier>` literal. Lines beyond the second are
-// ignored (reserved for future per-tier metadata).
+// ignored (reserved for future per-tier annotations).
 //
 // The returned `tokens` map is empty when no per-tier file is
 // configured (the operator is using the legacy single-token mode or
