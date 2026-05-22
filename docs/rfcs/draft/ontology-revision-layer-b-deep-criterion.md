@@ -1,6 +1,6 @@
 # RFC — Layer B Deep Criterion (Q4 follow-on)
 
-- **Status:** discussion (substantive deliberation complete — recommendation: Candidate L-BC-OR with L-C structural-exclusion commitment; formal resolution pending committee ratification)
+- **Status:** accepted (resolved at [`decision-log §0135`](../../charter/decision-log.md) adopting Candidate L-BC-OR with L-C structural-exclusion commitment)
 - **Authors:** Ghost Trace committee
 - **Date:** 2026-05-15
 - **Type:** ontology-revision
@@ -130,14 +130,23 @@ No historical Category III records exist at this point. Layer B's specification 
 
 ## Decision Record
 
-Substantive deliberation complete; formal resolution pending. The discussion-phase deliberation recorded in [`layer-b-deep-criterion-evidence.md`](../discussion/layer-b-deep-criterion-evidence.md) Phases 3–5 recommends **Candidate L-BC-OR (disjunctive — `Layer B(H) := (freshness_B(H) < T_B) OR (saturation_C(H) > K_C)`)** with the **L-C structural-exclusion commitment** (saturation denominator excludes H's own enrichment outputs per §2.4 v0.5 chain inspection).
+Resolved at [`decision-log §0135`](../../charter/decision-log.md) (2026-05-22): **Candidate L-BC-OR (disjunctive) adopted with L-C structural-exclusion commitment.**
 
 Full demotion-candidacy predicate:
 
 > `DEMOTE-CANDIDATE(H) := Layer A(H) AND ((freshness_B(H) < T_B) OR (saturation_C(H) > K_C))`
 
-The recommendation rests on Phase 4 Findings 1 (only L-BC-OR / L-BC-staged structurally cover both §1 Thesis failure modes), 2 (L-BC-AND systematically under-defends — admits single-half violations as structurally-undefended states), 3 (L-BC-staged blurs form-vs-parameter discipline; L-BC-OR preserves it), 4 (false-positive resistance concern is parameter-calibration-addressable; structural-coverage gap is not), 5 (L-C structural-exclusion commitment is constitutional, not operational), 6 (L-B's transitive-reading requirement pre-satisfied by §0134).
+where:
 
-Two committee extensions: (a) L-C structural-exclusion commitment — saturation denominator excludes H's own enrichment outputs (structural mirror of Q4 Phase 3 Finding 6 for the C-family); (b) form-vs-parameter discipline preserved — T_B / K_C / N values open as operational-specification follow-on RFC.
+- `freshness_B(H)` is the average `evidential_independence` (per [`§0133`](../../charter/decision-log.md) Q3-α) over the most recent N assertions whose transitive `influenced_by` (per [`§0134`](../../charter/decision-log.md) Q5-τ) includes H.
+- `saturation_C(H)` is `(count of recent assertions with H in transitive influenced_by, EXCLUDING H's own enrichment outputs) / N`. The exclusion is the L-C structural-exclusion committee extension; available via [§2.4](../../charter/constitutional-charter.md#24-inferential-influence-disclosure) v0.5 chain inspection.
+- `T_B`, `K_C`, `N` are operational parameters deferred to follow-on operational-specification RFC per the form-vs-parameter discipline.
 
-Resolution lands at a future `decision-log` entry that fully discharges the §2.5 binding-text Layer B forward-reference per [`§0011`](../../charter/decision-log.md) contract, completes the two-cascade chain Q3 → Q5 → Layer B, and feeds the canonical-serialization-contract revision (consolidated architecture-document RFC crystallizing α + τ + L-BC-OR per [`§0133`](../../charter/decision-log.md) + [`§0134`](../../charter/decision-log.md) follow-on schedule). Parameter-calibration operational-specification RFC opens as separate follow-on.
+Resolution rests on [`layer-b-deep-criterion-evidence.md`](../discussion/layer-b-deep-criterion-evidence.md) Phase 4 Findings 1–6. Two committee extensions: L-C structural-exclusion commitment (Phase 4 Finding 5) + form-vs-parameter discipline preservation (Phase 4 Finding 7).
+
+With this resolution, the [§2.5](../../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) binding-text Layer B forward-reference is fully discharged; the [`§0011`](../../charter/decision-log.md) Layer B contract is closed; the two-cascade chain Q3 → Q5 → Layer B is FULLY DISCHARGED ([`§0132`](../../charter/decision-log.md) → [`§0133`](../../charter/decision-log.md) → [`§0134`](../../charter/decision-log.md) → [`§0135`](../../charter/decision-log.md) — first complete three-step cascade-chain discharge in the project per [`§0135`](../../charter/decision-log.md) Methodological Observation 3).
+
+Two follow-on RFCs open as ordinary RFC discipline (NOT pre-Gate to this resolution):
+
+- **Canonical-serialization-contract revision** — consolidated architecture-document RFC crystallizing α (§0133) + τ + β-graph storage (§0134) + L-BC-OR firing predicate (this entry) at the canonical-serialization-contract layer.
+- **Parameter-calibration operational-specification RFC** — T_B, K_C, N values + "recent assertions" window structural form + per-subtype divergence under [`§0010`](../../charter/decision-log.md) Q2-A.2.
