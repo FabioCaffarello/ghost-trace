@@ -33,6 +33,12 @@ import (
 //     channel marker.
 //   - ClientCommonName / ClientSubjectAltNames / ClientCertSHA256:
 //     populated when the channel is "https+mtls"; otherwise empty.
+//   - TokenID: per RFC architecture-http-auth-scope-model item 4(b),
+//     the operator-supplied identifier of the matched per-tier bearer
+//     token when only α is active and the token file carries a second
+//     line (`<token>\n<token_id>\n`). Empty when γ active (mTLS subject
+//     supersedes), when the matched token file is the legacy single-
+//     line shape, or when the channel is neither HTTP-α nor HTTP-γ.
 //   - ReceivedAt: Unix nanoseconds when the service first received the
 //     primary observation. Distinct from the producer's declared_at
 //     (which is on the primary observation itself) and from the
@@ -42,6 +48,7 @@ type Envelope struct {
 	ClientCommonName     string
 	ClientSubjectAltNames []string
 	ClientCertSHA256     string
+	TokenID              string
 	ReceivedAt           int64
 }
 
@@ -130,6 +137,7 @@ func (in *Ingester) Append(ctx context.Context, msg proto.Message, eventTime int
 		ClientCommonName:      env.ClientCommonName,
 		ClientSubjectAltNames: env.ClientSubjectAltNames,
 		ClientCertSha256:      env.ClientCertSHA256,
+		TokenId:               env.TokenID,
 	}
 	enrichmentPayload, enrichmentHash, err := canonical.MarshalAndHash(ingEvent)
 	if err != nil {

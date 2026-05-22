@@ -119,7 +119,7 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("resolve HTTP auth token: %w", err)
 		}
-		tierTokens, err := resolveTierTokens(map[httpapi.Tier]string{
+		tierTokens, tierTokenIDs, err := resolveTierTokens(map[httpapi.Tier]string{
 			httpapi.TierProducer:          *httpAuthProducerTokenFile,
 			httpapi.TierOperatorRead:      *httpAuthOperatorReadTokenFile,
 			httpapi.TierSubstrateAdmin:    *httpAuthSubstrateAdminTokenFile,
@@ -138,6 +138,9 @@ func run() error {
 		}
 		for tier, tk := range tierTokens {
 			handlerOpts = append(handlerOpts, httpapi.WithAuthTierToken(tier, tk))
+		}
+		for tier, tkID := range tierTokenIDs {
+			handlerOpts = append(handlerOpts, httpapi.WithAuthTierTokenID(tier, tkID))
 		}
 		// Per decision-log §0080: enable projection-read endpoints
 		// (GET /v1/hypotheses/state and follow-ons). Same substrate
@@ -279,33 +282,62 @@ func resolveAuthToken(tokenInline, tokenFile string) (string, error) {
 	return tokenInline, nil
 }
 
-// resolveTierTokens reads per-tier token files and returns the map of
-// tiers with configured tokens. Tiers whose file path is empty are
-// omitted (operator opt-out per RFC architecture-http-auth-scope-model
-// item 1). Each file is read + whitespace-trimmed + rejected if empty,
-// matching the §0035 resolveAuthToken contract.
+// resolveTierTokens reads per-tier token files and returns two maps
+// keyed by tier: the bearer tokens themselves and (optionally) the
+// operator-supplied token identifiers per RFC architecture-http-auth-
+// scope-model item 4(b). Tiers whose file path is empty are omitted
+// (operator opt-out per RFC item 1).
 //
-// The returned map is empty when no per-tier file is configured (i.e.,
-// the operator is using the legacy single-token mode or no auth at
-// all); httpapi.New rejects the combination of per-tier + single-token
-// at construction. Per decision-log §0098 + RFC item 1.
-func resolveTierTokens(tierFiles map[httpapi.Tier]string) (map[httpapi.Tier]string, error) {
-	out := make(map[httpapi.Tier]string)
+// The token-file shape is line-oriented:
+//
+//	<token>
+//	<token_id>    OPTIONAL — RFC item 4(b)
+//
+// Line 1 is the bearer token (whitespace-trimmed); rejected when
+// empty per the §0035 resolveAuthToken contract. Line 2, when
+// present + non-empty after trim, surfaces as the matched IngestionEvent's
+// token_id field + the middle precedence rung of T4 per-actor-attribution
+// resolution. Legacy single-line files (no line 2) are preserved per
+// RFC item 4(c) "discouraged-but-permitted" fallback to the
+// `unattributed-token-<tier>` literal. Lines beyond the second are
+// ignored (reserved for future per-tier annotations).
+//
+// The returned `tokens` map is empty when no per-tier file is
+// configured (the operator is using the legacy single-token mode or
+// no auth at all); httpapi.New rejects the combination of per-tier +
+// single-token at construction. The returned `tokenIDs` map carries
+// entries ONLY for tiers whose file has a non-empty second line —
+// always a subset of `tokens`'s key set.
+//
+// Per decision-log §0098 + RFC item 1; line 2 extension per RFC item
+// 4(b).
+func resolveTierTokens(tierFiles map[httpapi.Tier]string) (map[httpapi.Tier]string, map[httpapi.Tier]string, error) {
+	tokens := make(map[httpapi.Tier]string)
+	tokenIDs := make(map[httpapi.Tier]string)
 	for tier, file := range tierFiles {
 		if file == "" {
 			continue
 		}
 		raw, err := os.ReadFile(file)
 		if err != nil {
-			return nil, fmt.Errorf("read %s token file %q: %w", tier, file, err)
+			return nil, nil, fmt.Errorf("read %s token file %q: %w", tier, file, err)
 		}
-		token := strings.TrimSpace(string(raw))
+		lines := strings.Split(string(raw), "\n")
+		if len(lines) == 0 {
+			return nil, nil, fmt.Errorf("%s token file %q is empty after whitespace trim", tier, file)
+		}
+		token := strings.TrimSpace(lines[0])
 		if token == "" {
-			return nil, fmt.Errorf("%s token file %q is empty after whitespace trim", tier, file)
+			return nil, nil, fmt.Errorf("%s token file %q is empty after whitespace trim", tier, file)
 		}
-		out[tier] = token
+		tokens[tier] = token
+		if len(lines) >= 2 {
+			if id := strings.TrimSpace(lines[1]); id != "" {
+				tokenIDs[tier] = id
+			}
+		}
 	}
-	return out, nil
+	return tokens, tokenIDs, nil
 }
 
 // fatalReporter implements httpapi.FatalReporter. The HTTP handler calls

@@ -158,7 +158,7 @@ func (h *Handler) handleAdminOrphanCleanup(w http.ResponseWriter, r *http.Reques
 	}
 
 	invokedAt := time.Now().UnixNano()
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 
 	opts := orphan.Options{
 		DryRun:         dryRun,

@@ -162,6 +162,19 @@ type Handler struct {
 	// returns an error at New.
 	tierTokens map[Tier]string
 
+	// tierTokenIDs, per RFC architecture-http-auth-scope-model item 4(b),
+	// carries operator-supplied identifiers for the tokens in tierTokens.
+	// Keyed by the same Tier; values are non-empty strings when the per-
+	// tier token file's optional second line is present. An entry MAY be
+	// absent for a tier whose token IS configured — the legacy single-
+	// line token file shape preserves §0035 backward compatibility per
+	// RFC item 4(c) "discouraged-but-permitted" fallback. The map is
+	// consulted at request time by envelopeForRequest to surface the
+	// matched token_id on the paired IngestionEvent + as the middle rung
+	// of resolveT4Actor's precedence (between verified mTLS subject and
+	// the `unattributed-token-<tier>` fallback literal).
+	tierTokenIDs map[Tier]string
+
 	// authRealm is the value advertised in WWW-Authenticate on 401
 	// responses. Defaults to "ghost-trace-ingestion".
 	authRealm string
@@ -210,6 +223,31 @@ func WithAuthTierToken(tier Tier, token string) Option {
 			h.tierTokens = make(map[Tier]string)
 		}
 		h.tierTokens[tier] = token
+	}
+}
+
+// WithAuthTierTokenID associates an operator-supplied identifier with
+// the configured per-tier token for tier. Surfaced on the paired
+// IngestionEvent (`token_id` field) when the matched route's tier
+// equals tier, and consumed as the middle precedence rung of the T4
+// per-actor-attribution resolver (verified mTLS subject → token_id →
+// `unattributed-token-<tier>` fallback). Per RFC architecture-http-
+// auth-scope-model item 4(b).
+//
+// Operationally configured by the second line of the per-tier token
+// file (`<token>\n<token_id>\n`); the legacy single-line shape omits
+// the second line and tierTokenIDs[tier] remains empty (preserves
+// §0035 single-line backward compatibility per RFC item 4(c)
+// "discouraged-but-permitted" clause). MAY be configured without a
+// corresponding WithAuthTierToken (the option is permissive at New;
+// the unmatched entry is inert — never consulted because the token
+// itself never matches).
+func WithAuthTierTokenID(tier Tier, tokenID string) Option {
+	return func(h *Handler) {
+		if h.tierTokenIDs == nil {
+			h.tierTokenIDs = make(map[Tier]string)
+		}
+		h.tierTokenIDs[tier] = tokenID
 	}
 }
 
@@ -519,12 +557,29 @@ type confirmation struct {
 	CommittedAt        int64  `json:"committed_at_ns"`
 }
 
-// envelopeForRequest derives the ingest.Envelope from the HTTP request,
+// envelopeForRequest derives the full ingest.Envelope for a Handler-
+// served request: the request-only TLS-channel + client-identity
+// portion (via requestEnvelope) plus the per-tier token_id when the
+// route classifies under a configured tier with a known identifier.
+// Used by every Handler method that calls doAppend. Per RFC
+// architecture-http-auth-scope-model item 4(b) for the token_id rung.
+func (h *Handler) envelopeForRequest(r *http.Request) ingest.Envelope {
+	env := requestEnvelope(r)
+	if len(h.tierTokenIDs) > 0 {
+		if tier := routeTier(r); tier != "" {
+			env.TokenID = h.tierTokenIDs[tier]
+		}
+	}
+	return env
+}
+
+// requestEnvelope derives the request-only portion of the
+// ingest.Envelope from the HTTP request,
 // populating channel + client identity from the verified mTLS peer
 // certificate when present. When the connection is plain HTTP the
 // envelope reports channel="http"; plain HTTPS without client cert is
 // "https"; HTTPS with verified client cert is "https+mtls".
-func envelopeForRequest(r *http.Request) ingest.Envelope {
+func requestEnvelope(r *http.Request) ingest.Envelope {
 	env := ingest.Envelope{ReceivedAt: time.Now().UnixNano()}
 	if r.TLS == nil {
 		env.Channel = "http"
@@ -634,7 +689,7 @@ func (h *Handler) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	rep, err := h.doAppend(r.Context(), msg, desc.EventTime(msg), env)
 	if err != nil {
 		if isUnrecoverable(err) {

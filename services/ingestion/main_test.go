@@ -396,7 +396,7 @@ func TestResolveTierTokens(t *testing.T) {
 	// surface as errors. Per decision-log §0098.
 
 	t.Run("all empty paths returns empty map", func(t *testing.T) {
-		got, err := resolveTierTokens(map[httpapi.Tier]string{
+		tokens, tokenIDs, err := resolveTierTokens(map[httpapi.Tier]string{
 			httpapi.TierProducer:          "",
 			httpapi.TierOperatorRead:      "",
 			httpapi.TierSubstrateAdmin:    "",
@@ -405,8 +405,11 @@ func TestResolveTierTokens(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(got) != 0 {
-			t.Errorf("got %v, want empty map", got)
+		if len(tokens) != 0 {
+			t.Errorf("tokens: got %v, want empty map", tokens)
+		}
+		if len(tokenIDs) != 0 {
+			t.Errorf("tokenIDs: got %v, want empty map", tokenIDs)
 		}
 	})
 
@@ -420,26 +423,80 @@ func TestResolveTierTokens(t *testing.T) {
 		if err := os.WriteFile(opFile, []byte("op-secret\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		got, err := resolveTierTokens(map[httpapi.Tier]string{
+		tokens, tokenIDs, err := resolveTierTokens(map[httpapi.Tier]string{
 			httpapi.TierProducer:     prodFile,
 			httpapi.TierOperatorRead: opFile,
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if got[httpapi.TierProducer] != "prod-secret" {
-			t.Errorf("producer: got %q, want %q", got[httpapi.TierProducer], "prod-secret")
+		if tokens[httpapi.TierProducer] != "prod-secret" {
+			t.Errorf("producer: got %q, want %q", tokens[httpapi.TierProducer], "prod-secret")
 		}
-		if got[httpapi.TierOperatorRead] != "op-secret" {
-			t.Errorf("operator-read: got %q, want %q", got[httpapi.TierOperatorRead], "op-secret")
+		if tokens[httpapi.TierOperatorRead] != "op-secret" {
+			t.Errorf("operator-read: got %q, want %q", tokens[httpapi.TierOperatorRead], "op-secret")
 		}
-		if _, ok := got[httpapi.TierSubstrateAdmin]; ok {
+		if _, ok := tokens[httpapi.TierSubstrateAdmin]; ok {
 			t.Errorf("substrate-admin should not be present (file path empty)")
+		}
+		// Legacy single-line files contribute no token_ids.
+		if len(tokenIDs) != 0 {
+			t.Errorf("tokenIDs: got %v, want empty map (single-line files)", tokenIDs)
+		}
+	})
+
+	t.Run("two-line files yield token_id per RFC item 4(b)", func(t *testing.T) {
+		dir := t.TempDir()
+		prodFile := dir + "/prod"
+		opFile := dir + "/op"
+		// Producer has two-line token file: line 1 token, line 2 token_id.
+		if err := os.WriteFile(prodFile, []byte("prod-secret\nprod-token-alpha\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		// Operator-read is single-line — preserves §0035 backward compat.
+		if err := os.WriteFile(opFile, []byte("op-secret\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		tokens, tokenIDs, err := resolveTierTokens(map[httpapi.Tier]string{
+			httpapi.TierProducer:     prodFile,
+			httpapi.TierOperatorRead: opFile,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if tokens[httpapi.TierProducer] != "prod-secret" {
+			t.Errorf("producer token: got %q, want %q", tokens[httpapi.TierProducer], "prod-secret")
+		}
+		if tokenIDs[httpapi.TierProducer] != "prod-token-alpha" {
+			t.Errorf("producer token_id: got %q, want %q", tokenIDs[httpapi.TierProducer], "prod-token-alpha")
+		}
+		if _, ok := tokenIDs[httpapi.TierOperatorRead]; ok {
+			t.Errorf("operator-read token_id should be absent (single-line file)")
+		}
+	})
+
+	t.Run("whitespace-only second line yields no token_id", func(t *testing.T) {
+		dir := t.TempDir()
+		path := dir + "/tok"
+		if err := os.WriteFile(path, []byte("the-token\n   \n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		tokens, tokenIDs, err := resolveTierTokens(map[httpapi.Tier]string{
+			httpapi.TierProducer: path,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if tokens[httpapi.TierProducer] != "the-token" {
+			t.Errorf("token: got %q, want %q", tokens[httpapi.TierProducer], "the-token")
+		}
+		if _, ok := tokenIDs[httpapi.TierProducer]; ok {
+			t.Errorf("token_id should be absent (whitespace-only second line)")
 		}
 	})
 
 	t.Run("missing file returns error", func(t *testing.T) {
-		_, err := resolveTierTokens(map[httpapi.Tier]string{
+		_, _, err := resolveTierTokens(map[httpapi.Tier]string{
 			httpapi.TierProducer: "/nonexistent/path/to/token",
 		})
 		if err == nil {
@@ -453,7 +510,7 @@ func TestResolveTierTokens(t *testing.T) {
 		if err := os.WriteFile(path, []byte("   \n\n  "), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		_, err := resolveTierTokens(map[httpapi.Tier]string{
+		_, _, err := resolveTierTokens(map[httpapi.Tier]string{
 			httpapi.TierProducer: path,
 		})
 		if err == nil {

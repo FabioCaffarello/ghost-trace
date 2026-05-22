@@ -1259,3 +1259,27 @@ func TestResolveT4ActorFallback(t *testing.T) {
 		t.Errorf("resolveT4Actor fallback: got %q, want %q", got, want)
 	}
 }
+
+func TestResolveT4ActorFromTokenID(t *testing.T) {
+	// Per RFC architecture-http-auth-scope-model item 4(b): when only α
+	// is active and the matched token file carries a configured second
+	// line, env.TokenID surfaces it; the resolver returns it directly
+	// (no `unattributed-token-<tier>` fallback).
+	got := resolveT4Actor(ingest.Envelope{TokenID: "prod-token-alpha"}, TierConstitutionalAct)
+	if want := "prod-token-alpha"; got != want {
+		t.Errorf("resolveT4Actor with TokenID: got %q, want %q", got, want)
+	}
+}
+
+func TestResolveT4ActorMTLSWinsOverTokenID(t *testing.T) {
+	// Precedence per RFC item 4: verified mTLS subject CN wins over
+	// bearer-token `token_id`. The CN is the stronger identity claim
+	// (cryptographic chain back to the operator's deployed cert).
+	got := resolveT4Actor(ingest.Envelope{
+		ClientCommonName: "operator-alice",
+		TokenID:          "prod-token-alpha",
+	}, TierConstitutionalAct)
+	if want := "operator-alice"; got != want {
+		t.Errorf("resolveT4Actor mTLS-over-TokenID: got %q, want %q", got, want)
+	}
+}
