@@ -5028,6 +5028,75 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0127` — Cross-subtype merge attachment-mechanism resolution: Candidate β (separately-committed attachment record)
+
+- **Status:** accepted.
+- **Date:** 2026-05-22.
+
+- **Context:** [`§0126`](#0126--pairtable-aggregatebatch-resolution-cells-1-2-3-5-6-resolved-per-leading-recommendations-merge--table-fully-closed) closed the cross-subtype merge γ pair-table at 6/6 cells and named the unified-attachment-mechanism as the remaining carry-forward (each cell's non-canonical-antecedent surface needs structural attachment to the merged record). The question was opened as RFC [`ontology-revision-cross-subtype-merge-attachment-mechanism`](../rfcs/draft/ontology-revision-cross-subtype-merge-attachment-mechanism.md) at PR #116; paired evidence at [`cross-subtype-merge-attachment-mechanism-evidence.md`](../rfcs/discussion/cross-subtype-merge-attachment-mechanism-evidence.md) (PR #117) ran a five-phase analysis recommending β (separately-committed attachment record) preferred over α (field-on-target-proto), with γ (inferred-from-antecedent-structure) disqualified by §4 structural-enforceability discipline.
+
+- **Decision:** The committee adopts **Candidate β — separately-committed attachment record** as the cross-subtype merge attachment mechanism. A new Cat I proto `CrossSubtypeMergeAttachment` carries the non-canonical-antecedent surface; it is committed atomically with the merged formation via `substrate.AppendPair` (analogous to the [`§0104`](#0104--t3-http-orphancleanup-endpoint-lands-orphancleanupaudit-cat-i-record-introduced-0098-landing-23) OrphanCleanupAudit pattern).
+
+  Structural commitments under β:
+
+  1. **New Cat I proto: `CrossSubtypeMergeAttachment`.** Fields per the RFC §Candidate β:
+     - `bytes merged_formation_hash` — the §0125/§0126-resolved target formation's content-hash
+     - `bytes antecedent_formation_hash` — the non-canonical antecedent whose surface this attaches
+     - `string surface_type` — discriminator (specific enum values deferred to follow-on)
+     - `bytes surface_payload` — canonicalized payload from the antecedent
+
+  2. **Atomic pairing via `substrate.AppendPair`.** When a cross-subtype merge produces a record under a non-trivial Cell N (N ∈ 1..5; Cell 6's derivation question is separate per below), the merge helper commits the merged formation + one or more `CrossSubtypeMergeAttachment` records as an atomic pair. The pairing IS the structural commitment per §1.3 falsifiability (substrate-level check: merged formation present implies attachment record(s) present).
+
+  3. **Existing target protos UNCHANGED.** `BehavioralClusterFormation`, `AutomationGroupFormation`, `CoordinationRingFormation`, `CampaignHypothesisFormation` retain their current shape. The attachment-record mechanism is layered on top via substrate-level pairing, not via per-target-proto evolution.
+
+  4. **Per-cell attachment requirements** (per §0125 + §0126 + RFC §Motivation):
+     - Cell 1 `{BC, AG} → AG`: one attachment record carries BC's pattern-signature reference (`surface_type = "operatorship_signature"`)
+     - Cell 2 `{BC, CR} → CR`: same as Cell 1
+     - Cell 3 `{BC, CH} → CH`: same; surface attaches per CH's actor-set derivation
+     - Cell 4 `{AG, CR} → CR`: one attachment record carries AG's automation-signature (`surface_type = "automation_signature"`)
+     - Cell 5 `{AG, CH} → CH`: same as Cell 4
+     - Cell 6 `{CR, CH} → CH`: derivation-vs-explicit-attachment sub-question (per the RFC §Open Questions); resolution deferred to a follow-on per "form-adopt + parameters-defer".
+
+  The five non-Cell-6 cells use the attachment mechanism uniformly; Cell 6's question (does the merged record carry an explicit attachment for CR's pairwise structure, or is it derivable from CH's event-actor index?) is sub-resolved separately.
+
+  **Specific sub-parameters deferred** (form-adopt + parameters-defer per [`§0011`](#0011--q4-resolution-staged-combination-demotion-criterion-layer-a--deferred-layer-b) + [`§0122`](#0122--crosssubtype-merge-typing-resolution-candidate--perpair-canonicalmerge-typing-formadopt--tabledefer) precedent):
+  - **`surface_type` enum values.** Committee-defended enumeration; placeholder values above (`"operatorship_signature"`, `"automation_signature"`) anchor the deliberation; final enum is implementation-RFC follow-on.
+  - **`surface_payload` canonicalization rule.** Byte-for-byte from antecedent's original payload OR re-canonicalized; per RFC §Open Questions, this is the canonicalization sub-question.
+  - **Cell 6 derivation-vs-explicit-attachment.** See above.
+  - **Projection-layer materialization shape.** Eager vs lazy join of attachment records with merged formations; implementation-RFC.
+
+- **Constitutional review:** No Charter invariant amended. The resolution operationalizes within frozen Charter sections:
+  - [`§2.1 frozen`](../charter/constitutional-charter.md#21-observational-integrity) — `CrossSubtypeMergeAttachment` is a new Cat I record type per the [`§0042`](#0042--initial-deferred-types-rendered-into-cat-i-protos-networkevent--clientstateevent) typed-Cat-I-protos pattern; committed once, immutable per §2.1.
+  - [`§2.3 frozen v0.4`](../charter/constitutional-charter.md#23-provenance-integrity) — the attachment record IS a §2.3 BC5 multi-category-traversal edge (the merged formation references the antecedent surface through the attachment's `antecedent_formation_hash` field).
+  - [`§2.5 frozen v0.3`](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) — the merged record remains the lifecycle event per §2.5 BC1; the attachment is a Cat I record paired with it, not part of the lifecycle event's identity.
+  - [`§4 frozen v0.2`](../charter/constitutional-charter.md#4-constitutional-design-rule) — §1.3 falsifiability satisfied: a cross-subtype merge committed without paired attachment record is structurally detectable via missing record in substrate.
+
+  No new canonical vocabulary at Charter level. The new proto name (`CrossSubtypeMergeAttachment`) is per-proto naming (analogous to [`§0104`](#0104--t3-http-orphancleanup-endpoint-lands-orphancleanupaudit-cat-i-record-introduced-0098-landing-23) `OrphanCleanupAudit` — not in glossary).
+
+- **Consequences:**
+  - **Cross-subtype merge attachment mechanism resolved.** The §0126 unified-attachment-mechanism carry-forward is discharged at the FORM level.
+  - **`docs/rfcs/draft/ontology-revision-cross-subtype-merge-attachment-mechanism.md`** — Status advances from `discussion` to `accepted`; Decision Record populated with this resolution + reversal conditions per evidence Phase 5 flip conditions.
+  - **`docs/ontology/entity-model.md` §Cross-subtype operations** — minor extension to record the attachment mechanism is β + the deferred sub-parameters.
+  - **`docs/rfcs/draft/ontology-revision-cross-subtype-merge-pair-table.md`** — Carry-forwards section revised to note the attachment-mechanism carry-forward is discharged (with sub-parameters remaining).
+
+  - **`CrossSubtypeMergeAttachment` proto follow-on RFC.** A new placeholder RFC opens (or is folded into the implementation-RFC corpus) to carry the schemas-evolution event introducing the proto. Per [`§0024`](#0024--canonicalserializationcontract-events-versioned-schemas-evolution-of-the-canonical-form) canonical-serialization-contract discipline, adding a Cat I proto is a schemas-evolution event with corpus-regeneration implications.
+
+  - **Sub-parameter follow-ons (form-adopt + parameters-defer):**
+    - `surface_type` enum values — committee-defended; placeholder names above. Follow-on RFC.
+    - `surface_payload` canonicalization rule — byte-for-byte vs re-canonicalized. Follow-on RFC; affects §2.3 BC5 attachment-as-provenance-edge fidelity.
+    - Cell 6 derivation-vs-explicit-attachment — follow-on per the RFC's §Open Questions.
+    - Projection-layer materialization shape — implementation-RFC.
+
+  - **Q2-A.2 cross-subtype framing arc structurally fully closed.** With this entry, ALL committee-bound questions opened by the cross-subtype framing arc (PRs #95-#100 → resolutions §0122-§0126 → §0127) are committee-resolved. Remaining work is implementation-RFC + sub-parameter discipline, both under ordinary RFC pattern (not committee-domain).
+
+  - **Methodological observation 1 — Form-adopt + parameters-defer pattern at 2/3 closure.** The form (β) is adopted; specific sub-parameters (enum values, canonicalization, Cell 6 derivation, projection-layer) are deferred. This is the third application of the pattern in this session ([`§0122`](#0122--crosssubtype-merge-typing-resolution-candidate--perpair-canonicalmerge-typing-formadopt--tabledefer) → [`§0125`](#0125--pairtable-cell-4-ag-cr-resolution--cr-genuineambiguity-cell-resolved)+[`§0126`](#0126--pairtable-aggregatebatch-resolution-cells-1-2-3-5-6-resolved-per-leading-recommendations-merge--table-fully-closed); §0127 here). The pattern is now firmly established as the recurring Ontology-RFC closure shape.
+
+  - **Methodological observation 2 — Stage 1 disqualification pattern reused.** [`cross-subtype-merge-enablement-evidence.md` Finding 1](../rfcs/discussion/cross-subtype-merge-enablement-evidence.md) disqualified Candidate A on "makes no enablement claim" → §4 discipline. [`cross-subtype-merge-attachment-mechanism-evidence.md` Finding 1](../rfcs/discussion/cross-subtype-merge-attachment-mechanism-evidence.md) disqualified Candidate γ on "makes no attachment claim" → §4 discipline. The pattern is now established as a recurring Stage 1 filter for Ontology RFCs with a "let consumers handle it" candidate.
+
+- **Supersession:** None. First resolution of the cross-subtype attachment-mechanism follow-on. Discharges the [`§0126`](#0126--pairtable-aggregatebatch-resolution-cells-1-2-3-5-6-resolved-per-leading-recommendations-merge--table-fully-closed) "extension-field attachment mechanism" carry-forward at the form level; sub-parameter follow-ons remain per established discipline.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

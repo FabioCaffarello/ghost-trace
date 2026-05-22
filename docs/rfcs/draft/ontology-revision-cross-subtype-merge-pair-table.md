@@ -237,5 +237,5 @@ Merge γ pair-table fully resolved (6/6 cells). Symmetric split γ' permitted-ta
 
 Carry-forwards (implementation-RFC discipline):
 
-- **Extension-field attachment mechanism** — each non-canonical-antecedent surface needs an attachment at the merged record (BC's pattern-signature under Cells 1-3; AG's automation-signature under Cells 4-5; CR's pairwise structure under Cell 6). Unified mechanism question for implementation-RFC.
-- **Cross-subtype merge + split helper-layer implementation** — under §0123 + §0124 + §0125 + §0126.
+- **Extension-field attachment mechanism** — **discharged at [`§0127`](../../charter/decision-log.md) as Candidate β** (separately-committed `CrossSubtypeMergeAttachment` record via `AppendPair` pairing). Sub-parameters remain (`surface_type` enum values; `surface_payload` canonicalization; Cell 6 derivation-vs-explicit-attachment; projection-layer materialization shape) — implementation-RFC discipline.
+- **Cross-subtype merge + split helper-layer implementation** — under §0123 + §0124 + §0125 + §0126 + §0127.

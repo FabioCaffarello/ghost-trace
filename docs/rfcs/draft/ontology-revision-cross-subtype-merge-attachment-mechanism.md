@@ -1,8 +1,8 @@
 # RFC — Cross-subtype merge extension-field attachment mechanism (§0126 follow-on)
 
-- **Status:** discussion
+- **Status:** accepted
 - **Authors:** Ghost Trace committee
-- **Date:** 2026-05-22
+- **Date:** 2026-05-22 (opened); 2026-05-22 (resolved)
 - **Type:** ontology-revision
 - **Affects:** [`docs/ontology/entity-model.md`](../../ontology/entity-model.md) §Cross-subtype operations; [`schemas/events/v1/`](../../../schemas/events/v1/) per-subtype formation protos (potentially); [`docs/architecture/replay-model.md`](../../architecture/replay-model.md) (replay-traversal implications).
 
@@ -208,4 +208,20 @@ Lock-in asymmetry:
 
 ## Decision Record
 
-Pending. The discussion phase opens with this RFC at `Status: discussion`; resolution will be recorded in `docs/charter/decision-log.md` and reflected back here on acceptance. The natural follow-on is a paired evidence document per the established RFC + evidence cadence (q4-evidence / cross-subtype-merge-typing-evidence pattern).
+Resolved at [`decision-log §0127`](../../charter/decision-log.md): **Candidate β — separately-committed attachment record** adopted as the cross-subtype merge attachment mechanism. The two-stage filter convergence from [`cross-subtype-merge-attachment-mechanism-evidence.md` Phase 5](../discussion/cross-subtype-merge-attachment-mechanism-evidence.md) is ratified — Stage 1 disqualifies γ on §4 structural-enforceability discipline (same shape as merge-enablement A); Stage 2 chooses β over α on uniform-mechanism + §2.3-BC5-provenance-explicitness grounds.
+
+Adopted at the FORM level; specific sub-parameters deferred per the [`§0011`](../../charter/decision-log.md) form-adopt + parameters-defer precedent:
+
+- **`surface_type` enum values** — committee-defended; placeholder strings (`"operatorship_signature"`, `"automation_signature"`) anchor the deliberation
+- **`surface_payload` canonicalization rule** — byte-for-byte from antecedent vs re-canonicalized
+- **Cell 6 derivation-vs-explicit-attachment** — per §Open Questions above
+- **Projection-layer materialization shape** — eager vs lazy join
+
+### Reversal conditions
+
+Per [`cross-subtype-merge-attachment-mechanism-evidence.md` §What would flip the recommendation](../discussion/cross-subtype-merge-attachment-mechanism-evidence.md):
+
+- **Flip to α** when operationally-expensive read-time joins emerge (the merged-formation-with-attachments view becomes a hot read path); when committee preference for type-system explicitness over uniformity surfaces; or when β's `surface_type` discriminator approaches §2.2's first forbidden anti-pattern too closely (despite intra-Cat-I scope).
+- **Flip to γ** only under a Charter §4 reinterpretation admitting consumer-interpretation as sufficient structural commitment. Structurally unlikely per the merge-enablement-A precedent.
+
+No reversal condition fires at acceptance.
