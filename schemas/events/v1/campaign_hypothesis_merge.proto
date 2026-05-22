@@ -2,8 +2,11 @@
 // lifecycle-semantics.md line 28 + decision-log §0067 (this entry —
 // third-subtype merge landing; mirrors §0049 BC and §0060 AG).
 //
-// SCOPE — within-subtype only. Cross-subtype merge per
-// entity-model.md §Cross-subtype operations remains deferred.
+// SCOPE — within-subtype only at this proto. Cross-subtype merge
+// is committee-resolved at decision-log §0122 (typing γ) + §0125 +
+// §0126 (pair-table) + §0127 (β attachment); the cross-subtype
+// surface lives in the separate CrossSubtypeMergeAttachment Cat I
+// record per §0127 structural commitment 3.
 //
 // Structural choice (mirrors §0049 Option B + §0060): each
 // antecedent + produced is a separately-committed

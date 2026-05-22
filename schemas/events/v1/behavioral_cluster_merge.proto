@@ -7,19 +7,23 @@
 //
 // Constitutional shape per Charter §2.5 + lifecycle-semantics.md
 // line 28: "Two hypotheses (same subtype or, per Q2-A.2 cross-subtype
-// resolution deferred to a follow-on revision of entity-model.md,
-// different subtypes) are recognized as describing the same
-// underlying phenomenon and combined. Merge is recorded as an
-// immutable event referencing both antecedents and the produced
-// hypothesis."
+// resolution at decision-log §0122-§0127, different subtypes) are
+// recognized as describing the same underlying phenomenon and
+// combined. Merge is recorded as an immutable event referencing
+// both antecedents and the produced hypothesis."
 //
-// SCOPE — within-subtype only at this layer. Both antecedents and
+// SCOPE — within-subtype only at this proto. Both antecedents and
 // the produced hypothesis are BehavioralClusterFormation events.
 // Cross-subtype merge (e.g. BehavioralCluster ⊕ CoordinationRing)
-// is structurally permitted per entity-model.md §Cross-subtype
-// operations but the typing of the produced record remains DEFERRED
-// to lifecycle-semantics.md post-Q4 redaction; this proto does not
-// land cross-subtype semantics.
+// is committee-resolved at decision-log §0122 (typing γ — per-pair
+// canonical-merge typing) + §0125 + §0126 (pair-table 6/6 closed)
+// + §0127 (Candidate β — separately-committed attachment record).
+// Per §0127 structural commitment 3, existing target formation
+// protos retain their current shape; the cross-subtype attachment
+// surface lives in the separate CrossSubtypeMergeAttachment Cat I
+// record, committed atomically with the merged formation via
+// substrate.AppendPair. This proto therefore preserves its
+// within-subtype shape unchanged.
 //
 // Structural choice (defended in decision-log §0049): the merge
 // event references TWO antecedent formation hashes + ONE separately-
@@ -62,11 +66,12 @@ message BehavioralClusterMerge {
   // produce a byte-identical merge event (the merge relation is
   // symmetric; substrate identity must not depend on call-order).
   //
-  // At this layer length MUST be exactly 2 (within-subtype binary
-  // merge). The repeated cardinality leaves room for future
-  // n-ary or cross-subtype merge per lifecycle-semantics.md
-  // post-Q4 redaction without breaking the wire shape; producers
-  // SHOULD validate length=2 until that redaction lands.
+  // Length MUST be exactly 2 (binary merge). Per decision-log §0127
+  // structural commitment 3, cross-subtype merge is handled via the
+  // CrossSubtypeMergeAttachment Cat I record, not via cardinality
+  // expansion on this field. The repeated cardinality leaves room
+  // for a future n-ary within-subtype merge extension without
+  // breaking the wire shape; producers MUST validate length=2.
   repeated bytes antecedent_formation_event_hashes = 1;
 
   // produced_formation_event_hash is the BLAKE3-256 content-hash

@@ -3,10 +3,13 @@
 // second-subtype merge landing; mirrors §0049 for the
 // AutomationGroup concrete subtype).
 //
-// SCOPE — within-subtype only at this layer. Both antecedents and
+// SCOPE — within-subtype only at this proto. Both antecedents and
 // the produced hypothesis are AutomationGroupFormation events.
-// Cross-subtype merge per entity-model.md §Cross-subtype operations
-// remains deferred to lifecycle-semantics.md post-Q4 redaction.
+// Cross-subtype merge is committee-resolved at decision-log §0122
+// (typing γ) + §0125 + §0126 (pair-table) + §0127 (β attachment);
+// the cross-subtype surface lives in the separate
+// CrossSubtypeMergeAttachment Cat I record per §0127 structural
+// commitment 3 — this proto retains its within-subtype shape.
 //
 // Structural choice (mirrors §0049 Option B): the merge event
 // references TWO antecedent formation hashes + ONE separately-
