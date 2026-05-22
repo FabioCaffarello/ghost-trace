@@ -1,0 +1,47 @@
+// EvidentialIndependence proto type per Charter §2.6 (Evidential
+// Independence Integrity, frozen v0.6) + decision-log §0133 (Q3-α
+// source-count ratio resolution) + §0136 (canonical-serialization-contract
+// revision; rational-pair encoding chosen to preserve the bounded-resolution
+// structural commitment per §0133 Phase 4 Finding 4).
+//
+// Constitutional shape per §2.6: every inferential-commitment record
+// (Cat II construct, Cat III hypothesis, Assertion with
+// subject_ref_construct/subject_ref_hypothesis populated) carries a
+// confidence magnitude AND an evidential_independence degree per the
+// paired-dimension commitment. This proto encodes the degree.
+//
+// Per §0133 Q3-α resolution, evidential_independence is computed at
+// substrate write time as the ratio:
+//   (count of Cat I roots NOT reachable via influenced_by from a
+//    promoted hypothesis) / (total Cat I roots in subject_ref_* chain)
+//
+// Rational-pair encoding (numerator + denominator) is REQUIRED — float
+// encoding is forbidden per §0136 Anti-Patterns ("α encoded as float").
+// The bounded-resolution structure preserved by the rational pair is
+// load-bearing: a hypothesis with 3 supporting observations admits
+// only 4 distinct independence values {0, 1/3, 2/3, 1}, and the
+// rational encoding makes this structurally explicit.
+syntax = "proto3";
+
+package ghosttrace.common.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1;commonv1";
+
+// EvidentialIndependence is a rational number in [0, 1] expressing the
+// degree of evidential independence of an inferential-commitment record
+// per Charter §2.6.
+message EvidentialIndependence {
+  // numerator is the count of Cat I primary observation roots in the
+  // record's subject_ref_* chain that are NOT reachable via any
+  // influenced_by edge from a promoted hypothesis. Per §0133 Q3-α
+  // resolution. uint64 chosen for non-negative semantics + ample range.
+  uint64 numerator = 1;
+
+  // denominator is the total count of Cat I primary observation roots
+  // in the record's subject_ref_* chain. Per §0133 Q3-α resolution +
+  // §2.3 (Provenance Integrity, frozen v0.4) chain-termination
+  // guarantee. MUST be > 0; a denominator of zero is a structural
+  // error indicating the provenance chain does not terminate at Cat I
+  // per §2.3. uint64 chosen for non-negative semantics + ample range.
+  uint64 denominator = 2;
+}
