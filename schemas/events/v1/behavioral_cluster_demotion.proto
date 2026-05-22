@@ -1,10 +1,11 @@
 // Category III hypothesis lifecycle event per Charter §2.5
 // (Hypothesis Lifecycle Explicitness, frozen v0.3) + decision-log
-// §0011 (Q4 — staged-combination criterion: Layer A cadence is now
-// CONSUMED by this event; Layer B deep criterion remains deferred
-// until §2.6 operationalization). Encoded under the canonical-
-// serialization-contract at
-// docs/architecture/canonical-serialization-contract.md.
+// §0011 (Q4 — staged-combination Layer A AND Layer B criterion) +
+// §0135 (Layer B L-BC-OR adopted; L-C structural-exclusion) +
+// §0136 (canonical-serialization-contract operational discharge;
+// predicate firing values recorded for audit) + §0138 (Layer B
+// parameter-calibration). Encoded under the canonical-serialization-
+// contract at docs/architecture/canonical-serialization-contract.md.
 //
 // Constitutional shape per Charter §2.5: demotion ends the
 // operational use of a SPECIFIC promotion event — per §0011 multiple
@@ -23,22 +24,29 @@
 // §2.5"), BehavioralClusterDemotion is a Category I substrate row
 // committed under §2.1 immutability.
 //
-// Cadence-gate semantics per §0011: Layer A (cadence gate) is a
-// CANDIDACY criterion, NOT a hard barrier. The Demote entry point
-// records the demotion regardless of whether Layer A has elapsed;
-// the projection layer or operator-facing report surfaces the gate
-// state (satisfied / unsatisfied). Operators may demote within the
-// cadence window when operational urgency or future Layer B
-// criteria justify; the substrate records the discrete event.
+// Cadence-gate + predicate-firing semantics per §0011 + §0135 +
+// §0136: Layer A (cadence gate) is the outer-AND gate; Layer B's
+// L-BC-OR predicate is the inner disjunction. DEMOTE-CANDIDATE(H)
+// fires when Layer A AND (freshness_B(H) < T_B OR saturation_C(H)
+// > K_C) hold. Per the canonical-serialization-contract Validation
+// discipline, predicate firing is computed at projection time, NOT
+// at substrate-commit time; when the predicate fires the operator
+// commits this demotion event recording the predicate's firing
+// values for audit. Operator-override demotions (within-cadence-
+// window urgency or non-predicate-fired decisions) leave the
+// firing-value fields unset; reason then carries the override
+// justification.
 syntax = "proto3";
 
 package ghosttrace.events.v1;
+
+import "common/v1/evidential_independence.proto";
 
 option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
 
 // BehavioralClusterDemotion records the transition of a
 // BehavioralCluster hypothesis OUT of operational use as enrichment
-// context, per Charter §2.5 + decision-log §0011.
+// context, per Charter §2.5 + decision-log §0011 + §0135.
 message BehavioralClusterDemotion {
   // promotion_event_hash is the BLAKE3-256 content-hash of the
   // BehavioralClusterPromotion event being ended. Identifies WHICH
@@ -49,16 +57,46 @@ message BehavioralClusterDemotion {
   // demoted_at is the Unix-nanoseconds time at which demotion was
   // recorded. The cadence-gate state is computed at consumer time
   // as (demoted_at - promotion.promoted_at) >=
-  // promotion.cadence_seconds * 1e9. Typically wall-clock at the
-  // operator's demotion decision; explicit values permitted for
-  // forensic replay + deterministic re-derivation.
+  // promotion.layer_b_parameters.n_a_duration_nanoseconds
+  // (or promotion.cadence_seconds * 1e9 for pre-§0138 promotions).
+  // Typically wall-clock at the operator's demotion decision;
+  // explicit values permitted for forensic replay + deterministic
+  // re-derivation.
   int64 demoted_at = 2;
 
   // reason is an operator-supplied free-form note explaining why
   // the hypothesis was demoted. Optional; recorded for forensic
   // replay. Empty is acceptable but discouraged at audit time —
   // particularly when demotion occurs within the cadence window
-  // (Layer A unsatisfied), an explanatory reason is the only
-  // record of why the candidacy gate was bypassed.
+  // (Layer A unsatisfied) or outside predicate firing (operator
+  // override), an explanatory reason is the only record of why
+  // the candidacy gate was bypassed.
   string reason = 3;
+
+  // freshness_b_at_firing is the value of freshness_B(H) computed
+  // at the moment the DEMOTE-CANDIDATE predicate fired, per §0135
+  // L-BC-OR + §0136 operational discharge. Rational-pair encoding
+  // (numerator / denominator) per §0136 bounded-resolution
+  // structural commitment. Set when this demotion was triggered by
+  // predicate firing; unset for operator-override demotions
+  // (within-cadence-window urgency or non-predicate-fired
+  // decisions). When set, projection-replay validates
+  // (freshness_b_at_firing < promotion.layer_b_parameters.t_b)
+  // against the L-BC-OR B-branch firing condition.
+  ghosttrace.common.v1.EvidentialIndependence freshness_b_at_firing = 4;
+
+  // saturation_c_at_firing is the value of saturation_C(H) computed
+  // at the moment the DEMOTE-CANDIDATE predicate fired, per §0135
+  // L-BC-OR + §0136 operational discharge. Rational-pair encoding;
+  // numerator is the count of recent-N assertions r where
+  // H.hash ∈ r.closure_hashes AND H.hash ∉ r.direct_influenced_by
+  // (L-C structural-exclusion per §0135); denominator is N. Set
+  // when triggered by predicate firing; unset for operator-override
+  // demotions. When set, projection-replay validates
+  // (saturation_c_at_firing > promotion.layer_b_parameters.k_c)
+  // against the L-BC-OR C-branch firing condition. At least one of
+  // {freshness_b_at_firing, saturation_c_at_firing} satisfies its
+  // branch when the predicate fires; both may satisfy simultaneously
+  // under L-BC-OR.
+  ghosttrace.common.v1.EvidentialIndependence saturation_c_at_firing = 5;
 }
