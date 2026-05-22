@@ -5197,6 +5197,86 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0130` — §3 redaction resumption; Step 1.1 anchor inventory complete
+
+- **Status:** accepted.
+- **Date:** 2026-05-22.
+
+- **Context:** Per committee direction following the [`§0129`](#0129--gate-26-closure-fourth-objectlevel-invariant-redaction-amendment-v06) §2.6 closure, §3 Non-Goals is the sole remaining pending Charter section. Empirical-pressure assessment at [`§0121`](#0121--3-nongoals-empiricalpressure-assessment-recorded-first-3-assessment) ranked MODERATE-TO-STRONG; five Q-§3-* questions + three cross-cutting questions catalogued. The cross-subtype framing arc closure ([`§0122`](#0122--crosssubtype-merge-typing-resolution-candidate--perpair-canonicalmerge-typing-formadopt--tabledefer)-[`§0127`](#0127--crosssubtype-merge-attachmentmechanism-resolution-candidate--separatelycommitted-attachment-record)) + the §2.6 v0.6 freeze ([`§0129`](#0129--gate-26-closure-fourth-objectlevel-invariant-redaction-amendment-v06)) collectively resolved §3's prior cross-section dependencies; §3 Step 1.1 inherits all upstream resolved surfaces.
+
+- **Decision:** §3 redaction resumes at Step 1.1 anchor inventory. The Step 1.1 artifact is recorded at [`docs/charter/in-committee/§3-non-goals.md`](./in-committee/§3-non-goals.md). The file captures:
+
+  1. **Anchor** — §3 stub quoted verbatim with all five anticipated non-goals.
+
+  2. **Ontology-derived material** — 7 inheritance sources spanning §2.x frozen invariants + decision-log entries operationalizing each anticipated non-goal's structural detection mechanism.
+
+  3. **Multi-carry-forward status** — three carry-forwards assessed:
+     - **Q-X1 (§3 / §4 overlap)** — clean partition: §3 governs identity perimeter; §4 governs constitutional-claim admissibility discipline.
+     - **Q-X2 (§3 vs §2.6 redaction order)** — discharged by §2.6 closure at [`§0129`](#0129--gate-26-closure-fourth-objectlevel-invariant-redaction-amendment-v06).
+     - **§2.x BC mutual scope inheritance** — clean structural partition across all sections.
+
+  4. **Cascade-trigger status** — **NO cascade triggers fire at Step 1.1.** The compactness reflects §3's positional advantage as the LAST pending Charter section.
+
+  Steps 1.2-1.5 + closure proceed as a single committed arc in the same change set per the [`§0129`](#0129--gate-26-closure-fourth-objectlevel-invariant-redaction-amendment-v06) §2.6 multi-step-closure precedent.
+
+- **Constitutional review:** No Charter invariant amended at Step 1.1. The Step 1.1 anchor inventory is structural framing; binding text appears at Steps 1.2-1.5 + closure (this commit). §3 status moves from `pending committee redaction` to `frozen — minor amendment v0.7` at the closure entry below.
+
+- **Consequences:**
+  - **`docs/charter/in-committee/§3-non-goals.md`** — new file. Step 1.1 anchor inventory + Steps 1.2-1.5 binding-text sections in single artifact.
+  - **`docs/charter/decision-log.md`** §0130 (this entry) + [`§0131`](#0131--gate-3-closure-fifth-charter-redaction-first-noninvariant-redaction-amendment-v07) (closure).
+  - Most compact pre-Gate dependency surface of any §-section redaction (three carry-forwards vs §2.4's four or §2.6's six). §3's positional advantage as the LAST pending Charter section — all upstream §2.x redactions provided resolved structural surfaces.
+
+- **Supersession:** None. First §3 redaction-step entry. Establishes the Step 1.1 anchor inventory; Steps 1.2-1.5 + closure recorded at [`§0131`](#0131--gate-3-closure-fifth-charter-redaction-first-noninvariant-redaction-amendment-v07) in the same committed arc per the [`§0129`](#0129--gate-26-closure-fourth-objectlevel-invariant-redaction-amendment-v06) multi-step-closure pattern.
+
+---
+
+## `0131` — Gate §3 closure: fifth Charter redaction (first non-invariant); amendment v0.7
+
+- **Status:** accepted.
+- **Date:** 2026-05-22.
+
+- **Context:** §3 redaction resumed at [`§0130`](#0130--3-redaction-resumption-step-11-anchor-inventory-complete) Step 1.1 anchor inventory in the same committed arc. Per committee direction, Steps 1.2-1.5 + closure proceed as a single committed deliberation arc following the [`§0129`](#0129--gate-26-closure-fourth-objectlevel-invariant-redaction-amendment-v06) §2.6 precedent. The prior four redactions ([`§0007`](#0007--gate-1-pilot-4-committeemode-redaction-path-c-narrow-but-not-minimal) §4 Gate 1; [`§0013`](#0013--gate-25-first-object-level-invariant-redaction-path-a-full-redaction-amendment-v03) §2.5; [`§0017`](#0017--gate-23-second-object-level-invariant-redaction-path-a-full-redaction-amendment-v04) §2.3; [`§0099`](#0099--gate-24-third-object-level-invariant-redaction-path-reading-1-full-amendment-v05) §2.4; [`§0129`](#0129--gate-26-closure-fourth-objectlevel-invariant-redaction-amendment-v06) §2.6) provide the methodological precedent. §3 is the first NON-INVARIANT redaction — it codifies the negative perimeter (non-goals), not a constitutional invariant.
+
+- **Decision:** §3 Non-Goals advances from `pending committee redaction` to `frozen — minor amendment v0.7`. Binding text in five subsections (Definition, Structural Requirement, Rationale, Forbidden Anti-Patterns, Boundary Conditions) merged into [`constitutional-charter.md`](./constitutional-charter.md) replacing the prior stub. Amendment v0.7 recorded at [`amendments.md`](./amendments.md).
+
+  The five non-goals (N1–N5) codified as categorical rejections with structural anchors:
+
+  1. **N1 — Ghost Trace does not produce truth.** Anchored at §2.4 (`influenced_by` chain) + §2.6 (paired dimension); detectable at §0034 canonical-serialization layer.
+
+  2. **N2 — Ghost Trace does not perform universal identity resolution.** Anchored at §0023 (single-tier inception) + Q2 forward-reference; detectable at §0024 schemas-evolution review.
+
+  3. **N3 — Ghost Trace does not automate irreversible operational action.** Anchored at §2.1 (substrate-immutability) + §0104/§0119 (audit-on-commit); detectable at substrate replay.
+
+  4. **N4 — Ghost Trace does not optimize for the lowest operational complexity.** Anchored at §4 (structural-enforceability discipline) + §0033/§0119 (default + opt-in pattern); detectable at change-set review.
+
+  5. **N5 — Ghost Trace is not a generic event-sourcing framework.** Anchored at §2.2 (three-category typing) + §0010 Q2-A.2 (four-subtype Cat III taxonomy); detectable at documentation review.
+
+  Five anti-patterns enumerated; seven boundary conditions including the §3/§4 partition (per §0121 Q-X1 resolution: clean partition; §3 governs identity perimeter, §4 governs admissibility discipline) + the §3 N4 + §0033/§0119 operational-simplicity-with-discipline-availability shape recognition.
+
+- **Constitutional review:** Amendment v0.7 recorded per [`amendments.md`](./amendments.md) §Amendment Process. Falsifiability-check applied: each non-goal anchors to a structural detection mechanism per §1.3 operationalization. §3 / §4 partition is clean per §0121 Q-X1 resolution; no overlap creates circular dependency.
+
+- **Consequences:**
+  - **`docs/charter/constitutional-charter.md`** — §3 stub replaced with binding text (Definition + Structural Requirement + Rationale + Forbidden Anti-Patterns + Boundary Conditions); banner version `v0.6` → `v0.7`; status line: §3 frozen clause; v0.7 amendment narrative paragraph appended.
+  - **`docs/charter/amendments.md`** — v0.7 entry recorded.
+  - **`.claude/CLAUDE.md`** §4 status table — §3 row `pending committee redaction` → `frozen — minor amendment v0.7`; narrative paragraph v0.7 chronological clause appended; §1 framing paragraph updated to reflect §3 frozen.
+
+  - **Constitutional Charter is fully frozen.** §1 + §2 qualification criteria + §2.1 + §2.2 + §2.3 v0.4 + §2.4 v0.5 + §2.5 v0.3 + §2.6 v0.6 + §3 v0.7 + §4 v0.2. All Charter sections frozen apart from future amendments via [`amendments.md`](./amendments.md) §Amendment Process. The repository's constitutional drafting phase is structurally complete.
+
+  - **Carry-forwards:**
+    - **§3 amendment surface remains open.** The non-goals enumerated at N1–N5 are not closed — committee may add or revise them via the §Amendment Process. New non-goals would be added under N6+.
+    - **All Charter forward-reference markers remain.** Q2 (identity tiers), Q3 (formal independence), Q5 (transitive-half), plus Ontology Open Modeling Questions Q1 (already resolved) carry the §0017 Resolution 4 contract pattern; structural commitments binding today; formal mechanisms become falsifiable on respective Open Question resolutions.
+    - **Layer B follow-on RFC** activated at [`§0129`](#0129--gate-26-closure-fourth-objectlevel-invariant-redaction-amendment-v06); deliberation can now proceed under ordinary RFC discipline (unchanged by §3 closure).
+
+  - **Methodological observation 1 — Charter redaction arc empirically complete.** Five committee-mode redactions across [`§0007`](#0007--gate-1-pilot-4-committeemode-redaction-path-c-narrow-but-not-minimal) (§4 pilot) → [`§0013`](#0013--gate-25-first-object-level-invariant-redaction-path-a-full-redaction-amendment-v03) (§2.5) → [`§0017`](#0017--gate-23-second-object-level-invariant-redaction-path-a-full-redaction-amendment-v04) (§2.3) → [`§0099`](#0099--gate-24-third-object-level-invariant-redaction-path-reading-1-full-amendment-v05) (§2.4) → [`§0129`](#0129--gate-26-closure-fourth-objectlevel-invariant-redaction-amendment-v06) (§2.6) → §0131 (§3). The Charter is fully frozen. The redaction-arc-empirically-complete pattern is now precedent-bound; future Charter evolution proceeds under [`amendments.md`](./amendments.md) §Amendment Process, not under further pending→frozen Gates.
+
+  - **Methodological observation 2 — Non-invariant redaction shape.** §3 is the first non-invariant Charter section to undergo committee-mode redaction. The five-subsection binding-text structure (Definition + Structural Requirement + Rationale + Forbidden Anti-Patterns + Boundary Conditions) was demonstrated to be reusable for non-invariant sections; §3's Definition codifies the perimeter, Structural Requirement maps non-goals to structural anchors, Rationale frames the negative perimeter as complement to §2.x positive commitments, Forbidden Anti-Patterns enumerate detectable violations, Boundary Conditions partition §3 from §2.x and §4. Pattern reusable for any future non-invariant Charter section.
+
+  - **Methodological observation 3 — Compact pre-Gate dependency surface as positional advantage.** §3 Step 1.1 had three carry-forwards (vs §2.4's four or §2.6's six) — the smallest of any §-section redaction. The compactness reflected §3's positional advantage as the LAST pending section: all upstream §2.x redactions provided resolved structural surfaces; no cross-section dependencies remained open. The pattern is precedent-bound: redaction order matters; later sections inherit more resolved structural surfaces from earlier redactions.
+
+- **Supersession:** None. Closes Gate §3 — fifth Charter redaction, first non-invariant redaction. Combines with [`§0130`](#0130--3-redaction-resumption-step-11-anchor-inventory-complete) Step 1.1 in the same committed arc per the [`§0129`](#0129--gate-26-closure-fourth-objectlevel-invariant-redaction-amendment-v06) §2.6 multi-step-closure precedent. **Constitutional Charter fully frozen.**
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
