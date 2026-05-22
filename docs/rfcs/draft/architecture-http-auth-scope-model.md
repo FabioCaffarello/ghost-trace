@@ -130,6 +130,21 @@ The selection stands subject to four named reversal conditions; any single condi
 
 - **R-auth-3 — `cli_actor` proto split (Proposal item 3 reversal trigger).** Per [`§0097`](../../charter/decision-log.md) + this RFC's Proposal item 3: a consumer needs to distinguish mTLS-CN from CLI-actor at read time AND the `channel` discriminator is insufficient. Trigger: explicit RFC characterizing the read-time consumer that cannot disambiguate via `channel`. Reversal scope: proto change adding a distinct `cli_actor` field; α + γ runtime mechanisms unaffected.
 
-- **R-auth-4 — CLI orphan-cleanup symmetry (Open Question 4 reversal).** When the local-shell-trust asymmetry between HTTP T3 (commits OrphanCleanupAudit) and CLI orphan-cleanup (commits no audit) becomes operationally untenable — typically when CLI invocations in production cron jobs require forensic-record symmetry with HTTP. Trigger: explicit RFC extending audit-on-commit to CLI orphan-cleanup. Reversal scope: extends T3 mechanism to a second channel; wire-format selection unaffected.
+- **R-auth-4 — CLI orphan-cleanup symmetry (Open Question 4 reversal).** When the local-shell-trust asymmetry between HTTP T3 (commits OrphanCleanupAudit) and CLI orphan-cleanup (commits no audit) becomes operationally untenable — typically when CLI invocations in production cron jobs require forensic-record symmetry with HTTP. Trigger: explicit RFC extending audit-on-commit to CLI orphan-cleanup. Reversal scope: extends T3 mechanism to a second channel; wire-format selection unaffected. **Discharged by extension-rather-than-reversal at [`§0119`](../../charter/decision-log.md):** the CLI orphan-cleanup tool gained an opt-in `--actor` option that activates the same audit-on-commit discipline as HTTP T3 while preserving the §0033 local-shell-trust no-audit behavior as the default. The R-auth-4 trigger condition is satisfied (audit-on-commit extended to a second channel); the wire-format selection is unaffected per the reversal-scope statement above.
 
 No reversal condition fires at acceptance. The three named follow-on landings (per [`§0098`](../../charter/decision-log.md) Consequences) — multi-tier token plumbing; T3 OrphanCleanupAudit endpoint; T4 24 lifecycle endpoints — ship under ordinary PR discipline.
+
+### Implementation status (as of 2026-05-21)
+
+All three named follow-on landings + both §0104 carry-forwards have closed under ordinary PR/RFC discipline:
+
+| Landing | Closed at | Notes |
+|---|---|---|
+| Multi-tier token plumbing | [`§0103`](../../charter/decision-log.md) | `WithAuthTierToken(tier, token)` + 4 per-tier CLI options; backward-compat with §0035 single-token |
+| T3 `POST /v1/admin/orphan-cleanup` | [`§0104`](../../charter/decision-log.md) | First new Cat I proto since §0042-era `NetworkEvent`; audit-then-delete contract |
+| T4 24 lifecycle endpoints | [`§0111`](../../charter/decision-log.md) | All six lifecycle ops × four subtypes; closes §0098 arc landings 3/3 (PRs #80–#86) |
+| **§0104 carry-forward — `token_id` (RFC item 4(b))** | [`§0118`](../../charter/decision-log.md) | IngestionEvent proto field 8; per-tier token file optional second line; `resolveT4Actor` middle precedence rung |
+| **§0104 carry-forward — CLI orphan-cleanup symmetry (OQ4)** | [`§0119`](../../charter/decision-log.md) | Discharged by operator-opt-in extension per R-auth-4 above; §0033 default preserved |
+| §0097 CLI-side per-actor attribution | [`§0117`](../../charter/decision-log.md) | All 24 CLI-side `--actor` options shipped (form/promote/demote/dissolve/merge/split × BC/AG/CH/CR) |
+
+The §0098 arc is fully discharged. Subsequent auth-scope work proceeds under ordinary RFC discipline (R-auth-1/2/3 reversal triggers; R-auth-4 already discharged per the entry above).
