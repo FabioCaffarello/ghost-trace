@@ -5097,6 +5097,52 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0128` — §2.6 redaction resumption; Step 1.1 anchor inventory complete
+
+- **Status:** accepted.
+- **Date:** 2026-05-22.
+
+- **Context:** Per [`§0008`](#0008--redaction-order-for-pending-invariants-25--23--24--26-gate-1-carry-forwards-enacted) redaction order (§2.5 → §2.3 → §2.4 → §2.6), §2.6 is the last pending object-level invariant. §2.4 closed at [`§0099`](#0099--gate-24-third-object-level-invariant-redaction-path-reading-1-full-amendment-v05); §2.5 at [`§0013`](#0013--gate-25-first-object-level-invariant-redaction-path-a-full-redaction-amendment-v03); §2.3 at [`§0017`](#0017--gate-23-second-object-level-invariant-redaction-path-a-full-redaction-amendment-v04). §2.6 status under [`§0022`](#0022--implementation-pivot-64-amendment--0003-reversal-authorization--2426-posture-shift) was `pending — empirical pressure phase`; pressure ranked STRONG at the [`§0120`](#0120--26-empiricalpressure-assessment-refresh-post24frozen) post-§2.4 refresh. With the [`§0122`](#0122--crosssubtype-merge-typing-resolution-candidate--perpair-canonicalmerge-typing-formadopt--tabledefer) → [`§0127`](#0127--crosssubtype-merge-attachmentmechanism-resolution-candidate--separatelycommitted-attachment-record) Q2-A.2 cross-subtype framing arc structurally complete at the committee level, §2.6's prior cross-subtype-pending dependencies (Q-§2.6-3 + Q-§2.6-4 per §0120) are pre-resolved. The committee directs §2.6 redaction resumption.
+
+- **Decision:** §2.6 redaction resumes at Step 1.1 anchor inventory. The Step 1.1 artifact is recorded at [`docs/charter/in-committee/§2.6-evidential-independence-integrity.md`](./in-committee/§2.6-evidential-independence-integrity.md). The file captures:
+
+  1. **Anchor** — §2.6 stub quoted verbatim.
+
+  2. **Ontology-derived material** — 12 inheritance sources (§0011 Layer B forward-reference contract; §0015 Q1; §0016 Q3; §0020 OMQ #2-C; §0021 OMQ #3-α; §0099 §2.4 frozen v0.5; §0077 + §0120 empirical-pressure assessments; §0122-§0127 cross-subtype closure; §0023 Q2 single-tier; §2.4 + §2.3 + §2.5 + §2.1 frozen surfaces; entity-model + provenance-model scaffolds). Binding text under these sources encodes substantial structural commitments; substance is filled in Steps 1.2-1.5.
+
+  3. **Multi-carry-forward status** — six carry-forwards assessed:
+     - **Q3 (formal independence definition)** — forward-referenceable per [`§0014`](#0014--23-redaction-plan-ontology-rfc-q1-before-charter-redaction-q3-subjectref-polymorphism-and-q2-identity-tiers-assessed-at-23-step-11) lazy methodology + [`§0017`](#0017--gate-23-second-object-level-invariant-redaction-path-a-full-redaction-amendment-v04) Resolution 4 contract; structural enforcement of pairing is separable from formal measurable-quantity specification.
+     - **Layer B activation completion** — §2.4 portion discharged at [`§0099`](#0099--gate-24-third-object-level-invariant-redaction-path-reading-1-full-amendment-v05); §2.6 binding text completes the activation by encoding the paired independence surface Layer B will operate on. Not cascade trigger; activation completion.
+     - **Q5 "transitive?" half** — forward-referenceable inherited from §2.4.
+     - **Q2 (Identity tiers)** — forward-referenceable continued.
+     - **§2.4 BC1 mutual scope inheritance** — clean structural.
+     - **Cross-subtype Q-§2.6-3 + Q-§2.6-4** — pre-resolved by upstream committee action ([`§0122`](#0122--crosssubtype-merge-typing-resolution-candidate--perpair-canonicalmerge-typing-formadopt--tabledefer)-[`§0127`](#0127--crosssubtype-merge-attachmentmechanism-resolution-candidate--separatelycommitted-attachment-record) cross-subtype arc closure).
+
+  4. **Cascade-trigger status** — **NO cascade triggers fire at Step 1.1.** Three forward-reference markers (Q3 + Q2 + Q5-transitive); one forward-reference completion (Layer B); one upstream-pre-resolved dependency (cross-subtype Q-§2.6-3/4 — methodologically novel).
+
+  Subsequent steps (1.2 Definition; 1.3 Structural Requirement; 1.4 Rationale + Forbidden Anti-Patterns; 1.5 Boundary Conditions) ship in follow-on commits per the `invariant-redactor` Steps 1.1-1.5 procedure.
+
+- **Constitutional review:** No Charter invariant amended at Step 1.1. The Step 1.1 anchor inventory is structural framing for the committee deliberation; binding text appears at Steps 1.2-1.5. The in-committee draft is non-binding per [`docs/charter/in-committee/README.md`](./in-committee/README.md). §2.6 status remains `pending — empirical pressure phase` until Steps 1.1-1.5 complete and §2.6 advances to `frozen — minor amendment vN.Y` via formal amendment process per [`amendments.md`](./amendments.md).
+
+- **Consequences:**
+  - **`docs/charter/in-committee/§2.6-evidential-independence-integrity.md`** — new file. Step 1.1 anchor inventory artifact.
+  - **`docs/charter/decision-log.md`** §0128 (this entry).
+  - **§2.6 status unchanged at this step.** Remains `pending — empirical pressure phase`; advances to `frozen` only at the Steps 1.1-1.5 completion + amendment-process closure.
+
+  - **§2.6 Step 1.1 carry-forwards (for Steps 1.2-1.5):**
+    - **Step 1.2 Definition:** encodes the paired-dimension structural commitment + the §2.4-side mutual scope statement.
+    - **Step 1.3 Structural Requirement:** encodes the substrate-time independence-value generation per OMQ #3-α + the supersession-via-§2.5-lifecycle-event chain per OMQ #2-C.
+    - **Step 1.4 Rationale + Forbidden Anti-Patterns:** encodes the recursive-belief-inflation defense + the §2.2-first-anti-pattern analog at the paired-dimension layer.
+    - **Step 1.5 Boundary Conditions:** encodes the four forward-reference markers (Q3, Q2, Q5-transitive, Layer B completion) + the §2.4 BC1 mutual scope statement + the cross-subtype-cell-derivation-rule operationalization framing.
+
+  - **Methodological observation 1 — Upstream-cascade-resolution as a new Step 1.1 status.** Prior §2.x Step 1.1 assessments produced cascade-trigger-fires (§0014 + §0020 + §0021 chain at §2.3 → §2.4) or all-forward-referenceable (§0099 §2.4 Step 1.1). §2.6 Step 1.1 introduces a third status: **upstream-pre-resolved**, where a prior committee arc (cross-subtype §0122-§0127) closes a dependency that would otherwise have been a Step 1.1 cascade trigger or forward-reference marker. The pattern: when an Ontology RFC arc resolves a structural surface that §2.x binding text would otherwise need to defer, §2.x Step 1.1 inherits the pre-resolution. Reusable for future §-section redactions whose dependencies have been resolved by upstream Ontology work.
+
+  - **Methodological observation 2 — Multi-forward-reference density consistency at §2.4 + §2.6.** §2.4 Step 1.1 (per [`§0099`](#0099--gate-24-third-object-level-invariant-redaction-path-reading-1-full-amendment-v05)) had three forward-reference markers (Q2 + Layer B + Q5-transitive). §2.6 Step 1.1 has three (Q3 + Q2 + Q5-transitive) + one completion (Layer B). The multi-forward-reference structure is now established at two consecutive §2.x redactions; the pattern is no longer novel — it is recurring.
+
+- **Supersession:** None. First §2.6 redaction-step entry. Establishes the Step 1.1 anchor inventory; subsequent Steps 1.2-1.5 land in follow-on commits per the established §2.4 / §2.5 / §2.3 multi-commit redaction pattern.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
