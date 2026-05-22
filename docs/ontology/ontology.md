@@ -53,7 +53,7 @@ The following questions are deferred to committee redaction. They are recorded h
 
 1. Is `Session` a single entity with reconciliation, or two entities (`DeclaredSession` and `OperationalSession`)? Discussed in conversation but not yet decided.
 2. Are `BehavioralCluster`, `CoordinationRing`, `CampaignHypothesis`, and `AutomationGroup` distinct entity types within the hypothesis category, or are they tags on a single `Hypothesis` type? Decision affects the schema surface.
-3. What is the formal definition of `independence` as a measurable quantity? Conceptually agreed; operationally undefined.
+3. What is the formal definition of `independence` as a measurable quantity? Conceptually agreed; operationally undefined. Opened for discussion as RFC [`ontology-revision-q3-independence`](../rfcs/draft/ontology-revision-q3-independence.md) per [`decision-log.md` §0132](../charter/decision-log.md); six candidate measurable-quantity families enumerated in [`q3-independence-evidence.md`](../rfcs/discussion/q3-independence-evidence.md) Phase 2.
 4. When does a promoted hypothesis become a candidate for demotion? Lifecycle rule.
 5. How does `influence` propagate through derived assertions? Transitive? Decaying? Both?
 
