@@ -111,7 +111,7 @@ The full pair-table:
 
 Symmetric split γ' permitted-target-set table derived by inverse-symmetry per [`§0124`](../charter/decision-log.md): AG permits `{BC, AG}`; CR permits `{BC, CR}`, `{AG, CR}`; CH permits `{BC, CH}`, `{AG, CH}`, `{CR, CH}`; BC is structurally terminal for cross-subtype split (BC is not the target of any merge cell, so BC cross-subtype split is structurally absent — within-subtype BC split remains unaffected).
 
-Remaining carry-forward: extension-field attachment mechanism for each non-canonical-antecedent surface (BC's pattern-signature under Cells 1-3; AG's automation-signature under Cells 4-5; CR's pairwise structure under Cell 6). Implementation-RFC discipline.
+**Extension-field attachment mechanism resolved at [`§0127`](../charter/decision-log.md) as Candidate β** (separately-committed `CrossSubtypeMergeAttachment` Cat I record; committed via `substrate.AppendPair` alongside the merged formation, analogous to the [`§0104`](../charter/decision-log.md) OrphanCleanupAudit pattern). Existing target protos remain unchanged; the attachment-record mechanism layers on top via substrate-level pairing. Sub-parameters deferred per form-adopt + parameters-defer pattern: `surface_type` enum values; `surface_payload` canonicalization rule; Cell 6 derivation-vs-explicit-attachment; projection-layer materialization shape. Q2-A.2 cross-subtype framing arc is structurally fully closed at the committee level; remaining work is implementation-RFC discipline.
 
 ## The Assertion Type and Cross-Category References
 
