@@ -75,16 +75,25 @@ The subtype distinction is structurally recorded: a hypothesis record's concrete
 
 Cross-subtype merge (e.g., a `BehavioralCluster` and a `CoordinationRing` recognized as the same underlying phenomenon) is structurally permitted but requires a typed transformation: the merge operation produces a typed output record.
 
-**Cross-subtype merge produced-record typing resolved at [`decision-log §0122`](../charter/decision-log.md) as Candidate γ — per-pair canonical-merge typing.** No new typed subtype is introduced; the four concrete subtypes (`BehavioralCluster`, `AutomationGroup`, `CampaignHypothesis`, `CoordinationRing`) remain the complete set per Q2-A.2. Cross-subtype merge produces a record of one of the four existing subtypes, determined by a per-pair canonical-target table co-located with this section (the table contents — 6 unordered pair cells: `{BC, AG}`, `{BC, CR}`, `{BC, CH}`, `{AG, CR}`, `{AG, CH}`, `{CR, CH}` → which existing subtype each maps to — are deferred to a follow-on RFC per the [`§0011`](../charter/decision-log.md) form-adopt + parameters-defer precedent). Within-subtype merge is unchanged.
+The Q2-A.2 cross-subtype framing arc resolves across three decision-log entries on 2026-05-22:
 
-The resolved typing RFC is at [`ontology-revision-cross-subtype-merge-typing.md`](../rfcs/draft/ontology-revision-cross-subtype-merge-typing.md) (`Status: accepted`); its paired evidence at [`cross-subtype-merge-typing-evidence.md`](../rfcs/discussion/cross-subtype-merge-typing-evidence.md) records the two-stage convergence (β disqualified on §4 discipline; γ chosen over α by committee judgment).
+- **Cross-subtype merge typing resolved at [`§0122`](../charter/decision-log.md) as Candidate γ — per-pair canonical-merge typing.** No new typed subtype; cross-subtype merge produces a record of one of the four existing concrete subtypes (`BehavioralCluster`, `AutomationGroup`, `CampaignHypothesis`, `CoordinationRing`) per Q2-A.2, determined by a per-pair canonical-target table co-located with this section. Form adopted; specific pair-table contents deferred to [`ontology-revision-cross-subtype-merge-pair-table.md`](../rfcs/draft/ontology-revision-cross-subtype-merge-pair-table.md) per the [`§0011`](../charter/decision-log.md) form-adopt + parameters-defer precedent.
 
-The remaining cross-subtype framing surface (open as of `§0122`):
+- **Cross-subtype merge enablement resolved at [`§0123`](../charter/decision-log.md) as Candidate B+D combined form.** Cross-subtype merge is permitted when **both**: (a) the antecedents share at least one `actor_ref`; (b) both antecedents are in promoted lifecycle-state per §2.5 + [`§0011`](../charter/decision-log.md) Q4 Layer A.
 
-- [`ontology-revision-cross-subtype-merge-enablement.md`](../rfcs/draft/ontology-revision-cross-subtype-merge-enablement.md) — enablement question (under what criterion cross-subtype merge is permitted). Four candidates (A / B / C / D); paired evidence at [`cross-subtype-merge-enablement-evidence.md`](../rfcs/discussion/cross-subtype-merge-enablement-evidence.md) recommends B+D (shared-actor-membership AND lifecycle-state) conditional on committee judgment. **Status: discussion.**
-- [`ontology-revision-cross-subtype-split.md`](../rfcs/draft/ontology-revision-cross-subtype-split.md) — consolidated typing + enablement for the symmetric split operation (split is the §0050 structural inverse of merge); paired evidence at [`cross-subtype-split-evidence.md`](../rfcs/discussion/cross-subtype-split-evidence.md) recommends γ' + B'+D' under symmetric-resolution with merge. **Status: discussion** — the symmetric γ' typing is now reachable as the default under the symmetric-resolution preference; committee action pending.
+- **Cross-subtype split resolved at [`§0124`](../charter/decision-log.md) as symmetric γ' + B'+D'.** Per the §0050 structural-inverse-of-merge framing, the split surface inherits the merge resolution: split typing is per-source-subtype permitted-target-set table (same pair-table placeholder, extended scope); split enablement is partition-of-membership (B') AND promoted-lifecycle-state (D'). The §0050 inverse-symmetry is preserved by construction (merge requires shared-actor intersection; split requires actor partition — the gates are set-theoretic duals).
 
-The pair-table follow-on RFC (placeholder for the 6 unordered cells per the γ form) will open at `docs/rfcs/draft/ontology-revision-cross-subtype-merge-pair-table.md` when its discussion phase is initiated; it is on hold per the form-adopt + parameters-defer pattern.
+Within-subtype merge and split are unchanged.
+
+The resolved RFCs:
+
+- [`ontology-revision-cross-subtype-merge-typing.md`](../rfcs/draft/ontology-revision-cross-subtype-merge-typing.md) (`Status: accepted` per §0122)
+- [`ontology-revision-cross-subtype-merge-enablement.md`](../rfcs/draft/ontology-revision-cross-subtype-merge-enablement.md) (`Status: accepted` per §0123)
+- [`ontology-revision-cross-subtype-split.md`](../rfcs/draft/ontology-revision-cross-subtype-split.md) (`Status: accepted` per §0124)
+
+Their paired discussion-phase evidence documents at [`cross-subtype-merge-typing-evidence.md`](../rfcs/discussion/cross-subtype-merge-typing-evidence.md) + [`cross-subtype-merge-enablement-evidence.md`](../rfcs/discussion/cross-subtype-merge-enablement-evidence.md) + [`cross-subtype-split-evidence.md`](../rfcs/discussion/cross-subtype-split-evidence.md) record the two-stage convergence patterns + convergence-by-inheritance pattern that produced the resolutions.
+
+The pair-table follow-on placeholder at [`ontology-revision-cross-subtype-merge-pair-table.md`](../rfcs/draft/ontology-revision-cross-subtype-merge-pair-table.md) (`Status: discussion`, on hold) carries the only structural follow-on: per-cell defense for 6 unordered merge-target cells + per-source-subtype split permitted-target sets. The placeholder is on hold pending operational pressure or committee direction.
 
 ## The Assertion Type and Cross-Category References
 
