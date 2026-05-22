@@ -136,13 +136,128 @@ These asymmetries are recorded for use by substantive deliberation; they are NOT
 
 ---
 
-## Phases 3+ — Deferred to substantive deliberation
+## Phase 3 — Apply epistemic skills
 
-The following phases are drafted in subsequent RFC commits when the committee deliberates Q5 transitivity-half substantively:
+Per [Q3 Phase 3 precedent](./q3-independence-evidence.md), three skills ([`falsifiability-check`](../../../.claude/skills/epistemic/falsifiability-check/SKILL.md), [`epistemic-separator`](../../../.claude/skills/epistemic/epistemic-separator/SKILL.md), [`ambiguity-reducer`](../../../.claude/skills/epistemic/ambiguity-reducer/SKILL.md)) are applied to each candidate as an abstract structural proposition. β-graph is a meta-form orthogonal to τ/δ/κ (it answers WHERE reachability is computed, not WHAT reachability means); the matrix below focuses on the three semantic candidates and treats β-graph composability as a separate column.
 
-- **Phase 3 — Epistemic-skill application.** Apply [`falsifiability-check`](../../../.claude/skills/epistemic/falsifiability-check/SKILL.md), [`epistemic-separator`](../../../.claude/skills/epistemic/epistemic-separator/SKILL.md), and [`ambiguity-reducer`](../../../.claude/skills/epistemic/ambiguity-reducer/SKILL.md) to each candidate per [Q3 Phase 3 precedent](./q3-independence-evidence.md).
-- **Phase 4 — Comparison synthesis.** Rank candidates against §1 Thesis defense, §4 criterion 1 cost, structural simplicity, and α-composition fidelity.
-- **Phase 5 — Recommendation.** Single-candidate recommendation with explicit dissent surface + cascade implications. Resolution recorded at a future decision-log entry that closes ontology.md Open Question 5 transitivity-half and discharges the [`§0133`](../../charter/decision-log.md) Q5-cascade.
+### Candidate propositions
+
+- **τ proposition:** "An assertion B is structurally `influenced_by` hypothesis H if there exists any chain of `influenced_by` edges B → ... → H of length ≥ 1. The substrate's `influenced_by` relation IS the transitive closure of declared direct edges."
+- **δ proposition:** "An assertion B is structurally `influenced_by` hypothesis H if and only if there is a direct `influenced_by(B, H)` edge declared at B's formation. Multi-step chain reachability is NOT structurally encoded."
+- **κ proposition:** "An assertion B is structurally `influenced_by` hypothesis H if there exists a chain B → ... → H of length ≤ K, where K is a fixed structural parameter at the canonical-serialization-contract layer."
+
+### 3 × 3 matrix — semantic candidate × skill
+
+| Candidate | `falsifiability-check` | `epistemic-separator` | `ambiguity-reducer` |
+|---|---|---|---|
+| **τ — Transitive closure** | §1.1: violation = a substrate-committed α value not matching the transitive-closure-based recomputation against the assertion's provenance + influence subgraphs. §1.2: third party reads substrate; recomputes closure; compares. §1.3: reduces to closure computation over substrate-committed edges — fully structural. §1.4: clean (no self-reference; closure is built from declared edges only). **Verdict: passes today.** Cost is the structural concern (deterministic closure per [`§0021`](../../charter/decision-log.md), but worst-case O(graph-size) per write absent caching). | Inputs: full `influenced_by` graph + transitive traversal. **Risk:** chains traverse Cat II constructs in intermediate positions. A Cat II construct C derived from a Cat-III-influenced source (per [§2.2](../../charter/constitutional-charter.md#22-epistemic-separation) deterministic derivation) under τ transitively transmits H's influence to anything formed under C's influence. **This is structurally correct under §2.2:** Cat II is deterministically a view of its inputs; influence on inputs IS influence on the Cat II output. The transitivity through Cat II is not cross-category mixing — it is the structural consequence of Cat II's determinism. **Verdict: clean per category boundary; the resolution must explicitly commit to "Cat II constructs structurally transmit `influenced_by` membership from their inputs".** This is a load-bearing structural commitment. | Terms: `transitive closure`, `chain`, `multi-step`. Watchlist scan: `closure` is mathematical and well-defined; `chain` is graph-theoretic. No watchlist hits in core terms. **Verdict: minor carry-forward.** Vocabulary clean. |
+| **δ — Direct edge only** | §1.1: violation = α value not matching direct-edge-only formula. §1.2: substrate-readable; cheapest computation. §1.3: reduces to direct edge lookup. §1.4: clean. **Verdict: passes today at the structural-falsifiability level.** Falsifiability is shallow: it tests only that α matches the direct-edge formula, NOT that the direct-edge formula correctly captures structural influence. Inputs are minimal; the §1 Thesis defense surface is silent on indirect chains. | Inputs: direct edges only. No traversal at substrate. **Risk:** Cat-II-mediated indirect influence is STRUCTURALLY INVISIBLE. Consider: H is a promoted Cat III hypothesis; C is a Cat II construct derived using H as enrichment input; A is a Cat III hypothesis formed under influence of C. Under δ, A's direct `influenced_by` is `{C}`; H is not declared. α's denominator under δ counts A's Cat I roots through C without subtracting for H's transitive influence. **The §1 Thesis cycle — "promoted hypotheses re-enter as enrichment and silently reinforce themselves" — is structurally invisible under δ.** Procedural defense (producer-aware declaration of indirect influences) is required; structural defense is absent. **Verdict: clean per category boundary structurally, but admits Cat-II-mediated indirect influence as the §1 Thesis failure mode.** This is a new instance of the Q3-1 third intra-category failure-mode pattern (opacity of producer-side derivation), here surfaced as Cat-II-mediated invisibility. | Terms: `direct edge only`, `declared at formation`. Watchlist scan: clean. **Verdict: clean.** Vocabulary minimal and structurally well-defined; the structural concern (Cat-II invisibility) surfaced under `epistemic-separator` is not an ambiguity-discipline question. |
+| **κ — Bounded-depth K** | §1.1: violation = α value not matching bounded-K closure. §1.2: substrate-readable; bounded traversal. §1.3: reduces to depth-≤-K traversal — fully structural conditional on K being structural. §1.4: clean. **Verdict: passes today, CONDITIONAL on K being structural at the canonical-serialization-contract layer.** If K is operator-configurable runtime, κ collapses to operator-supplied territory analogous to Q3-ε's failure (the substrate's discipline surface for the depth cutoff is at the contract; operator-configurability would invert the structural-vs-procedural balance). | Inputs: direct edges + bounded closure. **Risk:** K too small → K-mediated indirect influence invisible (analogous to δ's Cat-II invisibility, scoped to chains > K). K too large → cost approaches τ. **Risk:** the structural meaning of K — "chains longer than K are NOT influence" — admits no principled choice without empirical reference. A K-aware producer could craft chains of length K+1 to escape detection. **Verdict: clean per category boundary; the K parameter's choice is itself a sub-decision deferred to operational specification, and any specific K admits a K+1 chain-escape failure mode.** Structurally weaker than τ (which has no parameter to game) and weaker than δ (which is honestly minimal). | Terms: `bounded depth`, `parameter K`. Watchlist scan: `bounded` may need operationalization; `parameter` advisory. **Verdict: K's specific value is the central sub-decision the resolution must address — Response 3 (raise as open modeling question for the canonical-serialization-contract revision) applies.** Vocabulary clean at the structural surface; K's value is operationally-deferred. |
+
+### β-graph composability note
+
+β-graph is the meta-form: substrate stores direct edges only; reachability is computed at consumer side using a structurally-published rule. The published rule is itself ONE of τ / δ / κ.
+
+- Under β-graph + τ: substrate stores direct edges; consumers compute transitive closure on read. α's substrate-committed value is computed BY the producer at write time using the same published τ rule, so per-record byte-for-byte projection-replay match holds per [§2.6](../../charter/constitutional-charter.md#26-evidential-independence-integrity) anti-pattern 2 detection. Storage cost is minimal; read-time cost is higher.
+- Under β-graph + δ: substrate stores direct edges only; the "published rule" is "direct edge only". β-graph + δ is operationally identical to plain δ.
+- Under β-graph + κ: substrate stores direct edges; consumers traverse to depth K. K's value is part of the published rule.
+
+**β-graph is a storage-shape commitment, not a semantic-shape commitment.** The semantic question (τ vs δ vs κ) is logically prior to the storage question (substrate-cache the closure vs compute on read). Phase 5's recommendation addresses the semantic; β-graph is the natural storage strategy that accompanies it.
+
+### Most consequential epistemic finding across the 9 cells
+
+**Primary finding — Cat-II-mediated indirect-influence invisibility under δ (and partially under κ).** Under δ, the §1 Thesis failure mode — "promoted hypotheses re-enter as enrichment and silently reinforce themselves" — is structurally invisible when the cycle traverses a Cat II construct. Under κ, the same invisibility applies to chains longer than K. Under τ, the invisibility is structurally precluded by the transitive closure construction. **This is the load-bearing finding for §1 Thesis discipline.**
+
+The finding extends the Q3-1 [intra-category failure-mode catalogue](./q3-independence-evidence.md) Methodological observation: opacity of producer-side derivation surfaced under Q3-ε; here it manifests as Cat-II-mediated structural invisibility under Q5-δ. The two are different surface forms of the same underlying pattern: when the substrate's discipline does not structurally encode some part of the inferential relationship, the producer's behavior (or the topology's accident) determines whether the §1 Thesis failure mode is detectable. **τ closes this surface entirely; δ leaves it entirely open; κ partially closes it.**
+
+**Secondary finding — τ's structural commitment is also a structural cost.** Under τ, every commit must compute the closure of its `influenced_by` set against substrate-committed prior records. Worst-case cost is O(graph-size); typical case with closure caching at each prior record is amortized O(input-set-size). The cost is real but bounded by caching. The β-graph storage strategy + τ semantic together produce: minimal storage (direct edges) + amortized closure computation (cached per assertion at write time). **The cost surface is named, not dismissed.**
+
+**Tertiary finding — κ's K-parameter is structurally unprincipled.** Any specific K admits a K+1 chain-escape failure mode; smaller K is more invisible; larger K approaches τ at increased cost. The "right" K has no principled structural answer — it is operationally calibrated, which makes κ's structural-falsifiability conditional on the canonical-serialization-contract committing to a specific K value (and re-opening when K is revised). κ is structurally a weaker form of τ for an operational-cost benefit that is itself bounded by τ + caching.
+
+### Calibration carry-forward to future Ontology RFCs
+
+Q5-1 confirms and extends the Q3-1 calibration catalogue:
+
+- **Confirmed: falsifiability §1.3 (operationalization) does most of the work on substrate-touching propositions.** All three semantic candidates decide at §1.3 — τ + δ pass cleanly; κ passes conditional on K being structural.
+- **Confirmed: ambiguity-reducer surfaces residual carry-forwards that are themselves structural deferrals.** K's value under κ is Response-3 (open modeling question for the canonical-serialization-contract revision).
+- **Extended: the intra-category failure-mode catalogue now has FOUR pattern instances surfaced.** Q2-1 (flattening) + Q4-1 (circularity) + Q3-1 (opacity of producer-side derivation) + Q5-1 (Cat-II-mediated structural invisibility — a surface form of producer-side opacity, scoped to indirect chains). The catalogue continues to be structural rather than enumerative; the patterns reflect how the substrate's discipline surface composes with category discipline.
+
+## Phase 4 — Comparison synthesis
+
+Findings synthesized from Phase 1 (dependency surface), Phase 2 (four-candidate enumeration including β-graph meta-form), and Phase 3 (9-cell epistemic-skill matrix + β-graph composability note). Classified as **asymmetry** / **apparent trade-off that resolves** / **genuine trade-off** / **tension**. Numbered in order of consequence.
+
+### Finding 1 — Asymmetry: τ is the only candidate that structurally precludes the §1 Thesis failure mode through indirect chains
+
+Phase 3 primary finding: under δ and partially under κ, the §1 Thesis failure mode (promoted hypotheses re-entering as enrichment and silently reinforcing themselves) is structurally invisible when the cycle traverses Cat II constructs (or chains longer than K under κ). Under τ, the failure mode is structurally precluded by transitive closure construction. **This is the load-bearing constitutional asymmetry.** [Charter §1 Thesis](../../charter/constitutional-charter.md#1-thesis) is the central failure mode the entire §2.6 invariant exists to defend against; Q3-α was selected (per [`§0133`](../../charter/decision-log.md)) precisely to give §2.6 a substrate-falsifiable mechanism against this failure mode. Adopting δ or κ undermines that mechanism's structural completeness.
+
+### Finding 2 — Asymmetry: τ's structural commitment is consistent with §2.2 Cat II determinism
+
+Phase 3 τ's `epistemic-separator` finding: transitivity through Cat II is structurally correct under [§2.2](../../charter/constitutional-charter.md#22-epistemic-separation) — Cat II is deterministically derived from its inputs; influence on inputs IS influence on the Cat II output. The transitivity is not a cross-category leak; it is the structural consequence of §2.2's determinism commitment. **τ is the candidate that reads §2.2 + §2.4 together coherently.** δ treats Cat II as if it were inferentially independent of its inputs — which contradicts §2.2. κ partially treats Cat II this way (only for chains > K). τ is the only candidate fully aligned with §2.2's determinism.
+
+### Finding 3 — Apparent trade-off that resolves: τ's closure-computation cost is bounded by caching
+
+Phase 3 secondary finding + Phase 2 τ's tension: τ's worst-case closure cost is O(graph-size) per write. Surface reading: τ is too expensive; δ or κ is operationally preferable.
+
+Deeper reading: closure caching at each prior assertion's substrate-committed record reduces the amortized cost to O(input-set-size) per write — the new assertion merges the closures of its direct inputs. The β-graph storage strategy + τ semantic produces minimal storage (direct edges) + amortized closure computation. **The cost surface is named, bounded, and structural — not a procedural defect.** The apparent trade-off resolves: τ's cost is acceptable under the β-graph storage strategy.
+
+### Finding 4 — Asymmetry: κ's K parameter is structurally unprincipled
+
+Phase 3 tertiary finding: any specific K admits a K+1 chain-escape failure mode; the "right" K has no principled structural answer — it is operationally calibrated. **κ is a structurally weaker form of τ for an operational-cost benefit that is itself bounded by τ + caching (Finding 3).** With caching, τ's cost is comparable to κ's, and τ has no parameter to game. κ is dominated by τ-with-caching on both structural discipline AND amortized cost.
+
+### Finding 5 — Apparent trade-off that resolves: β-graph is composable, not competing
+
+Phase 2 named β-graph as orthogonal meta-form; Phase 3 β-graph composability note confirms. **β-graph is the storage strategy that accompanies the chosen semantic, not an alternative semantic.** Phase 5 recommendation is over τ/δ/κ; β-graph's role is to clarify that τ + β-graph (substrate stores direct edges + per-record cached closures) is the operational form τ takes at the canonical-serialization-contract layer.
+
+### Finding 6 — Genuine trade-off: τ's structural completeness vs δ's storage simplicity
+
+The only genuine trade-off in the candidate space: τ commits to the structural completeness of the §1 Thesis defense at the cost of closure computation (bounded by Finding 3); δ commits to storage simplicity at the cost of structural completeness (Finding 1). **The trade-off resolves toward τ on constitutional grounds (Finding 1 + Finding 2), but δ's simplicity is the legitimate alternative weight the committee may consider.** This is the substantive deliberation parameter.
+
+### Finding 7 — Carry-forward: per-subtype application under Q2-A.2 is uniform at inception
+
+Per [Q3 Phase 4 Finding 9](./q3-independence-evidence.md) precedent: the four concrete Cat III subtypes may surface per-subtype transitivity-variant if empirical pressure surfaces; the inception-phase default is uniform at the abstract `Hypothesis` level. **No candidate is constrained by Q2-A.2 composition at inception.**
+
+### Finding 8 — Asymmetry: τ unblocks Layer B substantive content + canonical-serialization-contract revision without further structural deferral
+
+Under τ, α's "reachable via influenced_by" predicate is structurally complete; α's canonical-serialization-contract revision can proceed without additional sub-decisions. Under δ, α's predicate is structurally minimal but the §1 Thesis defense gap (Finding 1) is open. Under κ, α's predicate is parameterized; the canonical-serialization-contract revision must additionally commit to K's value. **τ is the only candidate that fully discharges the [`§0133`](../../charter/decision-log.md) Q3-α follow-on dependencies.** δ leaves the §1 Thesis defense gap open; κ leaves K open.
+
+### Finding 9 — Methodological observation: storage-vs-semantic separation is a new structural pattern for Ontology RFCs
+
+Q5-1 surfaced the storage-vs-semantic separation explicitly (β-graph as meta-form orthogonal to τ/δ/κ). This is the first Ontology RFC where the discussion phase explicitly named a meta-form during candidate enumeration. The pattern: when a question has both a "what does X mean" and a "how is X computed/stored" dimension, the meta-form is the latter and composes with the former. **Future Ontology RFCs with similar shape should surface the meta-form explicitly at Phase 2.**
+
+## Phase 5 — Recommendation
+
+The discussion phase recommends adopting **Candidate τ (transitive closure)** as the structural semantic of `influenced_by` propagation. The recommendation rests on Findings 1 (τ is the only candidate structurally precluding the §1 Thesis failure mode through indirect chains), 2 (τ is the only candidate fully aligned with §2.2's Cat II determinism), 4 (κ is structurally weaker than τ-with-caching on both discipline and amortized cost), and 8 (τ alone fully discharges the [`§0133`](../../charter/decision-log.md) Q3-α follow-on dependencies). Finding 3's reframing of τ's cost (bounded by closure caching under the β-graph storage strategy) eliminates the principal objection to τ. Finding 6's genuine trade-off (τ's structural completeness vs δ's storage simplicity) resolves toward τ on constitutional grounds.
+
+The accompanying storage strategy is **β-graph + τ**: substrate stores direct `influenced_by` edges + per-record cached closures (computed at substrate write time per [`§0021`](../../charter/decision-log.md) by merging the closures of the new assertion's direct input edges). The canonical-serialization-contract revision crystallizes this storage shape per the [`§0133`](../../charter/decision-log.md) follow-on schedule.
+
+The committee extension accompanying τ's selection:
+
+- **Cat-II structural transmission commitment.** The resolution explicitly commits that Cat II constructs structurally transmit `influenced_by` membership from their inputs (per [§2.2](../../charter/constitutional-charter.md#22-epistemic-separation) Cat II determinism, the Cat II output's influence chain is the union of its inputs' influence chains). This is the structural reading Finding 2 surfaced; it is load-bearing for τ's correctness under §2.2 + §2.4 read together.
+
+### What would reverse this recommendation
+
+The recommendation flips or substantially changes if any of the following emerges:
+
+- **Empirical implementation pressure shows closure-computation cost is prohibitive even with caching.** If the typical inception-phase substrate exhibits influence graphs deep + dense enough that even amortized O(input-set-size) per write is operationally unworkable, κ becomes the operational fallback with K chosen large enough to capture realistic chain depths. The evidence-grounded test for this reversal: concrete profiling against an inception-phase substrate with measured chain depths and write rates.
+- **A new candidate emerges combining τ's structural completeness with δ's storage minimalism.** β-graph already does this for storage; if a new structural semantic surfaces (e.g., "transitive closure restricted to paths whose intermediate edges are all themselves transitively-influenced", or some other refinement), it may displace τ. Committee extension during resolution is legitimate per the Q2/Q4/Q3 precedent.
+- **The committee weights storage simplicity above structural completeness.** Finding 6's trade-off resolves toward τ on constitutional grounds, but the committee may judge that δ's storage simplicity (and the procedural defense layer that compensates for its structural-invisibility) is the inception-phase preference. This requires committee evidence that the producer-aware declaration of indirect influences is reliable in practice — a values judgment the discussion phase does not pre-decide.
+- **The Cat-II structural transmission commitment is found to conflict with §2.2 in an unanticipated way.** If, in implementation, the Cat II determinism commitment surfaces a structural form where transitivity through Cat II is not the natural reading (e.g., a Cat II that "summarizes" inputs without inheriting their influence chains), the commitment may need refinement. Empirical pressure would surface this during canonical-serialization-contract revision.
+
+### Implication for Layer B substantive content unblock
+
+τ's adoption fully discharges the two-cascade chain Q3 → Q5 → Layer B per [`§0133`](../../charter/decision-log.md) Phase 5's "Implication for Layer B follow-on RFC unblock". With Q3-α's measurable quantity + Q5-τ's transitivity semantic both structurally complete:
+
+- α's "reachable via influenced_by" predicate is fully operational: transitive closure under τ.
+- Layer B's deep criterion threshold-tests α directly — no further ontology-side dependency remains.
+- Layer B's substantive content (which combination of Candidate B family from Q4 — evidence-staleness using α — and/or Candidate C family — influence-saturation using α — constitutes the deep criterion) is the next substantive RFC, opening post-Q5-resolution.
+
+### Implication for canonical-serialization-contract revision
+
+τ + β-graph storage strategy lands in the canonical-serialization-contract revision as: direct `influenced_by` edges stored per record + per-record closure annotations (cached at write time). The revision RFC opens post-Q5 resolution per [`§0133`](../../charter/decision-log.md) follow-on schedule. The revision is NOT pre-Gate to Q5 closure; Q5 closure is form-level under τ; storage-shape crystallization is parameter-level following the [`§0024`](../../charter/decision-log.md) + [`§0027`](../../charter/decision-log.md) AP5 step (b) precedent.
+
+### Implication for ontology.md Open Question 5 closure
+
+τ's resolution closes the transitivity half of Open Question 5 (the decay half was closed at [`§0020`](../../charter/decision-log.md)). The full Open Question 5 closes at the Q5 transitivity-half resolution commit; ontology.md is updated to mark Q5 fully resolved.
 
 ---
 
