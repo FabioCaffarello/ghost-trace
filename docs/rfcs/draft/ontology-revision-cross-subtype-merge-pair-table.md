@@ -1,16 +1,18 @@
-# RFC — Cross-subtype merge pair-table contents (§0122 follow-on, on hold)
+# RFC — Cross-subtype merge + split pair-table contents (§0122 + §0124 follow-on, on hold)
 
 - **Status:** discussion (on hold pending operational pressure or committee direction)
 - **Authors:** Ghost Trace committee
-- **Date:** 2026-05-22
+- **Date:** 2026-05-22 (opened); scope extended to cover split per §0124 same-day
 - **Type:** ontology-revision
-- **Affects:** [`docs/ontology/entity-model.md`](../../ontology/entity-model.md) §Cross-subtype operations (the §0122-deferred per-pair canonical-target table).
+- **Affects:** [`docs/ontology/entity-model.md`](../../ontology/entity-model.md) §Cross-subtype operations (the §0122-deferred per-pair canonical-merge-target table + the §0124-deferred per-source split permitted-target-set table; co-located per the merge typing RFC §Combined-table option).
 
 > RFCs in Ghost Trace are proposals subject to constitutional review. The [Constitutional Charter](../../charter/constitutional-charter.md) is the authoritative reference. RFCs that conflict with the Charter must either be rejected or accompanied by a corresponding charter amendment (see [`../../charter/amendments.md`](../../charter/amendments.md)).
 
 ## Status note
 
-**This RFC is a placeholder.** Its substantive content — committee defense for each of the 6 unordered pair-table cells — is deferred per [`decision-log §0122`](../../charter/decision-log.md) (cross-subtype merge typing resolution, form-adopt + parameters-defer). The RFC is opened now so that the deferred question has a canonical referent in the RFC corpus; per the [`§0011`](../../charter/decision-log.md) Layer-B-placeholder precedent, the form resolution is procedurally complete without the parameters, but the parameters need a documented home to avoid silent-resolution.
+**This RFC is a placeholder.** Its substantive content — committee defense for each of the 6 unordered pair-table cells (merge canonical-target) + the per-source-subtype split permitted-target sets — is deferred per [`decision-log §0122`](../../charter/decision-log.md) + [`§0124`](../../charter/decision-log.md). The RFC is opened so that the deferred questions have a canonical referent in the RFC corpus; per the [`§0011`](../../charter/decision-log.md) Layer-B-placeholder precedent, the form resolutions are procedurally complete without the parameters, but the parameters need a documented home to avoid silent-resolution.
+
+**Scope extended at [`§0124`](../../charter/decision-log.md)** to cover split γ' permitted-target-set table alongside merge γ canonical-target table. The two tables co-locate per the merge typing RFC §Combined-table option, preserving §0050 inverse-symmetry by construction.
 
 ## Summary
 

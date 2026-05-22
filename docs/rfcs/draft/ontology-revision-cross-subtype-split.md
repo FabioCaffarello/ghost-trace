@@ -1,8 +1,8 @@
 # RFC — Cross-subtype split: typing + enablement (consolidated)
 
-- **Status:** discussion
+- **Status:** accepted
 - **Authors:** Ghost Trace committee
-- **Date:** 2026-05-21
+- **Date:** 2026-05-21 (opened); 2026-05-22 (resolved)
 - **Type:** ontology-revision
 - **Affects:** [`docs/ontology/entity-model.md`](../../ontology/entity-model.md) §Cross-subtype operations; [`docs/ontology/lifecycle-semantics.md`](../../ontology/lifecycle-semantics.md) §Split; [Charter §2.5](../../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) (frozen v0.3 — minor amendment surface only; this RFC anticipates no §2.5 prose change unless the resolution requires it).
 
@@ -179,4 +179,22 @@ No historical cross-subtype split records exist. Lock-in asymmetry mirrors merge
 
 ## Decision Record
 
-Pending. The discussion phase opens at `Status: discussion`; resolution may be: (a) independent of merge resolution; (b) symmetric inheritance of merge resolution; (c) the symmetric form with explicit divergence on specific candidates. Recorded in `docs/charter/decision-log.md` on acceptance.
+Resolved at [`decision-log §0124`](../../charter/decision-log.md): **symmetric resolution with the cross-subtype merge framing** ([`§0122`](../../charter/decision-log.md) merge typing γ + [`§0123`](../../charter/decision-log.md) merge enablement B+D). Per the §Symmetric resolution preference framing above, option (b) — symmetric inheritance — adopted.
+
+Concretely:
+
+- **Typing: Candidate γ' — per-source-subtype permitted-target-set table.** Cross-subtype split produces successors of one of the four existing concrete subtypes; no new typed subtype introduced. Form adopted; specific per-source permitted-target contents deferred to the [`ontology-revision-cross-subtype-merge-pair-table.md`](./ontology-revision-cross-subtype-merge-pair-table.md) placeholder, which is extended per §Combined-table option above to carry BOTH merge γ's canonical-merge-target AND split γ' permitted-split-targets.
+
+- **Enablement: Candidate B'+D' combined form.** Cross-subtype split is permitted when both: (a) **B' (successor-membership-partition):** successors' combined membership partitions the antecedent's membership (union equals antecedent's set; disjoint successor sets); (b) **D' (lifecycle-state gate):** the antecedent is in promoted lifecycle-state per §2.5 + [`§0011`](../../charter/decision-log.md) Q4 Layer A.
+
+The §0050 inverse-symmetry with merge is preserved by construction: merge requires shared-actor intersection (non-empty); split requires actor partition (union equals antecedent + disjoint successors). The two enablement gates are duals under set-theoretic operations.
+
+### Reversal conditions
+
+Per [`cross-subtype-split-evidence.md` §What would warrant asymmetric resolution](../discussion/cross-subtype-split-evidence.md), asymmetric resolution is justified if any of the following emerges:
+
+- **Split-specific operator workload requiring α' for type-level discrimination of split outputs.** If type-discrimination by "is this a split fragment?" becomes load-bearing, α' becomes preferable for split independent of merge's γ.
+- **Split-specific enablement requiring D'-alone (no partition gate).** If partition-strictness rejects too many epistemically-valid splits, B'-without-D' or D'-alone is the looser alternative.
+- **Symmetric-resolution reversal at the merge framing.** If [`§0122`](../../charter/decision-log.md) or [`§0123`](../../charter/decision-log.md) flips, the symmetric-resolution adoption here may flip in tandem.
+
+No reversal condition fires at acceptance.

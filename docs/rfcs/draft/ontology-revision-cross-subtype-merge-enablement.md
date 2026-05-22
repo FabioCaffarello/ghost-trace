@@ -1,8 +1,8 @@
 # RFC — Cross-subtype merge enablement criterion
 
-- **Status:** discussion
+- **Status:** accepted
 - **Authors:** Ghost Trace committee
-- **Date:** 2026-05-21
+- **Date:** 2026-05-21 (opened); 2026-05-22 (resolved)
 - **Type:** ontology-revision
 - **Affects:** [`docs/ontology/entity-model.md`](../../ontology/entity-model.md) §Cross-subtype operations; [`docs/ontology/lifecycle-semantics.md`](../../ontology/lifecycle-semantics.md) §Merge; [Charter §2.5](../../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) (frozen v0.3 — minor amendment surface only; this RFC produces no §2.5 prose change unless the resolution requires it).
 
@@ -211,4 +211,14 @@ The [Phase 3 / Phase 4 replay contracts](../../architecture/replay-model.md) req
 
 ## Decision Record
 
-Pending. The discussion phase opens with this RFC at `Status: discussion`; resolution will be recorded in `docs/charter/decision-log.md` and reflected back here on acceptance.
+Resolved at [`decision-log §0123`](../../charter/decision-log.md): **Candidate B+D combined form — shared-actor-membership AND lifecycle-state** adopted as the cross-subtype merge enablement criterion. The two-stage filter convergence from [`cross-subtype-merge-enablement-evidence.md` Phase 5](../discussion/cross-subtype-merge-enablement-evidence.md) is ratified — Stage 1 disqualifies A on §4 discipline; Stage 2 chooses B+D among the survivors. Cross-subtype merge is permitted when **both** gates pass: (a) the antecedents share at least one `actor_ref`; (b) both antecedents are in promoted lifecycle-state per [`§0011`](../../charter/decision-log.md) Q4 Layer A.
+
+### Reversal conditions
+
+The selection stands subject to the conditional reversal flips enumerated at [`cross-subtype-merge-enablement-evidence.md` §What would reverse the recommendation](../discussion/cross-subtype-merge-enablement-evidence.md):
+
+- **Flip to C (per-pair enablement table)** when specific per-pair asymmetries surface in operational practice (e.g., {AG, CR} permits without actor-overlap because coordinated automation may be detected before actor-attribution; but {BC, CH} requires actor-overlap).
+- **Flip to D-alone (without B)** when evidence emerges that actor-set intersection is too restrictive in practice (actor-disjoint same-phenomenon recognition is operationally common).
+- **Flip to A** only under a committee reinterpretation of §4 criterion 1 that admits operator-trust as cleanly extending across the within-subtype/cross-subtype boundary.
+
+No reversal condition fires at acceptance.
