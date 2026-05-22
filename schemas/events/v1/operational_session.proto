@@ -2,7 +2,11 @@
 // §Category II + decision-log §0015 (Q1 resolution — OperationalSession
 // is the canonical Cat II construct, derived deterministically from
 // DeclaredSession + other Cat I inputs under a versioned operational
-// definition). Encoded under the canonical-serialization-contract at
+// definition) + §0133 (Q3-α evidential-independence) + §0134 (Q5-τ
+// transitive closure + Cat II structural transmission) + §0136
+// (canonical-serialization-contract operational discharge of §2.6
+// paired-dimension + Q3-α + Q5-τ + Cat II closure-union transmission).
+// Encoded under the canonical-serialization-contract at
 // docs/architecture/canonical-serialization-contract.md.
 //
 // Identity composition per entity-model.md §Category II Structural
@@ -12,9 +16,20 @@
 // tuple produces a NEW record; the prior derivation is preserved.
 // Identity-tier (actor_ref) defaults to the source DeclaredSession's
 // per entity-model.md line 36.
+//
+// Per Charter §2.6 (Evidential Independence Integrity, frozen v0.6 +
+// patched v0.7.1) + §0136 paired-dimension commitment: Cat II
+// constructs carry both confidence (magnitude) and
+// evidential_independence (degree) at substrate commit. Per §0134
+// Cat II structural-transmission commitment + §0136: closure_hashes
+// IS the union of the closure_hashes of records this Cat II is
+// deterministically derived from — substrate write-time validation
+// recomputes the union and compares; mismatch is rejected.
 syntax = "proto3";
 
 package ghosttrace.events.v1;
+
+import "common/v1/evidential_independence.proto";
 
 option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
 
@@ -68,4 +83,51 @@ message OperationalSession {
   // DeclaredSession; the divergence is the structural signal
   // (per entity-model.md line 34).
   int64 operational_end_at = 6;
+
+  // confidence is the paired-dimension magnitude per Charter §2.6
+  // (frozen v0.6 + patched v0.7.1) + §0136 paired-dimension
+  // commitment. Scalar in [0.0, 1.0]. For inception-phase
+  // deterministic operational definitions (e.g. "padded-v1"), the
+  // derivation is mechanically reproducible from inputs and
+  // confidence in the operational reading defaults to 1.0; future
+  // operational definitions with intrinsic uncertainty may carry
+  // values below 1.0. The substrate enforces presence at canonical-
+  // marshalling per §0136.
+  float confidence = 7;
+
+  // evidential_independence is the paired dimension to confidence
+  // per Charter §2.6 (frozen v0.6 + patched v0.7.1) + §0136. Computed
+  // per Q3-α (decision-log §0133): ratio of Cat I roots NOT reachable
+  // via influenced_by from a promoted hypothesis, divided by total
+  // Cat I roots in the subject_ref_* chain. Rational-pair encoding
+  // (numerator / denominator) preserves the bounded-resolution
+  // structural commitment per §0133 Phase 4 Finding 4. For
+  // inception-phase OperationalSessions with no promoted-hypothesis
+  // influence in the source DeclaredSession's chain, α = 1/1
+  // (full evidential independence).
+  ghosttrace.common.v1.EvidentialIndependence evidential_independence = 8;
+
+  // direct_influenced_by is the list of Cat III hypothesis content-
+  // hashes that the operational definition directly declares as
+  // influencing this Cat II derivation per Charter §2.4 (Inferential
+  // Influence Disclosure, frozen v0.5). Typically empty for inception-
+  // phase deterministic definitions like "padded-v1" that do not
+  // reference any promoted hypothesis; populated when an operational
+  // definition incorporates promoted-hypothesis enrichment context
+  // into its derivation. Sorted ASCENDING lexicographic order;
+  // elements are 32-byte BLAKE3 content-hashes.
+  repeated bytes direct_influenced_by = 9;
+
+  // closure_hashes is the transitive closure per Q5-τ (decision-log
+  // §0134) + §0136 Influence Storage. Per the Cat II structural-
+  // transmission commitment (§0134 + §0136), this field MUST equal
+  // the UNION of the source DeclaredSession's closure_hashes and
+  // any other input records' closure_hashes, merged with this
+  // record's own direct_influenced_by. Substrate write-time
+  // recomputes the union and compares element-by-element; mismatch
+  // is rejected. Sorted ASCENDING lexicographic order; elements are
+  // 32-byte BLAKE3 content-hashes. Empty when the input chain has
+  // no transitive promoted-hypothesis influences (the typical case
+  // at inception phase — Cat I-only chain).
+  repeated bytes closure_hashes = 10;
 }
