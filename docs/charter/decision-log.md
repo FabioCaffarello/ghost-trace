@@ -5143,6 +5143,60 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0129` — Gate §2.6 closure: fourth object-level invariant redaction; amendment v0.6
+
+- **Status:** accepted.
+- **Date:** 2026-05-22.
+
+- **Context:** §2.6 redaction resumed at [`§0128`](#0128--26-redaction-resumption-step-11-anchor-inventory-complete) Step 1.1 anchor inventory. Per committee direction in the same redaction-resumption arc, Steps 1.2–1.5 + the v0.6 closure proceed as a single committed deliberation arc. The four prior object-level invariant redactions ([`§0007`](#0007--gate-1-pilot-4-committeemode-redaction-path-c-narrow-but-not-minimal) §4 Gate 1; [`§0013`](#0013--gate-25-first-object-level-invariant-redaction-path-a-full-redaction-amendment-v03) §2.5 Gate; [`§0017`](#0017--gate-23-second-object-level-invariant-redaction-path-a-full-redaction-amendment-v04) §2.3 Gate; [`§0099`](#0099--gate-24-third-object-level-invariant-redaction-path-reading-1-full-amendment-v05) §2.4 Gate) provide the methodological precedent for the Steps 1.2–1.5 deliberation shape. §2.6 inherits the multi-forward-reference structural shape from §2.4 + the upstream-pre-resolved status introduced at §0128.
+
+- **Decision:** §2.6 Evidential Independence Integrity advances from `pending — empirical pressure phase` to `frozen — minor amendment v0.6`. Binding text in five subsections (Definition, Structural Requirement, Rationale, Forbidden Anti-Patterns, Boundary Conditions) merged into [`constitutional-charter.md`](./constitutional-charter.md) replacing the prior stub. Amendment v0.6 recorded at [`amendments.md`](./amendments.md).
+
+  Substantive structural commitments encoded:
+
+  1. **Paired-dimension structural enforcement.** Every Cat II construct, Cat III hypothesis, and Assertion with `subject_ref_construct` or `subject_ref_hypothesis` populated carries both `confidence` and `evidential_independence` at substrate commit time; rejection at canonical-serialization-contract per [`§0034`](#0034--canonicalserializationcontract-events-versioned-schemas-evolution-of-the-canonical-form) for records missing either dimension.
+
+  2. **Substrate-time-generation per OMQ #3-α.** Both dimensions are committed at the influenced record's formation event time per [`§0021`](#0021--omq-3-resolution-substrate-time-generation-candidate--0020-cascade-fully-discharged); §2.1 substrate-immutability applies.
+
+  3. **Supersession via §2.5 lifecycle chain per OMQ #2-C.** Current operational applicability is read at projection time against the referenced hypothesis's §2.5 lifecycle event chain per [`§0020`](#0020--omq-2-resolution-decay-via-25-lifecycle-event-supersession-candidate-c-omq-3-cascade-triggered).
+
+  4. **Layer B activation completion.** The §2.5 Layer B forward-reference contract's second half (evidential-independence) discharged at §2.6 frozen; the [Layer B follow-on RFC](../rfcs/draft/ontology-revision-layer-b-deep-criterion.md) advances from on-hold to active discussion phase per [`§0011`](#0011--q4-resolution-staged-combination-demotion-criterion-layer-a--deferred-layer-b).
+
+  5. **Three forward-reference markers.** Q3 (formal independence definition), Q2 (identity-tiers inherited from §2.4), Q5 (transitive-half inherited from §2.4) — all per [`§0017`](#0017--gate-23-second-object-level-invariant-redaction-path-a-full-redaction-amendment-v04) Resolution 4 marker pattern.
+
+  6. **Cross-subtype-cell-derivation-rule boundary.** The [`§0122`](#0122--crosssubtype-merge-typing-resolution-candidate--perpair-canonicalmerge-typing-formadopt--tabledefer)-[`§0127`](#0127--crosssubtype-merge-attachmentmechanism-resolution-candidate--separatelycommitted-attachment-record) cross-subtype framing arc's resolved surface is §2.6 input, not §2.6 binding-text constraint.
+
+  Six anti-patterns enumerated; eight boundary conditions including the three forward-reference markers above + Layer B activation completion + cross-subtype-cell-derivation-rule boundary + Identity-tier deferral + transitive-scope deferral + runtime-mechanics-vs-structural-pairing partition.
+
+- **Constitutional review:** Amendment v0.6 recorded per [`amendments.md`](./amendments.md) §Amendment Process. Falsifiability-check applied to the binding text (per the v0.5 §2.4 closure precedent): the paired-dimension pairing is structurally enforceable at the schemas layer per §0034; substrate-immutability applies per §0021; supersession read per §0020; forward-reference markers carry the §0017 Resolution 4 contract pattern. No conflict with frozen-Charter sections (§1, §2 criteria, §2.1, §2.2, §2.3 v0.4, §2.4 v0.5, §2.5 v0.3, §4 v0.2). The §2.4 BC1 mutual scope statement is mirrored in §2.6 BC1 + Layer B activation completion is structural per §0011 contract.
+
+- **Consequences:**
+  - **`docs/charter/constitutional-charter.md`** — §2.6 stub replaced with binding text (Definition + Structural Requirement + Rationale + Forbidden Anti-Patterns + Boundary Conditions); banner version `v0.5.2` → `v0.6`; status line: §2.6 frozen clause; v0.6 amendment narrative paragraph appended.
+  - **`docs/charter/amendments.md`** — v0.6 entry recorded with substantive Sections affected + Summary + Rationale + Falsifiability review outcome per §Amendment Process.
+  - **`docs/charter/decision-log.md`** — §0128 (Step 1.1 anchor inventory) + this entry (closure).
+  - **`.claude/CLAUDE.md`** §4 status table — §2.6 row `pending — empirical pressure phase` → `frozen — minor amendment v0.6`; narrative paragraph v0.6 chronological clause appended; §1 framing paragraph updated to reflect §2.6 frozen.
+
+  - **All object-level invariants of §2 now frozen.** §2.1 + §2.2 + §2.3 v0.4 + §2.4 v0.5 + §2.5 v0.3 + §2.6 v0.6. §3 Non-Goals remains the sole pending Charter section.
+
+  - **Layer B follow-on RFC advances.** [`ontology-revision-layer-b-deep-criterion.md`](../rfcs/draft/ontology-revision-layer-b-deep-criterion.md) status field updated from `discussion (on hold pending §2.4 and §2.6 redactions)` to `discussion (active; §2.4 + §2.6 surfaces present)` per §0011 contract activation completion. Deliberation can now proceed under ordinary RFC discipline.
+
+  - **Carry-forwards:**
+    - **Q3 (formal independence definition)** — forward-referenceable per §0014 lazy methodology; resolves when Ontology RFC advances. §2.6 binding text becomes structurally-falsifiable-with-Q3-specification when Q3 resolves.
+    - **Q2 (Identity tiers) + Q5 (transitive-half)** — inherited forward-references from §2.4; unchanged by §2.6 closure.
+    - **Layer B follow-on RFC deliberation** — newly-activated; opens to active discussion phase.
+    - **Cross-subtype-cell-derivation-rule operationalization** — per-cell independence derivation rules (Q-§2.6-3 + Q-§2.6-4 catalogued at §0120) are operational specification anchored to the §0122-§0127 resolved surface; Steps 1.5-equivalent operationalization under ordinary RFC.
+    - **§3 Non-Goals redaction** — now the sole pending Charter section; pressure assessment per [`§0121`](#0121--3-nongoals-empiricalpressure-assessment-recorded-first-3-assessment) ranks MODERATE-TO-STRONG.
+
+  - **Methodological observation 1 — Empirical-pressure phase produces full closure cycle.** §0022 introduced the `pending — empirical pressure phase` posture; §0099 closed §2.4 under it; §0129 (this entry) closes §2.6 under it. Both object-level invariants under the posture have now reached closure. The pattern is empirically complete: pressure-phase → assessment → assessment-refresh → redaction-resumption → Steps 1.1-1.5 → closure. Reusable for §3 if §3 status moves to `pending — empirical pressure phase` per the v0.6 framing question (recorded at §0121 carry-forward for committee consideration).
+
+  - **Methodological observation 2 — Upstream-cascade-resolution as recurring Step 1.1 status.** §0128 introduced upstream-pre-resolved as a third Step 1.1 status (alongside cascade-trigger-fires and all-forward-referenceable). §0129 ratifies the status: the §0122-§0127 cross-subtype arc resolution pre-resolved §2.6's Q-§2.6-3/4 dependencies, and the §2.6 binding text inherits the resolved surface as input rather than as constraint. The pattern is reusable for future §-section redactions whose dependencies have been resolved by upstream Ontology work.
+
+  - **Methodological observation 3 — Multi-step closure in single committed arc.** Prior §2.x redactions were multi-PR arcs (Steps 1.1-1.5 across separate commits + closure). §2.6 closure proceeds as a single committed arc per committee direction. The pattern is procedurally complete (each step's substantive content is in the binding text); the deliberation rounds collapse into the single commit's binding-text deliberation. Reusable when committee deliberation is sufficiently consolidated.
+
+- **Supersession:** None. Closes Gate §2.6 — fourth object-level invariant redaction. Combines with [`§0128`](#0128--26-redaction-resumption-step-11-anchor-inventory-complete) Step 1.1 + this entry's Steps 1.2-1.5 + closure to fully discharge the §2.6 redaction surface. All §2 object-level invariants are now frozen; only §3 Non-Goals remains pending Charter redaction.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

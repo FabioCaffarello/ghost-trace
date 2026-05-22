@@ -1,6 +1,6 @@
-# RFC — Layer B Deep Criterion (Q4 follow-on, on hold)
+# RFC — Layer B Deep Criterion (Q4 follow-on)
 
-- **Status:** discussion (on hold pending §2.4 and §2.6 redactions)
+- **Status:** discussion (active; §2.4 v0.5 + §2.6 v0.6 surfaces present per [`§0011`](../../charter/decision-log.md) contract activation completion at [`§0129`](../../charter/decision-log.md))
 - **Authors:** Ghost Trace committee
 - **Date:** 2026-05-15
 - **Type:** ontology-revision
