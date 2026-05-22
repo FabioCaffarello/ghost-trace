@@ -4624,6 +4624,48 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0118` — token_id rung lands per RFC item 4(b); per-tier token file gains optional second line
+
+- **Status:** accepted.
+- **Date:** 2026-05-21.
+
+- **Context:** The auth-scope RFC at [`§0098`](#0098--http-authscope-rfc-accepted-asis-g-adopted-0094-wireformat-carryforward-discharged-t3t4-implementation-arc-opens) item 4(b) specifies a three-rung per-actor-attribution precedence for HTTP T4 (and analogously T3 audit attribution): (1) verified mTLS subject CN when γ active; (2) the matched per-tier bearer-token's `token_id` when only α active; (3) `unattributed-token-<tier>` literal fallback. The pilot landing [`§0105`](#0105--t4-promote-pilot-http-promote-endpoint-behavioralcluster-lands-per-actor-attribution-wire-pattern-established-0098-landing-3-pilot-124) shipped rungs 1 + 3 only; rung 2 was queued as a named carry-forward in [`§0104`](#0104--t3-http-orphancleanup-endpoint-lands-orphancleanupaudit-cat-i-record-introduced-0098-landing-23) + [`§0105`](#0105--t4-promote-pilot-http-promote-endpoint-behavioralcluster-lands-per-actor-attribution-wire-pattern-established-0098-landing-3-pilot-124) pending the per-tier token file format extension. This entry lands rung 2.
+
+- **Decision:** Per-tier token file format extended from single-line `<token>` to optional two-line `<token>\n<token_id>\n`; single-line shape preserved per RFC item 4(c) "discouraged-but-permitted" backward compatibility per [`§0035`](#0035--operator-quickstart-additions--bearer-token-on-filesystem-deferral).
+
+  1. **IngestionEvent proto extension.** [`schemas/events/v1/ingestion_event.proto`](../../schemas/events/v1/ingestion_event.proto) gains field 8: `string token_id = 8;`. Optional → forward-compatible at the §0034 canonical-serialization-contract layer. The field is empty in three cases per the proto's doc comment: (a) γ active (mTLS subject is the attribution source); (b) only α active but the matched token file is single-line legacy; (c) channel is neither HTTP-α nor HTTP-γ (e.g., stdin per §0033 local-shell-trust).
+
+  2. **Envelope extension.** [`services/ingestion/internal/ingest/ingest.go`](../../services/ingestion/internal/ingest/ingest.go) `Envelope` gains `TokenID string`; wired to `ingEvent.TokenId` at `Append` time.
+
+  3. **Handler-side enrichment.** [`services/ingestion/internal/httpapi/handler.go`](../../services/ingestion/internal/httpapi/handler.go) adds `tierTokenIDs map[Tier]string` + `WithAuthTierTokenID(tier, tokenID)` option. The free function `envelopeForRequest` is renamed `requestEnvelope` (TLS-channel + client-identity derivation only) + a new Handler method `(h *Handler) envelopeForRequest(r)` wraps it and enriches `env.TokenID` from `h.tierTokenIDs[routeTier(r)]`. All 29 Handler-method call sites updated; the test calling the standalone derivation continues to call `requestEnvelope` directly.
+
+  4. **`resolveT4Actor` precedence extension.** [`services/ingestion/internal/httpapi/lifecycle.go`](../../services/ingestion/internal/httpapi/lifecycle.go) `resolveT4Actor` gains the middle rung: mTLS CN → `env.TokenID` → `unattributed-token-<tier>` fallback. The fallback is now reached only when the matched token file is the legacy single-line shape (rung 2 inert per [`WithAuthTierTokenID`](../../services/ingestion/internal/httpapi/handler.go) being unset for that tier).
+
+  5. **Per-tier token file parser extension.** [`services/ingestion/main.go`](../../services/ingestion/main.go) `resolveTierTokens` signature changes from `(map[Tier]string) → (map[Tier]string, error)` to `(map[Tier]string) → (map[Tier]string, map[Tier]string, error)`. Line 1 is the bearer token (whitespace-trimmed, rejected when empty per §0035); line 2 is the optional token_id (whitespace-trimmed, omitted when empty); lines beyond ignored (reserved for future per-tier metadata). The two returned maps are plumbed through `WithAuthTierToken` + `WithAuthTierTokenID` options at handler construction.
+
+  6. **Tests.** [`services/ingestion/main_test.go`](../../services/ingestion/main_test.go) `TestResolveTierTokens` extended with two new sub-cases: (a) two-line file yields token_id; (b) whitespace-only second line yields no token_id (legacy backward compat). [`services/ingestion/internal/httpapi/lifecycle_test.go`](../../services/ingestion/internal/httpapi/lifecycle_test.go) gains `TestResolveT4ActorFromTokenID` (middle rung returns directly) + `TestResolveT4ActorMTLSWinsOverTokenID` (precedence order). [`services/ingestion/internal/httpapi/handler_test.go`](../../services/ingestion/internal/httpapi/handler_test.go) gains `TestHandlerEnvelopeForRequestPopulatesTokenID` (end-to-end: producer route → producer token_id; constitutional-act route w/o configured token_id → empty; healthz → empty).
+
+  7. **README.** [`services/ingestion/README.md`](../../services/ingestion/README.md) T3 audit-attribution + T4 attribution paragraphs updated: drop "follow-on" language; document the two-line file shape + the three-rung precedence; cross-subtype symmetry note updated.
+
+- **Constitutional review:** No Charter invariant amended. The new field is forward-compatible per §0034 (proto3 optional field); the new precedence rung is structural-only (per-actor attribution remains within the §0094 cross-tier obligation surface). Falsifiability: all four claims above (proto field present; envelope plumbing; resolver precedence; parser two-line shape) are testable by mechanical replay of the 7 new + extended unit tests.
+
+- **Consequences:**
+  - **Auth-scope RFC item 4(b) discharged.** All three precedence rungs of the T4 per-actor-attribution resolver land. The `unattributed-token-<tier>` literal fallback is now reachable ONLY when the operator uses a single-line legacy token file (preserving §0035 backward compat) or omits per-tier token files entirely (single-token mode).
+  - **§0104 carry-forward "token_id field per RFC item 4(b)"** discharged. Open Question 4 (CLI orphan-cleanup audit symmetry) remains open; orthogonal to the present landing.
+  - **Operator opt-in.** Existing single-line token file deployments are unaffected — no migration required. Operators who want per-token attribution add a second line to each per-tier token file.
+
+  - **Methodological observation 1 — Free-function-to-method conversion via name disambiguation.** Converting the free `envelopeForRequest(r)` into a Handler method required disambiguating from the existing test's direct call. The chosen pattern: rename the request-only derivation to `requestEnvelope(r)` (a name that describes what it does — derive from request alone) and create the Handler method under the original name (which now correctly describes the full Handler-context derivation including per-tier token_id enrichment). The pattern is reusable for any future conversion of a request-only helper to a Handler-stateful helper.
+
+  - **Methodological observation 2 — Two-line file parser preserves single-line backward compat by construction.** `strings.Split(raw, "\n")` returns at least one element for any non-empty input; the parser reads line 0 unconditionally + line 1 only when `len(lines) >= 2`. The whitespace-trim-then-check-empty discipline applies symmetrically on both lines; a single-line file produces `tokens[tier]` non-empty + `tokenIDs[tier]` absent. The pattern is reusable for other per-tier file formats with optional fields (e.g., expiry timestamps, scope annotations).
+
+  - **Carry-forwards:**
+    - **CLI orphan-cleanup audit symmetry per auth-scope RFC Open Question 4** — remains open; orthogonal to the present landing.
+    - **Multi-admin α deployment with token_id rotation** — when an operator rotates a token_id (e.g., revokes one admin's token + issues another with a new identifier), the substrate accumulates IngestionEvents with the prior token_id alongside the new ones. No mutation; provenance preserved per §2.1 + §2.3. Not a carry-forward — natural consequence of the immutable-substrate design.
+
+- **Supersession:** None. Discharges [`§0104`](#0104--t3-http-orphancleanup-endpoint-lands-orphancleanupaudit-cat-i-record-introduced-0098-landing-23) + [`§0105`](#0105--t4-promote-pilot-http-promote-endpoint-behavioralcluster-lands-per-actor-attribution-wire-pattern-established-0098-landing-3-pilot-124) carry-forward "token_id field per RFC item 4(b)".
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

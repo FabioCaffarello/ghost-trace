@@ -490,7 +490,7 @@ func TestUnknownPathReturns401WhenAuthConfigured(t *testing.T) {
 
 func TestEnvelopeForRequestPlainHTTP(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", nil)
-	env := envelopeForRequest(req)
+	env := requestEnvelope(req)
 	if env.Channel != "http" {
 		t.Errorf("Channel: got %q, want %q", env.Channel, "http")
 	}
@@ -499,6 +499,40 @@ func TestEnvelopeForRequestPlainHTTP(t *testing.T) {
 	}
 	if env.ReceivedAt == 0 {
 		t.Errorf("ReceivedAt should be set")
+	}
+}
+
+// TestHandlerEnvelopeForRequestPopulatesTokenID verifies that
+// h.envelopeForRequest enriches the request-derived envelope with the
+// matched per-tier token_id when WithAuthTierTokenID is configured for
+// the route's tier. Per RFC architecture-http-auth-scope-model item 4(b).
+func TestHandlerEnvelopeForRequestPopulatesTokenID(t *testing.T) {
+	doAppend, _ := stubAppendFunc(nil)
+	h := MustNew(doAppend, nil,
+		WithAuthTierToken(TierProducer, "prod-token"),
+		WithAuthTierTokenID(TierProducer, "prod-token-alpha"),
+		WithAuthTierToken(TierConstitutionalAct, "ca-token"),
+	)
+
+	// Producer route → producer's token_id surfaces.
+	req := httptest.NewRequest(http.MethodPost, "/v1/events/declared-session", nil)
+	env := h.envelopeForRequest(req)
+	if got, want := env.TokenID, "prod-token-alpha"; got != want {
+		t.Errorf("producer route TokenID: got %q, want %q", got, want)
+	}
+
+	// Constitutional-act route (no token_id configured) → empty.
+	req = httptest.NewRequest(http.MethodPost, "/v1/hypotheses/behavioral-cluster/promote", nil)
+	env = h.envelopeForRequest(req)
+	if env.TokenID != "" {
+		t.Errorf("constitutional-act route TokenID: got %q, want empty (no WithAuthTierTokenID for tier)", env.TokenID)
+	}
+
+	// Unclassified route (e.g., /healthz) → empty (no tier).
+	req = httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	env = h.envelopeForRequest(req)
+	if env.TokenID != "" {
+		t.Errorf("healthz route TokenID: got %q, want empty (T0 exempt, no tier)", env.TokenID)
 	}
 }
 

@@ -59,4 +59,19 @@ message IngestionEvent {
   // identifier independent of the CN; survives CN reuse across
   // rotated certs. Empty when no mTLS.
   string client_cert_sha256 = 7;
+
+  // token_id is the operator-supplied identifier of the bearer token
+  // that authorized the request. Per RFC architecture-http-auth-scope-
+  // model item 4(b): when only α (multi-tier bearer-token) is active
+  // and the request's matched per-tier token carries a configured
+  // identifier (second line of the per-tier token file), token_id
+  // surfaces it for per-actor attribution distinct from the bare
+  // bearer-token equivalence class. Empty in three cases: (a) γ
+  // (mTLS) is active and the verified cert subject is the attribution
+  // source; (b) only α is active but the matched token file is the
+  // legacy single-line `<token>` shape (no identifier configured);
+  // (c) the channel is neither HTTP-α nor HTTP-γ (e.g., stdin per
+  // §0035 local-shell-trust). Optional → forward-compatible at the
+  // §0034 canonical-serialization-contract layer.
+  string token_id = 8;
 }

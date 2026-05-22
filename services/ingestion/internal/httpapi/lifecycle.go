@@ -79,7 +79,7 @@ func (h *Handler) handlePromoteBehavioralCluster(w http.ResponseWriter, r *http.
 	var formationHash [32]byte
 	copy(formationHash[:], msg.GetFormationEventHash())
 
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.PromoteOptions{
 		FormationEventHash: formationHash,
 		PromotedAt:         msg.GetPromotedAt(),
@@ -107,25 +107,27 @@ func (h *Handler) handlePromoteBehavioralCluster(w http.ResponseWriter, r *http.
 
 // resolveT4Actor returns the per-actor attribution string for a T4
 // HTTP request. Precedence per RFC architecture-http-auth-scope-model
-// item 4(c):
+// item 4:
 //
 //  1. Verified mTLS subject CN (when γ active — env.ClientCommonName
-//     populated by envelopeForRequest).
-//  2. Fallback literal "unattributed-token-<tier>" (when only α
-//     active OR no client cert presented). Operationally discouraged
-//     (the hypothesis package logs nothing here; structured logging
-//     is the operator's responsibility); preserves §0035 single-
-//     line-token-file backward compatibility per the RFC item 4(c)
-//     "discouraged-but-permitted" clause.
-//
-// The bearer-token's `token_id` precedence rung (RFC item 4(b)) is
-// not exercised at this T4 pilot landing — per-tier token files are
-// currently single-line `<token>` only. A future per-tier token file
-// format extension (`<token>\n<token_id>\n`) will land before multi-
-// admin α deployments make the fallback literal load-bearing.
+//     populated by requestEnvelope).
+//  2. Matched per-tier bearer-token's `token_id` (when only α active
+//     and the matched token file's optional second line is configured
+//     — env.TokenID populated by h.envelopeForRequest per RFC item
+//     4(b)).
+//  3. Fallback literal "unattributed-token-<tier>" (when only α
+//     active AND the matched token file is the legacy single-line
+//     `<token>` shape — no identifier configured). Operationally
+//     discouraged (the hypothesis package logs nothing here; structured
+//     logging is the operator's responsibility); preserves §0035
+//     single-line-token-file backward compatibility per the RFC item
+//     4(c) "discouraged-but-permitted" clause.
 func resolveT4Actor(env ingest.Envelope, tier Tier) string {
 	if env.ClientCommonName != "" {
 		return env.ClientCommonName
+	}
+	if env.TokenID != "" {
+		return env.TokenID
 	}
 	return fmt.Sprintf("unattributed-token-%s", tier)
 }
@@ -224,7 +226,7 @@ func (h *Handler) handlePromoteAutomationGroup(w http.ResponseWriter, r *http.Re
 	var formationHash [32]byte
 	copy(formationHash[:], msg.GetFormationEventHash())
 
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.AutomationGroupPromoteOptions{
 		FormationEventHash: formationHash,
 		PromotedAt:         msg.GetPromotedAt(),
@@ -268,7 +270,7 @@ func (h *Handler) handlePromoteCampaignHypothesis(w http.ResponseWriter, r *http
 	var formationHash [32]byte
 	copy(formationHash[:], msg.GetFormationEventHash())
 
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.CampaignHypothesisPromoteOptions{
 		FormationEventHash: formationHash,
 		PromotedAt:         msg.GetPromotedAt(),
@@ -378,7 +380,7 @@ func (h *Handler) handleFormBehavioralCluster(w http.ResponseWriter, r *http.Req
 		writeIngestError(w, http.StatusBadRequest, fmt.Sprintf("min_cluster_size must be ≥ 2 (got %d)", minClusterSize))
 		return
 	}
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	rep, err := hypothesis.FormAllWithActor(r.Context(), h.sub,
 		hypothesis.SessionDescriptorSharedV1{MinClusterSize: int64(minClusterSize)},
 		time.Now, resolveT4Actor(env, TierConstitutionalAct))
@@ -424,7 +426,7 @@ func (h *Handler) handleFormAutomationGroup(w http.ResponseWriter, r *http.Reque
 		writeIngestError(w, http.StatusBadRequest, fmt.Sprintf("max_co_v_threshold must be ≥ 0 (got %f)", maxCoV))
 		return
 	}
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	rep, err := hypothesis.FormAutomationGroupAllWithActor(r.Context(), h.sub,
 		hypothesis.UniformCadenceV1{MinObservationCount: int64(minObsCount), MaxCoVThreshold: maxCoV},
 		time.Now, resolveT4Actor(env, TierConstitutionalAct))
@@ -471,7 +473,7 @@ func (h *Handler) handleFormCampaignHypothesis(w http.ResponseWriter, r *http.Re
 		writeIngestError(w, http.StatusBadRequest, fmt.Sprintf("max_intra_event_gap_seconds must be ≥ 0 (got %d)", maxGap))
 		return
 	}
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	rep, err := hypothesis.FormCampaignHypothesisAllWithActor(r.Context(), h.sub,
 		hypothesis.TemporalDescriptorCohortV1{MinCampaignSize: int64(minSize), MaxIntraEventGapSeconds: int64(maxGap)},
 		time.Now, resolveT4Actor(env, TierConstitutionalAct))
@@ -517,7 +519,7 @@ func (h *Handler) handleFormCoordinationRing(w http.ResponseWriter, r *http.Requ
 		writeIngestError(w, http.StatusBadRequest, fmt.Sprintf("max_window_seconds must be ≥ 0 (got %d)", maxWindow))
 		return
 	}
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	rep, err := hypothesis.FormCoordinationRingAllWithActor(r.Context(), h.sub,
 		hypothesis.CoOccurrenceWindowV1{MinEdgeSupport: int64(minEdgeSupport), MaxWindowSeconds: int64(maxWindow)},
 		time.Now, resolveT4Actor(env, TierConstitutionalAct))
@@ -612,7 +614,7 @@ func (h *Handler) handleSplitBehavioralCluster(w http.ResponseWriter, r *http.Re
 		writeIngestError(w, s, m)
 		return
 	}
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.SplitOptions{
 		AntecedentFormationHash:  a,
 		SuccessorFormationHashes: succs,
@@ -647,7 +649,7 @@ func (h *Handler) handleSplitAutomationGroup(w http.ResponseWriter, r *http.Requ
 		writeIngestError(w, s, m)
 		return
 	}
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.AutomationGroupSplitOptions{
 		AntecedentFormationHash:  a,
 		SuccessorFormationHashes: succs,
@@ -682,7 +684,7 @@ func (h *Handler) handleSplitCampaignHypothesis(w http.ResponseWriter, r *http.R
 		writeIngestError(w, s, m)
 		return
 	}
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.CampaignHypothesisSplitOptions{
 		AntecedentFormationHash:  a,
 		SuccessorFormationHashes: succs,
@@ -717,7 +719,7 @@ func (h *Handler) handleSplitCoordinationRing(w http.ResponseWriter, r *http.Req
 		writeIngestError(w, s, m)
 		return
 	}
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.CoordinationRingSplitOptions{
 		AntecedentFormationHash:  a,
 		SuccessorFormationHashes: succs,
@@ -835,7 +837,7 @@ func (h *Handler) handleMergeBehavioralCluster(w http.ResponseWriter, r *http.Re
 		writeIngestError(w, s, m)
 		return
 	}
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.MergeOptions{
 		AntecedentAFormationHash: a,
 		AntecedentBFormationHash: b,
@@ -873,7 +875,7 @@ func (h *Handler) handleMergeAutomationGroup(w http.ResponseWriter, r *http.Requ
 		writeIngestError(w, s, m)
 		return
 	}
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.AutomationGroupMergeOptions{
 		AntecedentAFormationHash: a,
 		AntecedentBFormationHash: b,
@@ -911,7 +913,7 @@ func (h *Handler) handleMergeCampaignHypothesis(w http.ResponseWriter, r *http.R
 		writeIngestError(w, s, m)
 		return
 	}
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.CampaignHypothesisMergeOptions{
 		AntecedentAFormationHash: a,
 		AntecedentBFormationHash: b,
@@ -949,7 +951,7 @@ func (h *Handler) handleMergeCoordinationRing(w http.ResponseWriter, r *http.Req
 		writeIngestError(w, s, m)
 		return
 	}
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.CoordinationRingMergeOptions{
 		AntecedentAFormationHash: a,
 		AntecedentBFormationHash: b,
@@ -1052,7 +1054,7 @@ func (h *Handler) handleDissolveBehavioralCluster(w http.ResponseWriter, r *http
 	var formationHash [32]byte
 	copy(formationHash[:], msg.GetFormationEventHash())
 
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.DissolveOptions{
 		FormationEventHash: formationHash,
 		DissolvedAt:        msg.GetDissolvedAt(),
@@ -1090,7 +1092,7 @@ func (h *Handler) handleDissolveAutomationGroup(w http.ResponseWriter, r *http.R
 	var formationHash [32]byte
 	copy(formationHash[:], msg.GetFormationEventHash())
 
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.AutomationGroupDissolveOptions{
 		FormationEventHash: formationHash,
 		DissolvedAt:        msg.GetDissolvedAt(),
@@ -1128,7 +1130,7 @@ func (h *Handler) handleDissolveCampaignHypothesis(w http.ResponseWriter, r *htt
 	var formationHash [32]byte
 	copy(formationHash[:], msg.GetFormationEventHash())
 
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.CampaignHypothesisDissolveOptions{
 		FormationEventHash: formationHash,
 		DissolvedAt:        msg.GetDissolvedAt(),
@@ -1166,7 +1168,7 @@ func (h *Handler) handleDissolveCoordinationRing(w http.ResponseWriter, r *http.
 	var formationHash [32]byte
 	copy(formationHash[:], msg.GetFormationEventHash())
 
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.CoordinationRingDissolveOptions{
 		FormationEventHash: formationHash,
 		DissolvedAt:        msg.GetDissolvedAt(),
@@ -1278,7 +1280,7 @@ func (h *Handler) handleDemoteBehavioralCluster(w http.ResponseWriter, r *http.R
 	var promotionHash [32]byte
 	copy(promotionHash[:], msg.GetPromotionEventHash())
 
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.DemoteOptions{
 		PromotionEventHash: promotionHash,
 		DemotedAt:          msg.GetDemotedAt(),
@@ -1319,7 +1321,7 @@ func (h *Handler) handleDemoteAutomationGroup(w http.ResponseWriter, r *http.Req
 	var promotionHash [32]byte
 	copy(promotionHash[:], msg.GetPromotionEventHash())
 
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.AutomationGroupDemoteOptions{
 		PromotionEventHash: promotionHash,
 		DemotedAt:          msg.GetDemotedAt(),
@@ -1360,7 +1362,7 @@ func (h *Handler) handleDemoteCampaignHypothesis(w http.ResponseWriter, r *http.
 	var promotionHash [32]byte
 	copy(promotionHash[:], msg.GetPromotionEventHash())
 
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.CampaignHypothesisDemoteOptions{
 		PromotionEventHash: promotionHash,
 		DemotedAt:          msg.GetDemotedAt(),
@@ -1401,7 +1403,7 @@ func (h *Handler) handleDemoteCoordinationRing(w http.ResponseWriter, r *http.Re
 	var promotionHash [32]byte
 	copy(promotionHash[:], msg.GetPromotionEventHash())
 
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.CoordinationRingDemoteOptions{
 		PromotionEventHash: promotionHash,
 		DemotedAt:          msg.GetDemotedAt(),
@@ -1444,7 +1446,7 @@ func (h *Handler) handlePromoteCoordinationRing(w http.ResponseWriter, r *http.R
 	var formationHash [32]byte
 	copy(formationHash[:], msg.GetFormationEventHash())
 
-	env := envelopeForRequest(r)
+	env := h.envelopeForRequest(r)
 	opts := hypothesis.CoordinationRingPromoteOptions{
 		FormationEventHash: formationHash,
 		PromotedAt:         msg.GetPromotedAt(),
