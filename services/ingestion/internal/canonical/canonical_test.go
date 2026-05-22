@@ -181,3 +181,79 @@ func TestMarshalAcceptsEmptyInfluenceLists(t *testing.T) {
 		t.Fatalf("empty-influence-list message rejected: %v", err)
 	}
 }
+
+func TestMarshalAcceptsValidEvidentialIndependence(t *testing.T) {
+	// numerator=0 / denominator=1 → α = 0 (fully influenced; valid).
+	zero := &commonv1.EvidentialIndependence{Numerator: 0, Denominator: 1}
+	if _, err := Marshal(zero); err != nil {
+		t.Fatalf("α = 0 (0/1) rejected: %v", err)
+	}
+	// numerator=denominator → α = 1 (fully independent; valid).
+	one := &commonv1.EvidentialIndependence{Numerator: 7, Denominator: 7}
+	if _, err := Marshal(one); err != nil {
+		t.Fatalf("α = 1 (7/7) rejected: %v", err)
+	}
+	// Intermediate value 2/3 — valid.
+	half := &commonv1.EvidentialIndependence{Numerator: 2, Denominator: 3}
+	if _, err := Marshal(half); err != nil {
+		t.Fatalf("α = 2/3 rejected: %v", err)
+	}
+}
+
+func TestMarshalRejectsZeroDenominatorEvidentialIndependence(t *testing.T) {
+	bad := &commonv1.EvidentialIndependence{Numerator: 1, Denominator: 0}
+	_, err := Marshal(bad)
+	if err == nil {
+		t.Fatal("Marshal accepted EvidentialIndependence with denominator=0")
+	}
+	if !strings.Contains(err.Error(), "denominator must be > 0") {
+		t.Fatalf("error %q does not mention denominator > 0 invariant", err)
+	}
+}
+
+func TestMarshalRejectsOutOfRangeEvidentialIndependence(t *testing.T) {
+	bad := &commonv1.EvidentialIndependence{Numerator: 5, Denominator: 3}
+	_, err := Marshal(bad)
+	if err == nil {
+		t.Fatal("Marshal accepted EvidentialIndependence with numerator > denominator (α > 1)")
+	}
+	if !strings.Contains(err.Error(), "α ∈ [0, 1]") {
+		t.Fatalf("error %q does not mention the α range invariant", err)
+	}
+}
+
+func TestMarshalChecksNestedEvidentialIndependence(t *testing.T) {
+	// LayerBParameters carries multiple EvidentialIndependence sub-fields
+	// (t_b, k_c) — the walk must recurse into the nested-message
+	// structure and reject when any nested instance is malformed.
+	bad := &commonv1.LayerBParameters{
+		TB: &commonv1.EvidentialIndependence{Numerator: 1, Denominator: 2},
+		KC: &commonv1.EvidentialIndependence{Numerator: 5, Denominator: 3}, // α > 1
+		NWindow:               1000,
+		NADurationNanoseconds: 86400000000000,
+	}
+	_, err := Marshal(bad)
+	if err == nil {
+		t.Fatal("Marshal accepted LayerBParameters with k_c α > 1")
+	}
+	if !strings.Contains(err.Error(), "α ∈ [0, 1]") {
+		t.Fatalf("nested-walk error %q does not mention the α range invariant", err)
+	}
+}
+
+func TestMarshalAcceptsUnsetEvidentialIndependence(t *testing.T) {
+	// A message that declares an EvidentialIndependence field but leaves
+	// it nil must NOT be rejected by the rational-pair check (the check
+	// is on PRESENT instances). Paired-dimension presence-enforcement is
+	// a substrate-tier concern per the canonical-serialization-contract.
+	msg := &eventsv1.BehavioralClusterFormation{
+		PatternSignature:  "p",
+		PatternParameters: "k=v",
+		FormationAt:       1,
+		Confidence:        0.5,
+		// EvidentialIndependence intentionally nil.
+	}
+	if _, err := Marshal(msg); err != nil {
+		t.Fatalf("unset evidential_independence rejected by rational-pair check: %v", err)
+	}
+}
