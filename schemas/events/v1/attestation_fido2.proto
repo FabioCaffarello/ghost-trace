@@ -1,0 +1,54 @@
+// Sub-modality of AttestationObservation per §0147 discriminated-
+// union framing. Carries FIDO2 attestation (registration ceremony)
+// observation per W3C WebAuthn Level 2 specification + FIDO Alliance
+// FIDO2 specifications. Distinct from WebAuthn assertion
+// (authentication ceremony) per AttestationWebAuthnAssertion
+// sub-modality above.
+//
+// Privacy-preserving design parallel to AttestationWebAuthnAssertion:
+// credential_id_hash (BLAKE3) for stable identifier; attestation_object
+// bytes preserved for substrate-side forensic re-verification.
+//
+// No `confidence` / `evidential_independence` fields — Cat I sub-
+// modality payload, structurally excluded from paired-dimension
+// per §2.6 BC3.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// AttestationFido2 is the FIDO2 / WebAuthn registration attestation
+// payload carried by AttestationObservation when the modality is
+// `fido2_attestation`.
+message AttestationFido2 {
+  // credential_id_hash is the BLAKE3-256 hash of the newly-created
+  // credential ID. 32-byte fixed length. Substrate-side correlation
+  // with subsequent WebAuthn assertions is possible via hash
+  // comparison against AttestationWebAuthnAssertion.credential_id_hash.
+  bytes credential_id_hash = 1;
+
+  // attestation_object is the raw attestationObject bytes per
+  // W3C WebAuthn §6.5. CBOR-encoded structure carrying the
+  // attestation statement format, attestation statement, and
+  // authenticator payload. Load-bearing for forensic verification.
+  bytes attestation_object = 2;
+
+  // format is the attestation-statement format per W3C WebAuthn
+  // §8 (e.g., "packed", "fido-u2f", "tpm", "android-key", "apple",
+  // "none"). Identifies the attestation-statement structure within
+  // attestation_object.
+  string format = 3;
+
+  // aaguid is the Authenticator Attestation GUID per FIDO Alliance
+  // FIDO2 specification — 16-byte unique identifier of the
+  // authenticator model. Distinct authenticator models have
+  // distinct aaguids; allows substrate-side authenticator-model
+  // correlation across registration ceremonies. Empty when format
+  // does not surface an aaguid (e.g., "none" format).
+  bytes aaguid = 4;
+
+  // registered_at is the producer-reported registration ceremony
+  // completion time as Unix nanoseconds.
+  int64 registered_at = 5;
+}

@@ -1,0 +1,12 @@
+{
+  "observedAt": "1716120000000000000",
+  "actorRef": "actor-corpus-apple",
+  "sessionRef": "session-corpus-apple",
+  "collectorRef": "browser-sdk:v1",
+  "applePat": {
+    "tokenHash": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+    "issuerKeyId": "apple-issuer-2026Q2",
+    "challengeHash": "/v38+/r5+Pf29fTz8vHw7+7t7Ovq6ejn5uXk4+Lh4N8=",
+    "redeemedAt": "1716120000000000000"
+  }
+}

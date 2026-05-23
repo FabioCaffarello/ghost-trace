@@ -1,0 +1,79 @@
+// Category I primary observation per Charter §2.1 + §2.2 +
+// entity-model.md §Category I. AttestationObservation is the typed
+// Cat I observation for cryptographic attestation surface (Apple
+// Private Access Tokens, Google Privacy Pass, Cloudflare Turnstile,
+// WebAuthn assertions, FIDO2 attestations). Third F1 modality per
+// Domain Pack v0.1 §0143; established by §0147.
+//
+// Discriminated-union pattern inherited from §0144 + §0146
+// (Methodological observation 1: pattern cascades cleanly across F1
+// modalities). Five sub-modalities, one per protocol: apple_pat,
+// google_privacy_pass, cloudflare_turnstile, webauthn_assertion,
+// fido2_attestation. Per §0146 Methodological observation 2 (sub-
+// modality count is structural choice), 5 is justified by 5
+// structurally-distinct attestation protocols, each with distinct
+// cryptographic ceremony and verification path.
+//
+// IMPORTANT TRIGGER per §0143 + §0147: this is the **third F1
+// modality**, which fires the §0143 trigger for authentication-class
+// typing OMQ ("when F1 has three modalities stable, opens formally
+// for committee resolution"). The OMQ formal opening is recorded as
+// a §0147 Consequence; a separate `ontology-revision-authentication-
+// class-typing` RFC opens as a follow-on entry, not pre-empted in
+// this proto-definition landing per §0144 Methodological
+// observation 2 (anticipate ≠ pre-resolve).
+//
+// Encoded under the canonical-serialization-contract at
+// docs/architecture/canonical-serialization-contract.md. Per §0147
+// constitutional review: AttestationObservation declares NEITHER
+// `confidence` NOR `evidential_independence` fields — structurally
+// excluded from the validatePairedDimensionCommitment subject set
+// per §2.6 BC3.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+import "events/v1/attestation_apple_pat.proto";
+import "events/v1/attestation_google_privacy_pass.proto";
+import "events/v1/attestation_cloudflare_turnstile.proto";
+import "events/v1/attestation_webauthn_assertion.proto";
+import "events/v1/attestation_fido2.proto";
+
+// AttestationObservation is a typed Cat I primary observation about a
+// cryptographic attestation event. Each instance carries exactly one
+// of the five sub-modality payloads via the `modality` oneof; the
+// envelope carries the invariant fields (observation time, actor
+// attribution, optional session context, collector provenance).
+message AttestationObservation {
+  // observed_at is the collector-reported observation time as Unix
+  // nanoseconds since epoch. int64 per decision-log §0024 mod 6.
+  int64 observed_at = 1;
+
+  // actor_ref is the single-tier actor identity reference per
+  // decision-log §0023. Optional: empty string = unattributed.
+  string actor_ref = 2;
+
+  // session_ref is the optional producer-supplied session-context
+  // identifier per §0146 (d) (parallel to actor_ref shape; NOT a
+  // substrate-verifiable BLAKE3 reference). Empty string = no
+  // session context.
+  string session_ref = 3;
+
+  // collector_ref identifies the adapter / ingestion-source per
+  // §0144 (e) phenomenon-vs-record reconciliation slot.
+  string collector_ref = 4;
+
+  // modality discriminates which sub-modality payload is carried.
+  // Exactly one of the five sub-modality messages is populated per
+  // observation; mutual exclusivity enforced by proto3 oneof at the
+  // marshalling boundary.
+  oneof modality {
+    AttestationApplePAT apple_pat = 5;
+    AttestationGooglePrivacyPass google_privacy_pass = 6;
+    AttestationCloudflareTurnstile cloudflare_turnstile = 7;
+    AttestationWebAuthnAssertion webauthn_assertion = 8;
+    AttestationFido2 fido2_attestation = 9;
+  }
+}

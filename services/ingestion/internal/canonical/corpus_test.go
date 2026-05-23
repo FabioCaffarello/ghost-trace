@@ -36,6 +36,7 @@ var messageFactory = map[string]func() proto.Message{
 	"network-event":                func() proto.Message { return &eventsv1.NetworkEvent{} },
 	"network-observation":          func() proto.Message { return &eventsv1.NetworkObservation{} },
 	"behavioral-observation":       func() proto.Message { return &eventsv1.BehavioralObservation{} },
+	"attestation-observation":      func() proto.Message { return &eventsv1.AttestationObservation{} },
 	"operational-session":          func() proto.Message { return &eventsv1.OperationalSession{} },
 	"behavioral-cluster-formation": func() proto.Message { return &eventsv1.BehavioralClusterFormation{} },
 	"behavioral-cluster-promotion": func() proto.Message { return &eventsv1.BehavioralClusterPromotion{} },

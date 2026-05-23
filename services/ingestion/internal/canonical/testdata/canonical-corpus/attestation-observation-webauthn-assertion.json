@@ -1,0 +1,13 @@
+{
+  "observedAt": "1716120000000000000",
+  "actorRef": "actor-corpus-webauthn",
+  "sessionRef": "session-corpus-webauthn",
+  "collectorRef": "browser-sdk:v1",
+  "webauthnAssertion": {
+    "credentialIdHash": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+    "authenticatorData": "AQIDBAU=",
+    "clientDataJsonHash": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+    "signature": "qrvM3e7/",
+    "userHandleHash": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+  }
+}
