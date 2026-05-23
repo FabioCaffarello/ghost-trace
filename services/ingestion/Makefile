@@ -69,6 +69,11 @@ generate: $(PROTOC_GEN_GO)
 	  --go_opt=paths=source_relative \
 	  events/v1/declared_session.proto \
 	  events/v1/ingestion_event.proto \
+	  events/v1/behavioral_observation.proto \
+	  events/v1/behavioral_mouse_trajectory.proto \
+	  events/v1/behavioral_keystroke_timing.proto \
+	  events/v1/behavioral_scroll_cadence.proto \
+	  events/v1/behavioral_pointer_dwell.proto \
 	  events/v1/network_event.proto \
 	  events/v1/network_observation.proto \
 	  events/v1/network_tcp_fingerprint.proto \

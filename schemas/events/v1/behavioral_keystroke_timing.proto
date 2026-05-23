@@ -1,0 +1,43 @@
+// Sub-modality of BehavioralObservation per decision-log §0146
+// discriminated-union framing. Carries keystroke event timing
+// distributions extractable from browser-SDK / native instrumentation
+// over a bounded observation window. Per privacy-preserving design:
+// the payload carries TIMINGS, not key codes — anti-bot signatures
+// inspect cadence + dwell-flight statistics, not content.
+//
+// No `confidence` / `evidential_independence` fields — Cat I sub-modality
+// payload, structurally excluded from paired-dimension per §2.6 BC3.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// KeystrokeInterval is a single inter-keystroke timing pair: time
+// between key-down and the previous key-up (flight time) + time the
+// key was held down (dwell time). Established convention in
+// keystroke-dynamics literature.
+message KeystrokeInterval {
+  // flight_ns is the time from previous key-up to this key-down,
+  // in nanoseconds. 0 for the first key in the sequence.
+  uint64 flight_ns = 1;
+  // dwell_ns is the time from this key-down to this key-up,
+  // in nanoseconds.
+  uint64 dwell_ns = 2;
+}
+
+// BehavioralKeystrokeTiming is the keystroke-timing payload carried by
+// BehavioralObservation when the modality is `keystroke_timing`. Per
+// privacy-preserving design: NO key codes, character codes, or input
+// content recorded — only timing distributions.
+message BehavioralKeystrokeTiming {
+  // intervals are the inter-keystroke timing pairs in chronological
+  // order over the enclosing observation window. Empty when no
+  // keystrokes were observed.
+  repeated KeystrokeInterval intervals = 1;
+
+  // total_keystroke_count is the absolute count of keystroke events
+  // observed during the window. Equals len(intervals); preserved
+  // explicitly for forensic-replay-without-array-iteration.
+  uint32 total_keystroke_count = 2;
+}
