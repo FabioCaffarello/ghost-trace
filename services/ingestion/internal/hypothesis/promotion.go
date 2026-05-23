@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/canonical"
+	commonv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
@@ -70,6 +71,21 @@ type PromoteOptions struct {
 	// Question 2: CLI attribution is operator opt-in, not enforced —
 	// the CLI operator is trusted by virtue of local shell access.
 	Actor string
+
+	// LayerBParameters bundles the demotion-candidacy parameters per
+	// §0138 (T_B, K_C, N_window, N_A_duration_nanoseconds). When non-
+	// nil, the supplied LayerBParameters is written to the promotion
+	// event's layer_b_parameters field, enabling subsequent Demote
+	// invocations to evaluate Layer B's deep criterion per §0141 E1.
+	// When nil, the promotion event's layer_b_parameters field remains
+	// unset (legacy path; subsequent Demote sets LayerB.Evaluated=false).
+	//
+	// Per §0141 sub-decision F3, the promote-hypothesis CLI defaults
+	// the parameter values from §0138 inception-phase resolution when
+	// the operator does not supply them. Callers (CLIs, programmatic
+	// promoters) are responsible for choosing whether to populate this
+	// field; the hypothesis package does not enforce a default.
+	LayerBParameters *commonv1.LayerBParameters
 }
 
 // PromoteReport is the per-Promote outcome.
@@ -132,6 +148,7 @@ func Promote(ctx context.Context, sub *substrate.Substrate, opts PromoteOptions,
 		PromotedAt:         promotedAt,
 		CadenceSeconds:     opts.CadenceSeconds,
 		Reason:             opts.Reason,
+		LayerBParameters:   opts.LayerBParameters,
 	}
 	payload, hash, err := canonical.MarshalAndHash(ev)
 	if err != nil {

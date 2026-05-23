@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/canonical"
+	commonv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
@@ -38,6 +39,12 @@ type CoordinationRingPromoteOptions struct {
 	// CoordinationRingPromotion event paired with an IngestionEvent
 	// via AppendPair. Empty preserves the single-Append path.
 	Actor string
+
+	// LayerBParameters bundles the demotion-candidacy parameters per
+	// §0138; mirrors PromoteOptions.LayerBParameters. When non-nil,
+	// written to the promotion event's layer_b_parameters field;
+	// when nil, the field remains unset (legacy path).
+	LayerBParameters *commonv1.LayerBParameters
 }
 
 // CoordinationRingPromoteReport is the per-PromoteCoordinationRing
@@ -95,6 +102,7 @@ func PromoteCoordinationRing(ctx context.Context, sub *substrate.Substrate, opts
 		PromotedAt:         promotedAt,
 		CadenceSeconds:     opts.CadenceSeconds,
 		Reason:             opts.Reason,
+		LayerBParameters:   opts.LayerBParameters,
 	}
 	payload, hash, err := canonical.MarshalAndHash(ev)
 	if err != nil {
