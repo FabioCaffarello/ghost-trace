@@ -34,7 +34,7 @@ Operational constructs (Category II) are derived from observations and enrichmen
 
 ### Phase 4 — Hypothesis formation and evolution
 
-Hypotheses (Category III) are formed and evolved through inference processes that operate over signals, constructs, and prior hypotheses. Each operation on a hypothesis is itself an event in the primary log per [Invariant 2.5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) (frozen v0.3 per [`decision-log §0013`](../charter/decision-log.md)).
+Hypotheses (Category III) are formed and evolved through inference processes that operate over signals, constructs, and prior hypotheses. Each operation on a hypothesis is itself an event in the primary event log per [Invariant 2.5](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) (frozen v0.3 per [`decision-log §0013`](../charter/decision-log.md)).
 
 ### Phase 5 — Projection
 
