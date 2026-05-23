@@ -5751,6 +5751,58 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0142` — Patch amendment v0.7.2: Charter §2.3 + §2.4 + §2.6 Q2/Q3/Q5 stale-anchor sweep; §0137 Methodological observation 3 first deliberate enaction
+
+- **Status:** accepted.
+- **Date:** 2026-05-23.
+- **Context:** [`§0137`](#0137--patch-amendment-v071-charter-26--3-0034--0136-staleanchor-correction-0136-anchorfidelity-observation-discharged) Methodological observation 3 prescribed anchor-inventory verification as a Step 1.1 augmentation for future §-section redactions, with the rationale that decision-log entry cross-references can become stale without the BC's binding commitment being affected. Pre-RFC framing review for the upcoming [Domain Pack v0.1 — anti-bot atlas](../rfcs/draft/) preparation triggered an anchor-inventory scan against the current Q-resolution status of the four ontology Open Modeling Questions originally forward-referenced from frozen §2.x BCs. Scan found seven Charter prose locations still describing formal mechanisms as pending after the respective Qs had resolved:
+
+  | Line | Section | Stale Q | Resolution entry |
+  |---|---|---|---|
+  | 115 | §2.3 Structural Requirement prose | Q2 (Identity tiers) | [`§0023`](#0023--q2-identity-tiers-inceptionphase-singletier-actor_ref-adopted) |
+  | 136 | §2.3 BC4 | Q2 | [`§0023`](#0023--q2-identity-tiers-inceptionphase-singletier-actor_ref-adopted) |
+  | 182 | §2.4 BC4 | Q2 | [`§0023`](#0023--q2-identity-tiers-inceptionphase-singletier-actor_ref-adopted) |
+  | 186 | §2.4 BC6 | Q5 (transitivity) | [`§0134`](#0134--q5-transitivityhalf-resolution-candidate--transitive-closure-adopted-with-graph-storage-ontologymd-q5-fully-resolved-layer-b-alldependenciesdischarged) |
+  | 271 | §2.6 BC1 | Q3 (formal independence) | [`§0133`](#0133--q3-resolution-candidate--sourcecount-ratio-adopted-26-bc1-operational-specification-discharged-0132-cascade-trigger-fires-q5-transitivityhalf-pregate-opened) |
+  | 279 | §2.6 BC5 | Q2 | [`§0023`](#0023--q2-identity-tiers-inceptionphase-singletier-actor_ref-adopted) |
+  | 281 | §2.6 BC6 | Q5 | [`§0134`](#0134--q5-transitivityhalf-resolution-candidate--transitive-closure-adopted-with-graph-storage-ontologymd-q5-fully-resolved-layer-b-alldependenciesdischarged) |
+
+  Each affected BC's binding commitment ("§X does not govern Y formal specifics") is independent of which entry the formal mechanism is anchored to — the stale anchors were status-reporting drift, not enforcement-relevant. The patch consolidates the seven corrections into a single amendment per the [`§0137`](#0137--patch-amendment-v071-charter-26--3-0034--0136-staleanchor-correction-0136-anchorfidelity-observation-discharged) Methodological observation 2 (bundle-by-shape) precedent: shared pattern shape (stale Q-pending anchor) + shared correction shape (replace with resolved-at-§NNNN reference + preserve BC binding text verbatim).
+
+  Pattern instance: **fourth occurrence of the patch-via-pressure pattern at the Charter level**, and **first deliberate enaction** of the pattern rather than incidental observation. Prior three instances all surfaced from downstream incidental observation: [`§0018`](#0018--fix-frozen-section-parser-to-accept-amendmentqualified-status-cells-v041) (v0.4.1 parser fix, surfaced at §2.5 freeze self-test discrepancy), [`§0100`](#0100--frozennewly-frozen-section-exemption--amendment-in-progress-exemption-v051--v052) (v0.5.1 hook extension, surfaced at §2.4 freeze pending→frozen promotion), [`§0137`](#0137--patch-amendment-v071-charter-26--3-0034--0136-staleanchor-correction-0136-anchorfidelity-observation-discharged) (v0.7.1 Charter cross-references, surfaced at §0136 contract revision). This entry surfaces from a deliberate sweep — the methodology that [`§0137`](#0137--patch-amendment-v071-charter-26--3-0034--0136-staleanchor-correction-0136-anchorfidelity-observation-discharged) Methodological observation 3 prescribed for future use.
+
+- **Decision:** Charter amendment v0.7.2: seven text changes across §2.3, §2.4, §2.6, each replacing a stale Q-pending formulation with a resolved-at-§NNNN reference while preserving the BC's binding commitment verbatim. Specifically:
+
+  - §2.3 Structural Requirement prose (L115): Q2 stale anchor → `§0023` reference + multi-tier deferral noted.
+  - §2.3 BC4 (L136): Q2 stale anchor → `§0023` reference + multi-tier deferral noted.
+  - §2.4 BC4 (L182): Q2 stale anchor → `§0023` reference + multi-tier deferral noted.
+  - §2.4 BC6 (L186): Q5 stale anchor → `§0134` reference (Candidate τ — transitive closure with β-graph storage).
+  - §2.6 BC1 (L271): Q3 stale anchor → `§0133` reference (Candidate α — source-count ratio).
+  - §2.6 BC5 (L279): Q2 stale anchor → `§0023` reference + multi-tier deferral noted.
+  - §2.6 BC6 (L281): Q5 stale anchor → `§0134` reference (Candidate τ).
+
+  Each BC's binding commitment ("§X does not govern Y formal specifics") preserved verbatim. The falsifiability-status sentence updates from "becomes structurally falsifiable when QN resolution lands" to "is binding today and structurally falsifiable per §NNNN" (or, for Q2 split single-tier-adopted + multi-tier-deferred, retains the prospective tense for the deferred half).
+
+  The Charter banner version line advances `v0.7.1` → `v0.7.2` with a patch clause appended. The [`amendments.md` v0.7.2 entry](../charter/amendments.md) records the patch with `**Sections affected:**` line naming §2.3 + §2.4 + §2.6 (per the hook's amendment-in-progress exemption from [v0.5.2](../charter/amendments.md#v052--hook-amendment-in-progress-exemption--23-bc5-vocabulary-tightening)). CLAUDE.md §4 status table narrative paragraph appends a v0.7.2 clause per [`§0017`](#0017--gate-23-second-objectlevel-invariant-redaction-path-a-full-redaction-amendment-v04) + [`§0022`](#0022--implementation-pivot-64-amendment--0003-reversal-authorization--2426-posture-shift) + [`§0137`](#0137--patch-amendment-v071-charter-26--3-0034--0136-staleanchor-correction-0136-anchorfidelity-observation-discharged) precedent.
+
+- **Constitutional review:** No semantic change to any Charter invariant. Each of the seven affected BC sites retains its binding commitment verbatim ("§X does not govern Y formal specifics"); only the formal-mechanism status sentence updates from a pending-future formulation to a resolved-present formulation. Per [v0.4.1](../charter/amendments.md#v041--fix-frozen-section-parser-to-accept-amendment-qualified-status-cells) / [v0.5.1](../charter/amendments.md#v051--hook-fix-handle-pendingfrozen-promotion-prs-no-charter-prose-amended) / [v0.7.1](../charter/amendments.md#v071--fix-26--3-stale-anchor-0034--0136-canonical-serialization-contract-paired-dimension-enforcement) precedent, patch-level amendments preserving Charter semantics qualify under the `amendments.md` §Amendment Discipline patch rules.
+
+  Falsifiability discipline: each of the seven references' correctness predicate is structurally observable — `§0023` carries the Q2 Identity tiers resolution (inception-phase single-tier `actor_ref` + multi-tier deferral); `§0133` carries the Q3 Candidate α resolution (source-count ratio); `§0134` carries the Q5 Candidate τ resolution (transitive closure with β-graph storage). The patch is mechanically verifiable via diff inspection.
+
+- **Consequences:**
+  - Charter §2.3 + §2.4 + §2.6 prose corrected at seven cross-reference sites. Charter version advances `v0.7.1` → `v0.7.2`.
+  - [`amendments.md` v0.7.2 entry](../charter/amendments.md) records the patch with full Summary + Rationale + Falsifiability review outcome subsections per the v0.4.1 / v0.5.1 / v0.5.2 / v0.7.1 precedent.
+  - CLAUDE.md §4 status table narrative paragraph extends with v0.7.2 clause.
+  - [`docs/rfcs/draft/charter-amendment-v0-7-2-stale-anchor-sweep.md`](../rfcs/draft/charter-amendment-v0-7-2-stale-anchor-sweep.md) is the originating RFC for this patch; status `accepted`.
+  - **[`§0137`](#0137--patch-amendment-v071-charter-26--3-0034--0136-staleanchor-correction-0136-anchorfidelity-observation-discharged) Methodological observation 3 first deliberate enaction.** The anchor-inventory checklist that §0137 prescribed for future §-section redactions is exercised here for the first time as a deliberate sweep rather than an incidental observation. This validates the prescription as operationally tractable.
+  - **Methodological observation 1 — Patch-via-pressure pattern at four instances; pattern shape now includes multi-anchor (heterogeneous) sweeps.** Prior three instances were homogeneous: §0018 was one regex fix; §0100 was one hook extension (with two sub-changes bundled per v0.5.1+v0.5.2); §0137 was six occurrences of the same `§0034 → §0136` swap. This entry is the first heterogeneous sweep — three different Q-resolutions (Q2 + Q3 + Q5) at seven sites — bundled under the [v0.7.1](../charter/amendments.md#v071--fix-26--3-stale-anchor-0034--0136-canonical-serialization-contract-paired-dimension-enforcement) Methodological observation 2 bundle-by-shape rationale: same pattern shape (stale Q-pending) + same correction shape (resolved-at-§NNNN reference). **Future patches may bundle heterogeneous corrections when shape uniformity holds.**
+  - **Methodological observation 2 — Deliberate inventory yields different pattern of findings than incidental observation.** Incidental observation (prior three instances) surfaces single-anchor issues at the moment they bite. Deliberate inventory (this instance) surfaces aggregate stale-anchor sets that accumulated silently across multiple freezes. The two methods are complementary: deliberate inventory should be invoked before any new RFC framing that will cite Charter BCs; incidental observation continues to catch issues that deliberate inventory missed. **Future Domain Pack RFCs and any RFC citing multiple Charter BCs should trigger deliberate inventory first.**
+  - **Methodological observation 3 — Anchor inventory should be extended to subordinate documents during deliberate sweeps.** The scan that surfaced these seven anchors checked only Charter prose. Subordinate documents (Ontology, Architecture, RFCs in `accepted` or `draft` status) may carry stale anchors of the same shape. The scan was extended to `docs/architecture/`, `docs/ontology/`, `docs/rfcs/` during pre-patch verification and found no architecture-layer stale anchors and only historical references in RFCs/discussion scratches (preserved by design as records of state at proposal time). **Future deliberate sweeps should extend the scan to subordinate documents and explicitly distinguish (a) stale anchors in current binding text from (b) historical references in immutable records.**
+
+- **Supersession:** No prior decision-log entry superseded. First deliberate enaction of [`§0137`](#0137--patch-amendment-v071-charter-26--3-0034--0136-staleanchor-correction-0136-anchorfidelity-observation-discharged) Methodological observation 3 (anchor-inventory checklist).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
