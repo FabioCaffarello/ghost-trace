@@ -280,8 +280,8 @@ Missing fields are marked `pending`, never omitted.
 
 - **Canonical definition.** The second dimension of an inferential assertion, distinct from confidence; defends against recursive belief inflation.
 - **Introduction.** [Charter §1](./charter/constitutional-charter.md#1-thesis) (mentioned); [`ontology/entity-model.md` §Category III](./ontology/entity-model.md).
-- **Stabilization.** pending ([Invariant 2.6](./charter/constitutional-charter.md#26-evidential-independence-integrity) pending committee redaction).
-- **Last amendment.** pending (§2.6 pending).
+- **Stabilization.** [Invariant 2.6](./charter/constitutional-charter.md#26-evidential-independence-integrity) frozen v0.6 (Gate §2.6 closure per [`decision-log.md` §0129](./charter/decision-log.md)).
+- **Last amendment.** v0.6 (§2.6 pending → frozen at amendment v0.6).
 - **Forbidden synonyms.** `confidence` (the two are paired but distinct; collapsing them is the failure mode §2.6 prevents); `independence` standalone (overloaded — `evidential independence` is the canonical full term in this project).
 
 ### `phase 1/2/3/4 replay`
