@@ -94,7 +94,7 @@ Three candidate forms surfaced during framing and explicitly rejected as out-of-
 | Candidate | Strategy | Sketch |
 |---|---|---|
 | B1 | On-the-fly from substrate | Per-evaluation: read promotion event + closure_hashes; scan substrate window (N=1000 events) under sub-decision C's identity; compute fresh-roots-count and saturation-ratio; return verdict. No persistent state. |
-| B2 | Cat II projection per promoted hypothesis | Maintain a continuously-updated projection record per promoted hypothesis (freshness_B(H), saturation_C(H), last-updated-at, last-input-event-hash). Read projection at evaluation time; rebuild from substrate on demand per the projection-rebuildability discipline (`projection-model.md`). |
+| B2 | Cat II projection per promoted hypothesis | Maintain a continuously-refreshed projection record per promoted hypothesis (freshness_B(H), saturation_C(H), last-refreshed-at, last-input-event-hash). Read projection at evaluation time; rebuild from substrate on demand per the projection-rebuildability discipline (`projection-model.md`). |
 | B3 | On-the-fly with substrate audit record | Compute on-the-fly per evaluation (as B1); additionally emit a `LayerBEvaluation` Cat II substrate record per evaluation cycle, capturing the computed values + window range. Audit trail without per-hypothesis projection. |
 
 **Conservative-defaults reading**: B1 is the simplest form, matching the existing demote-hypothesis pattern (no persistent state; computation is transient). B2 introduces projection-storage cost ahead of need. B3 introduces substrate-write cost per evaluation (potentially per demote attempt) — schemas-evolution event required if adopted.
@@ -171,10 +171,156 @@ The Phase 3 analysis will produce a per-sub-decision recommendation; the Phase 4
 
 ---
 
-## Forward schedule
+## Phase 3 — Apply epistemic skills
 
-- **Phase 3** (next commit): Apply epistemic-skill methodology to each sub-decision in turn — operationalization clarity, falsifiability of recommendation, counterfactual robustness, vocabulary-respect. Single PR.
-- **Phase 4** (subsequent commit): Synthesis findings + cross-decision interaction check. Identify single dominant configuration across the six sub-decisions OR identify the genuine trade-off space.
-- **Phase 5** (subsequent commit): Single-configuration recommendation OR multi-configuration finalist comparison. Phase 5 produces the substantive deliberation outcome.
-- **Resolution PR**: RFC status moves from `discussion` to `accepted`; decision-log entry recorded; implementation work proceeds under ordinary RFC discipline.
-- **Downstream consequences** (post-resolution): `services/ingestion/internal/hypothesis/demotion.go:97-99` comment refresh per the chosen implementation; new code per the chosen sub-decision configuration; CLI surface changes per E variant.
+Per the operational-spec Phase 3 precedent from [`layer-b-parameter-calibration-evidence.md`](./layer-b-parameter-calibration-evidence.md) Phase 3 (the "lighter Phase 3" methodological observation 9): three skills ([`falsifiability-check`](../../../.claude/skills/epistemic/falsifiability-check/SKILL.md), [`epistemic-separator`](../../../.claude/skills/epistemic/epistemic-separator/SKILL.md), [`ambiguity-reducer`](../../../.claude/skills/epistemic/ambiguity-reducer/SKILL.md)) applied. The structural form is fixed at [`§0135`](../../charter/decision-log.md); the parameter values are fixed at [`§0138`](../../charter/decision-log.md); the canonical-serialization-contract enforces type/range at the marshalling boundary per [`§0136`](../../charter/decision-log.md) + [`§0140`](../../charter/decision-log.md). The epistemic-skill questions focus on posture-fit at inception phase rather than on structural admissibility.
+
+### Sub-decision A — Evaluation locus
+
+| Candidate | `falsifiability-check` | `epistemic-separator` | `ambiguity-reducer` |
+|---|---|---|---|
+| **A1 internal package** (`internal/hypothesis/layerb`) | Pass. The evaluation function's behavior is mechanically observable via unit tests over fixture substrate state; outputs (`LayerBVerdict` shape) are deterministic given inputs. | Pass per category boundary. The function operates over `closure_hashes` (Cat I substrate facts per [`§0021`](../../charter/decision-log.md)) + `evidential_independence` (Cat III paired-dimension per [`§0140`](../../charter/decision-log.md)); the read crosses categories but does not mix them at the assertion level. | Pass. Package locus and function signature are mechanically specified. |
+| **A2 separate service** (`assertion-engine`) | Pass at form-level. Service-boundary call is observable but introduces RPC-call testability burden. | **Risk:** introduces a service-boundary separation between substrate read (ingestion) and Layer B evaluation (assertion-engine); the read-and-evaluate path is split across two services. Operationally admissible but the boundary requires structural justification not currently available. | **Ambiguity surfaced on service-boundary semantics.** Inception-phase has zero service-to-service calls in `services/`; introducing the pattern requires its own design decision (sync vs async, in-process import vs out-of-process RPC, type-definition versioning across services). Response 3 — raise as a structural decision under a separate architecture RFC if A2 is preferred. |
+| **A3 inline per CLI** | Pass at form-level. Each CLI's behavior is observable independently. | **Risk:** the same Layer B predicate is computed in 5+ CLI bodies; per [CLAUDE.md §7](../../../.claude/CLAUDE.md) constitutional minimalism, this is ceremony without behavioral consequence — five sites with the same logic offer no separation-of-concerns benefit. | **Ambiguity surfaced on DRY violation.** The inlining is operationally arbitrary; no per-CLI reason exists for the duplicated logic. |
+
+### Sub-decision B — Computation strategy
+
+| Candidate | `falsifiability-check` | `epistemic-separator` | `ambiguity-reducer` |
+|---|---|---|---|
+| **B1 on-the-fly from substrate** | Pass. Per-evaluation computation is deterministic given (a) the promoted hypothesis's `closure_hashes` set + (b) the recent-N substrate window. Falsifiability via substrate-replay over the same window. | Pass. Computation reads substrate facts (per [`§0021`](../../charter/decision-log.md)) without committing new substrate records; the read does not invert the Cat I / Cat II / Cat III layering. | Pass. The computation is well-defined; the recent-N window is per sub-decision C. |
+| **B2 Cat II projection per promoted hypothesis** | Pass at form-level. The projection is deterministically rebuildable from substrate per [`projection-model.md`](../../architecture/projection-model.md). | Pass per category boundary. The projection is Cat II derived from Cat I + Cat III substrate facts; the projection-vs-substrate distinction per [§2.1 Boundary Conditions](../../charter/constitutional-charter.md#21-observational-integrity) is respected. | **Ambiguity surfaced on refresh cadence.** A continuously-refreshed projection requires a cadence specification (every event, every N events, every time slice). The cadence is itself a sub-sub-decision the projection variant would have to specify. Response 3 — raise as deferred sub-question. |
+| **B3 on-the-fly with substrate audit record** | Pass at form-level. The audit record is a Cat II substrate event committed alongside evaluation. | Pass per category boundary. The audit record (Cat II) records the evaluation's inputs + outputs deterministically. | **Ambiguity surfaced on audit-record emission cadence.** The audit record is emitted "per evaluation cycle" — but the cycle definition (per CLI invocation, per scheduled job tick, per user query) is undefined. Response 3 — raise as deferred sub-question. |
+
+### Sub-decision C — W-count N=1000 stream identity
+
+| Candidate | `falsifiability-check` | `epistemic-separator` | `ambiguity-reducer` |
+|---|---|---|---|
+| **C1 substrate-global** | Pass. Matches the canonical-serialization-contract's [`§Demotion-Candidacy Predicate`](../../architecture/canonical-serialization-contract.md) explicit form: `freshness_B(H) = avg(evidential_independence(r) OVER recent N assertions r WHERE H.hash ∈ r.closure_hashes)` — "recent N assertions" is the global universe; the `WHERE` clause is a filter, not a window-identity redefinition. `saturation_C(H)`'s divisor is `N`, confirming the global count of recent assertions, not the filtered count. **Structural reading from the contract.** | Pass. Substrate-commit-order is the substrate's native ordering per [`§0024`](../../charter/decision-log.md) + [`§0027`](../../charter/decision-log.md); no parallel temporal axis introduced. | Pass. Window is deterministic. |
+| **C2 per-hypothesis closure** | **FAIL — violates canonical-serialization-contract `saturation_C` definition.** With per-hypothesis-closure window, every assertion in the window is by definition in H's closure; `saturation_C` would always be 1.0 (or its L-C-excluded equivalent), defeating the predicate's purpose. The contract's divisor `N` is the global count, not the filtered count. | Fail. Recasts the predicate's semantic from "fraction of recent global assertions in H's downstream" to "fraction of H's downstream that's recent" — a structurally different question. | N/A — rejected at falsifiability. |
+| **C3 per-subtype** | **FAIL — violates canonical-serialization-contract `recent N` reading.** The contract's `recent N assertions` is unfiltered at the window-selection step; per-subtype filtering would be an additional `WHERE` clause not present in the contract's predicate definition. | Fail. Introduces per-subtype window-identity not motivated by the abstract `Hypothesis` lifecycle per [`§0010`](../../charter/decision-log.md) Q2-A.2. | N/A — rejected at falsifiability. |
+| **C4 since-promotion** | **FAIL — violates W-count form.** The contract's W-count window per [`§0138`](../../charter/decision-log.md) is "the last N assertions by substrate-commit order" — a fixed-count window, NOT a since-event window. C4 conflates W-count with a since-promotion-bounded selection that is structurally different. | Fail. Introduces an event-anchored window not supported by W-count semantics. | N/A — rejected at falsifiability. |
+
+**Methodological observation surfaced.** Sub-decision C was over-framed in Phase 2 — the canonical-serialization-contract [`§Demotion-Candidacy Predicate`](../../architecture/canonical-serialization-contract.md) section EXPLICITLY defines the window stream as substrate-global with `WHERE H.hash ∈ r.closure_hashes` as a downstream filter, not as a window-identity definition. C2/C3/C4 are structurally precluded, parallel to the T_B-derived structural-preclusion finding from [`layer-b-parameter-calibration-evidence.md`](./layer-b-parameter-calibration-evidence.md) Phase 3 sub-decision 1. **Future operational-spec RFCs should re-check the canonical-serialization-contract for structural determination before enumerating implementation-tier candidates.**
+
+### Sub-decision D — Output shape
+
+| Candidate | `falsifiability-check` | `epistemic-separator` | `ambiguity-reducer` |
+|---|---|---|---|
+| **D1 transient DemoteReport extension** | Pass. The verdict is observable in CLI output; falsifiability via per-invocation behavior. | Pass. Matches the existing Layer A pattern: `CadenceSatisfied` is a struct-field in DemoteReport, transient, not substrate-committed. | Pass. The DemoteReport extension is a mechanical Go struct addition. |
+| **D2 LayerBEvaluation Cat II substrate record** | Pass at form-level. The substrate record is observable per [§2.1 frozen](../../charter/constitutional-charter.md#21-observational-integrity) post-commit. | Pass per category boundary. Cat II derived-from-Cat-I-and-Cat-III evaluation is structurally well-defined. | **Ambiguity surfaced on schemas-evolution event scope.** Adding `LayerBEvaluation` proto requires its own schemas-evolution event RFC per the canonical-serialization-contract §Schemas-Evolution Events boundary; the schemas-evolution RFC must specify the proto's fields, version, and corpus impact. Response 3 — surface as triggering follow-on RFC. |
+| **D3 DemotionCandidacyEvaluation Cat II composite** | Same form-level pass as D2. | Same as D2 (composite Cat II record). | Same schemas-evolution-event surfacing; additionally, the composite-vs-separate choice (Layer A + Layer B combined record vs separate records) is itself a sub-sub-decision. |
+
+### Sub-decision E — demote-hypothesis interaction
+
+| Candidate | `falsifiability-check` | `epistemic-separator` | `ambiguity-reducer` |
+|---|---|---|---|
+| **E1 advisory like Layer A** | Pass. The advisory pattern is observable in DemoteReport; the demote commit semantic is unchanged. | Pass. Matches the [`§0011`](../../charter/decision-log.md) staged-combination Layer A precedent: Layer A is advisory in DemoteReport, not enforcing. Operator authority over substrate commit preserved per the substrate-writer pattern. | Pass. The advisory field semantic is mechanical. |
+| **E2 enforcing refusal with override** | Pass at form-level. The refusal path is observable; the override is observable in the demotion reason. | **Risk:** elevates Layer B from CANDIDACY (per [`§0011`](../../charter/decision-log.md) staged-combination) to BARRIER. Per [`§0011`](../../charter/decision-log.md) Q4 resolution, Layer A + Layer B is a CANDIDACY criterion, not a barrier; operator-elected demotion is the substrate-commit primitive. E2 requires an override mechanism to preserve operator authority — admissible but requires a structural commitment beyond [`§0011`](../../charter/decision-log.md). | **Ambiguity surfaced on override semantics.** The `--force-layer-b-bypass` option must be specified: does it require additional justification text? Is it audit-logged separately? Does it require a higher operator-permission level? Response 3 — raise as deferred sub-question. |
+| **E3 untouched separate candidate-finder** | Pass. New CLI is observable independently; existing CLIs unchanged. | Pass per category boundary. The candidate-finder is a Cat III-reading utility; demote CLIs remain pure substrate-commit. | Pass. Operationally clean separation — Layer B is a query tool, demote-hypothesis is a substrate-commit tool. |
+
+### Sub-decision F — N_A=1 day Layer A cadence source
+
+| Candidate | `falsifiability-check` | `epistemic-separator` | `ambiguity-reducer` |
+|---|---|---|---|
+| **F1 bundled in LayerBParameters** | Pass. Reading from `LayerBParameters.inactivity_window_seconds` per [`§0138`](../../charter/decision-log.md) bundling is mechanically observable. | Pass. Substrate-grounded read; no parallel config source. | **Ambiguity surfaced on CLI surface change.** Removing `-cadence-seconds` from promote-hypothesis is a breaking change to the existing CLI contract; backward-compatibility burden is non-trivial. Response 3 — raise as deferred sub-question. |
+| **F2 separate Layer A config** | Pass at form-level. | **Risk:** reverses the [`§0138`](../../charter/decision-log.md) N_A bundling decision. The bundling was committee-decided on inception-phase simplicity grounds; unbundling without empirical justification is committee-revisited. | N/A — rejected at epistemic-separator. |
+| **F3 CLI operator-supplied with bundled defaults** | Pass. CLI default-from-substrate is mechanically observable; operator override preserved. | Pass. Honors [`§0138`](../../charter/decision-log.md) bundling at the substrate layer while preserving CLI surface compatibility. | Pass. Default-from-substrate with operator override is a standard CLI pattern. |
+
+### Most consequential epistemic finding across the matrix
+
+**Primary finding — sub-decision C is structurally determined by the canonical-serialization-contract, not by implementation choice.** The contract's [`§Demotion-Candidacy Predicate`](../../architecture/canonical-serialization-contract.md) section explicitly defines `recent N assertions` as the substrate-global universe and `WHERE H.hash ∈ r.closure_hashes` as a downstream filter; the divisor in `saturation_C` is `N` (global count). C2/C3/C4 are structurally precluded; C1 is the only admissible candidate. **Sub-decision C resolves to C1 by structural determination from the upstream contract — not by inception-phase posture.**
+
+**Secondary finding — E2 enforcing refusal requires structural commitment beyond [`§0011`](../../charter/decision-log.md).** Per [`§0011`](../../charter/decision-log.md) Q4 resolution, Layer A + Layer B is a CANDIDACY criterion; E2 elevates it to BARRIER. Admissible only with an override mechanism preserving operator authority. The override mechanism is a sub-sub-decision not in framing scope — E2's adoption would require its own follow-on specification.
+
+**Tertiary finding — F2 (separate Layer A config) reverses [`§0138`](../../charter/decision-log.md) N_A bundling.** Bundling was committee-decided on inception-phase grounds; reversing it requires committee-revisit, not implementation choice. F2 is structurally precluded at this RFC's scope; revisit requires a separate operational-spec RFC.
+
+**Quaternary finding — D2/D3 require schemas-evolution event follow-on RFC.** Adding `LayerBEvaluation` or `DemotionCandidacyEvaluation` proto types is a schemas-evolution event per the canonical-serialization-contract boundary item 9. Adoption of D2 or D3 triggers a follow-on schemas-evolution RFC; D1 is contained within the existing proto set.
+
+### Calibration carry-forward to future operational-spec RFCs
+
+Layer-B-service-tier-implementation Phase 3 confirms and extends the parameter-calibration Phase 3 methodological observations:
+
+- **Confirmed: operational-spec RFCs admit a lighter Phase 3** (per parameter-calibration Phase 3 MO-9). Three skills (falsifiability-check + epistemic-separator + ambiguity-reducer) are sufficient; the structural form is upstream-fixed; the implementation-tier focus is posture-fit + inheritance-conflict surfacing.
+- **New observation — Sub-decision over-framing is detectable at Phase 3 via canonical-serialization-contract re-reading.** Sub-decision C was over-framed in Phase 2 (4 candidates); the contract's explicit predicate definition reduces it to 1 admissible candidate at Phase 3. **Future operational-spec RFCs should re-check the canonical-serialization-contract for structural determination of each sub-decision before Phase 3 begins.** Pattern parallel to T_B-derived structural-preclusion from parameter-calibration Phase 3 sub-decision 1, but at implementation tier rather than parameter tier.
+- **New observation — Inheritance conflict between framing-PR enumeration and committee-decision precedents is detectable at Phase 3 via epistemic-separator.** F2 (separate Layer A config) reverses [`§0138`](../../charter/decision-log.md) bundling — visible only by reading the predecessor decision-log entry. **Future operational-spec RFCs should explicitly inventory predecessor committee decisions during Phase 1 to avoid framing candidates that revisit them.**
+
+## Phase 4 — Comparison synthesis
+
+Findings synthesized from Phase 1 (dependency surface + inception-phase posture + implementation surface inventory at §0140 commit), Phase 2 (sub-decision candidate enumeration with sketches and conservative-defaults readings), and Phase 3 (epistemic-skill matrix). Classified as **asymmetry** / **apparent trade-off that resolves** / **genuine trade-off** / **structural determination** / **tension**. Numbered in order of consequence.
+
+### Finding 1 — Structural determination: sub-decision C resolves by canonical-serialization-contract reading, not by implementation choice
+
+Per Phase 3 primary finding: the canonical-serialization-contract's [`§Demotion-Candidacy Predicate`](../../architecture/canonical-serialization-contract.md) section explicitly defines `recent N assertions` as the substrate-global universe; C1 is the only admissible candidate. **Sub-decision C exits the open-decision space at this Phase 3 finding; the framing PR's 4-candidate enumeration was over-framed.**
+
+### Finding 2 — Asymmetry: inception-phase posture favors conservative-defaults across the remaining sub-decisions
+
+Per Phase 1's inception-phase posture commitment + [`§0022`](../../charter/decision-log.md) empirical-pressure-phase discipline + [`§0023`](../../charter/decision-log.md) inception-phase precedent + [`§0138`](../../charter/decision-log.md) inception-phase parameter values: the system has zero promoted hypotheses in production, zero observed Layer B evaluations, and zero empirical pressure on the implementation tier. The conservative-defaults bundle across the remaining 5 sub-decisions is A1 + B1 + D1 + E1 + F3 — internal package; on-the-fly computation; transient DemoteReport extension; advisory-like-Layer-A; CLI operator-supplied with bundled defaults. Each conservative-default minimizes the operational surface added at this RFC's resolution.
+
+### Finding 3 — Asymmetry: A1 + B1 + D1 + E1 align with [`§0011`](../../charter/decision-log.md) staged-combination Layer A pattern precedent
+
+Per Phase 3 sub-decision A (A1), sub-decision B (B1), sub-decision D (D1), and sub-decision E (E1): the existing Layer A handling at the service tier is exactly the conservative-defaults bundle. Layer A is computed on-the-fly (no projection); the verdict is transient (in DemoteReport, not substrate-committed); it's advisory (demote records regardless); it lives in an internal package (the cadence helper functions in `internal/hypothesis/`). **Adopting the same pattern for Layer B inherits the established service-tier discipline from [`§0011`](../../charter/decision-log.md) Layer A — no new pattern is introduced.**
+
+### Finding 4 — Apparent trade-off that resolves: E2 (enforcing) elevates Layer B to barrier, requires beyond-§0011 commitment
+
+Per Phase 3 sub-decision E secondary finding: E2 elevates Layer B from CANDIDACY (per [`§0011`](../../charter/decision-log.md)) to BARRIER. The apparent benefit (stronger structural defense) does not survive the [`§0011`](../../charter/decision-log.md) staged-combination reading — Layer A + Layer B is candidacy, not barrier; operator-elected demotion is the substrate-commit primitive. **E2's adoption would require a separate structural commitment beyond [`§0011`](../../charter/decision-log.md), which is not in this RFC's scope. The trade-off resolves toward E1 at inception, with E2 available as empirical-pressure-phase reversal option if operator-elected demotion patterns surface that warrant barrier-mode.**
+
+### Finding 5 — Structural precluusion: F2 (separate Layer A config) reverses [`§0138`](../../charter/decision-log.md) bundling
+
+Per Phase 3 sub-decision F tertiary finding: F2 reverses the [`§0138`](../../charter/decision-log.md) N_A bundling decision. The bundling was committee-decided on inception-phase simplicity grounds; reversing it requires committee-revisit, not implementation choice. **F2 exits the admissible-candidate space; F1 vs F3 is the remaining choice.**
+
+### Finding 6 — Genuine trade-off: F1 vs F3 — CLI surface compatibility vs strict bundling honor
+
+Per Phase 2 sub-decision F + Phase 3 sub-decision F: F1 (bundled in LayerBParameters) honors [`§0138`](../../charter/decision-log.md) bundling most directly but removes the existing `-cadence-seconds` CLI option from promote-hypothesis (breaking change). F3 (CLI operator-supplied with bundled defaults) honors the bundling at the substrate layer while preserving CLI surface compatibility. **The trade-off is committee-judgment on whether strict bundling honor or CLI surface compatibility matters more at inception**. The conservative-defaults reading favors F3 — backward compatibility is the more conservative choice; F1's break is justifiable only with operator-experience evidence that the existing option is harmful, which is not available at inception.
+
+### Finding 7 — Schemas-evolution event scope: D1 contained, D2/D3 triggers follow-on RFC
+
+Per Phase 3 sub-decision D quaternary finding: D1 is contained within the existing proto set; D2/D3 are schemas-evolution events per the canonical-serialization-contract §Schemas-Evolution Events boundary. Adopting D2 or D3 triggers a follow-on schemas-evolution RFC (proto field specification, version bumping, corpus impact, golden regeneration). **At inception phase, the schemas-evolution surface is unjustified — there is no audit-trail requirement yet that D1's transient form fails to meet; D1 is the conservative choice. D2/D3 reversal triggers: audit-trail requirement surfaces (e.g., regulatory, operational forensics); operator workflow demands persistent Layer B evaluation history.**
+
+### Finding 8 — Methodological observation: phase 3 sub-decision over-framing detection
+
+Per Phase 3 calibration carry-forward observation 2: the framing PR's sub-decision C over-enumeration was detectable only at Phase 3 via canonical-serialization-contract re-reading. The phase-3-detection pattern parallels the T_B-derived structural-preclusion from [`layer-b-parameter-calibration-evidence.md`](./layer-b-parameter-calibration-evidence.md) Phase 3 sub-decision 1; both cases share the structure "framing enumerated structurally-precluded candidates that Phase 3's contract-re-reading surfaces." **Recommendation for future operational-spec RFCs: explicit canonical-serialization-contract re-reading as a Phase 0 step (between framing PR and Phase 3) catches structural-preclusion sooner.**
+
+### Finding 9 — Cross-decision interaction matrix: conservative-defaults bundle has no internal conflict
+
+Per Phase 2's cross-decision interaction matrix + Phase 3's per-sub-decision findings: the conservative-defaults bundle A1 + B1 + C1 + D1 + E1 + F3 has no internal conflict. Each sub-decision's recommendation is compatible with every other sub-decision's recommendation in the bundle. The aggressive bundle (A2 + B2 + C-NA + D2 + E2 + F1) introduces multiple downstream dependencies (service architecture RFC, projection-rebuild RFC, schemas-evolution RFC, override-semantics specification, CLI breaking change) — adoption would multiply the RFC arc rather than complete it.
+
+## Phase 5 — Recommendation
+
+The discussion phase recommends the following service-tier implementation specification:
+
+| Sub-decision | Recommendation | Reversal trigger |
+|---|---|---|
+| **A. Evaluation locus** | **A1 — internal package** (`services/ingestion/internal/hypothesis/layerb/`) | Revise to A2 (separate service) if operational evidence shows Layer B evaluation requires independent scaling/deployment from ingestion (e.g., evaluation latency dominates ingestion CLI runtime; resource consumption competes with substrate writes). |
+| **B. Computation strategy** | **B1 — on-the-fly from substrate** | Revise to B2 (Cat II projection) if observed evaluation latency proves prohibitive at scale (e.g., closure-read time exceeds operator-tolerable threshold). Revise to B3 (substrate audit record) if audit-trail requirements become non-optional (regulatory, operational forensics, or post-incident analysis demands persistent evaluation history). |
+| **C. Window stream identity** | **C1 — substrate-global** | No reversal. Structurally determined by the canonical-serialization-contract [`§Demotion-Candidacy Predicate`](../../architecture/canonical-serialization-contract.md); only contract revision can revisit. |
+| **D. Output shape** | **D1 — transient DemoteReport extension** | Revise to D2 (`LayerBEvaluation` Cat II record) if audit-trail requirements surface; revise to D3 (`DemotionCandidacyEvaluation` composite) if operator workflow demands Layer A + Layer B combined audit per evaluation. Both reversals trigger a follow-on schemas-evolution RFC. |
+| **E. demote-hypothesis interaction** | **E1 — advisory like Layer A** | Revise to E2 (enforcing refusal) ONLY if operator-elected demotion patterns surface that warrant barrier-mode (e.g., empirical evidence of demotion-without-criterion creating substrate noise); E2 adoption requires concurrent structural commitment beyond [`§0011`](../../charter/decision-log.md). Revise to E3 (untouched, separate candidate-finder) if operator-workflow evidence shows the advisory field is overlooked in CLI output. |
+| **F. N_A=1 day Layer A cadence source** | **F3 — CLI operator-supplied with bundled defaults** | Revise to F1 (bundled-only, no CLI option) if operator-experience evidence accumulates that the existing `-cadence-seconds` option is harmful (e.g., overrides defeat the [`§0138`](../../charter/decision-log.md) inception-phase calibration). |
+
+The bundle **A1 + B1 + C1 + D1 + E1 + F3** is the conservative-defaults recommendation across the six sub-decisions. It honors:
+
+- [`§0011`](../../charter/decision-log.md) staged-combination Layer A pattern precedent (advisory in DemoteReport, no barrier);
+- [`§0022`](../../charter/decision-log.md) + [`§0023`](../../charter/decision-log.md) inception-phase posture (no service-architecture changes ahead of need; no projection storage ahead of need; no schemas-evolution events ahead of need);
+- [`§0136`](../../charter/decision-log.md) canonical-serialization-contract structural determination (sub-decision C resolves by contract reading);
+- [`§0138`](../../charter/decision-log.md) N_A bundling at the substrate layer (F3 reads default from LayerBParameters);
+- [CLAUDE.md §7](../../../.claude/CLAUDE.md) constitutional minimalism (no new patterns, no new service boundaries, no new substrate-record types at this RFC's resolution).
+
+**Per-sub-decision reversal triggers are observable empirical signals, not predictions.** Per [`layer-b-parameter-calibration-evidence.md`](./layer-b-parameter-calibration-evidence.md) Phase 4 Finding 8 carry-forward: triggers are observation-based ("if we observe X, revise"); the structural commitment is what would be observed, not what is predicted.
+
+### Implementation surface at resolution
+
+If accepted, the resolution PR will land:
+
+- New internal package `services/ingestion/internal/hypothesis/layerb/` with pure-function `Evaluate(ctx, sub, promotionEventHash, params) (Verdict, error)` (sub-decision A1).
+- The function reads substrate on-the-fly (sub-decision B1) using `closure_hashes` per [`§0136`](../../charter/decision-log.md) + `evidential_independence` per [`§0140`](../../charter/decision-log.md); window per the contract's substrate-global reading (sub-decision C1); returns a `Verdict` struct in memory (sub-decision D1).
+- Existing demote-hypothesis + 4 subtype variants are extended to invoke `layerb.Evaluate` and surface the verdict in `DemoteReport`'s new `LayerB*` fields (sub-decision E1). Demote behavior unchanged — records the demotion regardless of the verdict.
+- promote-hypothesis is extended to default `-cadence-seconds` from the hypothesis's `LayerBParameters.n_a_duration_nanoseconds` field when the option is not supplied (sub-decision F3); existing CLI semantic preserved.
+- `services/ingestion/internal/hypothesis/demotion.go:97-99` comment refreshed to acknowledge [`§0129`](../../charter/decision-log.md) §2.6 freeze + [`§0138`](../../charter/decision-log.md) Layer B specification + the new evaluation function.
+- Unit tests over fixture substrate for the evaluation function; integration tests for CLI extension.
+- No new proto types. No corpus changes. No schemas-evolution event.
+
+### Forward schedule
+
+- **Resolution PR**: RFC status moves from `discussion` to `accepted`; decision-log entry recorded; service-tier implementation work proceeds under ordinary RFC discipline.
+- **Implementation PR(s)**: post-resolution; one or more PRs land the implementation surface specified above. Coordination with existing CI hooks (Go build/test, doc-check) is structural — no new infrastructure required.
+- **Downstream consequences** (post-resolution): no Charter prose modification; no Ontology binding-text change; the `demotion.go:97-99` comment refresh is bundled with the implementation PR(s).
