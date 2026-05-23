@@ -41,9 +41,9 @@ The Ontology must, at minimum, satisfy the following Charter requirements:
 | [Invariant 2.1 — Observational Integrity](../charter/constitutional-charter.md#21-observational-integrity) | The observation category must be modeled as immutable. |
 | [Invariant 2.2 — Epistemic Separation](../charter/constitutional-charter.md#22-epistemic-separation) | The three categories must occupy distinct types with distinct operations. |
 | [Invariant 2.3 — Provenance Integrity](../charter/constitutional-charter.md#23-provenance-integrity) | Every Assertion declares observational provenance via the typed `subject_ref_*` field; the reference chain terminates at Category I primary observations. |
-| Invariant 2.4 — Inferential Influence Disclosure (pending) | Entities formed under influence of promoted hypotheses must declare that influence. |
+| [Invariant 2.4 — Inferential Influence Disclosure](../charter/constitutional-charter.md#24-inferential-influence-disclosure) | Entities formed under influence of promoted hypotheses must declare that influence. |
 | [Invariant 2.5 — Hypothesis Lifecycle Explicitness](../charter/constitutional-charter.md#25-hypothesis-lifecycle-explicitness) | Hypothesis-state changes must be modeled as lifecycle events, not mutations. |
-| Invariant 2.6 — Evidential Independence Integrity (pending) | Inferential assertions must carry separate confidence and independence dimensions. |
+| [Invariant 2.6 — Evidential Independence Integrity](../charter/constitutional-charter.md#26-evidential-independence-integrity) | Inferential assertions must carry separate confidence and independence dimensions. |
 
 Each invariant above corresponds to a concrete structural requirement in the Ontology. As invariants are redacted in committee mode, the corresponding Ontology sections are written to match them.
 
@@ -65,9 +65,9 @@ The following questions are deferred to committee redaction. They are recorded h
 |---|---|
 | Scope and document family | Drafted |
 | Constitutional anchors | Drafted |
-| [Entity model](./entity-model.md) | Scaffold |
-| [Provenance model](./provenance-model.md) | Scaffold |
-| [Lifecycle semantics](./lifecycle-semantics.md) | Scaffold |
+| [Entity model](./entity-model.md) | Drafted (Cat I + II + III post-Q1/Q2/Q3 per [`§0010`](../charter/decision-log.md) + [`§0015`](../charter/decision-log.md) + [`§0016`](../charter/decision-log.md); other sections at Scaffold strength) |
+| [Provenance model](./provenance-model.md) | Drafted (§Observational Provenance post-Q3 per [`§0016`](../charter/decision-log.md) + [`§0017`](../charter/decision-log.md); §Inferential Provenance post-OMQ #2 + OMQ #3 per [`§0020`](../charter/decision-log.md) + [`§0021`](../charter/decision-log.md) + [`§0099`](../charter/decision-log.md); Q5 transitivity per [`§0134`](../charter/decision-log.md)) |
+| [Lifecycle semantics](./lifecycle-semantics.md) | Drafted (Cat III + §The Promotion Mechanism post-Q4 + Layer B per [`§0011`](../charter/decision-log.md) + [`§0135`](../charter/decision-log.md) + [`§0138`](../charter/decision-log.md); other sections at Scaffold strength) |
 | Replay semantics | Not yet created |
 
-<!-- TODO: After Charter v0.1 is frozen, begin committee redaction of entity-model.md as the first concrete Ontology document. -->
+<!-- Charter v0.7 fully frozen per `decision-log.md` §0131. Committee redaction of [`entity-model.md`](./entity-model.md) is complete (Drafted per `docs/architecture/README.md` Status); [`provenance-model.md`](./provenance-model.md) and [`lifecycle-semantics.md`](./lifecycle-semantics.md) likewise advanced to Drafted strength on their constitutional-anchor sections (per Status banners). -->
