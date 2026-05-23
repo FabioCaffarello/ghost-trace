@@ -4,6 +4,10 @@
   "actorRefs": ["bot-actor-a"],
   "formationAt": "1716120300000000000",
   "confidence": 0.95,
+  "evidentialIndependence": {
+    "numerator": "2",
+    "denominator": "3"
+  },
   "sourceEventHashes": [
     "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
     "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=",

@@ -111,3 +111,86 @@ func TestHashListFieldNamesRegistry_NoSpuriousEntries(t *testing.T) {
 		t.Fatalf("hashListFieldNames contains entries with no corresponding top-level repeated bytes field on the canonical-form-load-bearing proto surface: %v (registered names that no longer match any proto field — likely indicates a proto-deletion event that did not clean up the registry)", spurious)
 	}
 }
+
+// pairedDimensionSubjectSet enumerates the canonical-form-load-bearing
+// message-type names (as messageFactory prefixes) that are subject to
+// the paired-dimension commitment per canonical-serialization-contract
+// §Paired-Dimension Commitment + §2.6 v0.6 + §0136 + §0140:
+//
+//   - Category III hypothesis formation records (the four concrete
+//     subtypes per §0010 Q2-A.2 × the formation lifecycle event).
+//   - Category II OperationalSession (per §0134 Cat II structural
+//     transmission + paired-dimension commitment).
+//
+// This is the contract's enumeration. The structural detection
+// (validatePairedDimensionCommitment uses "declares both confidence
+// field AND evidential_independence field" as the proxy) must select
+// exactly this set. TestPairedDimensionSubjectSet_StructuralDetection
+// below verifies the proxy and the enumeration agree.
+var pairedDimensionSubjectSet = map[string]struct{}{
+	"behavioral-cluster-formation":  {},
+	"automation-group-formation":    {},
+	"campaign-hypothesis-formation": {},
+	"coordination-ring-formation":   {},
+	"operational-session":           {},
+}
+
+// TestPairedDimensionSubjectSet_StructuralDetection asserts that the
+// structural detection used by validatePairedDimensionCommitment
+// ("declares both confidence + evidential_independence fields") selects
+// exactly the contract-enumerated paired-dimension subject set
+// (pairedDimensionSubjectSet above).
+//
+// Failures in either direction indicate drift between the contract's
+// enumeration and the structural proxy:
+//
+//   - A type in pairedDimensionSubjectSet that does NOT declare both
+//     fields: the type was added to the contract's enumeration but the
+//     proto schema does not carry both required fields. The proto needs
+//     extension OR the enumeration is wrong.
+//
+//   - A type that DOES declare both fields but is NOT in
+//     pairedDimensionSubjectSet: either the proto inadvertently carries
+//     both fields (likely a field-naming collision) OR the contract
+//     enumeration needs extension AND pairedDimensionSubjectSet here
+//     needs to be updated.
+//
+// Mechanizes §0140 patch-via-pressure protection: keeps the structural
+// detection in canonical.go and the contract's enumeration agreeing,
+// so a future proto change that introduces (or removes) one of the
+// paired-dimension fields surfaces as a test failure at the same
+// commit.
+func TestPairedDimensionSubjectSet_StructuralDetection(t *testing.T) {
+	detected := map[string]struct{}{}
+	for prefix, factory := range messageFactory {
+		msg := factory()
+		fields := msg.ProtoReflect().Descriptor().Fields()
+		hasConf := fields.ByName("confidence") != nil
+		hasEi := fields.ByName("evidential_independence") != nil
+		if hasConf && hasEi {
+			detected[prefix] = struct{}{}
+		}
+	}
+
+	var missingFromDetection []string
+	for prefix := range pairedDimensionSubjectSet {
+		if _, ok := detected[prefix]; !ok {
+			missingFromDetection = append(missingFromDetection, prefix)
+		}
+	}
+	var unexpectedlyDetected []string
+	for prefix := range detected {
+		if _, ok := pairedDimensionSubjectSet[prefix]; !ok {
+			unexpectedlyDetected = append(unexpectedlyDetected, prefix)
+		}
+	}
+
+	if len(missingFromDetection) > 0 {
+		sort.Strings(missingFromDetection)
+		t.Errorf("contract-enumerated paired-dimension subject type(s) NOT detected by the structural proxy (proto does not declare both confidence + evidential_independence): %v (either the proto schema needs the paired-dimension fields OR the contract enumeration is wrong)", missingFromDetection)
+	}
+	if len(unexpectedlyDetected) > 0 {
+		sort.Strings(unexpectedlyDetected)
+		t.Errorf("type(s) detected by the structural proxy (declare both confidence + evidential_independence) but NOT in the contract-enumerated paired-dimension subject set: %v (either the proto inadvertently carries both fields OR the contract enumeration needs extension AND pairedDimensionSubjectSet in this test needs the new entry)", unexpectedlyDetected)
+	}
+}
