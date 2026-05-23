@@ -1,8 +1,8 @@
 # RFC — Operational specification: Layer B service-tier implementation
 
-- **Status:** discussion
-- **Authors:** Ghost Trace committee (per [`decision-log §0138`](../../charter/decision-log.md) Consequences carry-forward — "service-tier implementation now openable as ordinary RFC discipline" — opening this RFC at discussion phase as the next operational-specification follow-on after [`§0136`](../../charter/decision-log.md) canonical-serialization-contract crystallization + [`§0138`](../../charter/decision-log.md) parameter calibration)
-- **Date:** 2026-05-23 (opened)
+- **Status:** accepted (resolved at [`decision-log §0141`](../../charter/decision-log.md) adopting Phase 5 recommendation — A1+B1+C1+D1+E1+F3 conservative-defaults bundle)
+- **Authors:** Ghost Trace committee (per [`decision-log §0138`](../../charter/decision-log.md) Consequences carry-forward — "service-tier implementation now openable as ordinary RFC discipline"; discussion-phase deliberation Phases 3–5 recorded in [`layer-b-service-tier-implementation-evidence.md`](../discussion/layer-b-service-tier-implementation-evidence.md); resolution at [`§0141`](../../charter/decision-log.md))
+- **Date:** 2026-05-23 (opened); 2026-05-23 (resolved)
 - **Type:** operational-spec
 - **Affects:** [`services/ingestion/internal/hypothesis/`](../../../services/ingestion/internal/hypothesis/) (new evaluation surface; affects `demotion.go` + per-subtype demotion implementations); [`services/ingestion/cmd/demote-hypothesis/`](../../../services/ingestion/cmd/demote-hypothesis/) + four subtype-specific demote commands (CLI surface for Layer B reporting); potentially new `cmd/find-demotion-candidates/` (depends on sub-decision E); [`docs/architecture/canonical-serialization-contract.md`](../../architecture/canonical-serialization-contract.md) §Demotion-Candidacy Predicate (operational discharge of the contract's structural surface — values + computation strategy + locus); no Charter prose modification (form-level + parameter-level resolutions already at [`§0135`](../../charter/decision-log.md) + [`§0138`](../../charter/decision-log.md))
 
@@ -146,4 +146,29 @@ No corpus or canonical-byte changes from this RFC. No schemas-evolution event fr
 
 ## Decision Record
 
-Status: discussion. Resolution will be recorded here at acceptance time, with reference to the decision-log entry that adopts a final implementation specification across the six sub-decisions.
+Resolved at [`decision-log §0141`](../../charter/decision-log.md) (2026-05-23): conservative-defaults bundle adopted per Phase 5 recommendation.
+
+| Sub-decision | Resolved value |
+|---|---|
+| **A. Evaluation locus** | **A1 — internal package** (`services/ingestion/internal/hypothesis/layerb/`) |
+| **B. Computation strategy** | **B1 — on-the-fly from substrate** |
+| **C. Window stream identity** | **C1 — substrate-global** (structurally determined by canonical-serialization-contract §Demotion-Candidacy Predicate, not by implementation choice) |
+| **D. Output shape** | **D1 — transient DemoteReport extension** |
+| **E. demote-hypothesis interaction** | **E1 — advisory like Layer A** |
+| **F. N_A=1 day Layer A cadence source** | **F3 — CLI operator-supplied with bundled defaults** |
+| Reversal-conditions granularity | **Per-sub-decision** |
+
+Implementation surface to follow at subsequent implementation PR(s):
+
+- New internal package `services/ingestion/internal/hypothesis/layerb/` with pure-function `Evaluate(ctx, sub, promotionEventHash, params) (Verdict, error)`.
+- Function reads substrate on-the-fly using `closure_hashes` per [`§0136`](../../charter/decision-log.md) + `evidential_independence` per [`§0140`](../../charter/decision-log.md); window per the contract's substrate-global reading.
+- demote-hypothesis + 4 subtype variants extended to surface verdict in `DemoteReport`'s new `LayerB*` fields. Demote behavior unchanged.
+- promote-hypothesis extended to default `-cadence-seconds` from `LayerBParameters.n_a_duration_nanoseconds` when option not supplied.
+- `services/ingestion/internal/hypothesis/demotion.go:97-99` stale comment refreshed to acknowledge [`§0129`](../../charter/decision-log.md) §2.6 freeze + [`§0138`](../../charter/decision-log.md) Layer B specification + the new evaluation function.
+- Unit + integration tests over fixture substrate.
+
+No new proto types. No corpus changes. No schemas-evolution event at this resolution.
+
+The resolution rests on [`layer-b-service-tier-implementation-evidence.md`](../discussion/layer-b-service-tier-implementation-evidence.md) Phase 4 findings F1–F9 (with F1 being the structural-determination of sub-decision C by the canonical-serialization-contract).
+
+With this resolution, the full Q4 → Layer B operational arc extends one layer deeper into implementation: [`§0011`](../../charter/decision-log.md) → [`§0099`](../../charter/decision-log.md) → [`§0129`](../../charter/decision-log.md) → [`§0133`](../../charter/decision-log.md) → [`§0134`](../../charter/decision-log.md) → [`§0135`](../../charter/decision-log.md) → [`§0136`](../../charter/decision-log.md) → [`§0138`](../../charter/decision-log.md) → [`§0141`](../../charter/decision-log.md). Implementation work proceeds under ordinary RFC discipline; the form, parameters, and implementation strategy are now all committee-resolved.
