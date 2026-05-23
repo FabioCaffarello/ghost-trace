@@ -228,7 +228,7 @@ Substrate-commit fails at the canonical-marshalling boundary when any field in t
 
 ### Scope and future extension
 
-The check is scoped to top-level `repeated bytes` fields of the canonical-form-load-bearing types named above. A future canonical-form-load-bearing message type that introduces a new 32-byte BLAKE3 hash-list field inherits this discipline structurally and must be added to the marshalling-boundary check at the same commit as the proto change (per the Schemas-Evolution Events boundary item 5 — new structural commitments at the schema layer). Singular `bytes` content-hash fields (e.g., `produced_formation_event_hash`, `source_event_hash`) are NOT subject to this discipline at the field-list level — their structural commitment is length-only (32 bytes) and is enforced by the same proto-field-shape mechanism at substrate-commit time, not by the ordered/deduplicated list-shape rules.
+The check is scoped to top-level `repeated bytes` fields of the canonical-form-load-bearing types named above. A future canonical-form-load-bearing message type that introduces a new 32-byte BLAKE3 hash-list field inherits this discipline structurally and must be added to the marshalling-boundary check at the same commit as the proto change (per the Schemas-Evolution Events boundary item 5 — `.proto` file structural commitments change). Singular `bytes` content-hash fields (e.g., `produced_formation_event_hash`, `source_event_hash`) are NOT subject to this discipline at the field-list level — their structural commitment is length-only (32 bytes) and is enforced by the same proto-field-shape mechanism at substrate-commit time, not by the ordered/deduplicated list-shape rules.
 
 ## Demotion-Candidacy Predicate (Layer B L-BC-OR)
 
