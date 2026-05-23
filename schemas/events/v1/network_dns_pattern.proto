@@ -1,0 +1,46 @@
+// Sub-modality of NetworkObservation per decision-log §0144 (a)
+// discriminated-union framing. Carries DNS query pattern features
+// observable from collector-side query logs over a window. NOT raw
+// QNAMEs (privacy-preserving by structural design — pattern over
+// time, anonymized).
+//
+// No `confidence` / `evidential_independence` fields — Cat I sub-modality
+// payload, structurally excluded from paired-dimension per §2.6 BC3.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// NetworkDnsPattern is the DNS query pattern payload carried by
+// NetworkObservation when the modality is `dns_pattern`. Field set
+// captures pattern features over a query window, not individual
+// queries. The anonymization is structural: qname_pattern carries
+// structure (TLD depth, label-length histogram) not labels.
+message NetworkDnsPattern {
+  // qname_pattern is the anonymized structural representation of the
+  // observed QNAMEs over the window. Format: "depth:N;label_lengths:
+  // L1,L2,...,LN" where depth is the number of labels and label_lengths
+  // is the histogram of label lengths in the order they appeared.
+  // Example: "depth:3;label_lengths:8,7,3" for a QNAME like
+  // "example.foo.com" (label lengths 7, 3, 3 — example length 8 for
+  // illustration). Carries no raw label content.
+  string qname_pattern = 1;
+
+  // qtype_sequence is the sequence of observed QTYPE codes per RFC
+  // 1035 §3.2.2 + RFC 3596 (1=A, 28=AAAA, 5=CNAME, 15=MX, 16=TXT,
+  // 33=SRV, 65=HTTPS, etc.) in the order they appeared across the
+  // window.
+  repeated uint32 qtype_sequence = 2;
+
+  // recursion_desired is the typical RD flag value observed in the
+  // window (true if any query had RD set; consumers needing per-query
+  // RD should observe at higher resolution). Per RFC 1035 §4.1.1.
+  bool recursion_desired = 3;
+
+  // response_codes is the sequence of RCODE values observed in
+  // responses (when collector has visibility into responses) per RFC
+  // 1035 §4.1.1 (0=NoError, 1=FormErr, 2=ServFail, 3=NXDomain, 4=NotImp,
+  // 5=Refused).
+  repeated uint32 response_codes = 4;
+}

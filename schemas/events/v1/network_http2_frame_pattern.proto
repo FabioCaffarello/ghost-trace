@@ -1,0 +1,44 @@
+// Sub-modality of NetworkObservation per decision-log §0144 (a)
+// discriminated-union framing. Carries HTTP/2 frame-level pattern
+// features observable from connection establishment + early frames.
+// Sample sources cited for fixture authorship: RFC 7540 §6 frame types
+// + publicly documented browser HTTP/2 settings tables.
+//
+// No `confidence` / `evidential_independence` fields — Cat I sub-modality
+// payload, structurally excluded from paired-dimension per §2.6 BC3.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// NetworkHttp2FramePattern is the HTTP/2 frame-level pattern payload
+// carried by NetworkObservation when the modality is
+// `http2_frame_pattern`. Field set captures the patterns that
+// distinguish browser stacks from automation frameworks at the HTTP/2
+// frame layer.
+message NetworkHttp2FramePattern {
+  // frame_type_sequence is the sequence of observed HTTP/2 frame
+  // type numbers per RFC 7540 §6 (frame-type registry; see the RFC
+  // for the enumeration of type-number → frame-name mappings)
+  // in the order observed across the connection's early frames.
+  repeated uint32 frame_type_sequence = 1;
+
+  // settings_canonical is the canonical-form representation of the
+  // SETTINGS frame parameters, sorted by parameter ID and serialized
+  // as "id:value" pairs joined by ";" (e.g.
+  // "1:65536;3:1000;4:6291456;6:262144"). Sorting normalizes order
+  // for hash stability across collector implementations.
+  string settings_canonical = 2;
+
+  // priority_canonical is the canonical-form representation of the
+  // observed PRIORITY frame stream-dependency tree, when present.
+  // Empty when no PRIORITY frames were observed.
+  string priority_canonical = 3;
+
+  // header_table_size is the SETTINGS_HEADER_TABLE_SIZE value per
+  // RFC 7540 §6.5.2 (HPACK dynamic table size). Distinct field for
+  // direct access; redundant with `settings_canonical` but commonly
+  // queried.
+  uint32 header_table_size = 4;
+}
