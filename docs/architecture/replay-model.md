@@ -7,8 +7,8 @@
 ## Constitutional Anchors
 
 - [Invariant 2.1 — Observational Integrity](../charter/constitutional-charter.md#21-observational-integrity). Replay is meaningful only because the observational substrate is immutable.
-- Invariant 2.3 — Provenance Integrity (pending). Replay traverses provenance to reconstruct the path from assertions to observations.
-- Invariant 2.4 — Inferential Influence Disclosure (pending). Replay must preserve the distinction between belief grounded in observation and belief inherited from prior assertions.
+- [Invariant 2.3 — Provenance Integrity](../charter/constitutional-charter.md#23-provenance-integrity) (frozen v0.4 per [`decision-log §0017`](../charter/decision-log.md)). Replay traverses provenance to reconstruct the path from assertions to observations.
+- [Invariant 2.4 — Inferential Influence Disclosure](../charter/constitutional-charter.md#24-inferential-influence-disclosure) (frozen v0.5 per [`decision-log §0099`](../charter/decision-log.md)). Replay must preserve the distinction between belief grounded in observation and belief inherited from prior assertions.
 
 ## Replay Phases
 
