@@ -4,7 +4,7 @@ Schemas for provenance edges and supporting structures.
 
 ## Status
 
-Not yet defined. Awaiting committee redaction of Invariants 2.3 (Provenance Integrity) and 2.4 (Inferential Influence Disclosure).
+No dedicated provenance-edge protos exist in this directory. [Invariant 2.3 — Provenance Integrity](../../docs/charter/constitutional-charter.md#23-provenance-integrity) is frozen v0.4 per [`decision-log §0017`](../../docs/charter/decision-log.md); [§2.4 — Inferential Influence Disclosure](../../docs/charter/constitutional-charter.md#24-inferential-influence-disclosure) is frozen v0.5 per [`§0099`](../../docs/charter/decision-log.md). The structural requirements both invariants codify (`derived_from` observational edges via typed `subject_ref_*` references per [`§0016`](../../docs/charter/decision-log.md); `influenced_by` inferential edges committed at substrate event time per [`§0021`](../../docs/charter/decision-log.md); transitive scope per [`§0134`](../../docs/charter/decision-log.md); decay via §2.5 lifecycle event supersession per [`§0020`](../../docs/charter/decision-log.md)) are presently materialized inline in the [`events/v1/`](../events/v1/) Category III formation protos and the canonical-serialization-contract closure-storage shape per [`decision-log §0136`](../../docs/charter/decision-log.md). Dedicated provenance-edge protos may surface here as a future schema-evolution event if a future RFC factors them out of the inline form; until then, this directory remains an organizational placeholder.
 
 ## Required Properties
 
