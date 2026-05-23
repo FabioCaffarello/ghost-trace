@@ -10,6 +10,6 @@ Not implemented.
 
 ## Required Properties
 
-- Projection discipline: the graph reflects the substrate. Direct mutation of graph state outside the projection rebuild path is forbidden (Invariant 2.5 — pending).
+- Projection discipline: the graph reflects the substrate. Direct mutation of graph state outside the projection rebuild path is forbidden (per the [projection-model.md](../../docs/architecture/projection-model.md) projection-rebuildability discipline; the graph is a projection of the substrate event log, not a mutable store).
 - Independence support: graph traversal must be capable of filtering by edge type (`derived_from` vs. `influenced_by`) to support independence analysis.
 - Versioned projection logic.
