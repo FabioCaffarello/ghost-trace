@@ -81,6 +81,16 @@ type DemoteReport struct {
 	// demoted_at. Surfaces "how early" or "how late" the demotion
 	// fired relative to the cadence parameter.
 	CadenceElapsedSeconds int64
+
+	// LayerB is the Layer B deep-criterion verdict per §0141 sub-
+	// decision E1 (advisory like Layer A). Per §0011 staged-combination,
+	// Layer B is a CANDIDACY criterion alongside Layer A; LayerB.Fired
+	// indicates whether the demote target satisfied Layer B at evaluation
+	// time. Demote records the demotion regardless of LayerB.Fired.
+	// LayerB.Evaluated=false when the source promotion lacks
+	// LayerBParameters (pre-§0138 legacy promotion); see LayerBReport
+	// fields documentation.
+	LayerB LayerBReport
 }
 
 // Demote records a BehavioralClusterDemotion lifecycle event against
@@ -94,9 +104,13 @@ type DemoteReport struct {
 // Demote records the demotion regardless of whether
 // promotion.promoted_at + cadence_seconds has elapsed; the resulting
 // DemoteReport.CadenceSatisfied surfaces the gate state for
-// operator-facing reporting. Layer B (deep criterion on evidential
-// independence) remains deferred until §2.6 operationalization;
-// Demote does not evaluate it.
+// operator-facing reporting. Per §0141 sub-decision E1 (advisory
+// like Layer A), Layer B (the deep criterion under §0135 L-BC-OR +
+// §0138 inception-phase parameters T_B=K_C=0.5, N=1000, W-count) is
+// evaluated on-the-fly via internal/hypothesis/layerb.Evaluate and
+// surfaced in DemoteReport.LayerB; Demote also records the demotion
+// regardless of LayerB.Fired. Pre-§0138 promotions lack
+// LayerBParameters and surface as DemoteReport.LayerB.Evaluated=false.
 //
 // Errors:
 //   - ErrTargetNotFound: the promotion hash does not resolve to any
@@ -139,6 +153,17 @@ func Demote(ctx context.Context, sub *substrate.Substrate, opts DemoteOptions, n
 	elapsedSeconds := (demotedAt - promotion.GetPromotedAt()) / int64(time.Second)
 	cadenceSatisfied := elapsedSeconds >= promotion.GetCadenceSeconds()
 
+	// Layer B evaluation per §0141 sub-decision E1 (advisory) + B1
+	// (on-the-fly). Hypothesis identity per §0045: H.hash IS the
+	// formation event's content-hash; the promotion event carries it
+	// as formation_event_hash. LayerBParameters per §0138 bundling.
+	var formationHash [32]byte
+	copy(formationHash[:], promotion.GetFormationEventHash())
+	layerBReport, err := evaluateLayerB(ctx, sub, formationHash, promotion.GetLayerBParameters())
+	if err != nil {
+		return DemoteReport{}, fmt.Errorf("hypothesis.Demote: evaluate Layer B: %w", err)
+	}
+
 	ev := &eventsv1.BehavioralClusterDemotion{
 		PromotionEventHash: opts.PromotionEventHash[:],
 		DemotedAt:          demotedAt,
@@ -174,6 +199,7 @@ func Demote(ctx context.Context, sub *substrate.Substrate, opts DemoteOptions, n
 			AlreadyDemoted:        alreadyPresent,
 			CadenceSatisfied:      cadenceSatisfied,
 			CadenceElapsedSeconds: elapsedSeconds,
+			LayerB:                layerBReport,
 		}, nil
 	}
 
@@ -206,5 +232,6 @@ func Demote(ctx context.Context, sub *substrate.Substrate, opts DemoteOptions, n
 		CadenceSatisfied:      cadenceSatisfied,
 		CadenceElapsedSeconds: elapsedSeconds,
 		IngestionEventHashHex: ingHex,
+		LayerB:                layerBReport,
 	}, nil
 }

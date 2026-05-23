@@ -297,3 +297,39 @@ func TestDemoteFullChainInSubstrate(t *testing.T) {
 		}
 	}
 }
+
+// TestDemoteLayerBLegacyPromotion verifies that demotions targeting
+// pre-§0138 promotions (which lack populated LayerBParameters) surface
+// DemoteReport.LayerB.Evaluated=false. This is the documented
+// fallback per evaluateLayerB + LayerBReport: when the source
+// promotion's layer_b_parameters field is unset, Layer B's predicate
+// is not runnable and the report's other LayerB fields are zero.
+//
+// The current Promote() implementation does not populate
+// layer_b_parameters; all promotions produced via Promote() therefore
+// fall into the legacy path until promote-hypothesis is extended per
+// §0141 sub-decision F3 follow-on PR.
+func TestDemoteLayerBLegacyPromotion(t *testing.T) {
+	sub, promotionHash := formAndPromote(t, 1716120000000000000, 3600)
+	rep, err := Demote(context.Background(), sub, DemoteOptions{
+		PromotionEventHash: promotionHash,
+		DemotedAt:          1716120004000000000,
+		Reason:             "test",
+	}, nil)
+	if err != nil {
+		t.Fatalf("Demote: %v", err)
+	}
+	if rep.LayerB.Evaluated {
+		t.Errorf("LayerB.Evaluated: got true, want false (Promote() does not populate layer_b_parameters; legacy path)")
+	}
+	if rep.LayerB.Fired {
+		t.Errorf("LayerB.Fired: got true, want false on Evaluated=false")
+	}
+	if rep.LayerB.FreshnessFired || rep.LayerB.SaturationFired {
+		t.Errorf("LayerB.{Freshness,Saturation}Fired: got true, want false on Evaluated=false")
+	}
+	// Demote itself succeeded — Layer B advisory per §0141 E1 does not block.
+	if rep.DemotionEventHashHex == "" {
+		t.Error("DemotionEventHashHex empty; demote should record regardless of LayerB state per §0141 E1")
+	}
+}

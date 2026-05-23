@@ -69,6 +69,11 @@ type AutomationGroupDemoteReport struct {
 	// IngestionEventHashHex is the content-hash (hex) of the paired
 	// IngestionEvent committed when Actor was non-empty.
 	IngestionEventHashHex string
+
+	// LayerB is the Layer B deep-criterion verdict per §0141
+	// sub-decision E1 (advisory like Layer A). Demote records the
+	// demotion regardless of LayerB.Fired.
+	LayerB LayerBReport
 }
 
 // DemoteAutomationGroup records an AutomationGroupDemotion lifecycle
@@ -118,6 +123,15 @@ func DemoteAutomationGroup(ctx context.Context, sub *substrate.Substrate, opts A
 	elapsedSeconds := (demotedAt - promotion.GetPromotedAt()) / int64(time.Second)
 	cadenceSatisfied := elapsedSeconds >= promotion.GetCadenceSeconds()
 
+	// Layer B evaluation per §0141 sub-decision E1 (advisory) + B1
+	// (on-the-fly).
+	var formationHash [32]byte
+	copy(formationHash[:], promotion.GetFormationEventHash())
+	layerBReport, err := evaluateLayerB(ctx, sub, formationHash, promotion.GetLayerBParameters())
+	if err != nil {
+		return AutomationGroupDemoteReport{}, fmt.Errorf("hypothesis.DemoteAutomationGroup: evaluate Layer B: %w", err)
+	}
+
 	ev := &eventsv1.AutomationGroupDemotion{
 		PromotionEventHash: opts.PromotionEventHash[:],
 		DemotedAt:          demotedAt,
@@ -153,6 +167,7 @@ func DemoteAutomationGroup(ctx context.Context, sub *substrate.Substrate, opts A
 			AlreadyDemoted:        alreadyPresent,
 			CadenceSatisfied:      cadenceSatisfied,
 			CadenceElapsedSeconds: elapsedSeconds,
+			LayerB:                layerBReport,
 		}, nil
 	}
 
@@ -185,5 +200,6 @@ func DemoteAutomationGroup(ctx context.Context, sub *substrate.Substrate, opts A
 		CadenceSatisfied:      cadenceSatisfied,
 		CadenceElapsedSeconds: elapsedSeconds,
 		IngestionEventHashHex: ingHex,
+		LayerB:                layerBReport,
 	}, nil
 }
