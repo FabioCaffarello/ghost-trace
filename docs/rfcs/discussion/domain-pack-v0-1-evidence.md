@@ -48,7 +48,7 @@ All sub-decisions enumerated below assume the posture closed in cross-Claude tri
 - **F1 — Typed observation taxonomy.** Four sub-decisions: (1) order of modality introduction; (2) NetworkObservation field set; (3) AttestationObservation typing — discriminated union per protocol vs generic envelope; (4) BrowserObservation typing — single type vs sub-discrimination.
 - **F2 — Cat II construct library extension.** Two sub-decisions: (5) construct-versioning surface (parallel to `uniform_cadence_v1.go` precedent? new pattern?); (6) when constructs land (front-load vs F3-responsive — already committed to F3-responsive by posture).
 - **F3 — Signature engines.** Three sub-decisions: (7) signature-definition format (Go-code vs declarative vs hybrid); (8) initial subtype scope (AutomationGroup-first per F1 dependency vs BehavioralCluster vs both); (9) instrumentation surface (substrate-committed vs telemetry-only — per phenomenon-vs-record OMQ surface).
-- **F4 — Trust-of-observation typing.** One sub-decision: (10) registration timing (open OMQ at F1 modality 2 vs at F1 modality 3 vs as separate ontology-revision RFC NOW). Per posture: open OMQ as separate ontology-revision RFC when F1 has three modalities stable (anticipated month 2–3).
+- **F4 — Authentication-class typing.** One sub-decision: (10) registration timing (open OMQ at F1 modality 2 vs at F1 modality 3 vs as separate ontology-revision RFC NOW). Per posture: open OMQ as separate ontology-revision RFC when F1 has three modalities stable (anticipated month 2–3).
 - **F6 — Operator-grade explainability.** Three sub-decisions: (11) F6 substrate-read contract scope (full export format vs minimum hash-navigation); (12) F6 surface form (CLI-only this window vs CLI + minimum HTTP); (13) F6 interaction with existing httpapi (extend vs separate service).
 - **Data sources.** Three sub-decisions: (14) public dataset order — CIC-IDS first vs ENISA first vs both adapters in parallel; (15) synthetic generator scope — own-engineering separate from F3 vs same-team-with-documented-brief vs pair-external-review-only; (16) honeypot collector architecture — own infra vs cloud-vendor sandbox vs lightweight VM.
 - **Layer C embargo mechanism.** Already resolved per posture closure: config (1) — embargo via decision-log communicational discipline; code always public. Sub-decision-(17) closed.
@@ -59,7 +59,7 @@ All sub-decisions enumerated below assume the posture closed in cross-Claude tri
 - Op-def-versioning (lifecycle-semantics.md OMQ) — surfaced under F2/F3 first revision.
 - Cross-category lifecycle interactions (lifecycle-semantics.md OMQ) — surfaced under F3 first demotion with Cat II downstream.
 - Phenomenon-vs-record reconciliation under multi-source ingestion — NEW; propose registration in entity-model.md OMQ section + separate ontology-revision RFC when F1 has two sources stable.
-- Trust-of-observation typing — NEW; propose registration in entity-model.md OMQ section + separate ontology-revision RFC when F1 has three modalities stable.
+- Authentication-class typing — NEW; propose registration in entity-model.md OMQ section + separate ontology-revision RFC when F1 has three modalities stable.
 
 Cross-domain provenance OMQ (provenance-model.md OMQ #4) is **explicitly out-of-scope** for this RFC.
 
@@ -85,7 +85,7 @@ Empirical audit (as of [`§0142`](../../charter/decision-log.md) merge):
 - **F10** performance / scale architecture.
 - Cross-domain provenance OMQ (provenance-model.md OMQ #4).
 - Fourth signature layer (comercial fechada).
-- Schema technology re-selection ([`§0024`](../../charter/decision-log.md) proto3 is accepted; F1 adds proto types within that selection).
+- Schemas-technology re-selection ([`§0024`](../../charter/decision-log.md) proto3 is accepted; F1 adds proto types within that selection).
 - Storage technology re-selection ([`architecture-storage-technology-selection.md`](../draft/architecture-storage-technology-selection.md) accepted).
 - Auth model re-selection ([`architecture-http-auth-scope-model.md`](../draft/architecture-http-auth-scope-model.md) accepted; F6 may consume but not modify).
 - Implementation language re-selection (Go accepted).

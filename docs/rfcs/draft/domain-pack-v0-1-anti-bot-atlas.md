@@ -142,7 +142,7 @@ Each new Cat I observation proto triggers a schemas-evolution event per the cano
 
 ### F2 — Cat II construct library (extended sob pressão de F3)
 
-The current library has four toy constructs operating on `DeclaredSession`. Anti-bot inference will require richer Cat II surface — likely `humanness_indicator`, `automation_signature`, `navigation_regularity`, `cohort_anomaly_distance`, `attestation_chain_trust`, `cross_modal_coherence`. **Not front-loaded.** Each construct formalizes when F3 needs it; the existing `uniform_cadence_v1.go` pattern (versioned Cat II definition) is the precedent.
+The current library has four toy constructs operating on `DeclaredSession`. Anti-bot inference will require richer Cat II surface — likely `humanness_indicator`, `automation_signature`, `navigation_regularity`, `cohort_anomaly_distance`, `attestation_chain_class`, `cross_modal_coherence`. **Not front-loaded.** Each construct formalizes when F3 needs it; the existing `uniform_cadence_v1.go` pattern (versioned Cat II definition) is the precedent.
 
 Each new construct is itself an **operational definition** per [§2.2](../../charter/constitutional-charter.md#22-epistemic-separation) Q1 determinism; the versioning of operational definitions is one of the anticipated OMQs surfaced below.
 
