@@ -37,7 +37,7 @@ The fix is nonetheless required because:
 
 ## Constitutional Review
 
-- **Q1 — Charter invariants touched?** None in content. Each affected BC retains its binding commitment verbatim. The Charter banner version line + status line are updated (`v0.7.1` → `v0.7.2`). The seven prose locations update cross-reference pointers + the falsifiability-status word ("becomes ... when ... lands" → "is ... per §NNNN"); the BC's logical structure is preserved.
+- **Q1 — Charter invariants touched?** None in content. Each affected BC retains its binding commitment verbatim. The Charter banner version line + status line are revised (`v0.7.1` → `v0.7.2`). The seven prose locations revise cross-reference pointers + the falsifiability-status word ("becomes ... when ... lands" → "is ... per §NNNN"); the BC's logical structure is preserved.
 - **Q2 — Glossary?** Not affected.
 - **Q3 — Ontology open questions?** Q2, Q3, Q5 resolutions referenced (not amended). Each was previously resolved via its own decision-log entry — §0023, §0133, §0134 respectively.
 - **Q4 — Is this RFC the amendment?** Yes. Patch-level amendment per [`amendments.md` Step 5](../../charter/amendments.md).
@@ -46,7 +46,7 @@ The fix is nonetheless required because:
 
 ## Proposal
 
-Seven text changes in `docs/charter/constitutional-charter.md`, each replacing a stale Q-pending formulation with a resolved-at-§NNNN reference. The replacement preserves the BC's binding commitment (the `**§X does not govern Y formal specifics**` lead clause) and the surrounding contextual prose; only the formal-mechanism-status sentence is updated.
+Seven text changes in `docs/charter/constitutional-charter.md`, each replacing a stale Q-pending formulation with a resolved-at-§NNNN reference. The replacement preserves the BC's binding commitment (the `**§X does not govern Y formal specifics**` lead clause) and the surrounding contextual prose; only the formal-mechanism-status sentence is revised.
 
 Pattern A (Q2 — four sites at L115, L136, L182, L279):
 ```
@@ -84,7 +84,7 @@ Pattern C (Q5 — two sites at L186, L281):
   structurally falsifiable per §0134."
 ```
 
-Charter banner updates:
+Charter banner revisions:
 - Version line `v0.7.1` → `v0.7.2`.
 - Status line: patch-amendment clause appended noting the seven-anchor sweep and reference to `decision-log §0142`.
 
@@ -101,15 +101,15 @@ None.
 
 ## Anti-Patterns to Avoid
 
-- Adding new BC formulations of the form "...pending [QN of `ontology.md`](../ontology/...)..." without a corresponding decision-log carry-forward to update the BC when QN resolves. Future §-section redactions or future BC additions to existing §-sections should either (a) cite the resolution entry directly if the resolution has landed, or (b) anchor to a specific resolution-watcher decision-log entry that explicitly carries forward the update obligation.
+- Adding new BC formulations of the form "...pending [QN of `ontology.md`](../ontology/...)..." without a corresponding decision-log carry-forward to revise the BC when QN resolves. Future §-section redactions or future BC additions to existing §-sections should either (a) cite the resolution entry directly if the resolution has landed, or (b) anchor to a specific resolution-watcher decision-log entry that explicitly carries forward the revision obligation.
 - Treating Charter prose status-reporting drift as cosmetic-only. The [`§0137`](../../charter/decision-log.md) precedent (six stale `§0034` references that pointed to an entry containing unrelated content) demonstrates that stale anchors can mislead readers materially even when the binding commitment is preserved. Anchor inventory is part of constitutional discipline.
 - Bundling structurally-unrelated patches into a single amendment. This patch bundles seven Q-stale anchors because they share pattern shape; bundling them with, e.g., a hook fix or a typography correction would dilute the audit trail.
 
 ## Migration and Backward Compatibility
 
-No migration. The Charter binding commitments are unchanged; subordinate documents (Ontology, Architecture, RFCs) that cite §2.3 BC4 / §2.4 BC4 / §2.4 BC6 / §2.6 BC1 / §2.6 BC5 / §2.6 BC6 continue to cite the same BCs with the same binding commitments — only the formal-mechanism anchors are updated.
+No migration. The Charter binding commitments are unchanged; subordinate documents (Ontology, Architecture, RFCs) that cite §2.3 BC4 / §2.4 BC4 / §2.4 BC6 / §2.6 BC1 / §2.6 BC5 / §2.6 BC6 continue to cite the same BCs with the same binding commitments — only the formal-mechanism anchors are revised.
 
-Existing RFCs that quoted the pre-patch BC text (e.g., [`ontology-revision-q3-independence`](./ontology-revision-q3-independence.md) at line 53) preserve historical fidelity to the state at proposal time; no retroactive update to accepted-status RFCs.
+Existing RFCs that quoted the pre-patch BC text (e.g., [`ontology-revision-q3-independence`](./ontology-revision-q3-independence.md) at line 53) preserve historical fidelity to the state at proposal time; no retroactive revision to accepted-status RFCs.
 
 ## References
 
