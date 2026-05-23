@@ -1,0 +1,49 @@
+// Sub-modality of AttestationObservation per §0147 discriminated-
+// union framing. Carries Cloudflare Turnstile challenge-response
+// token observation. Per Cloudflare Turnstile public documentation
+// (challenge-based CAPTCHA replacement; returns opaque token on
+// successful challenge).
+//
+// Privacy-preserving design: response_token_hash (BLAKE3) rather
+// than raw response_token string — preserves forensic verifiability
+// without committing the redeemable token to immutable substrate.
+// Site key + action + cdata are short identifiers safe to commit
+// per Cloudflare's public-key model (these identify the
+// configuration, not the user).
+//
+// No `confidence` / `evidential_independence` fields — Cat I sub-
+// modality payload, structurally excluded from paired-dimension
+// per §2.6 BC3.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// AttestationCloudflareTurnstile is the Turnstile response payload
+// carried by AttestationObservation when the modality is
+// `cloudflare_turnstile`.
+message AttestationCloudflareTurnstile {
+  // response_token_hash is the BLAKE3-256 hash of the Turnstile
+  // response token string. 32-byte fixed length.
+  bytes response_token_hash = 1;
+
+  // site_key identifies the Turnstile site configuration
+  // (Cloudflare-issued public identifier). Safe to commit:
+  // identifies the configuration, not the user.
+  string site_key = 2;
+
+  // action is the operator-supplied action name associated with
+  // this challenge (e.g., "login", "form-submit"). Producer-defined
+  // enumeration; substrate treats as opaque string.
+  string action = 3;
+
+  // cdata is the operator-supplied CData field per Turnstile spec
+  // (free-form context string passed through challenge → response).
+  // Empty when not supplied.
+  string cdata = 4;
+
+  // issued_at is the producer-reported token-issuance time as Unix
+  // nanoseconds.
+  int64 issued_at = 5;
+}

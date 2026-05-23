@@ -1,0 +1,13 @@
+{
+  "observedAt": "1716120000000000000",
+  "actorRef": "actor-corpus-fido2",
+  "sessionRef": "session-corpus-fido2",
+  "collectorRef": "browser-sdk:v1",
+  "fido2Attestation": {
+    "credentialIdHash": "EBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBA=",
+    "attestationObject": "oKGio6M=",
+    "format": "packed",
+    "aaguid": "VVVVVVVVVVVVVVVVVVVVVQ==",
+    "registeredAt": "1716120000000000000"
+  }
+}
