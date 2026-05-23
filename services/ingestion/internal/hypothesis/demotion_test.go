@@ -8,6 +8,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	commonv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
@@ -329,6 +330,77 @@ func TestDemoteLayerBLegacyPromotion(t *testing.T) {
 		t.Errorf("LayerB.{Freshness,Saturation}Fired: got true, want false on Evaluated=false")
 	}
 	// Demote itself succeeded — Layer B advisory per §0141 E1 does not block.
+	if rep.DemotionEventHashHex == "" {
+		t.Error("DemotionEventHashHex empty; demote should record regardless of LayerB state per §0141 E1")
+	}
+}
+
+// TestDemoteLayerBEvaluatedPath verifies the Evaluated=true end-to-end
+// path: a promotion produced via Promote() with LayerBParameters set
+// produces a substrate state where the subsequent Demote can run
+// Layer B's predicate. This exercises the full layerb.Evaluate path
+// through the hypothesis package boundary.
+//
+// The window contains a single formation event (the substrate carries
+// formation + promotion only at demote time; the formation is itself
+// in the window and is its own closure root in the §0136 β-graph
+// shape). Because the formation does not carry itself in
+// closure_hashes (a hypothesis's own formation event is not in its
+// own influence closure), the FilterMatchCount is 0 — yielding
+// FreshnessUndefined=true. Saturation_C numerator is also 0 → ratio
+// 0/1000 = 0, which is NOT > K_C=0.5; saturation does not fire either.
+// Fired=false; demote records the demotion regardless per E1.
+//
+// The test asserts the structural invariants: Evaluated=true; both
+// Fired flags false; FreshnessUndefined=true; demote completes.
+func TestDemoteLayerBEvaluatedPath(t *testing.T) {
+	sub, formationHash := formAndCollect(t)
+	ctx := context.Background()
+	params := &commonv1.LayerBParameters{
+		TB:                    &commonv1.EvidentialIndependence{Numerator: 1, Denominator: 2},
+		KC:                    &commonv1.EvidentialIndependence{Numerator: 1, Denominator: 2},
+		NWindow:               1000,
+		NADurationNanoseconds: 86400000000000,
+	}
+	if _, err := Promote(ctx, sub, PromoteOptions{
+		FormationEventHash: formationHash,
+		PromotedAt:         1716120000000000000,
+		CadenceSeconds:     3600,
+		Reason:             "test promotion with LayerBParameters",
+		LayerBParameters:   params,
+	}, nil); err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+	var promotionHash [32]byte
+	if err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
+		if row.MessageType == "ghosttrace.events.v1.BehavioralClusterPromotion" {
+			promotionHash = row.EventHash
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("WalkEvents: %v", err)
+	}
+
+	rep, err := Demote(ctx, sub, DemoteOptions{
+		PromotionEventHash: promotionHash,
+		DemotedAt:          1716120004000000000,
+		Reason:             "test",
+	}, nil)
+	if err != nil {
+		t.Fatalf("Demote: %v", err)
+	}
+	if !rep.LayerB.Evaluated {
+		t.Errorf("LayerB.Evaluated: got false, want true (promotion carries LayerBParameters)")
+	}
+	if rep.LayerB.Fired {
+		t.Errorf("LayerB.Fired: got true, want false (FilterMatchCount=0 → freshness undefined; saturation=0/1000=0 not > 0.5)")
+	}
+	if !rep.LayerB.FreshnessUndefined {
+		t.Errorf("LayerB.FreshnessUndefined: got false, want true (no events in window match the formation hash filter)")
+	}
+	if rep.LayerB.FilterMatchCount != 0 {
+		t.Errorf("LayerB.FilterMatchCount: got %d, want 0 (formation is not its own closure root)", rep.LayerB.FilterMatchCount)
+	}
 	if rep.DemotionEventHashHex == "" {
 		t.Error("DemotionEventHashHex empty; demote should record regardless of LayerB state per §0141 E1")
 	}
