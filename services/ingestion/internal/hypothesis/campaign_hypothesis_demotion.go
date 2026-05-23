@@ -40,6 +40,11 @@ type CampaignHypothesisDemoteReport struct {
 
 	// IngestionEventHashHex non-empty when Actor was supplied.
 	IngestionEventHashHex string
+
+	// LayerB is the Layer B deep-criterion verdict per §0141
+	// sub-decision E1 (advisory like Layer A). Demote records the
+	// demotion regardless of LayerB.Fired.
+	LayerB LayerBReport
 }
 
 // DemoteCampaignHypothesis records a CampaignHypothesisDemotion
@@ -88,6 +93,15 @@ func DemoteCampaignHypothesis(ctx context.Context, sub *substrate.Substrate, opt
 	elapsedSeconds := (demotedAt - promotion.GetPromotedAt()) / int64(time.Second)
 	cadenceSatisfied := elapsedSeconds >= promotion.GetCadenceSeconds()
 
+	// Layer B evaluation per §0141 sub-decision E1 (advisory) + B1
+	// (on-the-fly).
+	var formationHash [32]byte
+	copy(formationHash[:], promotion.GetFormationEventHash())
+	layerBReport, err := evaluateLayerB(ctx, sub, formationHash, promotion.GetLayerBParameters())
+	if err != nil {
+		return CampaignHypothesisDemoteReport{}, fmt.Errorf("hypothesis.DemoteCampaignHypothesis: evaluate Layer B: %w", err)
+	}
+
 	ev := &eventsv1.CampaignHypothesisDemotion{
 		PromotionEventHash: opts.PromotionEventHash[:],
 		DemotedAt:          demotedAt,
@@ -123,6 +137,7 @@ func DemoteCampaignHypothesis(ctx context.Context, sub *substrate.Substrate, opt
 			AlreadyDemoted:        alreadyPresent,
 			CadenceSatisfied:      cadenceSatisfied,
 			CadenceElapsedSeconds: elapsedSeconds,
+			LayerB:                layerBReport,
 		}, nil
 	}
 
@@ -155,5 +170,6 @@ func DemoteCampaignHypothesis(ctx context.Context, sub *substrate.Substrate, opt
 		CadenceSatisfied:      cadenceSatisfied,
 		CadenceElapsedSeconds: elapsedSeconds,
 		IngestionEventHashHex: ingHex,
+		LayerB:                layerBReport,
 	}, nil
 }

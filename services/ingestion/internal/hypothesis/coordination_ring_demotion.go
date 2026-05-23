@@ -41,6 +41,11 @@ type CoordinationRingDemoteReport struct {
 
 	// IngestionEventHashHex non-empty when Actor was supplied.
 	IngestionEventHashHex string
+
+	// LayerB is the Layer B deep-criterion verdict per §0141
+	// sub-decision E1 (advisory like Layer A). Demote records the
+	// demotion regardless of LayerB.Fired.
+	LayerB LayerBReport
 }
 
 // DemoteCoordinationRing records a CoordinationRingDemotion lifecycle
@@ -89,6 +94,15 @@ func DemoteCoordinationRing(ctx context.Context, sub *substrate.Substrate, opts 
 	elapsedSeconds := (demotedAt - promotion.GetPromotedAt()) / int64(time.Second)
 	cadenceSatisfied := elapsedSeconds >= promotion.GetCadenceSeconds()
 
+	// Layer B evaluation per §0141 sub-decision E1 (advisory) + B1
+	// (on-the-fly).
+	var formationHash [32]byte
+	copy(formationHash[:], promotion.GetFormationEventHash())
+	layerBReport, err := evaluateLayerB(ctx, sub, formationHash, promotion.GetLayerBParameters())
+	if err != nil {
+		return CoordinationRingDemoteReport{}, fmt.Errorf("hypothesis.DemoteCoordinationRing: evaluate Layer B: %w", err)
+	}
+
 	ev := &eventsv1.CoordinationRingDemotion{
 		PromotionEventHash: opts.PromotionEventHash[:],
 		DemotedAt:          demotedAt,
@@ -124,6 +138,7 @@ func DemoteCoordinationRing(ctx context.Context, sub *substrate.Substrate, opts 
 			AlreadyDemoted:        alreadyPresent,
 			CadenceSatisfied:      cadenceSatisfied,
 			CadenceElapsedSeconds: elapsedSeconds,
+			LayerB:                layerBReport,
 		}, nil
 	}
 
@@ -156,5 +171,6 @@ func DemoteCoordinationRing(ctx context.Context, sub *substrate.Substrate, opts 
 		CadenceSatisfied:      cadenceSatisfied,
 		CadenceElapsedSeconds: elapsedSeconds,
 		IngestionEventHashHex: ingHex,
+		LayerB:                layerBReport,
 	}, nil
 }
