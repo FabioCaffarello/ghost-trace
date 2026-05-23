@@ -154,10 +154,11 @@ func TestReplayBehavioralClusterFormationDriftDetection(t *testing.T) {
 	// Hand-built formation with corrupted parameters
 	// ("MIN_CLUSTER_SIZE=2" instead of canonical "min_cluster_size=2").
 	bcDrifted := &eventsv1.BehavioralClusterFormation{
-		PatternSignature:  hypothesis.SessionDescriptorSharedV1Signature,
-		PatternParameters: "MIN_CLUSTER_SIZE=2", // drifted from canonical
-		ActorRefs:         []string{"actor-drift-a", "actor-drift-b"},
-		FormationAt:       2000,
+		PatternSignature:       hypothesis.SessionDescriptorSharedV1Signature,
+		PatternParameters:      "MIN_CLUSTER_SIZE=2", // drifted from canonical
+		ActorRefs:              []string{"actor-drift-a", "actor-drift-b"},
+		FormationAt:            2000,
+		EvidentialIndependence: eiOne(),
 	}
 	bcPayload, bcHash, _ := canonical.MarshalAndHash(bcDrifted)
 	bcHex := canonical.HashHex(bcHash)
@@ -187,9 +188,10 @@ func TestReplayBehavioralClusterFormationUnknownPattern(t *testing.T) {
 	t.Cleanup(func() { _ = sub.Close() })
 
 	bcBogus := &eventsv1.BehavioralClusterFormation{
-		PatternSignature:  "not-a-real-pattern",
-		PatternParameters: "x=y",
-		FormationAt:       2000,
+		PatternSignature:       "not-a-real-pattern",
+		PatternParameters:      "x=y",
+		FormationAt:            2000,
+		EvidentialIndependence: eiOne(),
 	}
 	bcPayload, bcHash, _ := canonical.MarshalAndHash(bcBogus)
 	bcHex := canonical.HashHex(bcHash)

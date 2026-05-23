@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	commonv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 )
 
@@ -263,7 +264,20 @@ func buildCoordinationRingFormation(edges []edgeKey, sourceHashes map[[32]byte]s
 		Interactions:      interactions,
 		FormationAt:       maxAt,
 		Confidence:        confidenceFromClusterSize(len(edges) + 1),
-		SourceEventHashes: hashBytes,
+		// EvidentialIndependence per §0140 paired-dimension marshalling-
+		// boundary enforcement: this formation reads only from Cat I
+		// observations (DeclaredSessions + NetworkEvents in the
+		// co-occurrence window) and does not read from any promoted
+		// hypothesis. Per §0133 Q3-α formula, all Cat I roots in the
+		// subject_ref_* chain are NOT reachable via any
+		// influenced_by edge from a promoted hypothesis → numerator =
+		// denominator = total Cat I roots → α = 1. The inception-
+		// phase value is structurally fixed at 1/1 (full independence)
+		// for any formation path that does not consume hypothesis
+		// records; once such a path exists, α must be computed per
+		// the formula.
+		EvidentialIndependence: &commonv1.EvidentialIndependence{Numerator: 1, Denominator: 1},
+		SourceEventHashes:      hashBytes,
 	}
 }
 

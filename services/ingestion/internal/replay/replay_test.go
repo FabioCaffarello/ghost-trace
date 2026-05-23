@@ -11,10 +11,21 @@ import (
 
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/canonical"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/derivation"
+	commonv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
+
+// eiOne returns the inception-phase EvidentialIndependence value
+// (α = 1/1) per §0140 paired-dimension marshalling-boundary
+// enforcement. All current production formation/derivation paths
+// read only from Cat I observations and produce α = 1 per §0133
+// Q3-α formula; replay tests use the same value on hand-constructed
+// fixtures so the marshalling-boundary check accepts them.
+func eiOne() *commonv1.EvidentialIndependence {
+	return &commonv1.EvidentialIndependence{Numerator: 1, Denominator: 1}
+}
 
 // substrateWithDerivedSessions ingests two DeclaredSessions and runs
 // DeriveAll under PaddedV1, returning (substrate, slice of OS hashes).
@@ -223,12 +234,13 @@ func TestReplayOperationalSessionDetectsDefinitionDriftViaInjection(t *testing.T
 	// encoding — same logical parameter, but the stored canonical
 	// string differs from what PaddedV1.Parameters() would emit.
 	osDrifted := &eventsv1.OperationalSession{
-		DefinitionVersion:    derivation.PaddedV1Version,
-		DefinitionParameters: "PAD_SECONDS=60", // uppercase drift; canonical form is lowercase
-		SourceEventHash:      dsHash[:],
-		ActorRef:             "actor-drift",
-		OperationalStartAt:   940,
-		OperationalEndAt:     1060,
+		DefinitionVersion:      derivation.PaddedV1Version,
+		DefinitionParameters:   "PAD_SECONDS=60", // uppercase drift; canonical form is lowercase
+		SourceEventHash:        dsHash[:],
+		ActorRef:               "actor-drift",
+		OperationalStartAt:     940,
+		OperationalEndAt:       1060,
+		EvidentialIndependence: eiOne(),
 	}
 	osPayload, osHashRaw, err := canonical.MarshalAndHash(osDrifted)
 	if err != nil {
@@ -281,12 +293,13 @@ func TestReplayOperationalSessionVersioning(t *testing.T) {
 	}
 
 	osUnknownV := &eventsv1.OperationalSession{
-		DefinitionVersion:    "not-a-real-version",
-		DefinitionParameters: "x=y",
-		SourceEventHash:      dsHash[:],
-		ActorRef:             "actor-v",
-		OperationalStartAt:   500,
-		OperationalEndAt:     1500,
+		DefinitionVersion:      "not-a-real-version",
+		DefinitionParameters:   "x=y",
+		SourceEventHash:        dsHash[:],
+		ActorRef:               "actor-v",
+		OperationalStartAt:     500,
+		OperationalEndAt:       1500,
+		EvidentialIndependence: eiOne(),
 	}
 	osPayload, osHash, _ := canonical.MarshalAndHash(osUnknownV)
 	osHex := canonical.HashHex(osHash)
@@ -321,12 +334,13 @@ func TestReplayOperationalSessionMissingSource(t *testing.T) {
 	}
 
 	os := &eventsv1.OperationalSession{
-		DefinitionVersion:    derivation.PaddedV1Version,
-		DefinitionParameters: "pad_seconds=60",
-		SourceEventHash:      bogusSourceHash[:],
-		ActorRef:             "actor-miss",
-		OperationalStartAt:   500,
-		OperationalEndAt:     1500,
+		DefinitionVersion:      derivation.PaddedV1Version,
+		DefinitionParameters:   "pad_seconds=60",
+		SourceEventHash:        bogusSourceHash[:],
+		ActorRef:               "actor-miss",
+		OperationalStartAt:     500,
+		OperationalEndAt:       1500,
+		EvidentialIndependence: eiOne(),
 	}
 	osPayload, osHash, _ := canonical.MarshalAndHash(os)
 	osHex := canonical.HashHex(osHash)
