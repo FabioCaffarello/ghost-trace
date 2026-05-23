@@ -20,7 +20,7 @@ Per [`§0135`](../../charter/decision-log.md) Decision + [`§0136`](../../charte
 
 with `T_B = K_C = 0.5`; `N = 1000`; W-count window; U-uniform per-subtype; `N_A = 1 day` (bundled).
 
-The service tier — currently the `services/ingestion/` Go module — does not evaluate this predicate. It evaluates only Layer A (cadence gate) and reports it as an advisory flag (`CadenceSatisfied`) in `DemoteReport`, recording the demotion regardless of the flag. The CLI surface is operator-elected: an operator invokes `demote-hypothesis` (or one of four subtype-specific variants) with a target promotion hash + reason + actor; the service appends the demotion event to substrate. Layer B does not enter the call chain.
+The service tier — currently the `services/ingestion/` Go module — does not evaluate this predicate. It evaluates only Layer A (cadence gate) and reports it as an advisory field (`CadenceSatisfied`) in `DemoteReport`, recording the demotion regardless of the field's value. The CLI surface is operator-elected: an operator invokes `demote-hypothesis` (or one of four subtype-specific variants) with a target promotion hash + reason + actor; the service appends the demotion event to substrate. Layer B does not enter the call chain.
 
 This RFC asks: **How should the service tier evaluate Layer B's predicate? Where in the call chain does the evaluation live? What artifact (if any) does the evaluation produce? How does the existing demote CLI surface interact with the predicate's verdict?**
 
@@ -85,7 +85,7 @@ Three candidate forms surfaced during framing and explicitly rejected as out-of-
 | A2 | `services/assertion-engine/` | Promote the README-only service to a real service with Layer B as its first feature. Service boundary at the network; ingestion calls assertion-engine via RPC or in-process import. |
 | A3 | Inline in each demote CLI | Each of 5 demote CLIs (demote-hypothesis + 4 subtype variants) carries the Layer B computation inline in `main.go`. No shared evaluator. |
 
-**Conservative-defaults reading**: A1 is the simplest form respecting DRY. A2 introduces a service boundary ahead of need (cost: deployment topology, RPC schema, cross-service auth). A3 violates DRY across 5 implementation sites.
+**Conservative-defaults reading**: A1 is the simplest form respecting DRY. A2 introduces a service boundary ahead of need (cost: deployment topology, RPC type definitions, cross-service auth). A3 violates DRY across 5 implementation sites.
 
 ### Sub-decision B — Computation strategy
 
@@ -124,7 +124,7 @@ Three candidate forms surfaced during framing and explicitly rejected as out-of-
 | D2 | `LayerBEvaluation` Cat II substrate record | New Cat II proto: `LayerBEvaluation` with fields (target_promotion_event_hash, freshness_b, saturation_c, t_b_threshold, k_c_threshold, window_size_n, window_form, layer_b_fired, evaluation_event_hash). Committed to substrate per evaluation. Audit trail; substrate-grounded. |
 | D3 | `DemotionCandidacyEvaluation` Cat II composite | New Cat II proto combining Layer A + Layer B verdicts in one substrate record per candidacy evaluation. Audit trail; composite. |
 
-**Schemas-evolution-event scope**: D1 is contained within the existing schema set; no schemas-evolution event. D2 and D3 are schemas-evolution events per the canonical-serialization-contract §Schemas-Evolution Events boundary; if adopted, they may need their own follow-on schema-RFC at resolution time.
+**Schemas-evolution-event scope**: D1 is contained within the existing proto set under `schemas/`; no schemas-evolution event. D2 and D3 are schemas-evolution events per the canonical-serialization-contract §Schemas-Evolution Events boundary; if adopted, they may need their own follow-on schemas-evolution RFC at resolution time.
 
 **Conservative-defaults reading**: D1 matches the existing Layer A pattern (advisory in DemoteReport, not committed as a record). D2 and D3 add audit-trail durability but cost substrate-write per evaluation. The cost-justification depends on operational scale (number of evaluations per day × storage cost per record); at inception phase, this cost is unknown.
 
@@ -135,7 +135,7 @@ Three candidate forms surfaced during framing and explicitly rejected as out-of-
 | Candidate | Interaction | Sketch |
 |---|---|---|
 | E1 | Advisory, like Layer A | Demote CLI evaluates Layer B (via the chosen locus per A); adds `LayerBFired`, `LayerBFreshnessB`, `LayerBSaturationC` flags to DemoteReport; demote proceeds and commits regardless of the verdict. Operator sees the state post-facto. |
-| E2 | Enforcing refusal with override | Demote CLI evaluates Layer B; if `Layer B(H)` is false (predicate did not fire), CLI refuses to commit the demotion unless an explicit `--force-layer-b-bypass` flag is supplied. The override is recorded in the demotion reason for audit. |
+| E2 | Enforcing refusal with override | Demote CLI evaluates Layer B; if `Layer B(H)` is false (predicate did not fire), CLI refuses to commit the demotion unless an explicit `--force-layer-b-bypass` option is supplied. The override is recorded in the demotion reason for audit. |
 | E3 | Untouched; separate candidate-finder | demote CLIs remain untouched (pure operator-elected substrate commit). A new `cmd/find-demotion-candidates/` CLI consults Layer B across all promoted hypotheses and produces a candidate list. Operators use the candidate-finder to identify demotion candidates, then invoke demote-hypothesis manually. |
 
 **§0011 Layer A pattern precedent**: Layer A is advisory per [`§0011`](../../charter/decision-log.md) staged-combination — it's a CANDIDACY criterion, not a barrier. E1 directly mirrors this pattern for Layer B. E2 elevates Layer B from candidacy to barrier, which is a structural commitment beyond §0011. E3 leaves the existing CLIs untouched and adds Layer B as a separate query tool.
@@ -154,7 +154,7 @@ Three candidate forms surfaced during framing and explicitly rejected as out-of-
 
 **§0138 bundling reading**: [`§0138`](../../charter/decision-log.md) explicitly bundled `N_A = 1 day` into `LayerBParameters` rather than maintaining a separate Layer A config, on inception-phase simplicity grounds. F1 honors this bundling fully; F2 reverses it. F3 honors the bundling while preserving the existing CLI surface backward-compatibly.
 
-**Pre-existing CLI surface**: promote-hypothesis already accepts `-cadence-seconds`. F1 changes the contract (CLI no longer needs `-cadence-seconds`); F3 preserves the existing flag with a default-from-substrate fallback. F2 is the most disruptive.
+**Pre-existing CLI surface**: promote-hypothesis already accepts `-cadence-seconds`. F1 changes the contract (CLI no longer needs `-cadence-seconds`); F3 preserves the existing option with a default-from-substrate fallback. F2 is the most disruptive.
 
 ---
 
