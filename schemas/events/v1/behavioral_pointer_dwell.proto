@@ -1,0 +1,34 @@
+// Sub-modality of BehavioralObservation per decision-log §0146
+// discriminated-union framing. Carries pointer-dwell observation —
+// time spent with focus / hover on a specific element-class over a
+// bounded observation window. Per privacy-preserving design:
+// element_class is the structural identifier (CSS-selector-class or
+// equivalent) — NOT the element content or user-typed input.
+//
+// No `confidence` / `evidential_independence` fields — Cat I sub-modality
+// payload, structurally excluded from paired-dimension per §2.6 BC3.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// BehavioralPointerDwell is the focus-element dwell payload carried by
+// BehavioralObservation when the modality is `pointer_dwell`.
+message BehavioralPointerDwell {
+  // element_class is the structural class of the element receiving
+  // focus / hover (e.g., "form-input", "button", "link",
+  // "captcha-iframe"). Producer-defined enumeration; substrate
+  // treats as opaque string. Empty string = no focus during window.
+  string element_class = 1;
+
+  // dwell_ns is the time the pointer / focus remained on the element,
+  // in nanoseconds. 0 = focus immediately moved away (transitioning).
+  uint64 dwell_ns = 2;
+
+  // transition_count is the number of focus / hover transitions IN
+  // to this element_class observed during the window. Aggregated
+  // across multiple focus events with the same element_class; per-
+  // event ordering not preserved at this granularity.
+  uint32 transition_count = 3;
+}

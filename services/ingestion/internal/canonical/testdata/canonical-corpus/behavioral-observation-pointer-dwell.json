@@ -1,0 +1,11 @@
+{
+  "observedAt": "1716120000000000000",
+  "actorRef": "actor-corpus-dwell",
+  "sessionRef": "session-corpus-004",
+  "collectorRef": "browser-sdk:v1",
+  "pointerDwell": {
+    "elementClass": "form-input",
+    "dwellNs": "1500000000",
+    "transitionCount": 1
+  }
+}

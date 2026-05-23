@@ -1,0 +1,43 @@
+// Sub-modality of BehavioralObservation per decision-log §0146
+// discriminated-union framing. Carries scroll event sequence
+// extractable from browser-SDK / native instrumentation over a
+// bounded observation window.
+//
+// No `confidence` / `evidential_independence` fields — Cat I sub-modality
+// payload, structurally excluded from paired-dimension per §2.6 BC3.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// ScrollSample is a single scroll-position sample at observation time.
+// Per-sample time recorded as offset_ns from the enclosing
+// BehavioralObservation.observed_at. Pixel deltas (positive = scroll
+// down/right) per the producer's reference frame.
+message ScrollSample {
+  // offset_ns is the per-sample time relative to the envelope's
+  // observed_at, in nanoseconds.
+  uint64 offset_ns = 1;
+  // delta_x is the scroll-x delta in pixels since the previous sample
+  // (signed; positive = right). 0 = no horizontal scroll at this
+  // sample.
+  int32 delta_x = 2;
+  // delta_y is the scroll-y delta in pixels since the previous sample
+  // (signed; positive = down). 0 = no vertical scroll at this sample.
+  int32 delta_y = 3;
+}
+
+// BehavioralScrollCadence is the scroll-event payload carried by
+// BehavioralObservation when the modality is `scroll_cadence`.
+message BehavioralScrollCadence {
+  // samples are the scroll-position deltas in chronological order
+  // over the enclosing observation window. Empty when no scroll
+  // events were observed.
+  repeated ScrollSample samples = 1;
+
+  // total_scroll_events is the absolute count of scroll events
+  // observed during the window. Equals len(samples); preserved
+  // explicitly for forensic-replay-without-array-iteration.
+  uint32 total_scroll_events = 2;
+}
