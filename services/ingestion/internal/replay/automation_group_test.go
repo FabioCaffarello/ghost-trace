@@ -111,9 +111,10 @@ func TestReplayAutomationGroupFormationUnknownPattern(t *testing.T) {
 	t.Cleanup(func() { _ = sub.Close() })
 
 	agBogus := &eventsv1.AutomationGroupFormation{
-		PatternSignature:  "not-a-real-pattern",
-		PatternParameters: "x=y",
-		FormationAt:       2000,
+		PatternSignature:       "not-a-real-pattern",
+		PatternParameters:      "x=y",
+		FormationAt:            2000,
+		EvidentialIndependence: eiOne(),
 	}
 	agPayload, agHash, _ := canonical.MarshalAndHash(agBogus)
 	agHex := canonical.HashHex(agHash)

@@ -111,12 +111,13 @@ func TestReplayAllOperationalSessionsCountsErrored(t *testing.T) {
 
 	// Hand-injected OS with unknown definition_version.
 	osUnknown := &eventsv1.OperationalSession{
-		DefinitionVersion:    "not-a-real-version",
-		DefinitionParameters: "x=y",
-		SourceEventHash:      dsHash[:],
-		ActorRef:             "actor-mixed",
-		OperationalStartAt:   500,
-		OperationalEndAt:     1500,
+		DefinitionVersion:      "not-a-real-version",
+		DefinitionParameters:   "x=y",
+		SourceEventHash:        dsHash[:],
+		ActorRef:               "actor-mixed",
+		OperationalStartAt:     500,
+		OperationalEndAt:       1500,
+		EvidentialIndependence: eiOne(),
 	}
 	osUnknownPayload, osUnknownHash, _ := canonical.MarshalAndHash(osUnknown)
 	osUnknownHex := canonical.HashHex(osUnknownHash)

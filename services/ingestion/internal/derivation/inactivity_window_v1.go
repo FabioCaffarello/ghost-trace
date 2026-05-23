@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	commonv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 )
 
@@ -93,6 +94,11 @@ func (i InactivityWindowV1) Derive(source *eventsv1.DeclaredSession, _ [32]byte,
 		ActorRef:           source.GetActorRef(),
 		OperationalStartAt: declaredAt,
 		OperationalEndAt:   lastObserved + windowNanos,
+		// EvidentialIndependence per §0140 — α = 1/1. The derivation
+		// reads only Cat I inputs (the DeclaredSession + zero or more
+		// NetworkEvents for the same actor_ref); no promoted-hypothesis
+		// influence is consumed per §0133 Q3-α formula.
+		EvidentialIndependence: &commonv1.EvidentialIndependence{Numerator: 1, Denominator: 1},
 	}
 }
 

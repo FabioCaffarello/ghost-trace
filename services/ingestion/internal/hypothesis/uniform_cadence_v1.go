@@ -6,6 +6,7 @@ import (
 	"math"
 	"sort"
 
+	commonv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 )
 
@@ -205,10 +206,15 @@ func (p UniformCadenceV1) Form(fctx AutomationGroupFormationContext, _ int64) []
 		}
 
 		formations = append(formations, &eventsv1.AutomationGroupFormation{
-			ActorRefs:         []string{actor},
-			FormationAt:       maxDeclaredAt,
-			Confidence:        confidence,
-			SourceEventHashes: hashBytes,
+			ActorRefs:   []string{actor},
+			FormationAt: maxDeclaredAt,
+			Confidence:  confidence,
+			// EvidentialIndependence per §0140 — α = 1/1. This
+			// formation reads only from Cat I DeclaredSessions
+			// (cadence analysis over declared_at timestamps); no
+			// promoted-hypothesis influence is consumed.
+			EvidentialIndependence: &commonv1.EvidentialIndependence{Numerator: 1, Denominator: 1},
+			SourceEventHashes:      hashBytes,
 		})
 	}
 

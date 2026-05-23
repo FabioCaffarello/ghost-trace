@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	commonv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 )
 
@@ -138,9 +139,14 @@ func buildCampaignFormation(cohort []campaignMember) *eventsv1.CampaignHypothesi
 		hashBytes = append(hashBytes, cp)
 	}
 	return &eventsv1.CampaignHypothesisFormation{
-		FormationAt:       maxDeclaredAt,
-		Confidence:        confidenceFromClusterSize(len(hashes)),
-		SourceEventHashes: hashBytes,
+		FormationAt: maxDeclaredAt,
+		Confidence:  confidenceFromClusterSize(len(hashes)),
+		// EvidentialIndependence per §0140 — α = 1/1 (full
+		// independence). This formation reads only from Cat I
+		// DeclaredSessions; no promoted-hypothesis influence is
+		// consumed, so the §0133 Q3-α formula structurally yields 1.
+		EvidentialIndependence: &commonv1.EvidentialIndependence{Numerator: 1, Denominator: 1},
+		SourceEventHashes:      hashBytes,
 	}
 }
 

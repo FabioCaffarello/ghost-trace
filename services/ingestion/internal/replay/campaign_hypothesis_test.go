@@ -111,9 +111,10 @@ func TestReplayCampaignHypothesisFormationUnknownPattern(t *testing.T) {
 	t.Cleanup(func() { _ = sub.Close() })
 
 	chBogus := &eventsv1.CampaignHypothesisFormation{
-		PatternSignature:  "not-a-real-pattern",
-		PatternParameters: "x=y",
-		FormationAt:       2000,
+		PatternSignature:       "not-a-real-pattern",
+		PatternParameters:      "x=y",
+		FormationAt:            2000,
+		EvidentialIndependence: eiOne(),
 	}
 	chPayload, chHash, _ := canonical.MarshalAndHash(chBogus)
 	chHex := canonical.HashHex(chHash)
