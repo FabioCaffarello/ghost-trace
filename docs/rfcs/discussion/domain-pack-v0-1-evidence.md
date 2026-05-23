@@ -81,7 +81,7 @@ Empirical audit (as of [`§0142`](../../charter/decision-log.md) merge):
 - **F5** real-time decision serving.
 - **F7** broader adversarial workflows beyond the surfaced cross-category-lifecycle OMQ.
 - **F8** privacy-preserving substrate (relevant when customer-real ingestion enters).
-- **F9** cross-tenant intelligence sharing.
+- **F9** cross-tenant inference sharing.
 - **F10** performance / scale architecture.
 - Cross-domain provenance OMQ (provenance-model.md OMQ #4).
 - Fourth signature layer (comercial fechada).

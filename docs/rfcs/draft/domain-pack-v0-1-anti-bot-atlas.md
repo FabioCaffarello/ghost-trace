@@ -7,7 +7,7 @@
 - **Affects:** This RFC opens a new category of work — domain-specific applied packs on the Charter-frozen substrate. Specific surfaces touched by accepting this framing:
   - [`schemas/events/v1/`](../../../schemas/events/v1/) — four new Cat I observation proto types (NetworkObservation, BehavioralObservation, AttestationObservation, BrowserObservation) trigger schemas-evolution events per the canonical-serialization-contract per [`§0139`](../../charter/decision-log.md) + [`§0140`](../../charter/decision-log.md) discipline.
   - [`services/ingestion/internal/`](../../../services/ingestion/internal/) — new packages for signature engines (`signatures/`) and adapter pipelines (`adapters/`) under conservative-defaults bundle precedent established by Layer B at [`§0141`](../../charter/decision-log.md) (internal-package + on-the-fly evaluation pattern).
-  - [`docs/ontology/entity-model.md`](../../ontology/entity-model.md) §Open Modeling Questions — two new OMQs proposed for registration via separate ontology-revision RFCs anticipated to surface under F1+F3 pressure: phenomenon-vs-record reconciliation under multi-source ingestion; trust-of-observation typing (server-authenticated vs client-attested vs client-witnessed).
+  - [`docs/ontology/entity-model.md`](../../ontology/entity-model.md) §Open Modeling Questions — two new OMQs proposed for registration via separate ontology-revision RFCs anticipated to surface under F1+F3 pressure: phenomenon-vs-record reconciliation under multi-source ingestion; authentication-class typing (server-authenticated vs client-attested vs client-witnessed).
   - [`docs/architecture/`](../../architecture/) — new architecture artifact: F6 substrate-read contract (parallel to canonical-serialization-contract; read-semantics + reproducibility guarantees).
   - No Charter prose modification. No new Charter invariant. No structural amendment proposed. RFC consumes Charter v0.7.2 frozen state as given.
 
@@ -108,7 +108,7 @@ For every signature in F3, the substrate-grounded test harness must record, **pe
 | Committed demotion count | Number of operator-elected demotions that materialized as substrate events. |
 | Chain morphology | `chain_depth_max` (longest `influenced_by` path) + `chain_breadth_at_root` (number of influencing hypotheses at the root). |
 
-**Without this instrumentation, non-firing of benchmarks is non-informative.** The diagnostic distinction between (i) chains-fracas (depth ≤ 2 OR breadth-at-root ≤ 3) indicating F3 insufficient, and (ii) chains-fortes with EI stable indicating constitutional thesis confirmed (domain rotates evidence faster than decay) — requires the morphology dimension at instrumentation, not at analysis. Instrumentation is **schema constraint at build time**, not retroactive add-on; per the cross-Claude triangulation: instrumentation cost of design is trivial, instrumentation cost of retrofit is impossible.
+**Without this instrumentation, non-firing of benchmarks is non-informative.** The diagnostic distinction between (i) chains-fracas (depth ≤ 2 OR breadth-at-root ≤ 3) indicating F3 insufficient, and (ii) chains-fortes with EI stable indicating constitutional thesis confirmed (domain rotates evidence faster than decay) — requires the morphology dimension at instrumentation, not at analysis. Instrumentation is **marshalling-boundary constraint at build time**, not retroactive add-on; per the cross-Claude triangulation: instrumentation cost of design is trivial, instrumentation cost of retrofit is impossible.
 
 ### Falsifiability outcomes
 
@@ -164,17 +164,17 @@ The largest gap. The substrate has Cat III lifecycle plumbing (formation, promot
 - Instrumentation per subtype × fonte × morfologia-de-chain wired from build time.
 - Versioned definition format (parallel to `uniform_cadence_v1.go` precedent). Signature versioning surfaces the op-def-versioning OMQ.
 
-### F4 — Trust-of-observation typing (OMQ-shaped surface)
+### F4 — Authentication-class typing (OMQ-shaped surface)
 
-Anti-bot-specific: not all observations carry the same trust. Server-authenticated NetworkObservation (gateway-verified TLS handshake) is structurally different from client-attested AttestationObservation (browser-supplied attestation chain) is structurally different from client-witnessed BrowserObservation (JS-collected fingerprint, no attestation). The current `actor_ref` does not capture this dimension.
+Anti-bot-specific: not all observations carry the same authentication-class weight. Server-authenticated NetworkObservation (gateway-verified TLS handshake) is structurally different from client-attested AttestationObservation (browser-supplied attestation chain) is structurally different from client-witnessed BrowserObservation (JS-collected fingerprint, no attestation). The current `actor_ref` does not capture this dimension.
 
-F4 opens as a formal OMQ surfaced under F1 pressure (likely month 4–5 when F1 has 3+ modalities forcing the distinction). **Proposed for separate ontology-revision RFC**; not resolved in this RFC. Likely candidates for the OMQ's structural surface: (a) new field on Cat I observations; (b) new Cat I subtype hierarchy; (c) discriminator on existing `actor_ref` semantics.
+F4 opens as a formal OMQ surfaced under F1 pressure (likely month 4–5 when F1 has 3+ modalities forcing the distinction). **Proposed for separate ontology-revision RFC**; not resolved in this RFC. Likely candidates for the OMQ's structural surface: (a) new field on Cat I observations; (b) new Cat I subtype hierarchy; (c) discriminator on existing `actor_ref` semantics. Canonical-vocabulary note: the OMQ name `authentication-class typing` replaces the colloquial term often used in the anti-bot literature; the literature term is on the [`anti-marketing`](../../../.claude/skills/enforcement/anti-marketing/SKILL.md) watchlist and is replaced here under [`vocabulary-discipline`](../../../.claude/skills/ontology/vocabulary-discipline/SKILL.md) per [§4 of the discipline](../../../.claude/skills/ontology/vocabulary-discipline/SKILL.md) — same structural meaning, watchlist-compliant surface.
 
 ### F6 — Operator-grade explainability (architecture, not UX)
 
 F6 is the **commercializable surface of the substrate's structural property**. Not a dashboard; an interface against contract. Audit-grade navigability by hash, statelessness over substrate, exportable to audit-grade format. The regulator must be able to reproduce, from F6's export, the exact provenance chain the operator saw.
 
-**Designed alongside F3, not after.** F6's reading requirements (statelessness, hash-navigability, exportability) constrain F3's commit-time materialization. If F6 is treated as fim-de-fase product, F3's schema choices may foreclose hash-navigability and no quantity of UI corrects it.
+**Designed alongside F3, not after.** F6's reading requirements (statelessness, hash-navigability, exportability) constrain F3's commit-time materialization. If F6 is treated as fim-de-fase product, F3's proto-definition choices may foreclose hash-navigability and no quantity of UI corrects it.
 
 **New architecture artifact: F6 substrate-read contract.** Parallel to the canonical-serialization-contract. Defines:
 
@@ -190,7 +190,7 @@ F6 in this window is CLI-grade (no GUI). The substrate-read contract is the arti
 - **F5** — Real-time decision serving. Latency budget is a comercializar concern; under comprovar posture, latency does not gate the comprovation criterion. Deferred.
 - **F7** — Adversarial lifecycle workflows beyond the substrate's existing surface (cross-category-lifecycle OMQ surfaces naturally under F3 pressure; broader work deferred).
 - **F8** — Privacy-preserving substrate (GDPR / CCPA tension with §2.1 immutability). Relevant when customer-real datasets enter; not under comprovar.
-- **F9** — Cross-tenant intelligence sharing. Platform-tier; deferred.
+- **F9** — Cross-tenant inference sharing. Platform-tier; deferred.
 - **F10** — Performance / scale architecture. Production volume pressure; not under comprovar.
 
 ## Origem de dados (per D2 resolution)
@@ -236,7 +236,7 @@ Per the §0137 + §0142 anchor-inventory pattern: declare anticipated pressures 
 | **Operational definition versioning** (lifecycle-semantics.md OMQ) | Existing open OMQ in [`lifecycle-semantics.md`](../../ontology/lifecycle-semantics.md#open-modeling-questions) | First signature revision in flight (signature v1 → v2; constructs already in substrate under v1 definition — re-derive, mark stale, or leave intact?) | Resolve under F2/F3 versioning pressure; existing OMQ surface; no new registration needed. |
 | **Cross-category lifecycle interactions** (lifecycle-semantics.md OMQ) | Existing open OMQ in [`lifecycle-semantics.md`](../../ontology/lifecycle-semantics.md#open-modeling-questions) | First demotion of a hypothesis that was previously consumed as enrichment by a Cat II construct | Resolve under F3 first-demotion pressure; existing OMQ surface; no new registration needed. |
 | **Phenomenon-vs-record reconciliation under multi-source ingestion** | **NEW** — proposed for registration in [`entity-model.md` Open Modeling Questions](../../ontology/entity-model.md#open-modeling-questions) | Same observational phenomenon (e.g., a TLS fingerprint) ingested from CIC-IDS + synthetic + honeypot produces three distinct substrate Cat I records (different `actor_ref` per fonte, different content-addressable identifiers). F3 inference computing over union vs filtered-to-unique faces reconciliation question. | **Propose opening separate `ontology-revision-phenomenon-vs-record-reconciliation` RFC** when F1 has two sources stable. |
-| **Trust-of-observation typing** | **NEW** — proposed for registration in [`entity-model.md` Open Modeling Questions](../../ontology/entity-model.md#open-modeling-questions) | F1 multi-modality forces distinction between server-authenticated, client-attested, client-witnessed observations. `actor_ref` does not capture trust dimension today. | **Propose opening separate `ontology-revision-trust-of-observation-typing` RFC** when F1 has three modalities stable. Likely affects entity-model.md Cat I structure. |
+| **Authentication-class typing** | **NEW** — proposed for registration in [`entity-model.md` Open Modeling Questions](../../ontology/entity-model.md#open-modeling-questions) | F1 multi-modality forces distinction between server-authenticated, client-attested, client-witnessed observations. `actor_ref` does not capture authentication-class dimension today. | **Propose opening separate `ontology-revision-authentication-class-typing` RFC** when F1 has three modalities stable. Likely affects entity-model.md Cat I structure. |
 
 Cross-domain provenance OMQ (provenance-model.md OMQ #4) is **explicitly out-of-scope** for this RFC; anti-bot is the only domain considered.
 
@@ -256,7 +256,7 @@ Per [`rfc-author` §1](../../../.claude/skills/workflow/rfc-author/SKILL.md), th
 - **§2.6** (frozen v0.6 + v0.7.2 sweep) — F3 commits `evidential_independence` at formation per §2.6 paired-dimension commitment + [`§0136`](../../charter/decision-log.md) canonical-serialization-contract + [`§0140`](../../charter/decision-log.md) marshalling-boundary enforcement. EI computation rule is [`§0133`](../../charter/decision-log.md) Candidate α (source-count ratio) per §2.6 BC1 post-sweep.
 - **§3 N1 — no truth.** Signatures of Camada A/B/C produce hypotheses (Cat III), not definitive claims. Demotion is structural per §2.5; the substrate never asserts truth, only records typed claims under explicit category.
 - **§3 N3 — no autonomous irreversible action.** Demote-* CLIs are operator-elected per [`§0119`](../../charter/decision-log.md) audit-symmetry posture. Layer A + Layer B verdicts are advisory per [`§0141`](../../charter/decision-log.md) E1; signatures never auto-commit demotions.
-- **§4 criterion 1** — sub-benchmarks are mechanically observable (substrate replay produces non-ambiguous verdict). Instrumentation by subtype × fonte × morfologia-de-chain is schema-checkable.
+- **§4 criterion 1** — sub-benchmarks are mechanically observable (substrate replay produces non-ambiguous verdict). Instrumentation by subtype × fonte × morfologia-de-chain is structurally-checkable at the marshalling boundary.
 
 ### Q2 — Does this RFC implicitly redefine any term in the glossary?
 
@@ -264,7 +264,7 @@ No. Canonical vocabulary used per glossary discipline. Implementation-locus term
 
 ### Q3 — Does this RFC implicitly resolve any of the five open Ontology questions?
 
-No. All five original `ontology.md` Open Questions are resolved as of [`§0134`](../../charter/decision-log.md). This RFC composes with the resolutions; does not re-open them. Five **NEW** OMQs are anticipated, three on existing OMQ surfaces (provenance-model OMQ #1; lifecycle-semantics OMQ × 2) and two requiring registration (phenomenon-vs-record; trust-of-observation), with proposed separate ontology-revision RFCs.
+No. All five original `ontology.md` Open Questions are resolved as of [`§0134`](../../charter/decision-log.md). This RFC composes with the resolutions; does not re-open them. Five **NEW** OMQs are anticipated, three on existing OMQ surfaces (provenance-model OMQ #1; lifecycle-semantics OMQ × 2) and two requiring registration (phenomenon-vs-record; authentication-class), with proposed separate ontology-revision RFCs.
 
 ### Q4 — Does this RFC require Charter amendment?
 
@@ -272,7 +272,7 @@ No. The RFC consumes Charter v0.7.2 frozen state. It anticipates that domain wor
 
 ### Q5 — Does this RFC introduce a new invariant?
 
-No. Domain-pack-level. No new Charter invariant. F4 (trust-of-observation typing) may require entity-model.md structural amendment when its OMQ resolves; that amendment would be Ontology-level, not Charter-level, and would proceed under ordinary RFC discipline.
+No. Domain-pack-level. No new Charter invariant. F4 (authentication-class typing) may require entity-model.md structural amendment when its OMQ resolves; that amendment would be Ontology-level, not Charter-level, and would proceed under ordinary RFC discipline. Canonical-vocabulary note: see Q3 above on watchlist-compliant naming.
 
 ### Q6 — Does this RFC propose ceremony without behavioral consequence?
 
@@ -286,7 +286,7 @@ Per cross-Claude triangulation. F-code references map to the scope section above
 |---|---|---|---|---|
 | **1** | F1.NetworkObservation (lowest-friction modality) | Adapter público #1 (CIC-IDS) begins | Honeypot legal review begins (critical path) | Single-developer: F1 alone fills the month. |
 | **2** | F1.BehavioralObservation | Synthetic generator v0 engineering (separate engineer ideally) | Adapter público #1 complete | F1+synthetic+legal-review parallelism stretches single-developer. |
-| **2–3** | F1.AttestationObservation + F1.BrowserObservation (may need sub-RFC for discriminated-union decision) | F4 OMQ formal opens (trust-of-observation surface pressure from F1) | Honeypot infra provisioning | F4 surfaces naturally; propose ontology-revision RFC opening. |
+| **2–3** | F1.AttestationObservation + F1.BrowserObservation (may need sub-RFC for discriminated-union decision) | F4 OMQ formal opens (authentication-class surface pressure from F1) | Honeypot infra provisioning | F4 surfaces naturally; propose ontology-revision RFC opening. |
 | **4–5** | F3 AutomationGroup minimum viable (canonical aberta signatures) | F6 substrate-read contract drafted in parallel with F3 | F2 Cat II library extends under F3 pressure | F3 starts only when F1 has 2 stable modalities. F2 responsive, not front-loaded. |
 | **4–5** | Phenomenon-vs-record OMQ surfaces (multi-source reconciliation pressure) | Propose ontology-revision RFC opening | Sub-benchmark 1 attempt (public + synthetic sources) | First comprovation gate. |
 | **5–6** | F3 BehavioralCluster extends (camada B) | F6 audit-grade navigability over F3 output | Sub-benchmark 2 attempt (honeypot non-curated) | Second comprovation gate; capture pressures as decision-log entries. |
