@@ -176,8 +176,8 @@ Missing fields are marked `pending`, never omitted.
 
 - **Canonical definition.** Structural reference from an assertion back to the observations and prior assertions that produced it.
 - **Introduction.** [Charter §1](./charter/constitutional-charter.md#1-thesis); [`ontology/provenance-model.md`](./ontology/provenance-model.md).
-- **Stabilization.** pending ([Invariant 2.3](./charter/constitutional-charter.md#23-provenance-integrity) pending committee redaction).
-- **Last amendment.** [`amendments.md` `v0.1` — Charter Inception](./charter/amendments.md) (Thesis introduces the term; full invariant pending).
+- **Stabilization.** [`decision-log.md` §0017 — Gate §2.3 closure](./charter/decision-log.md) ([Invariant 2.3](./charter/constitutional-charter.md#23-provenance-integrity) frozen v0.4).
+- **Last amendment.** v0.4 (§2.3 pending → frozen at amendment v0.4).
 - **Forbidden synonyms.** `metadata` (provenance is structure, not metadata, per [Charter §1](./charter/constitutional-charter.md#1-thesis)); `source` (when lineage is meant; collides with `provenance` per [`vocabulary-discipline` §4](../.claude/skills/ontology/vocabulary-discipline/SKILL.md)); `lineage` (acceptable in informal context, not as canonical replacement).
 
 ### `influence`
