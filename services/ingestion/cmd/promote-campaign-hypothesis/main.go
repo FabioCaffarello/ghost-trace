@@ -17,6 +17,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/cliutil"
+	commonv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/hypothesis"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
@@ -44,6 +46,7 @@ func run() error {
 	promotedAtNs := flag.Int64("promoted-at-ns", 0, "explicit promoted_at as Unix nanoseconds; 0 = wall-clock now()")
 	reason := flag.String("reason", "", "operator-supplied forensic note; optional")
 	actor := flag.String("actor", "", "OPTIONAL per decision-log §0097 + §0106: when non-empty, pairs the promotion with an IngestionEvent for per-actor attribution.")
+	layerB := flag.Bool("layer-b", false, "OPTIONAL per decision-log §0141 F3: when true, populate layer_b_parameters with §0138 inception-phase resolved values. Default false preserves the legacy path.")
 	flag.Parse()
 
 	if *formationHashHex == "" {
@@ -66,12 +69,17 @@ func run() error {
 	}
 	defer func() { _ = sub.Close() }()
 
+	var layerBParams *commonv1.LayerBParameters
+	if *layerB {
+		layerBParams = cliutil.InceptionPhaseLayerBParameters(*cadenceSeconds)
+	}
 	report, err := hypothesis.PromoteCampaignHypothesis(ctx, sub, hypothesis.CampaignHypothesisPromoteOptions{
 		FormationEventHash: hash,
 		PromotedAt:         *promotedAtNs,
 		CadenceSeconds:     *cadenceSeconds,
 		Reason:             *reason,
 		Actor:              *actor,
+		LayerBParameters:   layerBParams,
 	}, time.Now)
 	if err != nil {
 		return err
@@ -85,18 +93,23 @@ func run() error {
 		CadenceSeconds:        *cadenceSeconds,
 		AlreadyPromoted:       report.AlreadyPromoted,
 		IngestionEventHashHex: report.IngestionEventHashHex,
+		LayerBEnabled:         *layerB,
 	}); err != nil {
 		return fmt.Errorf("encode json: %w", err)
 	}
 
+	layerBState := "layer_b=legacy"
+	if *layerB {
+		layerBState = "layer_b=inception_defaults"
+	}
 	if *actor != "" {
 		fmt.Fprintf(os.Stderr,
-			"promote-campaign-hypothesis: formation=%s promotion=%s ingestion=%s cadence_seconds=%d actor=%q already_promoted=%v\n",
-			*formationHashHex, report.PromotionEventHashHex, report.IngestionEventHashHex, *cadenceSeconds, *actor, report.AlreadyPromoted)
+			"promote-campaign-hypothesis: formation=%s promotion=%s ingestion=%s cadence_seconds=%d %s actor=%q already_promoted=%v\n",
+			*formationHashHex, report.PromotionEventHashHex, report.IngestionEventHashHex, *cadenceSeconds, layerBState, *actor, report.AlreadyPromoted)
 	} else {
 		fmt.Fprintf(os.Stderr,
-			"promote-campaign-hypothesis: formation=%s promotion=%s cadence_seconds=%d already_promoted=%v\n",
-			*formationHashHex, report.PromotionEventHashHex, *cadenceSeconds, report.AlreadyPromoted)
+			"promote-campaign-hypothesis: formation=%s promotion=%s cadence_seconds=%d %s already_promoted=%v\n",
+			*formationHashHex, report.PromotionEventHashHex, *cadenceSeconds, layerBState, report.AlreadyPromoted)
 	}
 	return nil
 }
@@ -107,4 +120,5 @@ type payload struct {
 	CadenceSeconds        int64  `json:"cadence_seconds"`
 	AlreadyPromoted       bool   `json:"already_promoted"`
 	IngestionEventHashHex string `json:"ingestion_event_hash,omitempty"`
+	LayerBEnabled         bool   `json:"layer_b_enabled"`
 }

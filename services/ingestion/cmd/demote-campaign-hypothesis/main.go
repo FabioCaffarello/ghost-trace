@@ -17,6 +17,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/cliutil"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/hypothesis"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
@@ -84,27 +85,30 @@ func run() error {
 		CadenceSatisfied:      report.CadenceSatisfied,
 		CadenceElapsedSeconds: report.CadenceElapsedSeconds,
 		IngestionEventHashHex: report.IngestionEventHashHex,
+		LayerB:                cliutil.LayerBPayloadFromReport(report.LayerB),
 	}); err != nil {
 		return fmt.Errorf("encode json: %w", err)
 	}
 
+	layerBSummary := cliutil.LayerBSummary(report.LayerB)
 	if *actor != "" {
 		fmt.Fprintf(os.Stderr,
-			"demote-campaign-hypothesis: promotion=%s demotion=%s ingestion=%s cadence_satisfied=%v elapsed=%ds actor=%q\n",
-			*promotionHashHex, report.DemotionEventHashHex, report.IngestionEventHashHex, report.CadenceSatisfied, report.CadenceElapsedSeconds, *actor)
+			"demote-campaign-hypothesis: promotion=%s demotion=%s ingestion=%s cadence_satisfied=%v elapsed=%ds %s actor=%q\n",
+			*promotionHashHex, report.DemotionEventHashHex, report.IngestionEventHashHex, report.CadenceSatisfied, report.CadenceElapsedSeconds, layerBSummary, *actor)
 	} else {
 		fmt.Fprintf(os.Stderr,
-			"demote-campaign-hypothesis: promotion=%s demotion=%s cadence_satisfied=%v elapsed=%ds\n",
-			*promotionHashHex, report.DemotionEventHashHex, report.CadenceSatisfied, report.CadenceElapsedSeconds)
+			"demote-campaign-hypothesis: promotion=%s demotion=%s cadence_satisfied=%v elapsed=%ds %s\n",
+			*promotionHashHex, report.DemotionEventHashHex, report.CadenceSatisfied, report.CadenceElapsedSeconds, layerBSummary)
 	}
 	return nil
 }
 
 type payload struct {
-	PromotionEventHash    string `json:"promotion_event_hash"`
-	DemotionEventHashHex  string `json:"demotion_event_hash"`
-	AlreadyDemoted        bool   `json:"already_demoted"`
-	CadenceSatisfied      bool   `json:"cadence_satisfied"`
-	CadenceElapsedSeconds int64  `json:"cadence_elapsed_seconds"`
-	IngestionEventHashHex string `json:"ingestion_event_hash,omitempty"`
+	PromotionEventHash    string                `json:"promotion_event_hash"`
+	DemotionEventHashHex  string                `json:"demotion_event_hash"`
+	AlreadyDemoted        bool                  `json:"already_demoted"`
+	CadenceSatisfied      bool                  `json:"cadence_satisfied"`
+	CadenceElapsedSeconds int64                 `json:"cadence_elapsed_seconds"`
+	IngestionEventHashHex string                `json:"ingestion_event_hash,omitempty"`
+	LayerB                cliutil.LayerBPayload `json:"layer_b"`
 }
