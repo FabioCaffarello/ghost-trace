@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	commonv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 )
 
@@ -139,10 +140,20 @@ func (s SessionDescriptorSharedV1) Form(fctx FormationContext, _ int64) []*event
 		}
 
 		formations = append(formations, &eventsv1.BehavioralClusterFormation{
-			ActorRefs:         actors,
-			FormationAt:       maxDeclaredAt,
-			Confidence:        confidenceFromClusterSize(len(actors)),
-			SourceEventHashes: hashBytes,
+			ActorRefs:   actors,
+			FormationAt: maxDeclaredAt,
+			Confidence:  confidenceFromClusterSize(len(actors)),
+			// EvidentialIndependence per §0140 paired-dimension
+			// marshalling-boundary enforcement: α = 1/1 (full
+			// independence) — this pattern reads only from Cat I
+			// DeclaredSessions and does not consume promoted
+			// hypothesis records, so all Cat I roots in the chain
+			// are NOT reachable via any promoted-hypothesis
+			// influenced_by edge per §0133 Q3-α formula. Once a
+			// formation path consumes hypothesis records, α must
+			// be computed per the formula.
+			EvidentialIndependence: &commonv1.EvidentialIndependence{Numerator: 1, Denominator: 1},
+			SourceEventHashes:      hashBytes,
 		})
 	}
 

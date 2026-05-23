@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	commonv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 )
 
@@ -52,6 +53,10 @@ func (p PaddedV1) Derive(source *eventsv1.DeclaredSession, _ [32]byte, _ Derivat
 		ActorRef:           source.GetActorRef(),
 		OperationalStartAt: source.GetDeclaredAt(),
 		OperationalEndAt:   source.GetDeclaredAt() + padNanos,
+		// EvidentialIndependence per §0140 — α = 1/1. PaddedV1 reads
+		// only the single Cat I DeclaredSession source; no
+		// promoted-hypothesis influence is consumed per §0133 Q3-α.
+		EvidentialIndependence: &commonv1.EvidentialIndependence{Numerator: 1, Denominator: 1},
 	}
 }
 

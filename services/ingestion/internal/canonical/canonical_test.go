@@ -96,14 +96,15 @@ func hash(b byte) []byte {
 
 func TestMarshalAcceptsWellFormedClosureHashes(t *testing.T) {
 	msg := &eventsv1.BehavioralClusterFormation{
-		PatternSignature:   "session-descriptor-shared-v1",
-		PatternParameters:  "min_cluster_size=2",
-		ActorRefs:          []string{"actor-a", "actor-b"},
-		FormationAt:        1716120000000000000,
-		Confidence:         0.8,
-		SourceEventHashes:  [][]byte{hash(0x10), hash(0x20)},
-		DirectInfluencedBy: [][]byte{hash(0xa0)},
-		ClosureHashes:      [][]byte{hash(0xa0), hash(0xb0)},
+		PatternSignature:       "session-descriptor-shared-v1",
+		PatternParameters:      "min_cluster_size=2",
+		ActorRefs:              []string{"actor-a", "actor-b"},
+		FormationAt:            1716120000000000000,
+		Confidence:             0.8,
+		EvidentialIndependence: &commonv1.EvidentialIndependence{Numerator: 1, Denominator: 2},
+		SourceEventHashes:      [][]byte{hash(0x10), hash(0x20)},
+		DirectInfluencedBy:     [][]byte{hash(0xa0)},
+		ClosureHashes:          [][]byte{hash(0xa0), hash(0xb0)},
 	}
 	if _, err := Marshal(msg); err != nil {
 		t.Fatalf("well-formed message rejected: %v", err)
@@ -241,20 +242,41 @@ func TestMarshalChecksNestedEvidentialIndependence(t *testing.T) {
 	}
 }
 
-func TestMarshalAcceptsUnsetEvidentialIndependence(t *testing.T) {
-	// A message that declares an EvidentialIndependence field but leaves
-	// it nil must NOT be rejected by the rational-pair check (the check
-	// is on PRESENT instances). Paired-dimension presence-enforcement is
-	// a substrate-tier concern per the canonical-serialization-contract.
+func TestMarshalRejectsUnsetEvidentialIndependence(t *testing.T) {
+	// Pre-§0140: this test asserted the OPPOSITE — that an unset
+	// evidential_independence was accepted by the marshalling boundary,
+	// with the comment "Paired-dimension presence-enforcement is a
+	// substrate-tier concern per the canonical-serialization-contract."
+	//
+	// §0140 surfaced the gap: the canonical-serialization-contract
+	// §Paired-Dimension Commitment §Validation discipline says
+	// "Substrate-commit fails at the canonical-marshalling boundary when
+	// a record subject to the commitment is missing either dimension"
+	// (i.e., marshalling-boundary enforcement), and §2.6 v0.6
+	// anti-pattern 1 (paired-dimension bypass) is the §Anti-Patterns
+	// section's first entry. The pre-§0140 test codified the gap rather
+	// than the contract's stated enforcement; §0140 inverts to align
+	// with §2.6's operational discharge intent.
+	//
+	// The §0140 enforcement is asymmetric: EI presence is required
+	// (proto3 message-field with explicit presence); confidence presence
+	// is not enforced (proto3 scalar with no presence; 0.0 is valid
+	// low-confidence). See validatePairedDimensionCommitment.
 	msg := &eventsv1.BehavioralClusterFormation{
 		PatternSignature:  "p",
 		PatternParameters: "k=v",
 		FormationAt:       1,
 		Confidence:        0.5,
-		// EvidentialIndependence intentionally nil.
+		// EvidentialIndependence intentionally nil — must be rejected
+		// per §0140 + canonical-serialization-contract §Paired-Dimension
+		// Commitment.
 	}
-	if _, err := Marshal(msg); err != nil {
-		t.Fatalf("unset evidential_independence rejected by rational-pair check: %v", err)
+	_, err := Marshal(msg)
+	if err == nil {
+		t.Fatal("Marshal accepted a BehavioralClusterFormation with evidential_independence absent (per §0140 + canonical-serialization-contract §Paired-Dimension Commitment, absence at commit time MUST be rejected at the marshalling boundary)")
+	}
+	if !strings.Contains(err.Error(), "evidential_independence is absent") {
+		t.Fatalf("error %q does not name evidential_independence-absent discipline", err)
 	}
 }
 
@@ -309,11 +331,12 @@ func TestMarshalRejectsDuplicateSourceEventHashes(t *testing.T) {
 
 func TestMarshalAcceptsWellFormedSourceEventHashes(t *testing.T) {
 	msg := &eventsv1.BehavioralClusterFormation{
-		PatternSignature:  "p",
-		PatternParameters: "k=v",
-		FormationAt:       1,
-		Confidence:        0.5,
-		SourceEventHashes: [][]byte{hash(0x01), hash(0x02), hash(0x03)},
+		PatternSignature:       "p",
+		PatternParameters:      "k=v",
+		FormationAt:            1,
+		Confidence:             0.5,
+		EvidentialIndependence: &commonv1.EvidentialIndependence{Numerator: 1, Denominator: 2},
+		SourceEventHashes:      [][]byte{hash(0x01), hash(0x02), hash(0x03)},
 	}
 	if _, err := Marshal(msg); err != nil {
 		t.Fatalf("well-formed ascending source_event_hashes rejected: %v", err)

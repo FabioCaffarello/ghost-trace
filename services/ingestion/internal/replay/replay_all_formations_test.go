@@ -95,9 +95,10 @@ func TestReplayAllBehavioralClusterFormationsCountsErrored(t *testing.T) {
 
 	// Hand-injected bogus BC formation.
 	bcBogus := &eventsv1.BehavioralClusterFormation{
-		PatternSignature:  "not-a-real-pattern",
-		PatternParameters: "x=y",
-		FormationAt:       2000,
+		PatternSignature:       "not-a-real-pattern",
+		PatternParameters:      "x=y",
+		FormationAt:            2000,
+		EvidentialIndependence: eiOne(),
 	}
 	bcPayload, bcHash, _ := canonical.MarshalAndHash(bcBogus)
 	bcHex := canonical.HashHex(bcHash)
