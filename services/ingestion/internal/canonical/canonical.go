@@ -19,16 +19,30 @@ import (
 // docs/architecture/canonical-serialization-contract.md §Hash function.
 const hashByteLen = 32
 
-// influenceHashFieldNames are the proto field names subject to the
-// "closure_hashes element mis-encoded" anti-pattern + the Influence
-// Storage Validation discipline (out-of-order / duplicate rejection)
-// per docs/architecture/canonical-serialization-contract.md. The
-// canonical-serialization-contract enumerates both fields explicitly;
-// see §Influence Storage Validation discipline +
-// §Anti-Patterns.closure_hashes element mis-encoded.
-var influenceHashFieldNames = map[string]struct{}{
-	"closure_hashes":       {},
-	"direct_influenced_by": {},
+// hashListFieldNames are the proto field names subject to the
+// canonical-serialization-contract's Hash-List Field Discipline +
+// the "BLAKE3-hash-list element mis-encoded" anti-pattern: every
+// canonical-form-load-bearing repeated bytes field whose elements are
+// 32-byte BLAKE3 content-hashes carries the same uniform structural
+// commitment (length=32 + ascending lexicographic order + no duplicates),
+// regardless of the semantic surface (influence storage, observational
+// provenance, lifecycle antecedent/successor reference). See
+// docs/architecture/canonical-serialization-contract.md §Hash-List Field
+// Discipline + §Anti-Patterns.BLAKE3-hash-list element mis-encoded +
+// decision-log §0139.
+//
+// The five-field set was the inception-revision §0136 form's two-field
+// set (closure_hashes + direct_influenced_by) generalized per §0139 to
+// include the three additional canonical-form-load-bearing 32-byte
+// BLAKE3 repeated bytes fields named on the proto surface (the proto
+// comments at each field's site documented the ascending + content-hash-
+// stability commitment before this generalization).
+var hashListFieldNames = map[string]struct{}{
+	"closure_hashes":                    {}, // influence storage closure (§0134 Q5-τ + §0136 β-graph)
+	"direct_influenced_by":              {}, // influence storage direct edges (§0134 + §0136)
+	"source_event_hashes":               {}, // observational provenance roots (§2.3 v0.4)
+	"antecedent_formation_event_hashes": {}, // lifecycle merge antecedents (§2.5 v0.3 + §0045)
+	"successor_formation_event_hashes":  {}, // lifecycle split successors (§2.5 v0.3 + §0045)
 }
 
 // evidentialIndependenceFullName is the canonical Protobuf full-name of
@@ -54,11 +68,14 @@ const evidentialIndependenceFullName = "ghosttrace.common.v1.EvidentialIndepende
 // Marshal also enforces two canonical-serialization-contract structural
 // invariants at the marshalling boundary:
 //
-//  1. The closure_hashes / direct_influenced_by field-shape anti-pattern
-//     (per §Anti-Patterns + §Influence Storage Validation discipline):
-//     every top-level repeated bytes field named "closure_hashes" or
-//     "direct_influenced_by" is validated for (a) per-element length =
-//     32 bytes, (b) ascending lexicographic ordering, (c) no duplicates.
+//  1. The BLAKE3-hash-list element-shape anti-pattern (per §Hash-List
+//     Field Discipline + §Anti-Patterns + decision-log §0139): every
+//     top-level repeated bytes field listed in hashListFieldNames is
+//     validated for (a) per-element length = 32 bytes, (b) ascending
+//     lexicographic ordering, (c) no duplicates. The five-field set
+//     covers the full canonical-form-load-bearing surface as of §0139
+//     (closure_hashes, direct_influenced_by, source_event_hashes,
+//     antecedent_formation_event_hashes, successor_formation_event_hashes).
 //
 //  2. The EvidentialIndependence rational-pair invariant (per §2.6 +
 //     §0136 + the proto's MUST denominator > 0): every embedded
@@ -165,14 +182,19 @@ func validateEvidentialIndependenceMessage(m protoreflect.Message) error {
 }
 
 // validateHashListFields walks msg's top-level fields and enforces the
-// canonical-serialization-contract's closure_hashes / direct_influenced_by
-// shape rules. Returns a non-nil error on the first violation found;
-// nil if all such fields are well-formed or absent.
+// canonical-serialization-contract's Hash-List Field Discipline (per
+// §0139): every top-level repeated bytes field named in
+// hashListFieldNames is validated for 32-byte element length + ascending
+// lexicographic order + no duplicates. Returns a non-nil error on the
+// first violation found; nil if all such fields are well-formed or
+// absent.
 //
-// The check is structural-only — it does NOT verify that elements are
-// substrate-resident or that closure_hashes equals the recomputed union
-// per the Cat II structural-transmission commitment. Those are
-// substrate-tier validations per the contract's Validation discipline.
+// The check is structural-only — it does NOT verify substrate-tier
+// commitments (closure-recomputation per the Cat II structural-
+// transmission commitment; provenance-chain termination at Cat I per
+// §2.3; merge/split structural symmetry per §0045). Those are
+// substrate-tier validations supplementary to this marshalling-boundary
+// check per the contract's §Hash-List Field Discipline.
 func validateHashListFields(msg proto.Message) error {
 	if msg == nil {
 		return nil
@@ -185,25 +207,25 @@ func validateHashListFields(msg proto.Message) error {
 	for i := 0; i < fields.Len(); i++ {
 		fd := fields.Get(i)
 		name := string(fd.Name())
-		if _, ok := influenceHashFieldNames[name]; !ok {
+		if _, ok := hashListFieldNames[name]; !ok {
 			continue
 		}
 		if fd.Kind() != protoreflect.BytesKind || !fd.IsList() {
-			return fmt.Errorf("canonical: field %q must be repeated bytes per the canonical-serialization-contract Influence Storage section", name)
+			return fmt.Errorf("canonical: field %q must be repeated bytes per the canonical-serialization-contract Hash-List Field Discipline (§0139)", name)
 		}
 		list := m.Get(fd).List()
 		var prev []byte
 		for j := 0; j < list.Len(); j++ {
 			v := list.Get(j).Bytes()
 			if len(v) != hashByteLen {
-				return fmt.Errorf("canonical: %s[%d] has length %d, want %d (BLAKE3-256 per canonical-serialization-contract)", name, j, len(v), hashByteLen)
+				return fmt.Errorf("canonical: %s[%d] has length %d, want %d (BLAKE3-256 per canonical-serialization-contract Hash-List Field Discipline §0139)", name, j, len(v), hashByteLen)
 			}
 			if j > 0 {
 				switch bytes.Compare(prev, v) {
 				case 0:
-					return fmt.Errorf("canonical: %s[%d] duplicates %s[%d] (per canonical-serialization-contract — duplicates rejected)", name, j, name, j-1)
+					return fmt.Errorf("canonical: %s[%d] duplicates %s[%d] (per canonical-serialization-contract Hash-List Field Discipline §0139 — duplicates rejected)", name, j, name, j-1)
 				case 1:
-					return fmt.Errorf("canonical: %s[%d] precedes %s[%d] lexicographically (per canonical-serialization-contract — must be ascending order)", name, j-1, name, j)
+					return fmt.Errorf("canonical: %s[%d] precedes %s[%d] lexicographically (per canonical-serialization-contract Hash-List Field Discipline §0139 — must be ascending order)", name, j-1, name, j)
 				}
 			}
 			prev = v

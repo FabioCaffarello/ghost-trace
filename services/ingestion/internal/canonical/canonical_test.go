@@ -257,3 +257,129 @@ func TestMarshalAcceptsUnsetEvidentialIndependence(t *testing.T) {
 		t.Fatalf("unset evidential_independence rejected by rational-pair check: %v", err)
 	}
 }
+
+// Per docs/architecture/canonical-serialization-contract.md §Hash-List
+// Field Discipline + decision-log §0139: the marshalling-boundary
+// element-shape check covers FIVE field families. PRs #143 enforced two
+// (closure_hashes + direct_influenced_by); §0139 generalizes to three
+// additional families (source_event_hashes per formation protos,
+// antecedent_formation_event_hashes per merge protos,
+// successor_formation_event_hashes per split protos). The tests below
+// exercise each new family with positive (ascending well-formed) +
+// negative (descending / duplicate / short) cases.
+
+func TestMarshalRejectsShortSourceEventHash(t *testing.T) {
+	msg := &eventsv1.BehavioralClusterFormation{
+		SourceEventHashes: [][]byte{[]byte("too-short")},
+	}
+	_, err := Marshal(msg)
+	if err == nil {
+		t.Fatal("Marshal accepted a source_event_hashes element shorter than 32 bytes")
+	}
+	if !strings.Contains(err.Error(), "source_event_hashes") || !strings.Contains(err.Error(), "want 32") {
+		t.Fatalf("error %q does not name source_event_hashes + expected length", err)
+	}
+}
+
+func TestMarshalRejectsOutOfOrderSourceEventHashes(t *testing.T) {
+	msg := &eventsv1.BehavioralClusterFormation{
+		SourceEventHashes: [][]byte{hash(0xb0), hash(0xa0)}, // descending
+	}
+	_, err := Marshal(msg)
+	if err == nil {
+		t.Fatal("Marshal accepted descending source_event_hashes")
+	}
+	if !strings.Contains(err.Error(), "source_event_hashes") || !strings.Contains(err.Error(), "ascending") {
+		t.Fatalf("error %q does not name source_event_hashes + ascending discipline", err)
+	}
+}
+
+func TestMarshalRejectsDuplicateSourceEventHashes(t *testing.T) {
+	msg := &eventsv1.BehavioralClusterFormation{
+		SourceEventHashes: [][]byte{hash(0xa0), hash(0xa0)},
+	}
+	_, err := Marshal(msg)
+	if err == nil {
+		t.Fatal("Marshal accepted duplicate source_event_hashes")
+	}
+	if !strings.Contains(err.Error(), "source_event_hashes") || !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("error %q does not name source_event_hashes + duplicate discipline", err)
+	}
+}
+
+func TestMarshalAcceptsWellFormedSourceEventHashes(t *testing.T) {
+	msg := &eventsv1.BehavioralClusterFormation{
+		PatternSignature:  "p",
+		PatternParameters: "k=v",
+		FormationAt:       1,
+		Confidence:        0.5,
+		SourceEventHashes: [][]byte{hash(0x01), hash(0x02), hash(0x03)},
+	}
+	if _, err := Marshal(msg); err != nil {
+		t.Fatalf("well-formed ascending source_event_hashes rejected: %v", err)
+	}
+}
+
+func TestMarshalRejectsOutOfOrderAntecedentFormationEventHashes(t *testing.T) {
+	msg := &eventsv1.BehavioralClusterMerge{
+		AntecedentFormationEventHashes: [][]byte{hash(0xb0), hash(0xa0)},
+	}
+	_, err := Marshal(msg)
+	if err == nil {
+		t.Fatal("Marshal accepted descending antecedent_formation_event_hashes")
+	}
+	if !strings.Contains(err.Error(), "antecedent_formation_event_hashes") || !strings.Contains(err.Error(), "ascending") {
+		t.Fatalf("error %q does not name antecedent_formation_event_hashes + ascending discipline", err)
+	}
+}
+
+func TestMarshalRejectsDuplicateAntecedentFormationEventHashes(t *testing.T) {
+	msg := &eventsv1.CampaignHypothesisMerge{
+		AntecedentFormationEventHashes: [][]byte{hash(0x10), hash(0x10)},
+	}
+	_, err := Marshal(msg)
+	if err == nil {
+		t.Fatal("Marshal accepted duplicate antecedent_formation_event_hashes")
+	}
+	if !strings.Contains(err.Error(), "antecedent_formation_event_hashes") || !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("error %q does not name antecedent_formation_event_hashes + duplicate discipline", err)
+	}
+}
+
+func TestMarshalRejectsShortSuccessorFormationEventHash(t *testing.T) {
+	msg := &eventsv1.BehavioralClusterSplit{
+		SuccessorFormationEventHashes: [][]byte{[]byte("not-32-bytes")},
+	}
+	_, err := Marshal(msg)
+	if err == nil {
+		t.Fatal("Marshal accepted a successor_formation_event_hashes element shorter than 32 bytes")
+	}
+	if !strings.Contains(err.Error(), "successor_formation_event_hashes") || !strings.Contains(err.Error(), "want 32") {
+		t.Fatalf("error %q does not name successor_formation_event_hashes + expected length", err)
+	}
+}
+
+func TestMarshalRejectsOutOfOrderSuccessorFormationEventHashes(t *testing.T) {
+	msg := &eventsv1.AutomationGroupSplit{
+		SuccessorFormationEventHashes: [][]byte{hash(0xc0), hash(0xa0), hash(0xb0)}, // not ascending
+	}
+	_, err := Marshal(msg)
+	if err == nil {
+		t.Fatal("Marshal accepted out-of-order successor_formation_event_hashes")
+	}
+	if !strings.Contains(err.Error(), "successor_formation_event_hashes") || !strings.Contains(err.Error(), "ascending") {
+		t.Fatalf("error %q does not name successor_formation_event_hashes + ascending discipline", err)
+	}
+}
+
+func TestMarshalAcceptsWellFormedSuccessorFormationEventHashes(t *testing.T) {
+	msg := &eventsv1.CoordinationRingSplit{
+		AntecedentFormationEventHash:  hash(0x01),
+		SuccessorFormationEventHashes: [][]byte{hash(0x10), hash(0x20), hash(0x30)},
+		SplitAt:                       1716120000000000000,
+		Reason:                        "well-formed split fixture",
+	}
+	if _, err := Marshal(msg); err != nil {
+		t.Fatalf("well-formed ascending successor_formation_event_hashes rejected: %v", err)
+	}
+}
