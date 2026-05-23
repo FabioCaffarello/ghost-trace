@@ -65,7 +65,7 @@ const evidentialIndependenceFullName = "ghosttrace.common.v1.EvidentialIndepende
 //   - UseCachedSize: false — disables the size-caching optimization;
 //     preserves bit-stability across reentrant marshalling.
 //
-// Marshal also enforces two canonical-serialization-contract structural
+// Marshal also enforces three canonical-serialization-contract structural
 // invariants at the marshalling boundary:
 //
 //  1. The BLAKE3-hash-list element-shape anti-pattern (per §Hash-List
@@ -83,7 +83,19 @@ const evidentialIndependenceFullName = "ghosttrace.common.v1.EvidentialIndepende
 //     present must have denominator > 0 AND numerator ≤ denominator
 //     (the α ∈ [0, 1] bounded-resolution structural commitment).
 //
-// Mismatch on either returns a non-nil error WITHOUT producing canonical
+//  3. The paired-dimension commitment (per §2.6 v0.6 + §0136 + §0140):
+//     every top-level message type that declares BOTH a `confidence`
+//     field AND an `evidential_independence` field is subject to the
+//     commitment, and `evidential_independence` MUST be present at
+//     commit time. The check is asymmetric — confidence is a proto3
+//     scalar with no field-presence and 0.0 is a valid low-confidence
+//     commitment, so confidence presence is not enforced. See
+//     validatePairedDimensionCommitment for the reasoning + §0140 for
+//     the patch-via-pressure entry that surfaced the gap (the contract
+//     previously claimed `AllowPartial: false` enforced this — a
+//     structurally incorrect claim for proto3).
+//
+// Mismatch on any returns a non-nil error WITHOUT producing canonical
 // bytes — the violation is structurally rejected at the marshalling
 // boundary.
 func Marshal(msg proto.Message) ([]byte, error) {
@@ -91,6 +103,9 @@ func Marshal(msg proto.Message) ([]byte, error) {
 		return nil, err
 	}
 	if err := validateEvidentialIndependence(msg); err != nil {
+		return nil, err
+	}
+	if err := validatePairedDimensionCommitment(msg); err != nil {
 		return nil, err
 	}
 	opts := proto.MarshalOptions{
@@ -230,6 +245,69 @@ func validateHashListFields(msg proto.Message) error {
 			}
 			prev = v
 		}
+	}
+	return nil
+}
+
+// validatePairedDimensionCommitment enforces the canonical-serialization-
+// contract §Paired-Dimension Commitment per §2.6 v0.6 + §0136 + §0140:
+// every top-level message type subject to the commitment must have
+// `evidential_independence` present at commit time.
+//
+// Subject-to-commitment detection is structural: a message type is
+// subject to the commitment iff it declares BOTH a `confidence` field
+// AND an `evidential_independence` field. The structural proxy
+// corresponds to the contract's enumeration of records subject to the
+// commitment (Cat II constructs + Cat III hypothesis formation +
+// Assertion with subject_ref_construct/_hypothesis per §0016) — those
+// records carry both fields by construction; records NOT subject to
+// the commitment (Cat I observations; lifecycle events that record
+// EI under a different field name like `freshness_b_at_firing` /
+// `saturation_c_at_firing` per the demotion protos; etc.) lack one
+// of the two declared field names.
+//
+// The check is asymmetric:
+//
+//   - `evidential_independence`: REQUIRED to be present (proto3
+//     message-field with explicit presence; checked via m.Has(fd)).
+//     Absence is a structural commitment violation under §2.6 v0.6.
+//
+//   - `confidence`: NOT enforced for presence (proto3 scalar with no
+//     field-presence; 0.0 is a valid low-confidence commitment under
+//     the contract's confidence semantic). The asymmetry is sound:
+//     the structural failure mode the commitment defends against is
+//     confidence-without-EI (an inferential record committed without
+//     its evidential-independence dimension); EI-without-confidence
+//     is not a structural failure mode for records subject to the
+//     commitment because the records always declare both fields and
+//     confidence's zero-value is semantically meaningful.
+//
+// Per §0140 patch-via-pressure: the canonical-serialization-contract
+// previously claimed `AllowPartial: false` in the Marshal call enforced
+// this; that claim is structurally incorrect for proto3 (no required
+// fields). §0140 records the gap + the contract revision + this
+// validator as the actual enforcement mechanism. Scope is top-level
+// fields of the marshalled message; the validator does not recurse into
+// nested-message fields (records subject to the commitment carry the
+// paired dimensions at the top level by current proto-surface design).
+func validatePairedDimensionCommitment(msg proto.Message) error {
+	if msg == nil {
+		return nil
+	}
+	m := msg.ProtoReflect()
+	if !m.IsValid() {
+		return nil
+	}
+	fields := m.Descriptor().Fields()
+	confFd := fields.ByName("confidence")
+	eiFd := fields.ByName("evidential_independence")
+	if confFd == nil || eiFd == nil {
+		// Not subject to the commitment (lacks one or both declared
+		// field names). No-op.
+		return nil
+	}
+	if !m.Has(eiFd) {
+		return fmt.Errorf("canonical: %s is subject to the paired-dimension commitment (declares both confidence + evidential_independence per §2.6 v0.6 + §0136) but evidential_independence is absent at commit time (per canonical-serialization-contract §Paired-Dimension Commitment + §0140)", m.Descriptor().FullName())
 	}
 	return nil
 }
