@@ -1,0 +1,12 @@
+{
+  "observedAt": "1716120000000000000",
+  "actorRef": "actor-corpus-http2",
+  "endpointRef": "10.0.0.42:443",
+  "collectorRef": "honeypot-collector:hp-01",
+  "http2FramePattern": {
+    "frameTypeSequence": [4, 8, 1, 9],
+    "settingsCanonical": "1:65536;3:1000;4:6291456;6:262144",
+    "priorityCanonical": "stream:1;depends_on:0;weight:256;exclusive:false",
+    "headerTableSize": 65536
+  }
+}

@@ -1,0 +1,51 @@
+// Sub-modality of NetworkObservation per decision-log §0144 (a)
+// discriminated-union framing. Carries IP address + ASN + geo
+// provenance derived from a single observed network endpoint.
+//
+// No `confidence` / `evidential_independence` fields — Cat I sub-modality
+// payload, structurally excluded from paired-dimension per §2.6 BC3.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// NetworkIpAsn is the IP + ASN + geo payload carried by
+// NetworkObservation when the modality is `ip_asn`. Field set carries
+// the structural minimum to identify the network-layer origin of a
+// connection at AS granularity.
+message NetworkIpAsn {
+  // ip_address is the IP literal (IPv4 or IPv6) in canonical text form
+  // per RFC 5952 (IPv6 canonical) and RFC 791 (IPv4 dotted-quad).
+  string ip_address = 1;
+
+  // asn is the Autonomous System Number that originated the IP per
+  // the lookup source (see lookup_source). 0 when no ASN was found
+  // (private / reserved / unrouted ranges).
+  uint32 asn = 2;
+
+  // asn_organization is the registered organization name for the ASN
+  // per the lookup source (e.g. "CLOUDFLARENET", "GOOGLE-CLOUD-PLATFORM").
+  // Empty when the lookup source did not return an organization or when
+  // asn = 0.
+  string asn_organization = 3;
+
+  // geo_country is the ISO 3166-1 alpha-2 country code from geo lookup
+  // (e.g. "US", "BR", "DE"). Empty when geo lookup did not return a
+  // country.
+  string geo_country = 4;
+
+  // geo_subdivision is the ISO 3166-2 subdivision code from geo lookup
+  // (e.g. "US-CA", "BR-SP", "DE-BY"). Empty when geo lookup did not
+  // return a subdivision or when finer resolution is not configured.
+  string geo_subdivision = 5;
+
+  // lookup_source identifies the adapter / library that performed the
+  // ASN + geo lookup (e.g. "maxmind-geolite2:v20260101",
+  // "ipinfo-lite:v20260301", "team-cymru-whois:v20260501"). Distinct
+  // from NetworkObservation.collector_ref: collector_ref names the
+  // record's ingestion adapter; lookup_source names the ASN/geo
+  // resolution provider, which may differ. Empty when the lookup was
+  // performed by the collector itself.
+  string lookup_source = 6;
+}

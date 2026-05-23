@@ -70,6 +70,12 @@ generate: $(PROTOC_GEN_GO)
 	  events/v1/declared_session.proto \
 	  events/v1/ingestion_event.proto \
 	  events/v1/network_event.proto \
+	  events/v1/network_observation.proto \
+	  events/v1/network_tcp_fingerprint.proto \
+	  events/v1/network_tls_ja4.proto \
+	  events/v1/network_http2_frame_pattern.proto \
+	  events/v1/network_dns_pattern.proto \
+	  events/v1/network_ip_asn.proto \
 	  events/v1/operational_session.proto \
 	  events/v1/orphan_cleanup_audit.proto \
 	  events/v1/cross_subtype_merge_attachment.proto \

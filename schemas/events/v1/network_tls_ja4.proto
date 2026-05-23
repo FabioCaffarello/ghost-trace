@@ -1,0 +1,45 @@
+// Sub-modality of NetworkObservation per decision-log §0144 (a)
+// discriminated-union framing. Carries TLS ClientHello fingerprint
+// features per the JA4 specification (FoxIO LLC). Sample sources cited
+// for fixture authorship: FoxIO JA4 reference documentation
+// (publicly published canonical-form examples).
+//
+// No `confidence` / `evidential_independence` fields — Cat I sub-modality
+// payload, structurally excluded from paired-dimension per §2.6 BC3.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// NetworkTlsJa4 is the TLS ClientHello fingerprint payload carried by
+// NetworkObservation when the modality is `tls_ja4`. Field set follows
+// the FoxIO JA4 canonical form, with both the digest form (`ja4`) and
+// the pre-hash raw form (`ja4_raw`) so that consumers can re-derive
+// the digest from the raw or operate on the digest alone.
+message NetworkTlsJa4 {
+  // ja4 is the canonical JA4 fingerprint string per FoxIO spec, in the
+  // form "tNNCNNh2_HHHHHHHHHHHH_HHHHHHHHHHHH" (truncated truncated SHA-256
+  // digests of cipher list + extension list). Example:
+  // "t13d1516h2_8daaf6152771_b186095e22b6". Empty when not computed.
+  string ja4 = 1;
+
+  // ja4_raw is the pre-digest canonical form per FoxIO spec — the
+  // sorted cipher and extension lists in canonical form, before SHA-256
+  // truncation. Preserves the input the digest is computed from, for
+  // verification and re-derivation. Empty when not computed.
+  string ja4_raw = 2;
+
+  // sni_present indicates whether the ClientHello included a
+  // Server Name Indication extension. JA4's "d" / "i" character at
+  // offset 4 of `ja4` encodes this; the bool here is supplementary for
+  // consumers that prefer not to parse the JA4 string.
+  bool sni_present = 3;
+
+  // alpn_protocols is the ordered ALPN protocol list as advertised in
+  // the ClientHello (e.g. ["h2", "http/1.1"]). JA4's last two
+  // characters at offset 8-9 of `ja4` encode the first ALPN protocol;
+  // the repeated string here is supplementary for full ALPN list
+  // inspection. Empty when ALPN extension absent.
+  repeated string alpn_protocols = 4;
+}

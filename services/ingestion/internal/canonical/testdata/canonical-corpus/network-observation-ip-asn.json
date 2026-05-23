@@ -1,0 +1,14 @@
+{
+  "observedAt": "1716120000000000000",
+  "actorRef": "actor-corpus-ipasn",
+  "endpointRef": "192.0.2.1:443",
+  "collectorRef": "cic-ids-2017-adapter:v1",
+  "ipAsn": {
+    "ipAddress": "192.0.2.1",
+    "asn": 64496,
+    "asnOrganization": "EXAMPLE-AS",
+    "geoCountry": "US",
+    "geoSubdivision": "US-CA",
+    "lookupSource": "maxmind-geolite2:v20260101"
+  }
+}

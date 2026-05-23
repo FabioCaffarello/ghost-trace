@@ -1,0 +1,12 @@
+{
+  "observedAt": "1716120000000000000",
+  "actorRef": "actor-corpus-dns",
+  "endpointRef": "10.0.0.42:53",
+  "collectorRef": "honeypot-collector:hp-01",
+  "dnsPattern": {
+    "qnamePattern": "depth:3;label_lengths:7,3,3",
+    "qtypeSequence": [1, 28, 65],
+    "recursionDesired": true,
+    "responseCodes": [0, 0, 3]
+  }
+}

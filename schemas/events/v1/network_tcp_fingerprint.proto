@@ -1,0 +1,53 @@
+// Sub-modality of NetworkObservation per decision-log §0144 (a)
+// discriminated-union framing. Carries TCP-layer fingerprint features
+// extractable from observed SYN packets — the surface that p0f and
+// similar tools operate on. Sample sources cited for fixture
+// authorship: p0f v3 signature database (Marsh-Style format).
+//
+// No `confidence` / `evidential_independence` fields — Cat I sub-modality
+// payload, structurally excluded from paired-dimension per §2.6 BC3.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// NetworkTcpFingerprint is the TCP-layer fingerprint payload carried by
+// NetworkObservation when the modality is `tcp_fingerprint`. Field set
+// is the structural minimum to support p0f-style classification at
+// substrate level; downstream signatures may compute derived features
+// without modifying this record.
+message NetworkTcpFingerprint {
+  // tcp_options_order is the sequence of TCP option kind numbers as
+  // observed in the SYN packet, in the order they appeared. Per RFC
+  // 9293 §3.1 option kinds: 0=EOL, 1=NOP, 2=MSS, 3=WSCALE, 4=SACK-OK,
+  // 5=SACK, 8=TIMESTAMP, etc. Order is significant for p0f-style
+  // fingerprinting (different stacks emit options in different orders).
+  // Empty when no options were observed.
+  repeated uint32 tcp_options_order = 1;
+
+  // window_size is the TCP window size value from the observed SYN
+  // (before any window scaling is applied). 0 = not observed.
+  uint32 window_size = 2;
+
+  // mss is the Maximum Segment Size advertised in the SYN's MSS option
+  // (kind 2). 0 = MSS option absent.
+  uint32 mss = 3;
+
+  // ttl is the IP TTL value on the observed SYN packet. Cited per
+  // p0f initial-TTL inference (typical values: 64 for Linux/BSD,
+  // 128 for Windows, 255 for some routers). 0 = not observed.
+  uint32 ttl = 4;
+
+  // flags_sequence is the sequence of observed TCP flag-byte values
+  // across the captured handshake (SYN, SYN-ACK, ACK at minimum).
+  // Each entry is the flag byte as defined in RFC 9293 §3.1
+  // (FIN=0x01, SYN=0x02, RST=0x04, PSH=0x08, ACK=0x10, URG=0x20).
+  repeated uint32 flags_sequence = 5;
+
+  // p0f_signature is the optional p0f canonical-form signature string
+  // (e.g. "4:64:0:1460:mss*44,7:mss,sok,ts,nop,ws:df:0") for
+  // cross-vendor compatibility with existing p0f-based detection.
+  // Empty when not provided.
+  string p0f_signature = 6;
+}
