@@ -91,12 +91,26 @@ func TestFullPipeline_EndToEnd(t *testing.T) {
 	}
 
 	sig := &signatures.CDPMarkerDensityV1{}
-	candidates, err := sig.EvaluateBrowser(context.Background(), observations)
+	result, err := sig.EvaluateBrowser(context.Background(), observations)
 	if err != nil {
 		t.Fatalf("EvaluateBrowser: %v", err)
 	}
+	candidates := result.Candidates
 	if got, want := len(candidates), 1; got != want {
 		t.Fatalf("candidates: got %d want %d", got, want)
+	}
+	// Stats sanity checks (telemetry surface per §0154).
+	if result.Stats.ObservationsScanned != uint32(len(observations)) {
+		t.Errorf("Stats.ObservationsScanned: got %d want %d", result.Stats.ObservationsScanned, len(observations))
+	}
+	if result.Stats.ActorsAboveThreshold != 1 {
+		t.Errorf("Stats.ActorsAboveThreshold: got %d want 1", result.Stats.ActorsAboveThreshold)
+	}
+	if result.Stats.CandidatesEmitted != 1 {
+		t.Errorf("Stats.CandidatesEmitted: got %d want 1", result.Stats.CandidatesEmitted)
+	}
+	if got := result.Stats.PerCollector["browser-sdk:v1"]; got != uint32(len(observations)) {
+		t.Errorf("Stats.PerCollector[browser-sdk:v1]: got %d want %d", got, len(observations))
 	}
 
 	tmp, err := os.CreateTemp("", "find-candidates-*.json")
@@ -104,7 +118,7 @@ func TestFullPipeline_EndToEnd(t *testing.T) {
 		t.Fatalf("CreateTemp: %v", err)
 	}
 	defer os.Remove(tmp.Name())
-	if err := emitCandidatesJSON(tmp, sig.Name(), candidates); err != nil {
+	if err := emitCandidatesJSON(tmp, sig.Name(), candidates, result.Stats); err != nil {
 		t.Fatalf("emitCandidatesJSON: %v", err)
 	}
 	tmp.Close()

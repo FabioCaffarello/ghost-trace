@@ -104,15 +104,85 @@ const (
 	HypothesisSubtypeCoordinationRing
 )
 
+// EvaluationStats carries per-evaluation instrumentation counters
+// per §0154 + §0143 Sub-benchmark 1 mandatory-instrumentation
+// requirement. Counters are populated by the signature implementation
+// during evaluation; orchestrator surfaces them in operator-facing
+// output. The structure is intentionally per-evaluation (not
+// cumulative across invocations); cumulative aggregation is
+// orchestrator territory.
+//
+// Per-source breakdown via PerCollector map: collector_ref → counters.
+// Enables §0143 instrumentation-by-source axis without forcing
+// callers to know all collector_ref namespaces in advance.
+//
+// Per-chain-morphology field captured as best-effort at the signature
+// layer; full morphology is observable at the hypothesis substrate
+// level (post-formation-commit). Signature layer captures
+// pre-formation morphology indicators (e.g., per-actor source-hash
+// count is a proxy for chain-breadth-at-root).
+type EvaluationStats struct {
+	// ObservationsScanned is the total count of observations passed
+	// to EvaluateBrowser (or equivalent).
+	ObservationsScanned uint32
+
+	// ObservationsSkippedNoActor is the count of observations skipped
+	// because actor_ref was empty (signature cannot anchor a
+	// hypothesis without an actor_ref per the ontology).
+	ObservationsSkippedNoActor uint32
+
+	// ObservationsSkippedWrongModality is the count of observations
+	// skipped because the signature's required sub-modality was not
+	// populated (e.g., cdp_marker signature skipping
+	// canvas_fingerprint observations).
+	ObservationsSkippedWrongModality uint32
+
+	// ActorsAggregated is the count of distinct actor_refs the
+	// signature aggregated across the input window (regardless of
+	// whether they met the threshold).
+	ActorsAggregated uint32
+
+	// ActorsAboveThreshold is the count of distinct actor_refs that
+	// produced a FormationCandidate (i.e., met the signature's
+	// emission criteria).
+	ActorsAboveThreshold uint32
+
+	// CandidatesEmitted equals len(EvaluationResult.Candidates);
+	// preserved explicitly for telemetry-readable summary without
+	// requiring callers to inspect the candidates slice.
+	CandidatesEmitted uint32
+
+	// PerCollector breaks down observation counts by collector_ref
+	// (§0144 (e) phenomenon-vs-record reconciliation slot). Enables
+	// §0143 instrumentation-by-source axis. Key: collector_ref;
+	// value: count of observations scanned with that collector_ref.
+	// Empty when no observations carried a non-empty collector_ref.
+	PerCollector map[string]uint32
+}
+
+// EvaluationResult is the signature evaluation output: candidates +
+// instrumentation. Per §0154: returning both in a single struct keeps
+// signature interface simple (one return value) while exposing the
+// instrumentation surface mandated by §0143 Sub-benchmark 1.
+type EvaluationResult struct {
+	// Candidates are the formation candidates the signature emits.
+	// May be empty; empty != error.
+	Candidates []*FormationCandidate
+
+	// Stats are the per-evaluation instrumentation counters.
+	Stats EvaluationStats
+}
+
 // Signature is the F3 inference engine interface. Concrete signatures
 // implement Evaluate against the Cat I observation surface relevant
 // to their detection axis. Stateless across invocations (orchestrator
 // is responsible for window selection); deterministic given input.
 //
 // Per §0143 instrumentation-by-subtype-fonte-morfologia discipline:
-// signatures should be testable in isolation per subtype/source/
-// chain-morphology. The Evaluate interface accepts a typed observation
-// slice; orchestrator selects the slice per its windowing strategy.
+// signatures populate EvaluationStats during evaluation, surfacing
+// per-source + per-skip-reason counters via the EvaluationResult
+// returned to the orchestrator. Per §0154: single return value
+// carrying both candidates + stats.
 type Signature interface {
 	// Name returns the signature's name for instrumentation +
 	// versioning (e.g., "cdp_marker_density_v1").
@@ -123,10 +193,10 @@ type Signature interface {
 	Subtype() HypothesisSubtype
 
 	// EvaluateBrowser evaluates the signature against a slice of
-	// BrowserObservation records. Returns formation candidates (may
-	// be empty); error indicates a structural failure (e.g.,
-	// malformed input), not "no candidates found".
-	EvaluateBrowser(ctx context.Context, observations []*eventsv1.BrowserObservation) ([]*FormationCandidate, error)
+	// BrowserObservation records. Returns EvaluationResult (candidates
+	// + stats); error indicates a structural failure (e.g., malformed
+	// input), not "no candidates found".
+	EvaluateBrowser(ctx context.Context, observations []*eventsv1.BrowserObservation) (*EvaluationResult, error)
 }
 
 // BrowserSignature is a convenience marker interface for signatures

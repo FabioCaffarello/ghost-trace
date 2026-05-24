@@ -71,20 +71,26 @@ func run() error {
 	}
 
 	sig := &signatures.CDPMarkerDensityV1{Threshold: uint32(*threshold)}
-	candidates, err := sig.EvaluateBrowser(ctx, observations)
+	result, err := sig.EvaluateBrowser(ctx, observations)
 	if err != nil {
 		return fmt.Errorf("signature.EvaluateBrowser: %w", err)
 	}
 
+	candidates := result.Candidates
 	if *limitCandidates > 0 && len(candidates) > *limitCandidates {
 		candidates = candidates[:*limitCandidates]
 	}
 
-	if err := emitCandidatesJSON(os.Stdout, sig.Name(), candidates); err != nil {
+	if err := emitCandidatesJSON(os.Stdout, sig.Name(), candidates, result.Stats); err != nil {
 		return fmt.Errorf("emit JSON: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "find-automation-group-candidates: scanned=%d observations; candidates=%d (signature=%s threshold=%d)\n",
-		len(observations), len(candidates), sig.Name(), thresholdOrDefault(sig))
+	fmt.Fprintf(os.Stderr, "find-automation-group-candidates: scanned=%d observations; candidates=%d (signature=%s threshold=%d; actors_aggregated=%d; actors_above_threshold=%d)\n",
+		result.Stats.ObservationsScanned,
+		len(candidates),
+		sig.Name(),
+		thresholdOrDefault(sig),
+		result.Stats.ActorsAggregated,
+		result.Stats.ActorsAboveThreshold)
 	return nil
 }
 
@@ -127,17 +133,41 @@ type candidateJSON struct {
 	ConfidenceHint    float64  `json:"confidence_hint"`
 }
 
-type emissionEnvelope struct {
-	SignatureName string          `json:"signature_name"`
-	CandidateCount int            `json:"candidate_count"`
-	Candidates    []candidateJSON `json:"candidates"`
+// statsJSON is the operator-facing serialization of EvaluationStats.
+// Distinct from signatures.EvaluationStats to keep package-internal
+// representation decoupled from CLI's stable output contract per
+// §0153 Methodological observation 4.
+type statsJSON struct {
+	ObservationsScanned              uint32            `json:"observations_scanned"`
+	ObservationsSkippedNoActor       uint32            `json:"observations_skipped_no_actor"`
+	ObservationsSkippedWrongModality uint32            `json:"observations_skipped_wrong_modality"`
+	ActorsAggregated                 uint32            `json:"actors_aggregated"`
+	ActorsAboveThreshold             uint32            `json:"actors_above_threshold"`
+	CandidatesEmitted                uint32            `json:"candidates_emitted"`
+	PerCollector                     map[string]uint32 `json:"per_collector,omitempty"`
 }
 
-func emitCandidatesJSON(w *os.File, signatureName string, candidates []*signatures.FormationCandidate) error {
+type emissionEnvelope struct {
+	SignatureName  string          `json:"signature_name"`
+	CandidateCount int             `json:"candidate_count"`
+	Candidates     []candidateJSON `json:"candidates"`
+	Stats          statsJSON       `json:"stats"`
+}
+
+func emitCandidatesJSON(w *os.File, signatureName string, candidates []*signatures.FormationCandidate, stats signatures.EvaluationStats) error {
 	out := emissionEnvelope{
-		SignatureName: signatureName,
+		SignatureName:  signatureName,
 		CandidateCount: len(candidates),
-		Candidates: make([]candidateJSON, 0, len(candidates)),
+		Candidates:     make([]candidateJSON, 0, len(candidates)),
+		Stats: statsJSON{
+			ObservationsScanned:              stats.ObservationsScanned,
+			ObservationsSkippedNoActor:       stats.ObservationsSkippedNoActor,
+			ObservationsSkippedWrongModality: stats.ObservationsSkippedWrongModality,
+			ActorsAggregated:                 stats.ActorsAggregated,
+			ActorsAboveThreshold:             stats.ActorsAboveThreshold,
+			CandidatesEmitted:                stats.CandidatesEmitted,
+			PerCollector:                     stats.PerCollector,
+		},
 	}
 	for _, c := range candidates {
 		hashesHex := make([]string, len(c.SourceHashes))

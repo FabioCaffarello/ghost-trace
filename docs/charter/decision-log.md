@@ -6305,6 +6305,56 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0154` — F3 instrumentation pass: EvaluationStats added to Signature interface; per-collector + per-skip-reason counters operational; §0143 Sub-benchmark 1 instrumentation surface
+
+- **Status:** accepted.
+- **Date:** 2026-05-24.
+- **Context:** [`§0143`](#0143--domain-pack-v01-anti-bot-atlas-framing-pr-opened-first-applied-domain-vertical-on-the-substrate-hybrid-ontologyrevision--operationalspec-rfc-structure) Sub-benchmark 1 criterion mandates instrumentation per subtype × fonte × morfologia-de-chain: "Without this instrumentation, non-firing of benchmarks is non-informative." [`§0152`](#0152--f3-inference-layer-opens-cdp_marker_density_v1-signature-for-automationgroup-first-camada-a-canonicalaberta-signature-lands-new-signatures-package-establishes-f3-surface) landed the signature surface but did not yet expose instrumentation counters at the signature/orchestrator boundary. [`§0153`](#0153--f3-orchestrator-lands-find-automation-group-candidates-cli-wires-signatures-to-substrate-read-path-first-end-to-end-inference-loop-operational) landed the orchestrator with minimal summary output (scanned + candidates). This entry closes the instrumentation gap: introduces `EvaluationStats` + `EvaluationResult` types in signatures package; Signature interface returns `*EvaluationResult` carrying candidates + stats jointly; orchestrator emits stats in JSON output + stderr summary.
+
+  Per §0143 instrumentation-by-source axis: `EvaluationStats.PerCollector` breaks down observation counts by `collector_ref` (§0144 (e) phenomenon-vs-record reconciliation slot). When second ingestion source (synthetic generator OR honeypot collector) lands, the operator can directly observe per-source signature firing rates via the JSON output's `stats.per_collector` field.
+
+- **Decision:** Signatures package refactored to expose instrumentation:
+
+  - **`signatures.EvaluationStats`** struct with counters: ObservationsScanned, ObservationsSkippedNoActor, ObservationsSkippedWrongModality, ActorsAggregated, ActorsAboveThreshold, CandidatesEmitted, PerCollector (map[string]uint32 keyed on `collector_ref`).
+  - **`signatures.EvaluationResult`** struct wrapping Candidates + Stats.
+  - **`Signature.EvaluateBrowser` interface** changed from `([]*FormationCandidate, error)` to `(*EvaluationResult, error)` — single return value carries both candidates + stats per §0154 design rationale (interface simplicity + instrumentation exposure).
+  - **`CDPMarkerDensityV1.EvaluateBrowser` implementation** updated to populate stats during evaluation: increments per-collector counter on observed `collector_ref`; increments per-skip-reason counter on actor_ref-empty or non-cdp-modality; tracks per-actor aggregation count + above-threshold count + emitted count.
+  - **`cmd/find-automation-group-candidates` orchestrator** updated to consume `*EvaluationResult` + emit `stats` field in JSON output + extended stderr summary.
+
+  Test additions:
+  - `TestCDPMarkerDensityV1_EvaluationStats_PerCollectorBreakdown` (verifies per-collector counter shape across 2 collector_ref namespaces)
+  - `TestCDPMarkerDensityV1_EvaluationStats_SkipCounters` (verifies skip counters increment for both no-actor + wrong-modality paths)
+  - Orchestrator `TestFullPipeline_EndToEnd` extended with stats-surface verification (ObservationsScanned + ActorsAboveThreshold + CandidatesEmitted + PerCollector).
+
+  Constitutional discipline at instrumentation layer:
+
+  - **§0143 instrumentation-by-source axis** — `PerCollector` map exposes per-source firing rate measurement without forcing callers to pre-enumerate collector_ref namespaces.
+  - **§0143 instrumentation-by-subtype axis** — already exposed via `Signature.Subtype()` (signature-level annotation); per-evaluation counters now compose with subtype to give per-subtype × per-source breakdown.
+  - **§0143 morfologia-de-chain** — partial surface at signature layer: `EvidenceCount` per candidate is a proxy for chain-breadth-at-root (per-actor source-hash count). Full chain morphology (depth_max, breadth_at_root after formation commit) is substrate-layer observable post-formation-commit; signature-layer captures pre-formation indicators only.
+  - **§0143 falsifiability discipline** — with instrumentation, non-firing of Sub-benchmark 1 becomes informative: orchestrator output distinguishes "0 observations scanned" from "N observations scanned, M skipped no actor, K skipped wrong modality, 0 candidates" — diagnostic surface for distinguishing "no observable pattern in input" vs "pattern present but signature insensitive" vs "pattern present + signature sensitive but threshold high".
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant.
+
+  Falsifiability discipline: instrumentation behavior structurally observable via the 2 new EvaluationStats tests + extended end-to-end test. Counter increments mechanically checkable per skip path + per collector_ref namespace.
+
+  Backward-compat note: Signature interface signature change is structurally breaking for any external consumer (none exist outside the signatures + orchestrator packages this PR also updates).
+
+- **Consequences:**
+  - `signatures.go` extended with `EvaluationStats` + `EvaluationResult` types; `Signature` interface return signature changed.
+  - `cdp_marker_density.go` populates EvaluationStats during evaluation.
+  - `cdp_marker_density_test.go` extends with 2 new tests + migrates existing 10 tests to new return signature.
+  - `cmd/find-automation-group-candidates/main.go` extends emissionEnvelope JSON output with `stats` field + extended stderr summary (actors_aggregated + actors_above_threshold).
+  - `cmd/find-automation-group-candidates/main_test.go` extends `TestFullPipeline_EndToEnd` with stats-surface verification.
+  - **Sub-benchmark 1 measurement surface complete.** Per §0143 Sub-benchmark 1 criterion (first non-trivial demotion in [N] days after F3 mínimo viável; chains-fracas-vs-chains-fortes diagnosis via morphology): the signature-layer instrumentation now exposes the per-evaluation counters needed for the chains-fracas-vs-chains-fortes distinction at evaluation time. Full diagnosis requires substrate-layer chain morphology (post-formation-commit); but signature layer surfaces enough for first-pass diagnosis ("did the signature even see the observation? did it skip it? did the actor accumulate enough evidence?").
+  - **Methodological observation 1 — Instrumentation as single return value preserves interface simplicity.** Considered alternative: separate `Signature.Stats()` method returning last-evaluation stats. Rejected because (a) stateful signatures break the stateless-across-invocations contract; (b) callers always want both candidates + stats together. Single `*EvaluationResult` return value carries both atomically. **Pattern: F3 signature interfaces should return a result-struct, not split into multiple methods, when instrumentation is part of the evaluation surface.**
+  - **Methodological observation 2 — Per-collector breakdown via map[string]uint32 avoids pre-enumeration.** Considered alternative: typed enum or fixed list of collector_ref namespaces. Rejected because §0144 (e) phenomenon-vs-record reconciliation OMQ explicitly anticipates collector_ref namespaces evolving as new ingestion sources land; pre-enumeration would require proto-definition change per new source. **Pattern: instrumentation surfaces for fields that participate in open-evolution OMQs (collector_ref, future authentication_class extensions) should use string-keyed maps rather than typed enums.**
+  - **Methodological observation 3 — Signature-layer instrumentation is partial; full Sub-benchmark 1 measurement requires substrate-layer chain morphology.** EvidenceCount is a proxy; chain_depth_max + chain_breadth_at_root post-formation-commit are the authoritative §0143 morfologia metrics. The substrate-layer surface for these is future work (likely lives in a `cmd/measure-chain-morphology/` or extended `cmd/hypothesis-state/`). **Pattern: instrumentation lands in layers — signature-layer (pre-formation) + substrate-layer (post-formation) compose for full Sub-benchmark 1 measurement.** Future PR completes the substrate-layer half.
+  - **Methodological observation 4 — Sub-benchmark 1 non-firing now informative.** Pre-§0154: orchestrator emit "0 candidates" with no diagnostic surface. Post-§0154: orchestrator emit ObservationsScanned + ObservationsSkipped* + ActorsAggregated + PerCollector + CandidatesEmitted, allowing operator to distinguish multiple non-firing causes. **Pattern: instrumentation converts non-firing from uninformative (substrate didn't fire) to diagnostic (substrate observed N events, M skipped for reason X, K signatures fired but none above threshold) — operationalizes §0143 falsifiability discipline.**
+
+- **Supersession:** Signature interface signature change supersedes §0152 + §0153's prior `[]*FormationCandidate` return value. Backward-incompatible for external consumers (none).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
