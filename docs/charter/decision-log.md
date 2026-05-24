@@ -6905,6 +6905,65 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0166` — Dissolution E2E integration test from F3-derived candidate formation; extends §0165 cross-formation lifecycle to unary operation
+
+- **Status:** accepted.
+- **Date:** 2026-05-24.
+- **Context:** [`§0160`](#0160--demote-e2e-integration-test-against-f3-candidate-derived-lifecycle-validates-f3--formation--promotion--demotion-path-end-to-end) covered linear lifecycle (formation → promotion → demotion). [`§0165`](#0165--merge-e2e-integration-test-from-f3-derived-candidate-antecedents-extends-0160-lifecycle-axis-coverage-to-merge-operation) extended to the BINARY cross-formation operation (merge: 2 antecedents + 1 produced). The §0011 staged-combination AutomationGroup lifecycle ALSO includes the UNARY cross-formation operations: dissolution (recognizes hypothesis non-existence) + split (separates one formation into multiple successors). Dissolution had unit-test coverage in the hypothesis package but no integration test from F3-derived candidates.
+
+  Dissolution is structurally distinct from demotion per glossary + lifecycle-semantics.md line 36: demotion withdraws OPERATIONAL USE of a promoted hypothesis; dissolution recognizes NON-EXISTENCE of the underlying phenomenon. Dissolution does NOT require prior promotion — a formation may be dissolved directly per `AutomationGroupDissolveOptions` docstring. This entry exercises the direct-dissolution path.
+
+  Per §0165 MO1: cross-formation lifecycle operations differ structurally in whether they need operator-synthesized successor formation(s). Merge (binary) needs ONE synthesized successor; split (k-ary) would need k synthesized successors; dissolution (unary) needs NONE — the dissolution event simply references the formation being dissolved. §0166 is the simplest cross-formation lifecycle test by construction.
+
+- **Decision:** New test file `services/ingestion/cmd/find-automation-group-candidates/dissolution_e2e_test.go` with 2 integration tests:
+
+  - **`TestDissolveAutomationGroup_FromF3CandidateFormation`** — Full path validation (NO promotion step):
+    1. Inject BrowserObservation above threshold.
+    2. Run F3 signature → 1 candidate.
+    3. Operator-elected formation commit via §0157's `commitFormationFromCandidate`.
+    4. Operator-elected dissolution commit via `hypothesis.DissolveAutomationGroup` — DIRECT (no promotion in between).
+    5. Verify formation + dissolution events in substrate via LookupRow.
+    6. Verify dissolution proto's `FormationEventHash` field references formation hash exactly (32-byte exact-match via `bytes.Equal`).
+    7. Verify dissolution report fields (hex hash + `AlreadyDissolved=false`).
+
+  - **`TestDissolveAutomationGroup_IdempotencyUnderRepeatedCommit`** — Confirms content-hash idempotency: second dissolution commit with IDENTICAL `AutomationGroupDissolveOptions` surfaces `AlreadyDissolved=true` + identical hash hex. Substrate's lookup-before-append path returns the existing event rather than writing a duplicate row. Mirrors §0165's `RejectsIdenticalAntecedents` as the dissolution-side falsifiability check on a §0048 lifecycle invariant.
+
+  Helpers:
+
+  - `newDissolutionE2ESubstrate` — substrate + Ingester per the §0160/§0165 pattern.
+  - Reuses `appendBrowserObs`, `collectBrowserObservations`, `commitFormationFromCandidate`, `hexDecodeInto` (existing package helpers).
+
+  No new synthesizer helper required — dissolution is unary (per §0165 MO1).
+
+  Constitutional discipline:
+
+  - **Direct dissolution permitted per §2.5 BC5 + lifecycle-semantics.md** — formation may be dissolved without prior promotion; test exercises this path explicitly (no `PromoteAutomationGroup` call between formation and dissolution commits).
+  - **§3 N3 operator-elected commit boundary** — two operator-elected commits in sequence (formation, dissolution); each explicit + decoupled.
+  - **§2.5 BC5 lifecycle event immutability** — dissolution event committed via `substrate.Append`; influence chain preserved.
+  - **§0048 content-hash idempotency** — second commit with identical inputs surfaces `AlreadyDissolved=true`; falsifiability check via second-commit assertion.
+
+  Scope discipline per §0166: **structural connectivity across the F3-derived → dissolution arc + idempotency invariant**, NOT exhaustive per-operation dissolution semantics. Per-operation semantics (ErrTargetNotFound for missing hashes, ErrTargetWrongType for wrong message_type, AppendPair with Actor, dissolution against promoted vs unpromoted formation) covered by the hypothesis package's own unit test suite.
+
+  Per §0164 MO1 verification discipline: empirical state inline (`grep -c "^func Test" services/ingestion/cmd/find-automation-group-candidates/dissolution_e2e_test.go` returns 2; aggregate session E2E coverage: layerb_firing_test=2 + morphology_integration_test=1 + demote_e2e_test=1 + merge_e2e_test=2 + dissolution_e2e_test=2 = 8 tests across 5 files exercising §0157 anchor; total integration test count per `wc -l < services/ingestion/cmd/find-automation-group-candidates/*_test.go | awk '{s+=$1}END{print s}'` recordable post-merge).
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. Test-only addition.
+
+  Falsifiability discipline: dissolution behavior structurally observable. Test 1 verifies (a) F3 signature emits expected candidate; (b) formation commit accepts F3-derived AutomationGroupFormation; (c) DissolveAutomationGroup accepts formation hash + emits valid dissolution event WITHOUT requiring prior promotion; (d) dissolution proto references formation event hash exactly; (e) all committed records present via LookupRow; (f) report state correctly populated. Test 2 verifies (a) repeated commit with identical inputs surfaces AlreadyDissolved=true; (b) hash hex identical across both calls.
+
+- **Consequences:**
+  - New test file `cmd/find-automation-group-candidates/dissolution_e2e_test.go` (2 tests; ~210 lines).
+  - New helper `newDissolutionE2ESubstrate` (local to test package).
+  - No new packages. No proto changes. No corpus regeneration. No schemas-evolution event.
+  - **§0011 staged-combination AutomationGroup lifecycle integration coverage extended to dissolution.** Coverage from F3-derived candidates now spans: formation (§0157), promotion (§0160), demotion (§0160), merge (§0165), dissolution (this entry). Only split (§0011 cross-formation k-ary operation) remains — landing as a separate entry per §0165 MO1 (split needs commitSplitSuccessorFormation per k-successor synthesis).
+  - **Five integration test files in find-automation-group-candidates/ now exercise §0157's F3-derived-formation anchor.** Four distinct downstream axes per §0160 MO3: evaluation (§0157 layerb_firing_test), measurement (§0158 morphology_integration_test), linear lifecycle (§0160 demote_e2e_test), cross-formation lifecycle (§0165 merge_e2e_test + §0166 dissolution_e2e_test). The cross-formation axis now has TWO test files reflecting the binary/unary distinction in §0011 cross-formation operations.
+  - **Methodological observation 1 — Unary cross-formation lifecycle is the structurally simplest cross-formation operation to integration-test.** Dissolution requires NO synthesized successor formation (per §0165 MO1); the test is shorter than merge's by ~80 lines + uses ONLY existing helpers. Idempotency-via-content-hash is testable via repeated commit assertion. **Pattern: when adding cross-formation lifecycle integration tests, START with dissolution (unary) before merge (binary) or split (k-ary); the unary case validates the dissolution event commit boundary + idempotency semantics on the simplest possible surface. The §0165 → §0166 ordering inverts the "complexity ascending" pattern; a future arc starting from scratch should consider the §0166 → §0165 → split ordering instead.**
+  - **Methodological observation 2 — Direct-dissolution path (no promotion required) is a structurally important falsifiability case.** Without explicit testing, the assumption "dissolution requires promotion first" could silently creep into orchestrator code. The test asserts dissolution accepts a formation hash directly + emits a valid dissolution event, validating the lifecycle-semantics.md commitment that dissolution is NOT promotion-dependent. **Pattern: lifecycle operations with documented "X does NOT require Y" preconditions should be integration-tested SPECIFICALLY at the precondition boundary (test the X-without-Y path explicitly); without the test, the precondition assertion becomes ambient documentation rather than enforceable contract.**
+  - **Methodological observation 3 — Content-hash idempotency is integration-testable via repeated-commit assertion.** The dissolution code path's `LookupRow` before `Append` produces `AlreadyDissolved=true` on second call with identical inputs (the substrate's content-hash-collision detection surfaces here). Asserting both `AlreadyDissolved=true` AND `first.HashHex == second.HashHex` validates BOTH the substrate's collision detection + the dissolution code's report shape. **Pattern: content-hash idempotency claims at the lifecycle layer should be integration-tested by exercising the repeat-commit path + asserting both the report's idempotency boolean + hash-hex equality across calls. Single-assertion tests (only boolean OR only hash) miss half the contract.**
+
+- **Supersession:** No prior decision-log entry superseded. Extends §0165's cross-formation lifecycle integration coverage to the unary operation; together with §0157 (evaluation) + §0158 (measurement) + §0160 (linear lifecycle) + §0165 (binary cross-formation) + §0166 (unary cross-formation), the F3-derived-formation pattern is integration-tested across the full §0011 lifecycle MINUS split. Split lands as a separate entry per §0165 MO1.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
