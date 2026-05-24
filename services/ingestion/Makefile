@@ -24,6 +24,7 @@ help:
 	@echo "  hypothesis-state-build  go build -trimpath -o $(BIN_DIR)/hypothesis-state ./cmd/hypothesis-state"
 	@echo "  list-hypotheses-build  go build -trimpath -o $(BIN_DIR)/list-hypotheses ./cmd/list-hypotheses"
 	@echo "  find-automation-group-candidates-build  go build -trimpath -o $(BIN_DIR)/find-automation-group-candidates ./cmd/find-automation-group-candidates"
+	@echo "  measure-chain-morphology-build  go build -trimpath -o $(BIN_DIR)/measure-chain-morphology ./cmd/measure-chain-morphology"
 	@echo "  summarize-hypotheses-build  go build -trimpath -o $(BIN_DIR)/summarize-hypotheses ./cmd/summarize-hypotheses"
 	@echo "  form-automation-group-build  go build -trimpath -o $(BIN_DIR)/form-automation-group ./cmd/form-automation-group"
 	@echo "  promote-automation-group-build  go build -trimpath -o $(BIN_DIR)/promote-automation-group ./cmd/promote-automation-group"
@@ -192,6 +193,11 @@ list-hypotheses-build:
 find-automation-group-candidates-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/find-automation-group-candidates ./cmd/find-automation-group-candidates
+
+.PHONY: measure-chain-morphology-build
+measure-chain-morphology-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/measure-chain-morphology ./cmd/measure-chain-morphology
 
 .PHONY: summarize-hypotheses-build
 summarize-hypotheses-build:
