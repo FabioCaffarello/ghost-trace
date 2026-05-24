@@ -75,6 +75,12 @@ generate: $(PROTOC_GEN_GO)
 	  events/v1/attestation_cloudflare_turnstile.proto \
 	  events/v1/attestation_webauthn_assertion.proto \
 	  events/v1/attestation_fido2.proto \
+	  events/v1/browser_observation.proto \
+	  events/v1/browser_canvas_fingerprint.proto \
+	  events/v1/browser_webgl_fingerprint.proto \
+	  events/v1/browser_font_enumeration.proto \
+	  events/v1/browser_cdp_marker.proto \
+	  events/v1/browser_header_order.proto \
 	  events/v1/behavioral_observation.proto \
 	  events/v1/behavioral_mouse_trajectory.proto \
 	  events/v1/behavioral_keystroke_timing.proto \

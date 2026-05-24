@@ -1,0 +1,12 @@
+{
+  "observedAt": "1716120000000000000",
+  "actorRef": "actor-corpus-canvas",
+  "sessionRef": "session-corpus-canvas",
+  "collectorRef": "browser-sdk:v1",
+  "authenticationClass": "AUTHENTICATION_CLASS_CLIENT_WITNESSED",
+  "canvasFingerprint": {
+    "canvasHash": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+    "textBaselineOffset": 12,
+    "noiseLevel": 0
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "observedAt": "1716120000000000000",
+  "actorRef": "actor-corpus-fonts",
+  "sessionRef": "session-corpus-fonts",
+  "collectorRef": "browser-sdk:v1",
+  "authenticationClass": "AUTHENTICATION_CLASS_CLIENT_WITNESSED",
+  "fontEnumeration": {
+    "fontListHash": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=",
+    "fontCount": 142
+  }
+}
