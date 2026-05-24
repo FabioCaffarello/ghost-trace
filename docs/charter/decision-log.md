@@ -6494,6 +6494,61 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0158` — Chain morphology integration test against F3-candidate-derived multi-formation chain; validates F3 → operator-formations → morphology measurement path
+
+- **Status:** accepted.
+- **Date:** 2026-05-24.
+- **Context:** [`§0157`](#0157--layer-b-firing-integration-test-against-f3-candidate-derived-formation-validates-f3--operator-formation--layer-b-path-end-to-end) landed the F3-to-Layer-B integration test. The §0143 Sub-benchmark 1 instrumentation surface has TWO substrate-layer measurement endpoints per §0154 + §0155: signature-layer (§0154 EvaluationStats) + substrate-layer chain morphology (§0155 morphology.Measure). The morphology measurement engine has unit-test coverage via `internal/morphology/morphology_test.go` against hand-built BehavioralClusterFormation + AutomationGroupFormation fixtures, but no integration test exercises the morphology layer against F3-candidate-derived substrate state. This is the symmetric gap to the one §0157 closed for Layer B.
+
+  This entry lands the integration test closing that gap: F3 signature candidates → operator-elected multi-formation chain commit → morphology.Measure walk → per-formation morphology + aggregate stats validation.
+
+- **Decision:** New test file `services/ingestion/cmd/find-automation-group-candidates/morphology_integration_test.go` with 1 integration test:
+
+  - **`TestMorphology_AgainstF3DerivedFormationChain`** — Full path validation against a 3-formation chain:
+    1. Inject 3 BrowserObservation records via Ingester (3 distinct actors, each 3 detections → above default threshold 2).
+    2. Run `cdp_marker_density_v1` signature → 3 candidates (one per actor).
+    3. `commitFormationFromCandidateWithChain` helper materializes 3 AutomationGroupFormation records:
+       - formation_a (root): direct_influenced_by = nil; closure_hashes = nil.
+       - formation_b: direct_influenced_by = [hash_a]; closure_hashes = [hash_a].
+       - formation_c: direct_influenced_by = [hash_b]; closure_hashes = [hash_a, hash_b].
+    4. Substrate commit via `substrate.Append` + `canonical.MarshalAndHash`. Hash lists auto-sorted ascending per §0139.
+    5. Call `morphology.Measure` against the substrate.
+    6. Verify per-formation morphology values:
+       - formation_a: ChainDepthMax=0, ChainBreadthAtRoot=0, ClosureCount=0.
+       - formation_b: ChainDepthMax=1, ChainBreadthAtRoot=1, ClosureCount=1.
+       - formation_c: ChainDepthMax=2, ChainBreadthAtRoot=1, ClosureCount=2.
+    7. Verify aggregate stats: TotalFormations=3, PerSubtype[AutomationGroupFormation]=3, ChainsFracasCount=3 (all formations meet depth≤2 OR breadth≤3), ChainsFortesCount=0.
+
+  Constitutional discipline at integration-test layer:
+
+  - **Operator-elected commit boundary preserved** — `commitFormationFromCandidateWithChain` mirrors `cmd/form-automation-group` CLI substrate-level behavior; test bypasses CLI argument-parsing but uses identical substrate API (`canonical.MarshalAndHash` + `substrate.Append`). Per §3 N3 + §0152 + §0153 discipline. Extends §0157's `commitFormationFromCandidate` helper pattern with explicit direct_influenced_by + closure_hashes parameters for chain construction.
+  - **§0139 hash-list element-shape discipline** — direct_influenced_by + closure_hashes auto-sorted via `sortHashListAscending` before substrate commit (single-element lists are trivially sorted; helper handles the multi-element case for closure_hashes in formation_c).
+  - **§0134-τ + §0136 transitive closure semantics** — formation_c's closure_hashes = [hash_a, hash_b] reflects the transitive closure semantics (formation_c is influenced by formation_b which is influenced by formation_a; closure includes both). morphology.Measure reads both direct_influenced_by (for depth/breadth computation) + closure_hashes (for ClosureCount); both values validated.
+  - **§2.6 BC3 paired-dimension at marshalling boundary** — each formation carries confidence + evidential_independence 1/1 trivial pair; §0140 enforcement validates commit acceptance for F3-derived formations (drift-protection symmetric to §0157 Methodological observation 4).
+
+  Scope discipline per §0158: **connectivity + per-formation correctness for a single constructed shape, not exhaustive aggregate semantics.** Aggregate stats correctness (DepthHistogram bucketing, ChainsFracasCount/ChainsFortesCount predicates under various depth/breadth combinations) is exhaustively covered by the morphology package's own unit test suite; this test validates only the integration path + a single shape's per-formation values. Per the §0157 Methodological observation 1 pattern: integration tests close gaps between layers; per-layer semantics belong in per-layer unit tests.
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. Test-only addition.
+
+  Falsifiability discipline: test behavior structurally observable. Test verifies (a) F3 signature emits 3 expected candidates (one per injected actor); (b) candidate-to-formation mapping produces 3 valid AutomationGroupFormation records; (c) substrate commit accepts all 3 formations (including multi-element closure_hashes); (d) morphology.Measure walks all 3 formations + computes per-hypothesis depth + breadth + closure; (e) aggregate stats match for the constructed shape (3 fracas, 0 fortes).
+
+- **Consequences:**
+  - New test file `cmd/find-automation-group-candidates/morphology_integration_test.go` (1 test).
+  - New helper `commitFormationFromCandidateWithChain` (extension of §0157's `commitFormationFromCandidate` with explicit chain-construction parameters).
+  - New helper `sortHashListAscending` (local copy of the pattern used in `internal/morphology/morphology_test.go`; per §0157 Methodological observation 2 — library-level helpers for cross-layer integration tests).
+  - No new packages. No proto changes. No corpus regeneration. No schemas-evolution event.
+  - **Substrate-layer measurement endpoint of §0143 Sub-benchmark 1 instrumentation surface end-to-end-validated.** Both halves of §0155's two-layer diagnostic separation (signature-layer EvaluationStats + substrate-layer chain morphology) have integration-test coverage:
+    - signature-layer (§0154): covered by `cic_ids_integration_test.go` (§0156).
+    - substrate-layer (§0155): covered by this entry.
+  - **§0143 Sub-benchmark 1 instrumentation surface FULLY integration-tested across both measurement endpoints.** Combined with §0157's Layer B firing integration test, the entire F3 inference loop + diagnostic instrumentation are now integration-tested end-to-end. Remaining work for §0143 Sub-benchmark 1 closure: operator deployment of real adversarial pressure (out-of-scope for test code; requires production CIC-IDS adversarial dataset feed).
+  - **Methodological observation 1 — Helper chaining produces compositional integration tests.** `commitFormationFromCandidateWithChain` extends `commitFormationFromCandidate` (§0157) with two additional parameters (direct_influenced_by + closure_hashes). The helper hierarchy mirrors the substrate-content dependency: simple single-formation tests use the §0157 helper; chain-construction tests use the §0158 helper. **Pattern: integration test helpers should compose along the substrate-content-dependency axis, not duplicate across tests; each subsequent helper extends the prior with the minimal additional surface.**
+  - **Methodological observation 2 — Closure-count + chain-depth-max are independent measurements; integration tests must validate both.** formation_b has ChainDepthMax=1 + ClosureCount=1 (coincidence for chain shape). formation_c has ChainDepthMax=2 + ClosureCount=2 (also coincidence for chain shape). The two metrics would diverge for a DAG with shared ancestors (e.g., formation_d influenced by both formation_b + formation_c would have ChainDepthMax=3 but ClosureCount=3 if closure deduplicates hash_a). **Pattern: morphology integration tests SHOULD include at least one DAG shape (not just linear chain) to validate independence of depth vs closure metrics.** This test exercises only the chain shape; a future entry should add the DAG shape.
+  - **Methodological observation 3 — Symmetric integration-test coverage between layers reveals instrumentation-surface completeness.** §0143 Sub-benchmark 1 defines TWO measurement endpoints (§0154 signature-layer + §0155 substrate-layer); integration-test coverage was asymmetric until this entry (only signature-layer had F3-derived integration coverage via §0156). **Pattern: §0143-style instrumentation-surface definitions should be validated for symmetric integration-test coverage across all defined endpoints; missing coverage on any endpoint indicates a structural gap, not just a test-suite gap.** Future instrumentation surfaces inherit this discipline.
+
+- **Supersession:** No prior decision-log entry superseded. Chain morphology integration test closes the substrate-layer measurement endpoint coverage gap symmetric to §0157's Layer B firing closure. Together with §0156 (signature-layer endpoint) + §0157 (Layer B endpoint), §0143 Sub-benchmark 1 instrumentation surface is fully integration-tested across all defined endpoints.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
