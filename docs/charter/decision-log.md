@@ -6846,6 +6846,65 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0165` — Merge E2E integration test from F3-derived candidate antecedents; extends §0160 lifecycle-axis coverage to merge operation
+
+- **Status:** accepted.
+- **Date:** 2026-05-24.
+- **Context:** [`§0160`](#0160--demote-e2e-integration-test-against-f3-candidate-derived-lifecycle-validates-f3--formation--promotion--demotion-path-end-to-end) extended §0157's F3-derived-formation anchor along the lifecycle axis through the LINEAR sequence (formation → promotion → demotion). The §0011 staged-combination AutomationGroup lifecycle ALSO includes the CROSS-FORMATION operations (merge, split, dissolution) — these were unit-tested in the hypothesis package but not integration-tested from F3-derived candidates.
+
+  Merge is the structurally distinctive cross-formation operation: it combines TWO formations recognized as describing the same underlying phenomenon, with a separately-committed THIRD formation representing the merged hypothesis (§0049 Option B mirrored at the AutomationGroup subtype). The merge event records three formation hashes (two antecedents sorted ascending per §0049 symmetric-relation discipline + one produced).
+
+  This entry lands the integration test closing the F3-derived → merge gap: 2 F3 candidates → 2 formations → operator-elected merged-hypothesis formation → operator-elected merge event referencing all three.
+
+- **Decision:** New test file `services/ingestion/cmd/find-automation-group-candidates/merge_e2e_test.go` with 2 integration tests:
+
+  - **`TestMergeAutomationGroup_FromF3CandidateAntecedents`** — Full path validation:
+    1. Inject BrowserObservation for 2 distinct actors (actor-suspect-a + actor-suspect-b), each above threshold.
+    2. Run `cdp_marker_density_v1` signature → 2 candidates.
+    3. Commit formation_A (from candidate_a) + formation_B (from candidate_b) via §0157's `commitFormationFromCandidate`.
+    4. Commit formation_P (produced merged hypothesis) with combined actor_refs + sorted union source_hashes via new `commitMergedFormation` helper. Confidence + EvidentialIndependence operator-supplied per §2.6 BC3.
+    5. Call `hypothesis.MergeAutomationGroup(hashA, hashB, hashP)` — operator-elected merge.
+    6. Verify merge event in substrate + references all three formations + antecedents sorted ascending per §0049.
+    7. Verify all four committed records present via LookupRow.
+
+  - **`TestMergeAutomationGroup_RejectsIdenticalAntecedents`** — Confirms `ErrMergeAntecedentsIdentical` sentinel surfaces at integration-path level: call merge with `AntecedentAFormationHash == AntecedentBFormationHash` → error. Mirrors §0049 symmetric-relation merge constraint at integration-test layer.
+
+  Helpers:
+
+  - `commitMergedFormation` — materializes "produced" AutomationGroupFormation representing the merged hypothesis (operator-supplied actor_refs union + source_hashes union). Distinct from §0157's `commitFormationFromCandidate` because the merged formation is NOT a single F3-candidate output — it is an operator-synthesized record per the merge semantics. Mirrors operator behavior at substrate level.
+  - `newMergeE2ESubstrate` — substrate + Ingester per the §0160 pattern.
+  - Reuses `appendBrowserObs`, `collectBrowserObservations`, `findCandidateByActor`, `hexDecodeInto` (existing package helpers).
+
+  Constitutional discipline:
+
+  - **§0049 + §2.5 BC5 merge symmetric-relation discipline** — antecedents sorted ascending at commit time regardless of caller order; test verifies via `bytes.Compare(a, b) < 0` on the recorded slice.
+  - **§3 N3 operator-elected commit boundary** — four operator-elected commits in sequence (formation_A, formation_B, formation_P, merge); each explicit + decoupled; orchestrator does not auto-commit.
+  - **§2.6 BC3 paired-dimension at marshalling** — merged formation_P carries confidence + evidential_independence; commit succeeds per §0140 enforcement.
+  - **§0139 hash-list element-shape** — formation_P's source_event_hashes sorted ascending via local `sortHashListAscending` (union of antecedent sources requires re-sort post-merge).
+  - **§2.5 BC5 lifecycle event immutability** — merge event committed via `substrate.Append` (or `AppendPair` if Actor supplied); influence chain preserved.
+
+  Scope discipline per §0165: **structural connectivity across the F3-derived → merge arc, NOT exhaustive per-operation merge semantics.** Per-operation semantics (ErrTargetNotFound for missing hashes, ErrTargetWrongType for wrong message_type, idempotency-via-content-hash under reorder, AppendPair with Actor, all-three-hash-types check) are covered by the hypothesis package's own unit test suite. This test validates only the F3-derived integration path + the symmetric-relation sentinel.
+
+  Per §0164 MO1 verification discipline: empirical state inline (`grep -c "^func Test" services/ingestion/cmd/find-automation-group-candidates/merge_e2e_test.go` returns 2; total integration tests in find-automation-group-candidates/ before this entry = 9 across 5 files; post-entry = 11 across 6 files).
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. Test-only addition.
+
+  Falsifiability discipline: merge behavior structurally observable. Test 1 verifies (a) F3 signature emits 2 expected candidates; (b) two distinct formations commit; (c) merged formation_P commits with combined actor_refs + sorted source_hashes union; (d) MergeAutomationGroup accepts three formation hashes + emits merge event; (e) merge event records antecedents sorted ascending; (f) merge event records exact produced_formation_event_hash; (g) all four committed records present via LookupRow. Test 2 verifies merge rejects A == A sentinel at integration path.
+
+- **Consequences:**
+  - New test file `cmd/find-automation-group-candidates/merge_e2e_test.go` (2 tests; ~290 lines).
+  - New helpers `commitMergedFormation` + `newMergeE2ESubstrate` (local to test package; cross-test sharing would require lifting to shared helpers package, premature per "Don't add abstractions beyond what the task requires").
+  - No new packages. No proto changes. No corpus regeneration. No schemas-evolution event.
+  - **§0011 staged-combination AutomationGroup lifecycle MORE FULLY integration-tested from F3-derived candidates.** Coverage now spans: formation (§0157), promotion (§0160), demotion (§0160), merge (this entry). Remaining cross-formation operations: split (separates one formation into multiple successors) + dissolution (recognizes hypothesis non-existence). Both follow the §0160/§0165 pattern; can land as separate entries.
+  - **Four integration test files in find-automation-group-candidates/ now exercise §0157's F3-derived-formation anchor across four distinct downstream axes**: layerb_firing_test (evaluation), morphology_integration_test (measurement), demote_e2e_test (linear lifecycle), merge_e2e_test (cross-formation lifecycle). Per §0160 MO3: integration tests extend the §0157 anchor along ONE distinct axis per test; this entry adds the fourth distinct axis.
+  - **Methodological observation 1 — Cross-formation lifecycle operations need operator-synthesized intermediate records that linear lifecycle operations do not.** Linear lifecycle (formation → promotion → demotion) references EACH antecedent by its committed hash; cross-formation lifecycle (merge) requires an additional operator-synthesized formation (the "produced" hypothesis) representing the post-operation state. This is structurally distinct: linear operations form a chain over EXISTING records; cross-formation operations require a NEW record to represent the merged hypothesis. **Pattern: cross-formation integration tests must include a helper that synthesizes the post-operation record (commitMergedFormation here; future split tests would need commitSplitSuccessorFormation; dissolution does not need a successor record). The synthesizer mirrors operator behavior at substrate level + is distinct from the F3-candidate-to-formation mapping helper.**
+  - **Methodological observation 2 — Merge's symmetric-relation discipline is integration-testable via byte-order verification.** §0049's "ascending-sort antecedents" discipline is a structural commitment about how merge events serialize; integration tests can verify the commitment by reading the committed event back + asserting `bytes.Compare(antecedents[0], antecedents[1]) < 0`. This is a falsifiable empirical check: if the merge code stopped sorting, the test would fail at the byte comparison. **Pattern: symmetric-relation disciplines (merge antecedents, set-canonical-form fields) should be integration-tested by reading the committed serialized form back + asserting the sort/uniqueness invariant. The hypothesis package unit test covers the validation function; the integration test covers the end-to-end commit + read-back roundtrip.**
+  - **Methodological observation 3 — Empirical-state-inline verification per §0164 MO1 applied successfully.** §0165's structural claims (test counts, file counts) are verified inline at the Decision section with grep commands that produce the recorded values. Future readers can re-run the verification commands; if the repo state drifts from the recorded values, the drift is empirically detectable. **Pattern: §0164 MO1 discipline applied; empirical-state claims at entry-write time are now reproducible by re-running the inline verification commands. Future entries should continue this discipline.**
+
+- **Supersession:** No prior decision-log entry superseded. Extends §0157's F3-derived-formation anchor to a fourth distinct downstream axis (cross-formation lifecycle); extends §0160's linear-lifecycle integration test pattern to the merge operation; together with §0157 (evaluation) + §0158 (measurement) + §0160 (linear lifecycle) + §0165 (cross-formation lifecycle), the F3-derived-formation pattern is integration-tested across four downstream axes.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
