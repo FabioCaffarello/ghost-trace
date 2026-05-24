@@ -6406,6 +6406,46 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0156` — CIC-IDS integration test lands: first empirical-pressure exercise of F3 inference loop; non-firing-by-modality-mismatch operationally diagnosable per §0154 MO4
+
+- **Status:** accepted.
+- **Date:** 2026-05-24.
+- **Context:** With §0153 (orchestrator) + §0154 (signature-layer instrumentation) + §0155 (substrate-layer instrumentation) all merged, the F3 inference loop is **mechanically complete + fully instrumented** at every layer. The remaining piece for §0143 Sub-benchmark 1 readiness was demonstrating the loop operates end-to-end against REAL adapter-produced substrate input — validating that the diagnostic surface accurately reflects loop state under empirical pressure.
+
+  This entry records the **first empirical-pressure exercise** of the complete loop: integration test wires CIC-IDS adapter (§0145) → substrate → orchestrator (§0153 with §0154 instrumentation) using inline CIC-IDS-format CSV. Expected outcome: zero candidates because cdp_marker_density_v1 (§0152) consumes BrowserObservation while CIC-IDS adapter produces NetworkObservation only. **Expected non-firing for the expected reason.** §0154 MO4 predicted: "non-firing transformed from uninformative (substrate didn't fire) to diagnostic (substrate observed N events, M skipped for reason X, K signatures fired but none above threshold)." This test validates the prediction operationally.
+
+- **Decision:** New test file `services/ingestion/cmd/find-automation-group-candidates/cic_ids_integration_test.go` with 2 end-to-end integration tests:
+
+  - **`TestCICIDSIngestionThenSignature_NonFiringByModalityMismatch`** — Real CIC-IDS adapter ingest of 3-row CSV produces 9 substrate records (6 ip_asn + 3 tcp_fingerprint, 0 BrowserObservation) + 9 paired IngestionEvent per §0038 (substrate Count = 18). Orchestrator `collectBrowserObservations` returns empty slice (filter rejects all NetworkObservation per message_type). Signature evaluates against empty slice: 0 candidates + ObservationsScanned = 0 + every skip-counter = 0. **Diagnostic distinction at orchestrator level:** substrate is non-empty (count = 18) but BrowserObservation walk is empty → operator distinguishes "substrate empty" from "substrate has wrong-class observations".
+
+  - **`TestCICIDSIngestionThenSignature_WithInjectedBrowserObservation`** — Same CIC-IDS ingest + 2 additional injected BrowserObservation (each detection_count = 1; below default threshold of 2). Orchestrator collects 2 BrowserObservation; signature evaluates: 0 candidates + ObservationsScanned = 2 + ActorsAggregated = 2 + ActorsAboveThreshold = 0 + PerCollector["browser-sdk:v1"] = 2. **Diagnostic distinction at signature level:** ObservationsScanned > 0 distinguishes this case from prior test's case (signature has class-matching observations but none meet threshold).
+
+  Both tests together codify the three-way diagnostic distinction §0154 MO4 named:
+
+  | Case | Indicator | Distinguishing field |
+  |---|---|---|
+  | (a) substrate empty | `count(substrate) == 0` | substrate-layer |
+  | (b) modality mismatch | `count(substrate) > 0 AND ObservationsScanned == 0` | orchestrator-layer (substrate walk filter) |
+  | (c) below threshold | `ObservationsScanned > 0 AND ActorsAboveThreshold == 0` | signature-layer |
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant.
+
+  Falsifiability discipline: integration test behavior structurally observable via the assertions in each test. Test framework (`go test`) reports PASS/FAIL mechanically.
+
+- **Consequences:**
+  - New integration test file in `cmd/find-automation-group-candidates/`. Inline CSV (no relative-path fixture dependency on cic_ids package's testdata).
+  - **First empirical-pressure exercise of complete F3 loop landed.** Mechanical loop + diagnostic surface validated against real adapter-produced substrate input.
+  - **§0143 Sub-benchmark 1 readiness now end-to-end-validated.** Per §0143 criterion: "first non-trivial demotion under public + synthetic sources, month 3-4". The mechanical loop + instrumentation are operationally complete; what remains is producing actual pattern observations (real BrowserObservation containing CDP markers from genuine automation; not in this PR's scope).
+  - **CIC-IDS adapter wired as integration test fixture.** Demonstrates the adapter is consumable from arbitrary test contexts; future synthetic + honeypot adapter integration tests inherit the pattern (CIC-IDS as precedent).
+  - **Methodological observation 1 — §0154 MO4 prediction operationally validated.** §0154 MO4 stated: "instrumentation converts non-firing from uninformative to diagnostic". This entry's tests prove operationally: orchestrator output now answers "WHY did we get zero candidates?" with structural specificity (substrate empty / wrong class / below threshold). **Pattern: methodological observations stating diagnostic predictions should be operationally validated via integration tests; the prediction's structural claim becomes test assertions.** Future methodological observations naming diagnostic distinctions inherit this validation discipline.
+  - **Methodological observation 2 — Inline-fixture pattern for cross-package integration tests.** Considered alternative: import `testdata/sample.csv` from cic_ids package via relative path. Rejected because (a) relative-path coupling across packages is fragile; (b) inline fixture is self-documenting (test reader sees exact input); (c) inline CSV's small size (3 rows) does not warrant external fixture. **Pattern: cross-package integration tests should inline small fixtures; large fixtures (>10 rows or binary) warrant external testdata with documented import path.** Future integration tests inherit.
+  - **Methodological observation 3 — Three-way diagnostic distinction codified at test level.** §0154 MO4 named the three causes of non-firing; this entry's two tests codify two of them (cases (b) + (c)); case (a) was implicitly covered by prior `TestCollectBrowserObservations_EndToEnd` (empty substrate scenario from §0153's test suite). All three cases now have test coverage demonstrating the diagnostic surface separates them. **Pattern: when an instrumentation surface supports a structural diagnostic distinction, the distinction's truth-conditions should each have at least one test demonstrating the indicator value.** Test-driven validation of diagnostic invariants.
+  - **Methodological observation 4 — End-to-end integration tests precede real-pressure deployment.** This test exercises the loop with synthetic inline CSV; real CIC-IDS dataset ingestion (full 50GB) is a separate operator-deployment concern. The integration test's job is to validate the LOOP mechanics + DIAGNOSTIC surface; it does NOT validate signature efficacy against real adversarial pressure (that's §0143 Sub-benchmark 1 operational firing, not test code). **Pattern: integration tests validate plumbing + diagnostic invariants; operational pressure tests validate efficacy against real adversaries. Both required; distinct purposes.**
+
+- **Supersession:** No prior decision-log entry superseded. First empirical-pressure exercise of complete F3 loop; subsequent operational deployment (real CIC-IDS ingestion + synthetic generator engagement + honeypot collection) proceeds under ordinary discipline.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
