@@ -35,6 +35,7 @@ package ghosttrace.events.v1;
 
 option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
 
+import "common/v1/authentication_class.proto";
 import "events/v1/attestation_apple_pat.proto";
 import "events/v1/attestation_google_privacy_pass.proto";
 import "events/v1/attestation_cloudflare_turnstile.proto";
@@ -76,4 +77,11 @@ message AttestationObservation {
     AttestationWebAuthnAssertion webauthn_assertion = 8;
     AttestationFido2 fido2_attestation = 9;
   }
+
+  // authentication_class records the verification channel through
+  // which the observed actor's identity was established at observation
+  // time per decision-log §0150. Default UNKNOWN; AttestationObservation
+  // typically emits CLIENT_ATTESTED (cryptographic chain present in
+  // the sub-modality payload). See common/v1/authentication_class.proto.
+  ghosttrace.common.v1.AuthenticationClass authentication_class = 10;
 }

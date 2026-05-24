@@ -1,0 +1,61 @@
+// Common type for F1 Cat I observation envelopes per decision-log
+// §0150 resolution of the F4 authentication-class typing OMQ
+// (opened §0148; substantive deliberation §0149; recommendation =
+// Candidate α — envelope enum field). The enum codifies HOW the
+// observed actor's identity was verified at observation time:
+// substrate-side structural property of the observation, NOT a
+// truth-bearing claim about the actor's identity (per §3 N1).
+//
+// Field-naming axis per §0149 Methodological observation 4 (anti-
+// marketing watchlist): values name verification channel
+// structurally; future enum extension must remain on
+// channel-naming axis. Aspirational nouns from the watchlist (per
+// .claude/skills/enforcement/anti-marketing/SKILL.md) are
+// forbidden in this enum.
+syntax = "proto3";
+
+package ghosttrace.common.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1;commonv1";
+
+// AuthenticationClass identifies the verification channel through
+// which the observed actor's identity was established at observation
+// time. Carried as an envelope field on F1 Cat I observations
+// (NetworkObservation, BehavioralObservation, AttestationObservation,
+// BrowserObservation).
+enum AuthenticationClass {
+  // AUTHENTICATION_CLASS_UNKNOWN is the proto3 default; emitted when
+  // the producer did not determine the class, OR for pre-resolution
+  // records committed before §0150 landed. Consumers should treat
+  // UNKNOWN as the absence of a class commitment, NOT as a positive
+  // claim that no verification occurred.
+  AUTHENTICATION_CLASS_UNKNOWN = 0;
+
+  // AUTHENTICATION_CLASS_SERVER_AUTHENTICATED — observation collector
+  // verified the actor identity server-side at observation time.
+  // Typical: NetworkObservation collected at a gateway with mTLS
+  // termination or similar server-trusted authentication. The
+  // substrate carries no record of the verification details (which
+  // gateway, which mTLS cert) — those are operational concerns;
+  // this enum value records ONLY that server-side verification
+  // occurred.
+  AUTHENTICATION_CLASS_SERVER_AUTHENTICATED = 1;
+
+  // AUTHENTICATION_CLASS_CLIENT_ATTESTED — observation carries a
+  // cryptographic attestation chain the substrate may re-verify.
+  // Typical: AttestationObservation with WebAuthn assertion, FIDO2
+  // attestation, or a redeemed Privacy Pass token. The attestation
+  // chain itself is carried by the AttestationObservation sub-modality
+  // payload; this enum value records ONLY that the observation belongs
+  // to the client-attested class.
+  AUTHENTICATION_CLASS_CLIENT_ATTESTED = 2;
+
+  // AUTHENTICATION_CLASS_CLIENT_WITNESSED — observation was reported
+  // by a producer running in untrusted territory (typically a browser
+  // SDK or native JS collector). The producer reports observations
+  // about the actor's behavior; the substrate has no cryptographic
+  // anchor for the actor identity claim. Typical: BehavioralObservation
+  // collected by a browser SDK; BrowserObservation collected by
+  // client-side fingerprinting JS.
+  AUTHENTICATION_CLASS_CLIENT_WITNESSED = 3;
+}

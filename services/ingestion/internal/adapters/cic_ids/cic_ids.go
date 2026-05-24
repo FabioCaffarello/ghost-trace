@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
+	commonv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 )
 
@@ -174,11 +175,19 @@ func (e *ParseError) Unwrap() error { return e.Err }
 func ToObservations(flow *FlowRecord, observedAt int64, collectorRef string) []*eventsv1.NetworkObservation {
 	out := make([]*eventsv1.NetworkObservation, 0, 3)
 
+	// CIC-IDS-2017 flow records are collected at infrastructure-level
+	// (gateway / IDS appliance position) per Sharafaldin et al. ICISSP
+	// 2018. The observation collector is server-side; per §0150 +
+	// common/v1/authentication_class.proto the class is
+	// SERVER_AUTHENTICATED.
+	const authClass = commonv1.AuthenticationClass_AUTHENTICATION_CLASS_SERVER_AUTHENTICATED
+
 	if flow.SrcIP != "" {
 		out = append(out, &eventsv1.NetworkObservation{
-			ObservedAt:   observedAt,
-			EndpointRef:  fmt.Sprintf("%s:%d", flow.SrcIP, flow.SrcPort),
-			CollectorRef: collectorRef,
+			ObservedAt:          observedAt,
+			EndpointRef:         fmt.Sprintf("%s:%d", flow.SrcIP, flow.SrcPort),
+			CollectorRef:        collectorRef,
+			AuthenticationClass: authClass,
 			Modality: &eventsv1.NetworkObservation_IpAsn{
 				IpAsn: &eventsv1.NetworkIpAsn{
 					IpAddress: flow.SrcIP,
@@ -188,9 +197,10 @@ func ToObservations(flow *FlowRecord, observedAt int64, collectorRef string) []*
 	}
 	if flow.DstIP != "" {
 		out = append(out, &eventsv1.NetworkObservation{
-			ObservedAt:   observedAt,
-			EndpointRef:  fmt.Sprintf("%s:%d", flow.DstIP, flow.DstPort),
-			CollectorRef: collectorRef,
+			ObservedAt:          observedAt,
+			EndpointRef:         fmt.Sprintf("%s:%d", flow.DstIP, flow.DstPort),
+			CollectorRef:        collectorRef,
+			AuthenticationClass: authClass,
 			Modality: &eventsv1.NetworkObservation_IpAsn{
 				IpAsn: &eventsv1.NetworkIpAsn{
 					IpAddress: flow.DstIP,
@@ -201,9 +211,10 @@ func ToObservations(flow *FlowRecord, observedAt int64, collectorRef string) []*
 
 	if flow.Protocol == tcpProtocolNumber && hasAnyTCPFlag(flow) {
 		out = append(out, &eventsv1.NetworkObservation{
-			ObservedAt:   observedAt,
-			EndpointRef:  fmt.Sprintf("%s:%d", flow.SrcIP, flow.SrcPort),
-			CollectorRef: collectorRef,
+			ObservedAt:          observedAt,
+			EndpointRef:         fmt.Sprintf("%s:%d", flow.SrcIP, flow.SrcPort),
+			CollectorRef:        collectorRef,
+			AuthenticationClass: authClass,
 			Modality: &eventsv1.NetworkObservation_TcpFingerprint{
 				TcpFingerprint: &eventsv1.NetworkTcpFingerprint{
 					FlagsSequence:   tcpFlagSequenceFromCounts(flow),
