@@ -6802,6 +6802,50 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0164` — Browser CLI main_test.go acquires below-threshold test; closes asymmetry §0163 MO3 forward-projected as already-present
+
+- **Status:** accepted.
+- **Date:** 2026-05-24.
+- **Context:** [`§0163`](#0163--find-automation-group-candidates-network-cli-lands-network-modality-f3-orchestrator-symmetric-coverage-with-browser-modality-cli) added 4 main_test.go tests to the new network-modality CLI + recorded as MO3: "Both CLIs now have main_test.go exercising the same 4 contract points". Empirical audit of `cmd/find-automation-group-candidates/main_test.go` post-§0163 reveals the browser CLI has only 3 of the 4 prescribed tests — `TestFullPipeline_BelowThreshold_NoCandidates` was MISSING.
+
+  §0163 MO3 forward-projected the symmetric-coverage state as already-present at §0163 landing time; the empirical state was asymmetric until this entry closes the gap. This is the SECOND instance in the §0157-§0164 arc where an empirical audit corrects a forward-projected structural claim:
+
+  - §0161 → §0162: "CIC-IDS path is F3-reachable" forward-projected; integration test surfaces the §0144(e) gap empirically.
+  - §0163 → §0164: "Both CLIs have symmetric 4-test coverage" forward-projected; main_test.go audit surfaces the missing browser-side below-threshold test.
+
+  The pattern is structurally identical: an MO/Consequence sentence makes a STRUCTURAL claim about repo state that the entry does not itself verify; a follow-on entry empirically tests + records the actual state. Per §0007 append-only decision-log discipline: no §0163 prose is rewritten; the correction stands as a referenced revision via §0164 (this entry).
+
+- **Decision:** Single new test `TestFullPipeline_BelowThreshold_NoCandidates` in `services/ingestion/cmd/find-automation-group-candidates/main_test.go`. Mirrors the equivalent test in `find-automation-group-candidates-network/main_test.go` on the browser-modality side:
+
+  1. Commit 2 BrowserObservation records (each detection_count=1, below threshold=2).
+  2. Run signature → 0 candidates.
+  3. Emit JSON envelope via emitCandidatesJSON.
+  4. Decode envelope; verify `CandidateCount=0` + `Stats.ActorsAggregated=2` (both actors aggregated but below threshold) + `Stats.ActorsAboveThreshold=0`.
+
+  Browser CLI's main_test.go now exercises the same 4 contract points the network CLI does: `TestCollectBrowserObservations_EndToEnd` + `TestFullPipeline_EndToEnd` + `TestFullPipeline_BelowThreshold_NoCandidates` (added here) + `TestSubtypeName_AllValuesNamed`. Symmetry per §0163 MO3 now empirically present.
+
+  Constitutional discipline:
+
+  - **§0154 MO4 non-firing diagnostic discipline** — the new test validates that empty-candidate emission produces a structurally valid JSON envelope with populated diagnostic counters (operator can distinguish "below threshold" from "modality mismatch" from "no observations").
+  - **§0163 MO3 symmetric coverage discipline** — both F3-loop CLIs now have exactly 4 main_test.go tests with parallel contract points.
+
+  Scope discipline per §0164: **single test addition; no CLI logic change; no refactor; no new MO**. This entry executes §0163 MO3's prescription against the empirical state surfaced by audit.
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. Test-only addition.
+
+  Falsifiability discipline: the symmetric-coverage claim is now empirically verifiable by `grep -c "^func Test" services/ingestion/cmd/find-automation-group-candidates*/main_test.go` returning 4 for both CLIs. Pre-§0164 the grep returned 3 for browser-CLI + 4 for network-CLI (the asymmetry); post-§0164 both return 4. This is the §0163 MO3 claim made structurally testable.
+
+- **Consequences:**
+  - 1 new test in `cmd/find-automation-group-candidates/main_test.go` (~50 lines).
+  - **§0163 MO3 forward-projected claim CORRECTED via empirical state alignment.** The MO's structural prescription is now empirically present; no §0163 prose rewritten per §0007.
+  - **Pattern catalogue: empirical-correction follow-ups are now a recurring shape in this session's arc.** Two instances in 8 entries (§0162 corrects §0161; §0164 corrects §0163 MO3). Both follow the same shape: forward-projected structural claim + follow-on empirical audit + correction via referenced revision.
+  - **Methodological observation 1 — Self-referential MO statements ("symmetric coverage now achieved") should be empirically verified BEFORE being recorded, not after.** The §0163 MO3 statement asserted both CLIs had 4 tests when only one did. Recording the MO without grep-verifying the claim creates the kind of drift the MO is meant to prevent. **Pattern: MO statements that make STRUCTURAL CLAIMS about repo state (counts, symmetries, completeness) SHOULD include a grep/test command verifying the claim, OR explicitly mark the claim as "post-this-entry future state" rather than "current state". The §0163 MO3 fell into neither discipline; §0164 closes the gap empirically; future MOs of this shape should include verification commands inline.**
+  - **Methodological observation 2 — Empirical-correction follow-up entries are CHEAP when the underlying discipline is small.** §0164 closes the gap with a single test + brief entry. §0162 closed its gap with 3 tests + larger entry (the §0144(e) gap finding had broader implications). Cost scales with the depth of correction, not just the act of correcting. **Pattern: don't avoid correction entries to save effort; small corrections cost little + preserve the §0007 append-only discipline's coherence. The drift cost of NOT correcting (uncorrected forward-projected claims accumulate in the decision-log as stale assertions) exceeds the correction-entry cost in nearly all cases.**
+
+- **Supersession:** §0163's MO3 "Both CLIs now have main_test.go exercising the same 4 contract points" is CORRECTED by this entry. Per §0007 append-only discipline: no §0163 prose is rewritten. Pattern is now established for the §0157-§0164 arc: forward-projected structural claims may require empirical-audit follow-ups; future readers should treat §0163 alongside §0164 as a paired record (mirroring the §0161-§0162 pairing).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

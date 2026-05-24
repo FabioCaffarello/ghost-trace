@@ -164,6 +164,60 @@ func TestFullPipeline_EndToEnd(t *testing.T) {
 	}
 }
 
+// TestFullPipeline_BelowThreshold_NoCandidates verifies the empty-
+// candidate case still emits a valid JSON envelope with populated
+// diagnostic counters. Per §0154 MO4: non-firing is INFORMATIVE.
+// Symmetric to TestFullPipeline_BelowThreshold_NoCandidates in
+// find-automation-group-candidates-network/main_test.go per §0163 MO3
+// (F3 orchestrator CLIs maintain symmetric main_test.go contract
+// coverage).
+func TestFullPipeline_BelowThreshold_NoCandidates(t *testing.T) {
+	sub, in := newTestSubstrate(t)
+	// Two actors, each below threshold = 2 (one detection each).
+	appendBrowserObs(t, in, "actor-a", []string{"navigator.webdriver=true"}, 1)
+	appendBrowserObs(t, in, "actor-b", []string{"$cdc_test"}, 1)
+
+	observations, err := collectBrowserObservations(context.Background(), sub)
+	if err != nil {
+		t.Fatalf("collectBrowserObservations: %v", err)
+	}
+	sig := &signatures.CDPMarkerDensityV1{}
+	result, err := sig.EvaluateBrowser(context.Background(), observations)
+	if err != nil {
+		t.Fatalf("EvaluateBrowser: %v", err)
+	}
+	if len(result.Candidates) != 0 {
+		t.Fatalf("expected 0 candidates (below threshold), got %d", len(result.Candidates))
+	}
+
+	tmp, err := os.CreateTemp("", "find-candidates-empty-*.json")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+	defer os.Remove(tmp.Name())
+	if err := emitCandidatesJSON(tmp, sig.Name(), result.Candidates, result.Stats); err != nil {
+		t.Fatalf("emitCandidatesJSON: %v", err)
+	}
+	tmp.Close()
+	raw, err := os.ReadFile(tmp.Name())
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var got emissionEnvelope
+	if err := json.NewDecoder(bytes.NewReader(raw)).Decode(&got); err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if got.CandidateCount != 0 {
+		t.Errorf("CandidateCount: got %d want 0", got.CandidateCount)
+	}
+	if got.Stats.ActorsAggregated != 2 {
+		t.Errorf("Stats.ActorsAggregated: got %d want 2 (both actors aggregated, but below threshold)", got.Stats.ActorsAggregated)
+	}
+	if got.Stats.ActorsAboveThreshold != 0 {
+		t.Errorf("Stats.ActorsAboveThreshold: got %d want 0", got.Stats.ActorsAboveThreshold)
+	}
+}
+
 func TestSubtypeName_AllValuesNamed(t *testing.T) {
 	cases := []struct {
 		in   signatures.HypothesisSubtype
