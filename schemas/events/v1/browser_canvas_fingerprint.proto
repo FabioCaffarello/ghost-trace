@@ -1,0 +1,41 @@
+// Sub-modality of BrowserObservation per §0151 discriminated-union
+// framing. Carries Canvas API rendering fingerprint per the canvas-
+// fingerprinting technique (Mowery & Shacham, "Pixel Perfect:
+// Fingerprinting Canvas in HTML5", 2012). Privacy-preserving design
+// per §0146 Methodological observation 3 + §0147 cryptographic-
+// surface extension: canvas_hash (BLAKE3) rather than raw image
+// bytes — preserves cross-observation correlation by hash without
+// committing the raw fingerprinting payload.
+//
+// No `confidence` / `evidential_independence` fields — Cat I sub-
+// modality payload, structurally excluded from paired-dimension
+// per §2.6 BC3.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// BrowserCanvasFingerprint is the Canvas API rendering payload
+// carried by BrowserObservation when the modality is
+// `canvas_fingerprint`.
+message BrowserCanvasFingerprint {
+  // canvas_hash is the BLAKE3-256 hash of the rendered canvas image
+  // bytes per the producer's canonical canvas-fingerprinting routine.
+  // 32-byte fixed length. Cross-observation correlation: two
+  // observations with the same canvas_hash are likely from the same
+  // browser environment.
+  bytes canvas_hash = 1;
+
+  // text_baseline_offset is the rendered text baseline offset in
+  // pixels — well-known fingerprinting axis distinguishing rendering
+  // stacks (different graphics libraries / OS subpixel handling
+  // produce different offsets). 0 = not observed.
+  int32 text_baseline_offset = 2;
+
+  // noise_level is a producer-computed numeric noise-detection
+  // indicator for the canvas rendering. 0 = noise not detected /
+  // not measured. Used by anti-bot signatures detecting canvas-
+  // randomization countermeasures.
+  uint32 noise_level = 3;
+}

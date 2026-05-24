@@ -1,0 +1,14 @@
+{
+  "observedAt": "1716120000000000000",
+  "actorRef": "actor-corpus-cdp",
+  "sessionRef": "session-corpus-cdp",
+  "collectorRef": "browser-sdk:v1",
+  "authenticationClass": "AUTHENTICATION_CLASS_CLIENT_WITNESSED",
+  "cdpMarker": {
+    "markersObserved": [
+      "navigator.webdriver=true",
+      "$cdc_asdjflasutopfhvcZLmcfl_"
+    ],
+    "detectionCount": 2
+  }
+}
