@@ -23,6 +23,7 @@ help:
 	@echo "  split-hypothesis-build  go build -trimpath -o $(BIN_DIR)/split-hypothesis ./cmd/split-hypothesis"
 	@echo "  hypothesis-state-build  go build -trimpath -o $(BIN_DIR)/hypothesis-state ./cmd/hypothesis-state"
 	@echo "  list-hypotheses-build  go build -trimpath -o $(BIN_DIR)/list-hypotheses ./cmd/list-hypotheses"
+	@echo "  find-automation-group-candidates-build  go build -trimpath -o $(BIN_DIR)/find-automation-group-candidates ./cmd/find-automation-group-candidates"
 	@echo "  summarize-hypotheses-build  go build -trimpath -o $(BIN_DIR)/summarize-hypotheses ./cmd/summarize-hypotheses"
 	@echo "  form-automation-group-build  go build -trimpath -o $(BIN_DIR)/form-automation-group ./cmd/form-automation-group"
 	@echo "  promote-automation-group-build  go build -trimpath -o $(BIN_DIR)/promote-automation-group ./cmd/promote-automation-group"
@@ -186,6 +187,11 @@ hypothesis-state-build:
 list-hypotheses-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/list-hypotheses ./cmd/list-hypotheses
+
+.PHONY: find-automation-group-candidates-build
+find-automation-group-candidates-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/find-automation-group-candidates ./cmd/find-automation-group-candidates
 
 .PHONY: summarize-hypotheses-build
 summarize-hypotheses-build:

@@ -6249,6 +6249,62 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0153` — F3 orchestrator lands: `find-automation-group-candidates` CLI wires signatures/ to substrate-read path; first end-to-end inference loop operational
+
+- **Status:** accepted.
+- **Date:** 2026-05-24.
+- **Context:** [`§0152`](#0152--f3-inference-layer-opens-cdp_marker_density_v1-signature-for-automationgroup-first-camada-a-canonicalaberta-signature-lands-new-signatures-package-establishes-f3-surface) landed the first F3 signature + signatures/ package. The remaining gap to close the first F3 inference loop end-to-end was the **orchestrator** — the CLI/job that reads observations from substrate, invokes signatures, and surfaces candidates for operator review. This entry records the landing of `cmd/find-automation-group-candidates` — the orchestrator MVP.
+
+  Per §0143 Sub-benchmark 1 criterion (first non-trivial demotion under public + synthetic sources, month 3-4): with [`§0145`](#0145--cic-ids-2017-adapter-lands-first-public-adversarial-ingestion-source-integrated-18-aggregate-coverage-empirically-confirmed-flow_record_summary-omq-candidate-surfaced) (CIC-IDS adapter — F1 ingestion), F1 atlas at [`§0144`](#0144--f1networkobservation-discriminatedunion-typing-over-five-submodalities-tcp_fingerprint-tls_ja4-http2_frame_pattern-dns_pattern-ip_asn-first-protodefinition-landing-under-domain-pack-v01) + [`§0146`](#0146--f1behavioralobservation-discriminatedunion-typing-over-four-submodalities-mouse_trajectory-keystroke_timing-scroll_cadence-pointer_dwell-second-f1-modality-landing-touch_gesture-deferred-to-subrfc) + [`§0147`](#0147--f1attestationobservation-discriminatedunion-over-5-attestation-protocols-third-f1-modality-lands-f4-authenticationclass-typing-omq-trigger-fires-per-0143) + [`§0151`](#0151--f1browserobservation-fourth-and-final-f1-modality-lands-f1-atlas-complete-44-inherits-authentication_class-natively-per-0150-no-retrofit-discriminatedunion-pattern-4-validated) (F1.BrowserObservation), [`§0150`](#0150--f4-authenticationclass-typing-omq-resolution-candidate--adopted-envelope-enum-field-lands-on-3-f1-envelopes-omq-lifecycle-4stage-closes-entitymodelmd-f4-entry-moves-to-resolved-modeling-questions) (authentication_class), [`§0152`](#0152--f3-inference-layer-opens-cdp_marker_density_v1-signature-for-automationgroup-first-camada-a-canonicalaberta-signature-lands-new-signatures-package-establishes-f3-surface) (signature), and now this entry (orchestrator), **the first end-to-end inference loop is operationally complete**:
+
+  ```
+  Cat I ingestion (adapter) → substrate commit → substrate read (orchestrator) →
+  F3 signature (cdp_marker_density_v1) → FormationCandidate emission →
+  operator review → operator-elected form-automation-group commit →
+  Layer A/B candidacy → potential demotion
+  ```
+
+  Remaining piece for Sub-benchmark 1 firing: actual adversarial pressure with empirically-detected automation patterns producing real candidates that warrant formation + (eventually) demotion. The mechanical loop is now operational; pressure produces the empirical surface for Layer A/B to fire.
+
+- **Decision:** New CLI command `cmd/find-automation-group-candidates/` lands with:
+
+  - **`main.go`** — Orchestrator implementation. Flags: `-db`, `-blobs`, `-threshold` (signature override), `-limit` (max candidates). Read-only substrate access via `substrate.WalkEvents` + `substrate.ReadBlob`. Filter by `MessageType == "ghosttrace.events.v1.BrowserObservation"`. Unmarshal payloads via `proto.Unmarshal`. Invoke `signatures.CDPMarkerDensityV1.EvaluateBrowser`. Emit `emissionEnvelope` (signature name + candidate count + candidates list) as indented JSON to stdout. Summary to stderr (scanned count + candidate count + signature name + threshold).
+
+  - **`main_test.go`** — 3 end-to-end tests: `TestCollectBrowserObservations_EndToEnd` (verifies substrate walk + BrowserObservation filter — IngestionEvent paired records excluded), `TestFullPipeline_EndToEnd` (full pipeline: 3 observations → substrate → walk → signature → JSON output verified), `TestSubtypeName_AllValuesNamed` (subtype enum exhaustive).
+
+  - **Makefile** — `find-automation-group-candidates-build` target added per the existing CLI build-target pattern. Help banner extended.
+
+  Constitutional discipline applied at orchestrator layer:
+
+  - **[§3 N3](../charter/constitutional-charter.md#3-non-goals) no autonomous irreversible action** — orchestrator is READ-ONLY over substrate. NO `AppendPair` invocation. Emits candidates to stdout; does NOT commit formation events. Operator reviews candidates + commits via existing `form-automation-group` CLI per [`§0152`](#0152--f3-inference-layer-opens-cdp_marker_density_v1-signature-for-automationgroup-first-camada-a-canonicalaberta-signature-lands-new-signatures-package-establishes-f3-surface) discipline. Mirrors [`§0119`](#0119--cli-orphan-cleanup-audit-symmetry-authscope-rfc-open-question-4-discharged-via-operator-opt-in) audit-symmetry + [`§0141`](#0141--layer-b-service-tier-implementation-resolution-conservative-defaults-bundle-adopted-a1-internal-package--b1-on-the-fly--c1-substrate-global--d1-transient-demotereport--e1-advisory-like-layer-a--f3-cli-operator-supplied-with-bundled-defaults) E1 advisory-not-enforcing pattern.
+
+  - **Read-only over substrate; no writeMu contention** — safe to invoke concurrently with ingestion paths. No `AppendPair` means no Substrate-Writer Serialization conflict per concurrency-pattern.md.
+
+  - **Stable JSON output contract** — `candidateJSON` + `emissionEnvelope` types are distinct from `signatures.FormationCandidate` (package-internal) so the CLI's operator-facing output shape is decoupled from internal representation. Source hashes hex-encoded; subtype string-named (not numeric enum value) for operator readability.
+
+  - **Memory footprint O(N) per invocation** — collects all BrowserObservation records in memory before invoking signature. Documented as inception-phase-acceptable; reversal condition R-orch-1 names "substrate size pressure" as trigger for streaming-candidate variant.
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant.
+
+  Falsifiability discipline: orchestrator behavior structurally observable via the 3-test end-to-end suite. `TestCollectBrowserObservations_EndToEnd` mechanically verifies BrowserObservation/IngestionEvent filter discipline (paired records must be excluded). `TestFullPipeline_EndToEnd` verifies the complete pipeline produces the expected JSON output shape + values across threshold boundary. `TestSubtypeName_AllValuesNamed` verifies subtype-naming exhaustiveness.
+
+- **Consequences:**
+  - New CLI `cmd/find-automation-group-candidates/` operational (`go build` succeeds; `make find-automation-group-candidates-build` produces binary).
+  - Makefile + help banner extended.
+  - **First end-to-end F3 inference loop operationally complete.** All structural pieces in place: ingestion (§0145 + F1 atlas) → substrate commit → substrate read (this entry) → F3 signature (§0152) → candidate emission. Operator commit + Layer A/B candidacy + demotion already wired via existing form-*/demote-*/Layer-B-evaluation paths.
+  - **Sub-benchmark 1 path operational.** Per §0143 Sub-benchmark 1 criterion (first non-trivial demotion under public + synthetic sources, month 3-4): the mechanical loop is now end-to-end. Empirical firing requires adversarial pressure with real automation patterns. **Next workstream:** instrument the loop against real CIC-IDS observations + synthetic generator output; measure signature firing rate; measure demotion firing rate per §0143 Sub-benchmark 1.
+  - **Methodological observation 1 — Read-only CLI pattern established for F3 orchestrators.** This CLI is the first that reads substrate without ever invoking AppendPair. Mirrors `cmd/list-hypotheses` + `cmd/hypothesis-state` + `cmd/summarize-hypotheses` read-only pattern; differs in that those CLIs project hypothesis state, while this CLI invokes F3 inference. **Pattern: F3 orchestrator CLIs are READ-ONLY over substrate; operator-elected commit happens via existing form-* CLIs after operator reviews candidates.** Future F3 orchestrators (for BehavioralCluster + CampaignHypothesis + CoordinationRing) inherit this pattern.
+  - **Methodological observation 2 — Operator-elected commit boundary preserved at orchestrator landing.** [`§0152`](#0152--f3-inference-layer-opens-cdp_marker_density_v1-signature-for-automationgroup-first-camada-a-canonicalaberta-signature-lands-new-signatures-package-establishes-f3-surface) MO2 stated the principle; this entry instantiates it: orchestrator emits candidates; operator commits via existing `form-automation-group`. **Pattern: F3 orchestrator + existing form-* CLI compose to complete the operator-mediated formation path.** Future end-to-end automation (scheduled-job orchestrator that auto-commits) would violate §3 N3 + §0152 discipline; explicit decision-log entry would be required to authorize such a pattern.
+  - **Methodological observation 3 — Memory-footprint reversal conditions named.** Current implementation collects all observations into memory before invoking signature. Documented inception-phase acceptable per [`§0023`](#0023--q2-identity-tiers-inceptionphase-singletier-actor_ref-adopted) + [`§0141`](#0141--layer-b-service-tier-implementation-resolution-conservative-defaults-bundle-adopted-a1-internal-package--b1-on-the-fly--c1-substrate-global--d1-transient-demotereport--e1-advisory-like-layer-a--f3-cli-operator-supplied-with-bundled-defaults) F2 conservative-defaults precedent.
+    - **R-orch-1: Substrate size pressure** — if substrate grows large enough that O(N) memory footprint becomes infeasible, redesign orchestrator with streaming candidate emission (signature evaluates per window; emits candidates incrementally).
+    - **R-orch-2: Multi-signature dispatch** — current orchestrator wires single signature; future may need multi-signature dispatch (compose multiple signatures into one orchestrator invocation). Trigger: second F3 signature lands AND operator workflow requires composite candidate review.
+    - **R-orch-3: Cross-modality signature support** — current orchestrator wires BrowserObservation only; future signatures may consume multi-modality input (e.g., Network + Behavioral correlation). Trigger: second-class signature lands with cross-modal consumption requirements.
+  - **Methodological observation 4 — JSON output contract decoupled from package-internal representation.** `candidateJSON` + `emissionEnvelope` are CLI-package-local types; `signatures.FormationCandidate` is signatures-package-internal. Operator-facing output evolves at CLI's own cadence; internal signature representation evolves at signatures-package's own cadence. **Pattern: operator-facing serialization contracts decoupled from internal representations for evolution-independence.** Mirrors the canonical-serialization-contract + proto-definitions separation at the substrate layer.
+
+- **Supersession:** No prior decision-log entry superseded. First end-to-end F3 inference loop operationally complete; first orchestrator CLI; subsequent F3 work proceeds under this entry's pattern.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
