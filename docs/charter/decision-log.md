@@ -6641,6 +6641,62 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0161` — Second F3 signature `tcp_fingerprint_clustering_v1` lands first NetworkSignature; Signature interface refactored to support per-modality dispatch
+
+- **Status:** accepted.
+- **Date:** 2026-05-24.
+- **Context:** [`§0152`](#0152--cdp_marker_density_v1-lands-first-f3-signature-camada-a-canonical-aberta-against-browserobservation-cdp-marker-modality) introduced `cdp_marker_density_v1` as the first F3 signature, scoped to BrowserObservation input. The §0143 Domain Pack v0.1 anti-bot atlas defines F1 across five observation modality envelopes (NetworkObservation per §0144 + BehavioralObservation per §0146 + AttestationObservation per §0147 + BrowserObservation per §0151 + the residual NetworkEvent legacy), but F3 signature coverage was scoped to a single modality (Browser) until this entry. The Signature interface design embedded `EvaluateBrowser` directly in the common `Signature` interface, forcing every prospective F3 signature to be browser-modality regardless of its actual input class.
+
+  This entry lands two coupled changes: (a) the second F3 signature `tcp_fingerprint_clustering_v1` consuming NetworkObservation; (b) the minimal Signature interface refactor required to support per-modality dispatch (move `EvaluateBrowser` out of `Signature` into `BrowserSignature`; add `NetworkSignature` interface mirroring `BrowserSignature` on the network side).
+
+- **Decision:** Two changes in `services/ingestion/internal/signatures/`:
+
+  **1. Signature interface refactor** (`signatures.go`):
+
+  - `Signature` interface now carries only the common surface: `Name() string` + `Subtype() HypothesisSubtype`. Per-modality `Evaluate*` methods removed from common interface.
+  - `BrowserSignature` interface embeds `Signature` + adds `EvaluateBrowser(ctx, []*BrowserObservation) → *EvaluationResult` + `isBrowserSignature()` marker.
+  - `NetworkSignature` interface mirrors `BrowserSignature` on the network side: embeds `Signature` + adds `EvaluateNetwork(ctx, []*NetworkObservation) → *EvaluationResult` + `isNetworkSignature()` marker.
+
+  Existing `CDPMarkerDensityV1` continues to satisfy `BrowserSignature` (already implements `EvaluateBrowser` + `isBrowserSignature()`). Existing orchestrator code at `cmd/find-automation-group-candidates/main.go` continues to call `EvaluateBrowser` on the concrete `*CDPMarkerDensityV1` — no orchestrator changes required.
+
+  **2. `TCPFingerprintClusteringV1`** (`tcp_fingerprint_clustering.go` + `tcp_fingerprint_clustering_test.go`):
+
+  - First F3 signature implementing `NetworkSignature`.
+  - Detection axis: multi-actor TCP-fingerprint identity is a high-confidence indicator of shared automation infrastructure. Independent human-operated clients running varied OS / stack combinations produce a HETEROGENEOUS p0f signature distribution; automated infrastructure (bots from the same host, behind the same NAT/proxy, or running identical container images) emits IDENTICAL TCP fingerprints.
+  - Detection logic: per-p0f_signature cluster aggregation. Distinct `actor_ref` count per `p0f_signature` cluster is the threshold metric. Default threshold 3 (cluster size); emits one multi-actor `FormationCandidate` per cluster meeting threshold.
+  - Subtype: `AutomationGroup` (multi-actor identical-stack pattern is the AutomationGroup ontology shape per §0010 Q2-A.2).
+  - Skip semantics: nil obs (no counter); empty `actor_ref` → `ObservationsSkippedNoActor++`; non-tcp_fingerprint modality → `ObservationsSkippedWrongModality++`; empty `p0f_signature` string → `ObservationsSkippedWrongModality++` (clustering requires canonical p0f form for equality).
+  - Per §0139 hash-list discipline: `SourceHashes` sorted ascending at candidate emit time.
+  - Per §3 N1 truth-vs-structure: `ConfidenceHint` capped at 0.9.
+  - 11 unit tests covering: below-threshold non-emission, at-threshold emission, multiple clusters with selective emission, duplicate-actor count-once semantics, empty actor_ref skip, empty p0f skip, wrong-modality skip, empty input handling, deterministic order, Name/Subtype contract, NetworkSignature interface satisfaction.
+
+  Constitutional discipline:
+
+  - **§3 N3 operator-elected commit boundary preserved** — `TCPFingerprintClusteringV1` produces CANDIDATES; does not commit formation events. Mirrors §0152's discipline.
+  - **§0139 hash-list element-shape** — `SourceHashes` sorted ascending at candidate emit time.
+  - **§3 N1 truth-vs-structure** — `ConfidenceHint` capped at 0.9 via shared `confidenceFromCount` helper.
+  - **§0144 discriminated-union framing honored** — signature consumes `NetworkObservation` typed envelope + extracts `TcpFingerprint` sub-modality via `GetTcpFingerprint()`; explicit modality dispatch matches §0144's "strong typing pressures F3 signature engines to name explicitly which sub-modalities each signature consumes" rationale.
+  - **§0143 Sub-benchmark 1 instrumentation parity** — `EvaluationStats` populated identically to `cdp_marker_density_v1` (per-collector + per-skip-reason counters + actor aggregation counts).
+
+  Scope discipline per §0161: **interface refactor is MINIMAL** (smallest change required to admit a second modality without breaking the existing browser-signature). The refactor does NOT introduce: an orchestrator dispatch helper for choosing between Browser + Network signatures; a registry/discovery surface for signatures; a CLI for invoking the new signature against substrate; integration tests against F3-derived formations. Each of those would be a separate downstream advance; this entry closes only the signature implementation + interface refactor scope.
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. New non-Charter capability.
+
+  Falsifiability discipline: signature behavior structurally observable + exhaustively tested. Unit tests cover the 9 distinct behavior shapes (emit/non-emit/skip/cluster/order/contract). Interface refactor verified by `go build ./...` + the pre-existing `*CDPMarkerDensityV1` continuing to satisfy `BrowserSignature` (compile-time check via existing test usage).
+
+- **Consequences:**
+  - Signature interface refactored: `EvaluateBrowser` moved from `Signature` to `BrowserSignature`; `NetworkSignature` added. Existing `BrowserSignature`-satisfying types continue to satisfy it without code change.
+  - New signature `TCPFingerprintClusteringV1` available for orchestrator dispatch. Orchestrator that calls the new signature does not yet exist; future advance will land a `find-automation-group-candidates-network` CLI (or extend the existing CLI with multi-modality dispatch).
+  - **First NetworkObservation-side F3 signature lands.** The §0143 three-layer signature partition (Camada A canonical-aberta + Camada B heuristic-fechada + Camada C adversarial-confidential) gains its second Camada A entry. The §0143 Sub-benchmark 1 mechanical loop now has two distinct signature engines on two distinct F1 modalities (Browser + Network) — the architecture's cross-modality claim is empirically falsifiable by running both signatures against the same substrate and comparing instrumentation surface.
+  - **CIC-IDS adversarial-pressure path is now signature-reachable.** The `cic_ids` adapter (§0145) produces NetworkObservation with `tcp_fingerprint` sub-modality (CIC-IDS rows with non-zero TCP control-bit values emit a synthesized p0f signature). With `tcp_fingerprint_clustering_v1` landed, real CIC-IDS adversarial flows (e.g., DoS-Slowloris rows clustering by shared TCP stack) can be detected by the F3 layer for the first time. A future advance will exercise this path end-to-end via integration test.
+  - **Methodological observation 1 — Per-modality interface design admits additive signature corpus expansion.** The minimal refactor (split `Signature` common surface from per-modality Evaluate methods) admits a third modality (e.g., `BehavioralSignature` for BehavioralObservation per §0146) by adding a single new interface, without touching existing `BrowserSignature` or `NetworkSignature` consumers. **Pattern: when a polymorphic interface forces single-modality implementations, factor the common surface (Name + Subtype) from per-modality dispatch (Evaluate*); each new modality is an additive interface, not a breaking refactor.**
+  - **Methodological observation 2 — Distinct-actor-count threshold is a categorically different shape from detection-count threshold.** `cdp_marker_density_v1`'s threshold is per-actor sum of detections (single-actor candidates with cumulative density); `tcp_fingerprint_clustering_v1`'s threshold is distinct-actor count per cluster (multi-actor candidates with cardinality). Both signatures emit AutomationGroup candidates but model categorically different patterns: one is per-actor density (one bot's CDP traces accumulate), the other is multi-actor coincidence (many bots share infrastructure). **Pattern: signatures within the same hypothesis subtype can model categorically distinct patterns; the threshold metric (count vs cardinality vs density vs ratio) is the signature's primary modeling axis, not a parameter knob. Subtype label is the ontology contract; threshold shape is the signature's model commitment.**
+  - **Methodological observation 3 — Conservative default threshold scales with cluster shape.** `cdp_marker_density_v1` default threshold is 2 (single-actor detections); `tcp_fingerprint_clustering_v1` default threshold is 3 (cluster cardinality). The lower threshold for per-actor density reflects that a single bot's CDP detections accumulate quickly (one Selenium session yields 5+ markers in seconds); the higher threshold for cluster cardinality reflects that 2 actors sharing a fingerprint could be coincidence (shared OS + browser version), while 3+ sharing a fingerprint is meaningfully indicative of shared infrastructure. **Pattern: conservative-default thresholds should reflect the signature's specific noise floor (single-bot-of-known-class vs coincident-shared-stack), not a uniform "default 2" applied across all signatures. Each new signature's default threshold deserves explicit justification grounded in the signature's noise model.**
+
+- **Supersession:** No prior decision-log entry superseded. Extends §0152's first-F3-signature pattern to the NetworkObservation modality side via the minimal `Signature` interface refactor; closes the single-modality limitation that constrained the F3 corpus to Browser-only inputs.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

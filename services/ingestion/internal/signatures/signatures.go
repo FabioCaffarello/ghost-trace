@@ -173,10 +173,11 @@ type EvaluationResult struct {
 	Stats EvaluationStats
 }
 
-// Signature is the F3 inference engine interface. Concrete signatures
-// implement Evaluate against the Cat I observation surface relevant
-// to their detection axis. Stateless across invocations (orchestrator
-// is responsible for window selection); deterministic given input.
+// Signature is the F3 inference engine common-surface interface.
+// Concrete signatures embed Signature + add a per-modality Evaluate*
+// method via the BrowserSignature or NetworkSignature interfaces below.
+// Stateless across invocations (orchestrator is responsible for window
+// selection); deterministic given input.
 //
 // Per §0143 instrumentation-by-subtype-fonte-morfologia discipline:
 // signatures populate EvaluationStats during evaluation, surfacing
@@ -189,20 +190,34 @@ type Signature interface {
 	Name() string
 
 	// Subtype returns the Cat III hypothesis subtype this signature
-	// produces candidates for. MVP: AutomationGroup only.
+	// produces candidates for.
 	Subtype() HypothesisSubtype
+}
 
+// BrowserSignature is the interface for signatures that consume
+// BrowserObservation input. Embeds Signature for the common surface
+// + adds the modality-specific Evaluate method.
+type BrowserSignature interface {
+	Signature
 	// EvaluateBrowser evaluates the signature against a slice of
 	// BrowserObservation records. Returns EvaluationResult (candidates
 	// + stats); error indicates a structural failure (e.g., malformed
 	// input), not "no candidates found".
 	EvaluateBrowser(ctx context.Context, observations []*eventsv1.BrowserObservation) (*EvaluationResult, error)
+	isBrowserSignature()
 }
 
-// BrowserSignature is a convenience marker interface for signatures
-// that consume BrowserObservation input only. Allows the orchestrator
-// to dispatch by input class without type assertions.
-type BrowserSignature interface {
+// NetworkSignature is the interface for signatures that consume
+// NetworkObservation input. Mirrors BrowserSignature for the
+// network-modality side per §0144 discriminated-union framing —
+// strong typing pressures F3 signature engines to name explicitly
+// which sub-modality class each signature consumes.
+type NetworkSignature interface {
 	Signature
-	isBrowserSignature()
+	// EvaluateNetwork evaluates the signature against a slice of
+	// NetworkObservation records. Returns EvaluationResult (candidates
+	// + stats); error indicates a structural failure, not "no
+	// candidates found".
+	EvaluateNetwork(ctx context.Context, observations []*eventsv1.NetworkObservation) (*EvaluationResult, error)
+	isNetworkSignature()
 }
