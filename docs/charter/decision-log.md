@@ -6592,6 +6592,55 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0160` — Demote E2E integration test against F3-candidate-derived lifecycle; validates F3 → formation → promotion → demotion path end-to-end
+
+- **Status:** accepted.
+- **Date:** 2026-05-24.
+- **Context:** [`§0157`](#0157--layer-b-firing-integration-test-against-f3-candidate-derived-formation-validates-f3--operator-formation--layer-b-path-end-to-end) exercised F3 → formation → Layer B evaluation. The §0011 staged-combination lifecycle for AutomationGroup spans MORE than formation + Layer B verdict — the operator-elected promote + demote steps complete the arc per §0011 + §0107 + §0119. Integration coverage prior to this entry stopped at the formation event + Layer B verdict; the path from F3-derived formation through operator-elected promotion + operator-elected demotion was not exercised end-to-end at integration level.
+
+  This entry lands the integration test closing that gap: F3 signature candidate → operator-elected AutomationGroupFormation commit → operator-elected AutomationGroupPromotion commit (with LayerBParameters per §0138 N_A bundling) → operator-elected AutomationGroupDemotion commit (with Layer B verdict captured in DemoteReport per §0141 E1 advisory pattern).
+
+- **Decision:** New test file `services/ingestion/cmd/find-automation-group-candidates/demote_e2e_test.go` with 1 integration test:
+
+  - **`TestDemoteAutomationGroup_FromF3CandidateLifecycle`** — Full lifecycle path validation:
+    1. Inject 2 BrowserObservation records (actor-suspect, 3+2=5 detections, above default threshold 2).
+    2. Run `cdp_marker_density_v1` signature → 1 candidate for actor-suspect.
+    3. `commitFormationFromCandidate` helper (§0157) materializes + commits AutomationGroupFormation.
+    4. `hypothesis.PromoteAutomationGroup` with LayerBParameters (T_B=K_C=1/2, N_window=100, N_A=1 day per §0138) + CadenceSeconds=3600. Returns promotion event hash.
+    5. `hypothesis.DemoteAutomationGroup` with promotion event hash + DemotedAt 100s after PromotedAt. Layer B verdict captured in DemoteReport per §0141 E1.
+    6. Verify formation + promotion + demotion all in substrate via `LookupRow` (MessageType discrimination).
+    7. Verify demotion proto's `PromotionEventHash` field references the promotion event hash (32-byte exact-match).
+    8. Verify report state: `CadenceSatisfied=false` (demoted at 100s < CadenceSeconds=3600s — §0011 Layer A is CANDIDACY criterion, not hard barrier); `CadenceElapsedSeconds=100`; Layer B verdict structurally captured (advisory).
+
+  Constitutional discipline at integration-test layer:
+
+  - **§0011 staged-combination Layer A advisory** — demotion commits BEFORE cadence elapses; report surfaces `CadenceSatisfied=false`. Per §0011 Layer A is CANDIDACY criterion, not hard barrier — validates that the demotion code path does NOT short-circuit on unsatisfied cadence (the operator-elected commit boundary is preserved).
+  - **§0138 N_A bundling** — promotion event carries LayerBParameters via `LayerBParameters` field; demotion's `evaluateLayerB` recovers these parameters from the promotion event payload + invokes layerb.Evaluate against the formation. Validates the parameter-bundling round-trip from promotion-time to demotion-time.
+  - **§0141 E1 advisory pattern** — demotion commits regardless of Layer B verdict; verdict captured in DemoteReport.LayerB for operator visibility. Test verifies LayerB.Fired (advisory) but does NOT make the demotion conditional on verdict — mirrors the §0141 E1 contract that demote-* CLIs implement.
+  - **§3 N3 operator-elected commit boundary** — three operator-elected commits in sequence (formation, promotion, demotion); each commit is explicit + decoupled. Orchestrator does not auto-commit any of them per §3 N3.
+  - **§2.5 BC5 lifecycle event immutability** — each lifecycle event is committed via substrate.Append (or via the hypothesis package's path-equivalent helper); no mutation; influence chain preserved.
+
+  Scope discipline per §0160: **structural connectivity validation across the FULL lifecycle arc, not exhaustive per-operation semantics.** Per-operation semantics (promotion validation errors, demotion cadence-gate behavior under various time deltas, layerb verdict math under various N_window + threshold combinations, AppendPair behavior with Actor parameter, dissolution/merge/split lifecycle operations) are covered by the hypothesis package's own unit test suites + the layerb package's own unit test suite. This test validates only that the full lifecycle arc connects end-to-end from F3 candidate output without structural failure.
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. Test-only addition.
+
+  Falsifiability discipline: lifecycle behavior structurally observable. Test verifies (a) F3 signature emits expected candidate; (b) formation commit accepts F3-derived AutomationGroupFormation; (c) PromoteAutomationGroup accepts F3-derived formation hash + LayerBParameters; (d) DemoteAutomationGroup accepts promotion event hash + emits valid demotion event; (e) demotion proto references promotion event hash exactly; (f) Layer A cadence state correctly surfaced (not satisfied for within-cadence demotion); (g) Layer B verdict structurally captured in report.
+
+- **Consequences:**
+  - New test file `cmd/find-automation-group-candidates/demote_e2e_test.go` (1 test).
+  - Local helpers `newDemoteE2ESubstrate`, `hexDecodeInto`, `hexNibbleE2E`, `hexLenErr` (CLI-package-local; hex helpers do not conflict with existing main_test.go helpers per Go test-file namespace rules).
+  - Reuses `commitFormationFromCandidate` (§0157) + `appendBrowserObs` + `collectBrowserObservations` (existing package helpers).
+  - No new packages. No proto changes. No corpus regeneration. No schemas-evolution event.
+  - **Full §0011 staged-combination lifecycle for AutomationGroup end-to-end-validated from F3-derived candidate.** Sequence: F1 ingestion (§0145 + atlas) → orchestrator (§0153) → signature (§0152) → candidate (§0154) → formation commit (§0157) → promotion commit (this entry) → demotion commit (this entry) → Layer B verdict captured (§0141 E1) → lifecycle complete.
+  - **§0157 integration test extended downstream.** §0157 closed the F3 → Layer B path; this entry closes the F3 → demotion path. Three integration test files in find-automation-group-candidates/ now exercise distinct extension axes of the §0157 F3-derived-formation pattern: §0157 layerb_firing_test (verdict shape), §0158 morphology_integration_test (chain morphology measurement), §0160 demote_e2e_test (lifecycle arc completion). **Pattern: F3 → formation commits are the anchor; subsequent integration tests extend along distinct downstream axes (evaluation, measurement, lifecycle).**
+  - **Methodological observation 1 — Layer A cadence advisory verifiable via within-cadence demotion.** The §0011 Layer A staged-combination CANDIDACY-not-barrier semantics manifest at demote-time as `CadenceSatisfied=false` when DemotedAt < PromotedAt + CadenceSeconds; the demotion event still commits successfully. **Pattern: integration tests should EXPLICITLY exercise the within-cadence demotion case to validate the candidacy-not-barrier semantics; tests that ONLY commit demotion after cadence elapses would not distinguish the §0011 Layer A advisory pattern from a hypothetical "Layer A as hard barrier" alternative.**
+  - **Methodological observation 2 — §0138 N_A parameter-bundling round-trip is integration-testable.** The promotion event carries LayerBParameters; the demotion code recovers those parameters from the promotion event payload + invokes Layer B evaluation against the formation. This round-trip (promote-time bundling → demote-time recovery) is structurally validated when the demote E2E test completes without `evaluateLayerB` error AND the resulting LayerB report is structurally populated. **Pattern: parameter-bundling discipline (§0138 N_A pattern) is integration-testable by exercising the bundle-at-promote → recover-at-demote round-trip; missing parameters or wrong bundling would surface as nil report fields or evaluateLayerB error.**
+  - **Methodological observation 3 — F3-derived integration tests should extend §0157's pattern along ONE distinct downstream axis per test.** Three integration test files in find-automation-group-candidates/ now exercise §0157's F3-derived formation pattern along three distinct axes: layerb_firing_test (evaluation axis), morphology_integration_test (measurement axis), demote_e2e_test (lifecycle axis). Each test extends the §0157 anchor in ONE direction without conflating. **Pattern: integration tests that extend a prior anchor SHOULD pick ONE downstream axis per test; combining multiple axes in a single test conflates the failure surface (an error could be in evaluation, measurement, OR lifecycle code) + makes scope discipline harder to enforce.**
+
+- **Supersession:** No prior decision-log entry superseded. Demote E2E test extends the §0157 F3-derived-formation anchor along the lifecycle axis; together with §0157 (evaluation axis) + §0158 (measurement axis), the F3 → formation pattern is integration-tested across all three distinct downstream axes.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
