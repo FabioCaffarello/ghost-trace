@@ -6697,6 +6697,59 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0162` — tcp_fingerprint_clustering_v1 integration test surfaces TWO §0144(e) phenomenon-vs-record gaps for CIC-IDS path; §0161 reachability claim corrected
+
+- **Status:** accepted.
+- **Date:** 2026-05-24.
+- **Context:** [`§0161`](#0161--second-f3-signature-tcp_fingerprint_clustering_v1-lands-first-networksignature-signature-interface-refactored-to-support-per-modality-dispatch) landed `tcp_fingerprint_clustering_v1` + claimed "CIC-IDS adversarial-pressure path is now F3-reachable via tcp_fingerprint sub-modality". Empirical validation via integration test was deferred to a follow-on advance. This entry lands the deferred integration test + empirically tests the reachability claim.
+
+  Empirical observation: the §0161 reachability claim was OVER-OPTIMISTIC. CIC-IDS path is NOT F3-reachable for `tcp_fingerprint_clustering_v1` due to TWO independent phenomenon-vs-record gaps (per §0144(e) framing). Both gaps must close before CIC-IDS observations can produce candidates through this signature:
+
+  - **Gap (1) — no actor_ref**: the CIC-IDS adapter (`cic_ids.go:185-228`) emits `NetworkObservation` with `EndpointRef` populated but `ActorRef` left empty. CIC-IDS is a flow-level dataset (gateway/IDS appliance position per Sharafaldin et al. ICISSP 2018); it does not attribute flows to actors. The clustering signature requires `ActorRef` for per-actor aggregation; CIC-IDS records are skipped at `ObservationsSkippedNoActor` before reaching the modality dispatch.
+  - **Gap (2) — no p0f_signature**: even if `ActorRef` were populated, CIC-IDS via CICFlowMeter does NOT preserve TCP options (the adapter explicitly comments this at `cic_ids.go:163`). The clustering signature requires non-empty `p0f_signature` for equality-based clustering; CIC-IDS tcp_fingerprint records would be skipped at `ObservationsSkippedWrongModality`.
+
+  Both gaps are STRUCTURALLY DIAGNOSABLE per §0154 MO4: the signature's instrumentation surfaces `ObservationsSkippedNoActor` / `ObservationsSkippedWrongModality` counters that distinguish "modality absent" from "modality present but skipped" from "below threshold". The integration test exercises this distinction empirically.
+
+- **Decision:** New test file `services/ingestion/cmd/find-automation-group-candidates/cic_ids_network_signature_integration_test.go` with 3 integration tests:
+
+  - **`TestTCPFingerprintClustering_AgainstCICIDS_NoActorSkipped`** — Full path against CIC-IDS only: ingest 3 CIC-IDS rows → 9 NetworkObservation in substrate → run signature → verify 0 candidates + ObservationsSkippedNoActor=9 + ObservationsSkippedWrongModality=0 (the no-actor skip happens before modality dispatch).
+
+  - **`TestTCPFingerprintClustering_AgainstSyntheticP0F_ClusterEmitted`** — Validates signature correctness: 3 synthetic NetworkObservation with populated p0f_signature + distinct actor_refs → 1 multi-actor candidate emitted. Demonstrates the §0162 gap is at the ADAPTER layer, NOT the SIGNATURE layer.
+
+  - **`TestTCPFingerprintClustering_MixedSubstrate_OnlySyntheticContributes`** — Diagnostic separation: substrate contains BOTH CIC-IDS (9 records, no actor_ref) + synthetic (3 records, populated actor + p0f) → signature isolates the synthetic cluster while CIC-IDS records surface in skip counter. PerCollector breakdown distinguishes both sources.
+
+  Helpers:
+
+  - `collectNetworkObservations` — substrate walk for NetworkObservation records (mirrors `collectBrowserObservations` from main.go on the network side; local to test package; future advance will lift to shared package when a network-modality orchestrator CLI lands).
+  - `appendNetworkObservationWithP0F` — synthetic-fixture injection helper (commits NetworkObservation with populated p0f via Ingester).
+
+  Constitutional discipline at integration-test layer:
+
+  - **§3 N3 operator-elected commit boundary** — synthetic fixtures committed via Ingester.Append (standard ingestion path); no auto-commit of formation events.
+  - **§0154 MO4 diagnostic discipline** — both CIC-IDS gaps are EXPLICITLY observable via skip counters; the test verifies the exact counter values, distinguishing "no actor" from "no modality" from "below threshold".
+  - **§0144(e) phenomenon-vs-record gap codified empirically** — two distinct gaps at the adapter layer (no actor_ref + no p0f_signature) surface independently; future advance to close gap (1) requires either an actor-attribution layer (Cat II construct) or a different adapter producing actor-attributed flows; future advance to close gap (2) requires either an adapter that preserves TCP options (e.g., raw pcap ingest + p0f synthesis) or a signature variant clustering by derived attributes (window_size + mss + ttl tuple).
+
+  Scope discipline per §0162: **empirical observation + correction, not adapter rewrite or signature redesign.** The test documents the actual behavior; the corrections to §0161's reachability claim are recorded inline at the §0162 Context section above. Closing the gaps is a separate future advance (likely requires Cat II actor-attribution layer for gap (1) and adapter capability addition for gap (2)).
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. Test-only addition + decision-log correction of a prior over-optimistic reachability claim.
+
+  Falsifiability discipline: gap (1) and gap (2) are STRUCTURALLY independent — each test verifies the SPECIFIC counter that captures the specific skip reason. If gap (1) is closed (CIC-IDS adapter starts populating actor_ref) WITHOUT closing gap (2), the test `TestTCPFingerprintClustering_AgainstCICIDS_NoActorSkipped` would fail (ObservationsSkippedNoActor would drop to 0) and a new ObservationsSkippedWrongModality=N would surface. Either gap independently closing would surface as a test failure — the test is the §0154 MO4 diagnostic discipline applied operationally.
+
+  Reachability claim correction: §0161's Consequences paragraph "CIC-IDS adversarial-pressure path is now signature-reachable" is CORRECTED here. Decision-log is append-only per §0007; the correction is recorded as an entry rather than rewriting §0161. Future readers should consult §0162 alongside §0161 when interpreting the F3 corpus reachability map.
+
+- **Consequences:**
+  - New test file `cmd/find-automation-group-candidates/cic_ids_network_signature_integration_test.go` (3 tests).
+  - **§0161 reachability claim corrected.** CIC-IDS path is NOT F3-reachable for `tcp_fingerprint_clustering_v1` until two distinct adapter-layer gaps close (no actor_ref + no p0f_signature). The integration test documents the actual state empirically.
+  - **§0144(e) phenomenon-vs-record OMQ has TWO distinct sub-gaps for this signature.** The OMQ surface anticipated at §0143 is now empirically populated: gap (1) is about flow-vs-actor attribution (a Cat II construct deferred from §0023's single-tier inception phase would be the natural close); gap (2) is about adapter capability (CICFlowMeter does not preserve TCP options).
+  - **Diagnostic infrastructure operationally proven.** Per §0154 MO4 + §0155 + §0156's discipline (non-firing is INFORMATIVE), the integration test's `ObservationsSkippedNoActor=9` value DISTINGUISHES "CIC-IDS records present but unattributed" from "modality absent" from "below threshold" without forcing the operator to inspect substrate records by hand.
+  - **Methodological observation 1 — Reachability claims in capability-expansion entries are STRUCTURAL hypotheses that integration tests must verify empirically.** §0161's "CIC-IDS path is F3-reachable" was inferred from the proto structure (NetworkObservation has tcp_fingerprint sub-modality; CIC-IDS adapter emits NetworkObservation; ergo F3 signature can consume CIC-IDS observations) without verifying the specific fields the signature actually reads. The empirical verification surfaces both gaps. **Pattern: capability-expansion decision-log entries SHOULD treat their reachability claims as STRUCTURAL HYPOTHESES; follow-on integration-test entries verify (or correct) those hypotheses. Bundling capability + integration test in a single PR would have surfaced this earlier but increases PR scope; the §0161+§0162 two-PR pattern preserves one-PR-per-advance discipline while maintaining empirical verification discipline.**
+  - **Methodological observation 2 — Skip-counter ordering matters for diagnostic precision.** The signature's skip-check order (no-actor before wrong-modality) means CIC-IDS records all surface as `ObservationsSkippedNoActor` even though they ALSO would fail the empty-p0f check downstream. The test correctly captures the first-failing check; without examining the skip-check order in the implementation, a test asserting `ObservationsSkippedWrongModality=9` would be wrong. **Pattern: signature skip-counter semantics are ORDER-DEPENDENT; integration tests must read the signature implementation to know which counter captures which skip reason, NOT infer from problem framing. The §0162 first draft asserted SkippedWrongModality based on the "no p0f" framing; the empirical run surfaced SkippedNoActor=9 because the no-actor check fires first. Documentation of the skip-check order at the package level would reduce this slip risk for future signature integration tests.**
+  - **Methodological observation 3 — Test fixtures should validate the §0144(e) OMQ sub-gaps independently.** The 3-test structure (`AgainstCICIDS_NoActorSkipped` + `AgainstSyntheticP0F_ClusterEmitted` + `MixedSubstrate_OnlySyntheticContributes`) isolates each gap on a distinct test fixture. CIC-IDS alone surfaces gap (1) only (no actor_ref); synthetic alone validates the signature works correctly when both gaps absent; mixed substrate validates the signature correctly isolates the working records from the broken records under realistic mixed-source ingestion. **Pattern: integration tests for signatures with multiple structural dependencies SHOULD use a 3-fixture structure: each gap in isolation + the unbroken case + the mixed case; the 3 fixtures together cover the full §0144(e) phenomenon-vs-record reconciliation surface for the specific signature.**
+
+- **Supersession:** §0161's Consequences paragraph 4 ("CIC-IDS adversarial-pressure path is now signature-reachable") is CORRECTED by this entry. Per §0007 append-only decision-log discipline: no §0161 prose is rewritten; the correction stands as a referenced revision via §0162 (this entry). Future F3 reachability assessments should treat §0161 alongside §0162 as a paired record.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
