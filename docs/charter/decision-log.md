@@ -6549,6 +6549,49 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0159` — measure-chain-morphology CLI test coverage closes symmetric gap to find-automation-group-candidates' main_test.go
+
+- **Status:** accepted.
+- **Date:** 2026-05-24.
+- **Context:** The `measure-chain-morphology` CLI (§0155) emits operator-readable JSON summarizing per-hypothesis chain morphology + aggregate stats. The morphology library (`internal/morphology/`) has unit-test + integration-test coverage (via [`§0158`](#0158--chain-morphology-integration-test-against-f3-candidate-derived-multi-formation-chain-validates-f3--operator-formations--morphology-measurement-path)), but the CLI's emission surface — the JSON envelope shape, hex hash encoding, field mapping from `morphology.ChainMorphology` to `hypothesisJSON` — had no direct test prior to this entry.
+
+  The companion CLI `find-automation-group-candidates` has `main_test.go` exercising `emitCandidatesJSON` (the equivalent layer between typed signature output + operator JSON). The asymmetry — one CLI tested at the emission boundary, the other not — is a symmetric coverage gap parallel to the one §0158 closed for the substrate-layer measurement endpoint.
+
+- **Decision:** New test file `services/ingestion/cmd/measure-chain-morphology/main_test.go` with 2 CLI-level tests:
+
+  - **`TestEmitJSON_FromMeasurement`** — Validates the emission contract under a known 2-formation chain shape:
+    1. Build substrate with 2 AutomationGroupFormation records (formation_a root + formation_b influenced by a; both fields auto-sorted per §0139).
+    2. Run `morphology.Measure`.
+    3. Pass the Measurement to `emitJSON(tmpfile, m)`.
+    4. Decode JSON output into `emissionEnvelope`.
+    5. Verify: 2 hypotheses; per-formation `HypothesisHashHex` is valid BLAKE3-256 hex (64 chars); `SubtypeName` is canonical `ghosttrace.events.v1.AutomationGroupFormation`; per-formation depth/breadth/closure match expected; aggregate stats match (TotalFormations=2, PerSubtype, ChainsFracasCount=2, ChainsFortesCount=0); JSON output is indented (per `enc.SetIndent("", "  ")`).
+
+  - **`TestEmitJSON_EmptyMeasurement`** — Validates the empty-substrate contract: zero hypotheses + all-zero stats + valid JSON envelope. Matches the CLI's documented exit-0 behavior for empty hypothesis set.
+
+  Constitutional discipline at CLI-test layer:
+
+  - **§0139 hash-list element-shape** — direct_influenced_by + closure_hashes auto-sorted via local `sortHashListAscending` helper before substrate commit; single-element lists trivially compliant.
+  - **§2.6 BC3 paired-dimension at marshalling boundary** — each formation carries `confidence` + `evidential_independence` 1/1 trivial pair; commit succeeds per §0140 enforcement.
+  - **CLI emission boundary preserved** — tests do NOT spawn the binary (no `exec.Command("./measure-chain-morphology")`); instead exercise the in-package `emitJSON` function. Mirrors the find-automation-group-candidates `TestFullPipeline_EndToEnd` discipline. CLI argument-parsing + os.Stdin/Stdout coupling are validated by future operator-deployment exercises, not test code.
+
+  Scope discipline per §0159: **CLI emission contract (JSON envelope shape + field values for a known shape), not exhaustive morphology semantics.** Per-formation morphology correctness against F3-derived substrate state is covered by §0158; aggregate histogram math is covered by morphology package unit tests. This test validates ONLY the CLI's emission surface — the layer between `morphology.Measurement` (typed Go struct) and operator-readable JSON.
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. Test-only addition.
+
+  Falsifiability discipline: emission contract is structurally observable. Test 1 verifies (a) JSON envelope contains 2 hypotheses; (b) per-hypothesis hex encoding is valid BLAKE3-256 (length + alphabet); (c) `SubtypeName` is the canonical proto full name; (d) per-formation morphology values match the constructed shape; (e) aggregate stats match; (f) JSON output is indented. Test 2 verifies the empty-substrate case produces a valid envelope with all-zero stats.
+
+- **Consequences:**
+  - New test file `cmd/measure-chain-morphology/main_test.go` (2 tests).
+  - New helpers `newCLITestSubstrate`, `sortHashListAscending`, `commitTestFormation` — local copies of patterns established in §0158 (the helpers are CLI-package-local; cross-package sharing would require lifting to a shared test-utility package, which is premature per "Don't add abstractions beyond what the task requires").
+  - No new packages. No proto changes. No corpus regeneration. No schemas-evolution event.
+  - **CLI emission contract integration-tested.** Symmetric coverage to `find-automation-group-candidates` achieved at the emission boundary; both F3 inference loop CLIs now have main_test.go coverage exercising their respective `emit*JSON` functions.
+  - **Methodological observation 1 — CLI tests should exercise emission contract via in-package function call, not binary spawn.** Spawning the binary via `exec.Command` would couple the test to the build environment + add slowness; calling `emitJSON` directly with a tempfile preserves the contract validation (JSON shape + field values) without the binary-execution overhead. Per the §0157 Methodological observation 2 pattern extended to CLI tests. **Pattern: CLI-level tests SHOULD invoke in-package emission functions; binary spawning is reserved for explicit end-to-end operator-experience tests.**
+  - **Methodological observation 2 — Symmetric CLI coverage reveals operator-experience completeness.** Both F3-loop CLIs (`find-automation-group-candidates` + `measure-chain-morphology`) now have `main_test.go` coverage of their emission surface. The asymmetry pre-§0159 indicated that one CLI's operator-facing contract was not validated; closing the gap surfaces the operator-experience completeness — both CLIs' JSON envelopes are now drift-protected. **Pattern: cmd/ directory should be audited periodically for emission-contract test coverage symmetry; asymmetric coverage at the CLI layer indicates operator-experience drift risk.**
+
+- **Supersession:** No prior decision-log entry superseded. Closes the CLI-emission-contract coverage gap symmetric to §0158's substrate-layer morphology coverage closure.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
