@@ -6446,6 +6446,54 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0157` — Layer B firing integration test against F3-candidate-derived formation; validates F3 → operator-formation → Layer B path end-to-end
+
+- **Status:** accepted.
+- **Date:** 2026-05-24.
+- **Context:** [`§0156`](#0156--cic-ids-integration-test-lands-first-empirical-pressure-exercise-of-f3-inference-loop-non-firing-by-modality-mismatch-operationally-diagnosable-per-0154-mo4) exercised F1 ingestion → F3 signature → candidate emission. The complete F3 inference loop continues past candidate emission: operator-elected formation commit → Layer A/B candidacy → potential demotion. The path from "F3 signature emits candidate" to "Layer B evaluates" had no integration test prior to this entry — existing layerb test suite uses hand-built BehavioralClusterFormation fixtures, not formations derived from F3 candidate output.
+
+  This entry lands the integration test closing that gap: F3 signature candidate → operator-elected AutomationGroupFormation construction → substrate commit → Layer B evaluation. Validates that the candidate-to-formation mapping is structurally sound + Layer B accepts the resulting substrate state without structural failure.
+
+- **Decision:** New test file `services/ingestion/cmd/find-automation-group-candidates/layerb_firing_test.go` with 2 integration tests:
+
+  - **`TestLayerBFiring_AgainstF3CandidateFormation`** — Full path validation:
+    1. Inject 2 BrowserObservation records via Ingester (actor "actor-suspect", detection_count 3 + 2 → aggregate 5, above default threshold 2).
+    2. Run `cdp_marker_density_v1` signature → 1 candidate for actor-suspect.
+    3. `commitFormationFromCandidate` helper materializes AutomationGroupFormation proto from the candidate (pattern_signature = "cdp_marker_density_v1"; source_event_hashes inherits candidate.SourceHashes; direct_influenced_by = nil; confidence = candidate.ConfidenceHint; evidential_independence = 1/1 trivial pair for paired-dimension compliance per §2.6 BC3).
+    4. Substrate commit via `substrate.Append` + `canonical.MarshalAndHash`.
+    5. Verify formation landed via `LookupRow` + `ReadBlob` + proto Unmarshal.
+    6. Call `layerb.Evaluate` with formation hash + §0138 default params (T_B = K_C = 1/2, N_window = 100).
+    7. Verify Verdict shape: `WindowEventCount > 0` (substrate events walked); structural fields populated.
+
+  - **`TestLayerBFiring_RejectsNilParams`** — Documents contract: `layerb.Evaluate` rejects nil LayerBParameters per §0138 N_A bundling. Orchestrator MUST supply params (typically from the promotion event's bundled LayerBParameters) before invoking Evaluate.
+
+  Constitutional discipline at integration-test layer:
+
+  - **Operator-elected commit boundary preserved** — `commitFormationFromCandidate` helper mirrors what `cmd/form-automation-group` CLI does at substrate level (construct proto, marshal, commit). Test bypasses CLI argument-parsing but uses identical substrate API (`canonical.MarshalAndHash` + `substrate.Append`). Per §3 N3 + §0152 + §0153 discipline.
+  - **§2.6 BC3 paired-dimension at marshalling boundary** — formation carries both confidence + evidential_independence; commit succeeds (validates §0140 enforcement passes for F3-derived formations).
+  - **§0139 hash-list element-shape discipline** — source_event_hashes inherits candidate.SourceHashes (already sorted ascending by signature emit per §0152 implementation); substrate commit accepts without re-sorting.
+  - **§0141 Layer B service-tier integration** — `layerb.Evaluate` invoked exactly as the demote-* CLIs invoke it per §0141 E1 advisory pattern; same substrate API path; same Verdict shape.
+
+  Scope discipline per §0157: **structural connectivity validation, not verdict semantic coverage.** Layer B verdict semantics under various N_window + threshold configurations are exhaustively covered by the existing layerb package test suite (`internal/hypothesis/layerb/layerb_test.go`); this test does not duplicate that coverage. The integration test's job is to validate the PATH connects without structural failure when traversed end-to-end from F3 candidate output.
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. Test-only addition.
+
+  Falsifiability discipline: test behavior structurally observable. Test 1 verifies (a) F3 signature emits expected candidate; (b) candidate-to-formation mapping produces a valid AutomationGroupFormation; (c) substrate commit accepts the formation; (d) read-back via LookupRow + Unmarshal preserves the payload; (e) layerb.Evaluate accepts the formation hash + returns a structurally valid Verdict. Test 2 verifies layerb.Evaluate rejects nil params.
+
+- **Consequences:**
+  - New test file `cmd/find-automation-group-candidates/layerb_firing_test.go` (2 tests).
+  - No new packages. No proto changes. No corpus regeneration. No schemas-evolution event.
+  - **F3 inference loop end-to-end-validated through Layer B layer.** Sequence: F1 ingestion (§0145 + atlas) → substrate commit → orchestrator (§0153) → signature (§0152) → candidate (§0154 stats) → operator-elected formation commit (this entry) → Layer B evaluation (§0141) → verdict shape verified. Subsequent path (demote candidacy in DemoteReport per §0141 E1; operator-elected demote per §0119) inherits the existing demote-* CLI test coverage; structurally connected.
+  - **§0143 Sub-benchmark 1 mechanical loop FULLY validated end-to-end.** Every component from ingestion through Layer B verdict has integration-test coverage. Operator-deployment of real adversarial pressure is the remaining piece (out-of-scope for test code).
+  - **Methodological observation 1 — Integration tests should validate path connectivity, not duplicate unit-test coverage.** Existing layerb package test suite covers verdict semantics exhaustively; this entry's tests cover only the F3-to-Layer-B integration path. **Pattern: integration tests close gaps between layers; per-layer semantics belong in per-layer unit tests.** Future cross-layer integration tests inherit this scope discipline.
+  - **Methodological observation 2 — Helper that mirrors CLI behavior at library level supports integration testing without CLI overhead.** `commitFormationFromCandidate` does what `cmd/form-automation-group` CLI does (construct proto, marshal, commit) but bypasses argument parsing + os.Stdin/Stdout boilerplate. **Pattern: for cross-layer integration tests touching operator-elected steps, prefer library-level helpers over end-to-end CLI invocation.** Tests stay fast + focused; CLI E2E tests cover the argument-parsing + io layer separately.
+  - **Methodological observation 3 — Verdict recording in integration tests captures actual values for future-test-design reference.** Test 1 emits `t.Logf` with the verdict's field values; reading the test output reveals "WindowEventCount=5 FilterMatchCount=0 FreshnessUndefined=true ...". Future tests targeting specific verdict outcomes can use these observed values as baseline. **Pattern: integration tests for instrumentation surfaces should record the observed values via `t.Logf`; the recorded values document the substrate-state-to-verdict mapping for the test scenario.**
+  - **Methodological observation 4 — Paired-dimension compliance is silently enforced at substrate commit.** Test 1's formation construction explicitly sets `EvidentialIndependence` with non-nil rational pair; if omitted, `canonical.MarshalAndHash` would reject per §0140 marshalling-boundary enforcement. The integration test validates this enforcement remains operational when formations arrive via F3-derived candidate set (not just hand-built fixtures). **Pattern: F3 → substrate integration tests serve as drift-protection for §0140 enforcement — silent regression would fail at commit, not at runtime.**
+
+- **Supersession:** No prior decision-log entry superseded. Layer B firing integration test closes the F3-to-Layer-B path coverage gap; §0143 Sub-benchmark 1 mechanical loop fully validated end-to-end across all layers.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
