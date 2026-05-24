@@ -6964,6 +6964,63 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0167` — Split E2E integration test from F3-derived antecedent; closes §0011 AutomationGroup lifecycle integration coverage from F3-derived candidates
+
+- **Status:** accepted.
+- **Date:** 2026-05-24.
+- **Context:** [`§0166`](#0166--dissolution-e2e-integration-test-from-f3-derived-candidate-formation-extends-0165-cross-formation-lifecycle-to-unary-operation) closed dissolution (unary cross-formation). The remaining §0011 staged-combination AutomationGroup lifecycle operation without F3-derived integration coverage was split (k-ary cross-formation: 1 antecedent → K≥2 successors). Per §0165 MO1's "ascending complexity" ordering, split is the structurally most complex cross-formation operation: it requires K operator-synthesized successor formations + enforces two distinct §0050 sentinels (ErrSplitInsufficientSuccessors when K<2; ErrSplitSuccessorsNotDistinct when successors duplicate each other or the antecedent).
+
+  This entry closes the F3-derived → split gap + completes the lifecycle-axis integration coverage for AutomationGroup from F3-derived candidate substrate state.
+
+- **Decision:** New test file `services/ingestion/cmd/find-automation-group-candidates/split_e2e_test.go` with 3 integration tests:
+
+  - **`TestSplitAutomationGroup_FromF3CandidateAntecedent`** — Full path validation (1 antecedent → 2 successors):
+    1. Inject 2 BrowserObservation for single actor (5 detections aggregate, above threshold).
+    2. Run F3 signature → 1 antecedent candidate with 2 source hashes.
+    3. Commit antecedent formation via §0157's `commitFormationFromCandidate`.
+    4. Commit 2 successor formations via new `commitSplitSuccessor` helper. Each successor carries a distinct `pattern_signature` label representing a distinct sub-phenomenon (e.g., "cdp_marker_density_v1+split:webdriver-signal" + "cdp_marker_density_v1+split:cdc-signal"); source hashes subdivided between successors.
+    5. Call `hypothesis.SplitAutomationGroup(antecedent, [succ_A, succ_B])` — operator-elected split.
+    6. Verify split event in substrate + references antecedent + both successors exactly + reason + splitAt + all four committed records present.
+
+  - **`TestSplitAutomationGroup_RejectsInsufficientSuccessors`** — Confirms `ErrSplitInsufficientSuccessors` sentinel surfaces at integration path: call split with only 1 successor → error matching the sentinel via `errors.Is`.
+
+  - **`TestSplitAutomationGroup_RejectsAntecedentInSuccessorSet`** — Confirms `ErrSplitSuccessorsNotDistinct` sentinel surfaces when antecedent hash appears in successor set: call split with `SuccessorFormationHashes=[succHash, antecedentHash]` → error matching the sentinel via `errors.Is`.
+
+  New helper `commitSplitSuccessor` (per §0165 MO1):
+
+  - Parameterized over `actorRefs`, `sourceHashes`, `patternSignature`, `formationAt`. Distinct from §0165's `commitMergedFormation` because successor formations carry per-successor `pattern_signature` labels (the split decision separates the antecedent into K distinct sub-phenomena, each with its own label).
+  - Mirrors operator behavior at substrate level: construct proto with §2.6 BC3 paired-dimension fields + §0139 ascending-sorted source hashes + commit via `canonical.MarshalAndHash` + `substrate.Append`.
+
+  Constitutional discipline:
+
+  - **§0050 + §2.5 BC5 split-operation invariants** — minimum 2 successors + distinctness across (antecedent, succ_1, ..., succ_K). Both sentinels integration-tested.
+  - **§3 N3 operator-elected commit boundary** — four operator-elected commits in sequence (antecedent, succ_A, succ_B, split). Each explicit + decoupled.
+  - **§2.6 BC3 paired-dimension at marshalling** — successor formations carry confidence + evidential_independence.
+  - **§0139 hash-list element-shape** — successor `source_event_hashes` sorted ascending via `sortHashListAscending`.
+
+  Scope discipline per §0167: **structural connectivity across F3-derived → split arc + two §0050 sentinel checks**, NOT exhaustive per-operation split semantics. Per-operation semantics (ErrTargetNotFound for missing hashes, ErrTargetWrongType for non-AutomationGroupFormation rows, AppendPair with Actor, K>2 successor scaling, idempotency under successor-set reorder) covered by the hypothesis package's own unit test suite.
+
+  Per §0164 MO1 verification discipline: empirical state inline. After this PR lands: `find services/ingestion/cmd/find-automation-group-candidates -name "*_test.go" | xargs grep -c "^func Test" | awk -F: '{s+=$NF}END{print s}'` returns the aggregate test count; the lifecycle axis specifically covers: demote_e2e_test=1 + merge_e2e_test=2 + dissolution_e2e_test=2 + split_e2e_test=3 = 8 lifecycle-operation tests across 4 files.
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. Test-only addition.
+
+  Falsifiability discipline: split behavior structurally observable. Test 1 verifies (a) F3 signature emits expected single-actor antecedent candidate; (b) 2 successor formations commit with distinct content; (c) SplitAutomationGroup accepts (antecedent, [succA, succB]); (d) split event records antecedent_formation_event_hash exactly; (e) split event records both successor hashes (membership-checked via bytes.Equal); (f) all four committed records present via LookupRow. Tests 2 + 3 verify the two §0050 sentinels surface at integration path via `errors.Is` predicate match.
+
+- **Consequences:**
+  - New test file `cmd/find-automation-group-candidates/split_e2e_test.go` (3 tests; ~290 lines).
+  - New helper `commitSplitSuccessor` (CLI-package-local; per §0165 MO1 the k-ary case needs a per-successor synthesizer).
+  - No new packages. No proto changes. No corpus regeneration. No schemas-evolution event.
+  - **§0011 staged-combination AutomationGroup lifecycle integration coverage COMPLETE from F3-derived candidates.** Coverage from F3 candidate output now spans every §0011 operation: formation (§0157), promotion (§0160), demotion (§0160), merge (§0165), dissolution (§0166), split (this entry). No §0011 lifecycle operation lacks F3-derived integration test coverage at the AutomationGroup subtype.
+  - **Six integration test files in find-automation-group-candidates/ now exercise §0157's F3-derived-formation anchor.** Per §0160 MO3 the four downstream axes are: evaluation (§0157 layerb_firing_test), measurement (§0158 morphology_integration_test), linear lifecycle (§0160 demote_e2e_test), cross-formation lifecycle (§0165 merge_e2e_test + §0166 dissolution_e2e_test + §0167 split_e2e_test — three files covering binary, unary, k-ary shapes).
+  - **§0011 lifecycle-axis full coverage is the SESSION-LEVEL milestone for the §0157-§0167 arc.** Combined with §0143 Sub-benchmark 1 instrumentation surface (§0156 + §0157 + §0158), F3 corpus multi-modality (§0161 + §0163), and CIC-IDS reachability bound (§0162), the AutomationGroup F3-derived integration coverage is operationally complete. Future advances under the lifecycle axis would extend to OTHER subtypes (BehavioralCluster, CampaignHypothesis, CoordinationRing) — each requires its own F3 signature first (currently only cdp_marker_density_v1 emits AutomationGroup candidates; future BehavioralSignature implementations enable per-subtype lifecycle integration testing for their respective subtypes).
+  - **Methodological observation 1 — K-ary cross-formation operations enforce multiple distinctness invariants; integration tests should exercise both axes (k≥2 minimum AND set-distinctness).** Split has TWO §0050 sentinels: minimum-count (ErrSplitInsufficientSuccessors) + set-distinctness (ErrSplitSuccessorsNotDistinct). Asserting only one would miss the other; both are independent falsifiability surfaces. **Pattern: lifecycle operations with multiple invariant sentinels should have one test per sentinel + at least one happy-path test exercising both invariants simultaneously (the §0167 happy-path test implicitly satisfies both: 2 successors ≥ 2 AND succA ≠ succB ≠ antecedent). Multi-sentinel coverage matrix: K sentinels → K+1 tests minimum (one per sentinel + happy path).**
+  - **Methodological observation 2 — Per-successor pattern_signature labels surface the operator's split decision semantically.** §0167's `commitSplitSuccessor` accepts a `patternSignature` parameter so each successor formation can carry a distinct label (e.g., "cdp_marker_density_v1+split:webdriver-signal" + "cdp_marker_density_v1+split:cdc-signal"). This makes the split decision INSPECTABLE post-commit: an operator querying successor formations can SEE which sub-phenomenon each represents via the label. Without per-successor labels, post-split successor formations would be indistinguishable except by content hash. **Pattern: synthesizer helpers for cross-formation lifecycle operations SHOULD parameterize labels (pattern_signature for AutomationGroup; equivalent fields for other subtypes) per-record rather than using a uniform label across all synthesized records; the operator-decision semantics surface in the labels, not in the substrate hash list alone.**
+  - **Methodological observation 3 — Lifecycle-axis full coverage is achievable in a single session arc.** §0157 (formation) through §0167 (split) spans 11 entries (§0157 + §0158 + §0160 + §0165 + §0166 + §0167 directly; §0159 + §0161 + §0162 + §0163 + §0164 supporting) covering every §0011 staged-combination AutomationGroup operation from F3-derived candidates. The arc's compactness reflects the §0157 anchor's stability + the §0160 MO3 axis-discipline (one downstream axis per test) + the §0165 MO1 helper-composition discipline (each cross-formation operation adds at most one new synthesizer helper). **Pattern: when a new structural anchor (formation, observation envelope, etc.) lands, the integration-test coverage arc CAN reasonably complete in a single session if the anchor is followed by axis-disciplined tests + helper-composition discipline. The §0157-§0167 arc is the empirical reference for this scope; future anchor-and-axis arcs may use it as a planning baseline.**
+
+- **Supersession:** No prior decision-log entry superseded. CLOSES the §0157-§0167 F3-derived AutomationGroup lifecycle integration coverage arc. Together with §0157 (evaluation) + §0158 (measurement) + §0160 (linear lifecycle) + §0165 (binary cross-formation) + §0166 (unary cross-formation) + §0167 (k-ary cross-formation), the F3-derived-formation pattern is integration-tested across the full §0011 staged-combination AutomationGroup lifecycle. Future lifecycle-axis advances extend to other Cat III subtypes; each requires its own F3 signature first.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
