@@ -6750,6 +6750,58 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0163` — find-automation-group-candidates-network CLI lands network-modality F3 orchestrator; symmetric coverage with browser-modality CLI
+
+- **Status:** accepted.
+- **Date:** 2026-05-24.
+- **Context:** [`§0161`](#0161--second-f3-signature-tcp_fingerprint_clustering_v1-lands-first-networksignature-signature-interface-refactored-to-support-per-modality-dispatch) landed `tcp_fingerprint_clustering_v1` as the first NetworkSignature; [`§0162`](#0162--tcp_fingerprint_clustering_v1-integration-test-surfaces-two-0144e-phenomenon-vs-record-gaps-for-cic-ids-path-0161-reachability-claim-corrected) landed the integration test surfacing §0144(e) gaps. The signature is library-callable + integration-tested but lacks an operator-invokable CLI surface. The browser-modality side has `find-automation-group-candidates` (§0153) as its operator entry point; the network-modality side had no equivalent until this entry.
+
+  Symmetric coverage at the operator-invocation layer is the operational counterpart to §0161's interface-level symmetry (BrowserSignature ↔ NetworkSignature). Without a CLI, operators cannot invoke the network signature against a substrate without writing custom Go code; this entry closes that gap.
+
+- **Decision:** New CLI at `services/ingestion/cmd/find-automation-group-candidates-network/`:
+
+  - **`main.go`** — Parallel structure to `find-automation-group-candidates/main.go`: opens substrate, walks NetworkObservation records, invokes `TCPFingerprintClusteringV1`, emits JSON envelope to stdout + diagnostic summary to stderr.
+  - **`main_test.go`** — Four tests covering: substrate-walk endpoint (`TestCollectNetworkObservations_EndToEnd`), full pipeline at threshold (`TestFullPipeline_EndToEnd`), full pipeline below threshold with non-firing diagnostics (`TestFullPipeline_BelowThreshold_NoCandidates`), `subtypeName` exhaustiveness contract (`TestSubtypeName_AllValuesNamed`).
+
+  JSON envelope shape is IDENTICAL to find-automation-group-candidates' `emissionEnvelope` (same fields: `signature_name`, `candidate_count`, `candidates`, `stats`). Per-candidate shape (`candidateJSON`) + per-stats shape (`statsJSON`) are identical structurally — only the signature name + the underlying observation type differ. The two CLIs share a stable wire contract, supporting reuse of operator tooling (jq filters, dashboard parsers, replay scripts) across modalities without dual schemas.
+
+  CLI flags mirror the browser CLI:
+
+  - `-db <path>` / `-blobs <dir>` — substrate location.
+  - `-threshold <n>` — override default threshold (default 3 for this signature per §0161, distinct from cdp_marker's default 2).
+  - `-limit <n>` — max candidates to emit (operator-controlled truncation).
+
+  Diagnostic stderr summary adds `skipped_no_actor` + `skipped_wrong_modality` counters explicitly — per §0162 finding, these counters carry the §0144(e) gap diagnostic surface; surfacing them on stderr makes the gap operator-visible without requiring JSON inspection.
+
+  Constitutional discipline:
+
+  - **§3 N3 operator-elected commit boundary preserved** — CLI emits candidates; does NOT commit formation events. Operator reviews + decides whether to commit via `form-automation-group` CLI (paired with `actor_ref` + source-hash list).
+  - **§0153 read-only substrate access** — `collectNetworkObservations` invokes `WalkEvents` + `ReadBlob`; no `AppendPair`; no writeMu contention; safe concurrent with ingestion.
+  - **§0162 diagnostic surface operationalized** — `ObservationsSkippedNoActor` + `ObservationsSkippedWrongModality` exposed in both JSON envelope + stderr summary; operators can distinguish substrate-empty / no-actor / wrong-modality / below-threshold without inspecting substrate by hand.
+
+  Scope discipline per §0163: **MINIMAL operator CLI mirroring browser CLI shape; no new signature, no new orchestrator dispatch, no multi-modality unified CLI.** Each of those is a separate downstream advance:
+
+  - Multi-modality dispatch CLI (single CLI auto-selecting signature by present modality) — separate entry.
+  - Signature registry / discovery surface — separate entry.
+  - Additional NetworkSignature implementations — separate entry.
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. New non-Charter capability (CLI binary).
+
+  Falsifiability discipline: CLI behavior structurally observable + unit-tested. 4 tests cover (a) substrate walk returns NetworkObservation only (not paired IngestionEvent records); (b) full pipeline at threshold emits expected candidate + stats; (c) full pipeline below threshold emits empty candidate set + populated diagnostic counters; (d) subtypeName exhaustiveness across all enum values. JSON envelope shape symmetric with browser CLI verified via shared field-name convention + parallel decode tests.
+
+- **Consequences:**
+  - New CLI `cmd/find-automation-group-candidates-network/` (2 files: main.go + main_test.go).
+  - **F3 corpus operator entry points symmetric across modalities.** Two CLIs span browser + network sides of the §0144 discriminated-union framing; together with the existing `form-automation-group` (commit), `promote-automation-group`, `demote-automation-group`, etc., the operator workflow for AutomationGroup hypotheses is complete on both modality sides.
+  - **§0162 diagnostic surface operator-visible.** The §0144(e) phenomenon-vs-record gaps (no actor_ref, no p0f_signature) surface in CLI output without requiring test infrastructure; operators running this CLI against CIC-IDS substrate will see `skipped_no_actor=9` + `candidates=0` + `ObservationsScanned=9` rather than silent empty output.
+  - **Stable wire contract.** Both F3-loop orchestrator CLIs (browser + network) emit identical `emissionEnvelope` JSON shape (field names, types, structure); operator tooling (jq queries, dashboards) works against both modality CLIs without dual-schema handling.
+  - **Methodological observation 1 — CLI-as-symmetric-operator-surface is the natural operationalization of a per-modality interface refactor.** §0161 split `Signature` into `BrowserSignature` + `NetworkSignature` at the interface layer; §0163 surfaces that split at the CLI layer (two parallel binaries). **Pattern: per-modality interface refactors at the library layer should be followed by symmetric CLI surfaces at the operator layer; without the CLI, the library-layer symmetry remains theoretical for operators who do not write Go code.**
+  - **Methodological observation 2 — Diagnostic counters belong on stderr, JSON envelope on stdout.** This entry's CLI emits the JSON envelope to stdout (machine-consumable) + the diagnostic summary line to stderr (operator-readable). The browser CLI established this pattern at §0153; this entry preserves it. **Pattern: F3 orchestrator CLIs emit JSON envelope to stdout + single-line diagnostic summary to stderr; this separation supports both pipeline-style usage (stdout to next command) and interactive operator usage (stderr visible without parsing).**
+  - **Methodological observation 3 — Symmetric main_test.go coverage between F3-loop CLIs should be maintained as a discipline.** Both CLIs now have main_test.go exercising the same 4 contract points: substrate walk endpoint + full pipeline at threshold + below-threshold non-firing + subtypeName exhaustiveness. Future NetworkSignature additions (or BrowserSignature additions) inheriting this CLI pattern should add the same 4 tests by structural template. **Pattern: F3 orchestrator CLIs SHOULD maintain symmetric main_test.go contract coverage (4 tests minimum); asymmetric coverage indicates operator-experience drift risk per §0159 MO2.**
+
+- **Supersession:** No prior decision-log entry superseded. Lands the operator-invocable counterpart to §0161's library-level NetworkSignature; symmetric to §0153's browser-modality CLI.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
