@@ -63,13 +63,19 @@ func (s *CDPMarkerDensityV1) effectiveThreshold() uint32 {
 // records sharing the same actor_ref; emits a FormationCandidate
 // per actor whose aggregate count meets the threshold.
 //
-// Returns candidates in actor_ref alphabetical order for
-// deterministic test fixtures + reproducible orchestrator behavior.
-func (s *CDPMarkerDensityV1) EvaluateBrowser(ctx context.Context, observations []*eventsv1.BrowserObservation) ([]*FormationCandidate, error) {
+// Returns EvaluationResult with candidates in actor_ref alphabetical
+// order (for deterministic test fixtures + reproducible orchestrator
+// behavior) + EvaluationStats with per-source + per-skip-reason
+// counters per §0143 Sub-benchmark 1 instrumentation requirement.
+func (s *CDPMarkerDensityV1) EvaluateBrowser(ctx context.Context, observations []*eventsv1.BrowserObservation) (*EvaluationResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	threshold := s.effectiveThreshold()
+	stats := EvaluationStats{
+		ObservationsScanned: uint32(len(observations)),
+		PerCollector:        make(map[string]uint32),
+	}
 
 	// Per-actor aggregation. Skips observations without cdp_marker
 	// modality (other modalities are out-of-scope for this
@@ -82,11 +88,19 @@ func (s *CDPMarkerDensityV1) EvaluateBrowser(ctx context.Context, observations [
 	}
 	perActor := make(map[string]*aggregate)
 	for _, obs := range observations {
-		if obs == nil || obs.ActorRef == "" {
+		if obs == nil {
+			continue
+		}
+		if obs.CollectorRef != "" {
+			stats.PerCollector[obs.CollectorRef]++
+		}
+		if obs.ActorRef == "" {
+			stats.ObservationsSkippedNoActor++
 			continue
 		}
 		cdpVariant := obs.GetCdpMarker()
 		if cdpVariant == nil {
+			stats.ObservationsSkippedWrongModality++
 			continue
 		}
 		agg, ok := perActor[obs.ActorRef]
@@ -106,6 +120,7 @@ func (s *CDPMarkerDensityV1) EvaluateBrowser(ctx context.Context, observations [
 		copy(hashCopy, h[:])
 		agg.sourceHashes = append(agg.sourceHashes, hashCopy)
 	}
+	stats.ActorsAggregated = uint32(len(perActor))
 
 	// Sorted iteration for deterministic candidate order.
 	actors := make([]string, 0, len(perActor))
@@ -120,6 +135,7 @@ func (s *CDPMarkerDensityV1) EvaluateBrowser(ctx context.Context, observations [
 		if agg.detectionCount < threshold {
 			continue
 		}
+		stats.ActorsAboveThreshold++
 		// Sort source hashes ascending per §0139 hash-list element-
 		// shape discipline (substrate commit-time will enforce this
 		// anyway; surfacing sorted at candidate-emit time eases
@@ -140,7 +156,8 @@ func (s *CDPMarkerDensityV1) EvaluateBrowser(ctx context.Context, observations [
 			ConfidenceHint: confidenceFromCount(agg.detectionCount, threshold),
 		})
 	}
-	return out, nil
+	stats.CandidatesEmitted = uint32(len(out))
+	return &EvaluationResult{Candidates: out, Stats: stats}, nil
 }
 
 // bytesLess is the canonical hash-list ordering predicate per §0139:

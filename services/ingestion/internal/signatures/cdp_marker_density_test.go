@@ -29,10 +29,11 @@ func newBrowserObservationWithCDPMarker(actorRef string, detectionCount uint32, 
 func TestCDPMarkerDensityV1_BelowThreshold_NoCandidate(t *testing.T) {
 	sig := &CDPMarkerDensityV1{}
 	obs := newBrowserObservationWithCDPMarker("actor-a", 1, []string{"navigator.webdriver=true"})
-	cands, err := sig.EvaluateBrowser(context.Background(), []*eventsv1.BrowserObservation{obs})
+	result, err := sig.EvaluateBrowser(context.Background(), []*eventsv1.BrowserObservation{obs})
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
+	cands := result.Candidates
 	if len(cands) != 0 {
 		t.Fatalf("expected 0 candidates, got %d", len(cands))
 	}
@@ -41,10 +42,11 @@ func TestCDPMarkerDensityV1_BelowThreshold_NoCandidate(t *testing.T) {
 func TestCDPMarkerDensityV1_AtThreshold_OneCandidate(t *testing.T) {
 	sig := &CDPMarkerDensityV1{}
 	obs := newBrowserObservationWithCDPMarker("actor-a", 2, []string{"navigator.webdriver=true", "$cdc_test"})
-	cands, err := sig.EvaluateBrowser(context.Background(), []*eventsv1.BrowserObservation{obs})
+	result, err := sig.EvaluateBrowser(context.Background(), []*eventsv1.BrowserObservation{obs})
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
+	cands := result.Candidates
 	if len(cands) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(cands))
 	}
@@ -76,10 +78,11 @@ func TestCDPMarkerDensityV1_MultipleActorsAboveThreshold_MultipleCandidates(t *t
 		newBrowserObservationWithCDPMarker("actor-a", 5, []string{"$cdc_test"}),
 		newBrowserObservationWithCDPMarker("actor-c", 1, []string{"navigator.webdriver=true"}), // below threshold
 	}
-	cands, err := sig.EvaluateBrowser(context.Background(), observations)
+	result, err := sig.EvaluateBrowser(context.Background(), observations)
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
+	cands := result.Candidates
 	// Expect 2 candidates (actor-a + actor-b); actor-c below threshold.
 	if len(cands) != 2 {
 		t.Fatalf("expected 2 candidates, got %d", len(cands))
@@ -105,10 +108,11 @@ func TestCDPMarkerDensityV1_AggregatesAcrossWindow(t *testing.T) {
 		newBrowserObservationWithCDPMarker("actor-x", 1, []string{"m2"}),
 		newBrowserObservationWithCDPMarker("actor-x", 1, []string{"m3"}),
 	}
-	cands, err := sig.EvaluateBrowser(context.Background(), observations)
+	result, err := sig.EvaluateBrowser(context.Background(), observations)
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
+	cands := result.Candidates
 	if len(cands) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(cands))
 	}
@@ -130,10 +134,11 @@ func TestCDPMarkerDensityV1_SourceHashesAscendingOrder(t *testing.T) {
 		newBrowserObservationWithCDPMarker("actor-x", 2, []string{"c"}),
 		newBrowserObservationWithCDPMarker("actor-x", 2, []string{"d"}),
 	}
-	cands, err := sig.EvaluateBrowser(context.Background(), observations)
+	result, err := sig.EvaluateBrowser(context.Background(), observations)
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
+	cands := result.Candidates
 	if len(cands) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(cands))
 	}
@@ -147,10 +152,11 @@ func TestCDPMarkerDensityV1_SkipsUnattributedObservations(t *testing.T) {
 	sig := &CDPMarkerDensityV1{}
 	// Empty actor_ref → no anchor for AutomationGroup; observation skipped.
 	obs := newBrowserObservationWithCDPMarker("", 5, []string{"m1"})
-	cands, err := sig.EvaluateBrowser(context.Background(), []*eventsv1.BrowserObservation{obs})
+	result, err := sig.EvaluateBrowser(context.Background(), []*eventsv1.BrowserObservation{obs})
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
+	cands := result.Candidates
 	if len(cands) != 0 {
 		t.Fatalf("expected 0 candidates (unattributed observation), got %d", len(cands))
 	}
@@ -169,10 +175,11 @@ func TestCDPMarkerDensityV1_SkipsNonCDPModalities(t *testing.T) {
 			},
 		},
 	}
-	cands, err := sig.EvaluateBrowser(context.Background(), []*eventsv1.BrowserObservation{obs})
+	result, err := sig.EvaluateBrowser(context.Background(), []*eventsv1.BrowserObservation{obs})
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
+	cands := result.Candidates
 	if len(cands) != 0 {
 		t.Fatalf("expected 0 candidates (canvas_fingerprint out of scope), got %d", len(cands))
 	}
@@ -182,10 +189,11 @@ func TestCDPMarkerDensityV1_CustomThreshold(t *testing.T) {
 	sig := &CDPMarkerDensityV1{Threshold: 10}
 	// Below custom threshold (default would emit since 5 >= 2).
 	obs := newBrowserObservationWithCDPMarker("actor-x", 5, []string{"m1"})
-	cands, err := sig.EvaluateBrowser(context.Background(), []*eventsv1.BrowserObservation{obs})
+	result, err := sig.EvaluateBrowser(context.Background(), []*eventsv1.BrowserObservation{obs})
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
+	cands := result.Candidates
 	if len(cands) != 0 {
 		t.Fatalf("expected 0 candidates (5 < custom threshold 10), got %d", len(cands))
 	}
@@ -201,15 +209,88 @@ func TestCDPMarkerDensityV1_ContextCancellation(t *testing.T) {
 	}
 }
 
+// TestCDPMarkerDensityV1_EvaluationStats_PerCollectorBreakdown asserts
+// that EvaluationStats.PerCollector correctly counts observations by
+// collector_ref namespace (§0144 (e) phenomenon-vs-record reconciliation
+// slot; §0154 instrumentation surface).
+func TestCDPMarkerDensityV1_EvaluationStats_PerCollectorBreakdown(t *testing.T) {
+	sig := &CDPMarkerDensityV1{}
+	o1 := newBrowserObservationWithCDPMarker("actor-a", 1, []string{"m1"})
+	o1.CollectorRef = "browser-sdk:v1"
+	o2 := newBrowserObservationWithCDPMarker("actor-b", 1, []string{"m2"})
+	o2.CollectorRef = "browser-sdk:v1"
+	o3 := newBrowserObservationWithCDPMarker("actor-c", 1, []string{"m3"})
+	o3.CollectorRef = "honeypot-browser-collector:hp-01"
+
+	result, err := sig.EvaluateBrowser(context.Background(), []*eventsv1.BrowserObservation{o1, o2, o3})
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if got := result.Stats.PerCollector["browser-sdk:v1"]; got != 2 {
+		t.Errorf("PerCollector[browser-sdk:v1]: got %d want 2", got)
+	}
+	if got := result.Stats.PerCollector["honeypot-browser-collector:hp-01"]; got != 1 {
+		t.Errorf("PerCollector[honeypot-browser-collector:hp-01]: got %d want 1", got)
+	}
+	if result.Stats.ObservationsScanned != 3 {
+		t.Errorf("ObservationsScanned: got %d want 3", result.Stats.ObservationsScanned)
+	}
+}
+
+// TestCDPMarkerDensityV1_EvaluationStats_SkipCounters asserts skip
+// counters increment correctly for both no-actor + wrong-modality
+// skip paths (§0154 instrumentation surface).
+func TestCDPMarkerDensityV1_EvaluationStats_SkipCounters(t *testing.T) {
+	sig := &CDPMarkerDensityV1{}
+	// Observation 1: unattributed (no actor_ref) → skip-no-actor
+	o1 := newBrowserObservationWithCDPMarker("", 5, []string{"m1"})
+	// Observation 2: canvas_fingerprint modality → skip-wrong-modality
+	o2 := &eventsv1.BrowserObservation{
+		ObservedAt:   1716120000000000000,
+		ActorRef:     "actor-x",
+		CollectorRef: "browser-sdk:v1",
+		Modality: &eventsv1.BrowserObservation_CanvasFingerprint{
+			CanvasFingerprint: &eventsv1.BrowserCanvasFingerprint{
+				CanvasHash: bytes.Repeat([]byte{0x01}, 32),
+			},
+		},
+	}
+	// Observation 3: valid (above threshold)
+	o3 := newBrowserObservationWithCDPMarker("actor-x", 3, []string{"m2"})
+	result, err := sig.EvaluateBrowser(context.Background(), []*eventsv1.BrowserObservation{o1, o2, o3})
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if result.Stats.ObservationsScanned != 3 {
+		t.Errorf("ObservationsScanned: got %d want 3", result.Stats.ObservationsScanned)
+	}
+	if result.Stats.ObservationsSkippedNoActor != 1 {
+		t.Errorf("ObservationsSkippedNoActor: got %d want 1", result.Stats.ObservationsSkippedNoActor)
+	}
+	if result.Stats.ObservationsSkippedWrongModality != 1 {
+		t.Errorf("ObservationsSkippedWrongModality: got %d want 1", result.Stats.ObservationsSkippedWrongModality)
+	}
+	if result.Stats.ActorsAggregated != 1 {
+		t.Errorf("ActorsAggregated: got %d want 1", result.Stats.ActorsAggregated)
+	}
+	if result.Stats.ActorsAboveThreshold != 1 {
+		t.Errorf("ActorsAboveThreshold: got %d want 1", result.Stats.ActorsAboveThreshold)
+	}
+	if result.Stats.CandidatesEmitted != 1 {
+		t.Errorf("CandidatesEmitted: got %d want 1", result.Stats.CandidatesEmitted)
+	}
+}
+
 func TestCDPMarkerDensityV1_ConfidenceHintCappedAt09(t *testing.T) {
 	sig := &CDPMarkerDensityV1{}
 	// Very high detection count → confidence should be capped at 0.9
 	// per §3 N1 (substrate never asserts certainty).
 	obs := newBrowserObservationWithCDPMarker("actor-x", 100, []string{"m1"})
-	cands, err := sig.EvaluateBrowser(context.Background(), []*eventsv1.BrowserObservation{obs})
+	result, err := sig.EvaluateBrowser(context.Background(), []*eventsv1.BrowserObservation{obs})
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
+	cands := result.Candidates
 	if len(cands) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(cands))
 	}
