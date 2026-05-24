@@ -6355,6 +6355,57 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0155` — Substrate-layer chain morphology instrumentation lands; closes §0154 MO3 deferred surface; §0143 Sub-benchmark 1 measurement complete
+
+- **Status:** accepted.
+- **Date:** 2026-05-24.
+- **Context:** [`§0154`](#0154--f3-instrumentation-pass-evaluationstats-added-to-signature-interface-percollector--perskipreason-counters-operational-0143-subbenchmark-1-instrumentation-surface) landed signature-layer instrumentation (EvaluationStats per evaluation) but explicitly deferred full chain morphology to a substrate-layer companion per [`§0154`](#0154--f3-instrumentation-pass-evaluationstats-added-to-signature-interface-percollector--perskipreason-counters-operational-0143-subbenchmark-1-instrumentation-surface) Methodological observation 3: "Full Sub-benchmark 1 measurement requires substrate-layer chain morphology." This entry lands the substrate-layer half, closing the deferred surface.
+
+  Per §0143 instrumentation-by-morfologia axis: chain morphology = `chain_depth_max` (longest `influenced_by` path) + `chain_breadth_at_root` (count of direct predecessors). Both metrics derive from substrate-committed fields per [`§0136`](#0136--canonical-serialization-contract-revision-paireddimension----graph--l-bc-or-consolidated-at-the-contract-layer-26-paireddimension-operational-discharge) (full predicate surface) + [`§0139`](#0139--canonical-serialization-contract-revision-blake3hashlist-elementshape-discipline-generalized-from-two-influencestorage-fields-to-the-full-canonical-form-load-bearing-set) (hash-list discipline) + [`§0134`](#0134--q5-transitivityhalf-resolution-candidate--transitive-closure-adopted-with-graph-storage-ontologymd-q5-fully-resolved-layer-b-alldependenciesdischarged)-τ (β-graph storage). Substrate-layer measurement walks the influenced_by graph post-formation-commit.
+
+  Per §0143 Sub-benchmark 1 chains-fracas-vs-chains-fortes diagnostic distinction:
+  - **chains-fracas:** `depth_max <= 2 OR breadth_at_root <= 3` → indicates F3 insufficient
+  - **chains-fortes:** `depth_max > 2 AND breadth_at_root > 3` → indicates constitutional thesis confirmed (domain rotates evidence faster than decay)
+
+  With this PR: operator runs `cmd/measure-chain-morphology` against substrate; output classifies each formation event as chains-fracas vs chains-fortes; aggregate counters surface the distribution. Sub-benchmark 1 measurement is now complete at both signature layer (§0154 pre-formation counters) + substrate layer (§0155 post-formation morphology).
+
+- **Decision:** New package `services/ingestion/internal/morphology/` + new CLI `cmd/measure-chain-morphology/`:
+
+  - **`morphology.go`** — `ChainMorphology` struct (per-hypothesis metrics: HypothesisHash, SubtypeName, ActorRefs, ChainDepthMax, ChainBreadthAtRoot, ClosureCount, SourceEventCount, FormationAt) + `AggregateStats` struct (TotalFormations, PerSubtype, DepthHistogram, BreadthHistogram, ChainsFracasCount, ChainsFortesCount) + `Measure(ctx, sub) (*Measurement, error)` — three-pass walk: (1) collect formation events into in-memory map keyed by content-hash; (2) compute depth per formation via memoized DFS over direct_influenced_by edges; (3) emit per-hypothesis ChainMorphology + aggregate stats.
+
+  - **`morphology_test.go`** — 7 focused tests: empty-substrate (zero hypotheses), single-root-formation (depth 0), parent-child-chain (depth 1), diamond-graph (max-path depth 2), aggregate-stats chains-fortes classification, per-subtype breakdown, context-cancellation.
+
+  - **`cmd/measure-chain-morphology/main.go`** — CLI wrapper. Flags: `-db`, `-blobs`. Read-only substrate access. Emits per-hypothesis JSON + aggregate stats to stdout; summary (total + chains_fracas/chains_fortes count) to stderr. Mirrors §0153 `find-automation-group-candidates` orchestrator pattern.
+
+  - **Makefile** — `measure-chain-morphology-build` target + help banner entry per existing CLI build-target pattern.
+
+  Constitutional discipline at substrate-layer instrumentation:
+
+  - **[§2.1](../charter/constitutional-charter.md#21-observational-integrity) substrate immutability inherited** — measurement is READ-ONLY over substrate; no AppendPair invocation; no writeMu contention; safe concurrent with ingestion paths.
+  - **[`§0021`](#0021--ontology-modeling-question-3-influence-at-projection-vs-substrate-cascadetriggered-from-omq-2-resolution-2-1) substrate-time generation** — `direct_influenced_by` field per formation event was committed at substrate-write time; measurement reads it without re-derivation. The influence graph is structurally determined at commit; measurement merely walks it.
+  - **[`§0134`](#0134--q5-transitivityhalf-resolution-candidate--transitive-closure-adopted-with-graph-storage-ontologymd-q5-fully-resolved-layer-b-alldependenciesdischarged)-τ β-graph storage** — substrate carries both direct edges (`direct_influenced_by`) + cached closures (`closure_hashes`) per the τ resolution. Measurement uses `direct_influenced_by` (for depth computation via DFS) + `closure_hashes` count (for ClosureCount metric) jointly.
+  - **DAG structural property** — cycles structurally impossible per §2.1 (substrate write-once) + [`§0021`](#0021--ontology-modeling-question-3-influence-at-projection-vs-substrate-cascadetriggered-from-omq-2-resolution-2-1) (substrate-time generation: an influenced_by edge can only reference a record committed at or before the influenced record's commit time; content-hash references therefore form a DAG). Memoized DFS therefore terminates without cycle-detection overhead.
+  - **§0143 chains-fracas vs chains-fortes thresholds** — implemented exactly as named in §0143 anticipated-OMQs table (depth <= 2 OR breadth <= 3 → fracas; otherwise fortes). Operator sees the classification at aggregate-stats level + per-hypothesis level via JSON output.
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant.
+
+  Falsifiability discipline: morphology computation behavior structurally observable via the 7-test suite. Single-root, parent-child, and diamond-graph tests mechanically verify depth computation correctness across the three basic graph shapes. Chains-fortes classification mechanically verifies the §0143-named threshold predicate. Context-cancellation mechanically verifies graceful termination.
+
+- **Consequences:**
+  - New package `services/ingestion/internal/morphology/` (morphology.go + morphology_test.go).
+  - New CLI `cmd/measure-chain-morphology/` (main.go).
+  - Makefile extended (`measure-chain-morphology-build` target + help banner).
+  - **Sub-benchmark 1 measurement complete at both layers.** Signature-layer instrumentation per §0154 captures pre-formation counters (observations scanned/skipped, actors aggregated/above-threshold, per-collector breakdown); substrate-layer instrumentation per §0155 captures post-formation chain morphology (depth/breadth/closure/source-event count, per-subtype + per-depth + per-breadth histograms, chains-fracas/fortes classification). Operator now has full diagnostic surface for §0143 Sub-benchmark 1 measurement.
+  - **F3 inference loop fully instrumented.** Sequence: Cat I ingestion (§0145 + F1 atlas) → substrate commit → substrate read (§0153 orchestrator) → F3 signature (§0152 cdp_marker_density_v1) → candidate emission (with §0154 stats) → operator review → form-* CLI → substrate commit of formation → §0155 morphology measurement → Layer A/B candidacy → demotion. **Empirical pressure now produces a complete diagnostic trace** at every layer.
+  - **Methodological observation 1 — Two-layer instrumentation separation operationalized.** [`§0154`](#0154--f3-instrumentation-pass-evaluationstats-added-to-signature-interface-percollector--perskipreason-counters-operational-0143-subbenchmark-1-instrumentation-surface) MO3 predicted instrumentation lands in layers (signature-layer pre-formation + substrate-layer post-formation). This entry validates the prediction: signature-layer captures evaluation-time observability (what the signature saw, skipped, emitted); substrate-layer captures commit-time observability (what the substrate holds, how chains evolved). **Pattern: F3 measurement requires both layers; neither alone suffices for full Sub-benchmark 1 diagnosis.** Future F-codes (additional signatures + adapters) inherit the same two-layer instrumentation discipline.
+  - **Methodological observation 2 — Memoized DFS over influenced_by graph relies on DAG structural property.** §2.1 + §0021 jointly guarantee cycle-impossibility (content-hash references form a DAG by construction). Memoization therefore terminates without explicit cycle-detection; complexity is O(N + E) where N = formation count, E = total direct_influenced_by edges. **Pattern: substrate-graph algorithms can rely on §2.1 + §0021 DAG guarantee for termination; cycle-detection is structurally unnecessary.** Documented for future substrate-graph traversal work.
+  - **Methodological observation 3 — Chains-fracas + chains-fortes thresholds implemented per §0143 exact definition.** §0143 anticipated-OMQs table named `depth <= 2 OR breadth <= 3` (chains-fracas) and `depth > 2 AND breadth > 3` (chains-fortes). This entry implements those predicates exactly. Operator-side override (e.g., per-subtype thresholds, time-windowed measurement) is future-PR work; current MVP uses §0143-named values. **Pattern: anticipated-OMQ-table threshold values inherit operational use without re-deliberation; reversal conditions trigger threshold revision if operational pressure surfaces.**
+  - **Methodological observation 4 — Two-layer-decoupled JSON output contracts.** `cmd/find-automation-group-candidates` emits per-evaluation envelope (§0153); `cmd/measure-chain-morphology` emits per-substrate-walk envelope (§0155). Both follow §0153 MO4 (CLI-package-local types decoupled from package-internal representation). Operator's full Sub-benchmark 1 measurement is the union of both outputs; no single CLI carries everything by design. **Pattern: instrumentation CLIs are scoped per measurement axis (evaluation vs commit); operator composes outputs.** Mirrors the layered separation at the package level (signatures/ + morphology/) at the CLI level.
+
+- **Supersession:** No prior decision-log entry superseded. Closes [`§0154`](#0154--f3-instrumentation-pass-evaluationstats-added-to-signature-interface-percollector--perskipreason-counters-operational-0143-subbenchmark-1-instrumentation-surface) MO3 deferred surface; Sub-benchmark 1 measurement complete at both layers.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
