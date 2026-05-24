@@ -25,6 +25,7 @@ package ghosttrace.events.v1;
 
 option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
 
+import "common/v1/authentication_class.proto";
 import "events/v1/behavioral_mouse_trajectory.proto";
 import "events/v1/behavioral_keystroke_timing.proto";
 import "events/v1/behavioral_scroll_cadence.proto";
@@ -83,4 +84,13 @@ message BehavioralObservation {
     BehavioralScrollCadence scroll_cadence = 7;
     BehavioralPointerDwell pointer_dwell = 8;
   }
+
+  // authentication_class records the verification channel through
+  // which the observed actor's identity was established at observation
+  // time per decision-log §0150 (resolution of the F4
+  // authentication-class typing OMQ; Candidate α — envelope enum
+  // field). Default UNKNOWN; BehavioralObservation collected by a
+  // browser SDK typically emits CLIENT_WITNESSED. See
+  // common/v1/authentication_class.proto for the enum specification.
+  ghosttrace.common.v1.AuthenticationClass authentication_class = 10;
 }

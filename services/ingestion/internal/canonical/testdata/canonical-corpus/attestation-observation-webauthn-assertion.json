@@ -3,6 +3,7 @@
   "actorRef": "actor-corpus-webauthn",
   "sessionRef": "session-corpus-webauthn",
   "collectorRef": "browser-sdk:v1",
+  "authenticationClass": "AUTHENTICATION_CLASS_CLIENT_ATTESTED",
   "webauthnAssertion": {
     "credentialIdHash": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
     "authenticatorData": "AQIDBAU=",

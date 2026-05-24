@@ -3,6 +3,7 @@
   "actorRef": "actor-corpus-ipasn",
   "endpointRef": "192.0.2.1:443",
   "collectorRef": "cic-ids-2017-adapter:v1",
+  "authenticationClass": "AUTHENTICATION_CLASS_SERVER_AUTHENTICATED",
   "ipAsn": {
     "ipAddress": "192.0.2.1",
     "asn": 64496,

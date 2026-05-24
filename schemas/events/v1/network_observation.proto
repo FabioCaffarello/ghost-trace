@@ -23,6 +23,7 @@ package ghosttrace.events.v1;
 option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
 
 import "events/v1/network_tcp_fingerprint.proto";
+import "common/v1/authentication_class.proto";
 import "events/v1/network_tls_ja4.proto";
 import "events/v1/network_http2_frame_pattern.proto";
 import "events/v1/network_dns_pattern.proto";
@@ -77,4 +78,16 @@ message NetworkObservation {
     NetworkDnsPattern dns_pattern = 8;
     NetworkIpAsn ip_asn = 9;
   }
+
+  // authentication_class records the verification channel through
+  // which the observed actor's identity was established at observation
+  // time per decision-log §0150 (resolution of the F4
+  // authentication-class typing OMQ; Candidate α — envelope enum
+  // field). Default UNKNOWN. Field placement at the end of the
+  // envelope preserves binary backward-compat for records committed
+  // before §0150 landed (those records default to UNKNOWN per proto3
+  // enum default). See common/v1/authentication_class.proto for the
+  // enum specification + reversal conditions per §0023 + §0141
+  // pattern.
+  ghosttrace.common.v1.AuthenticationClass authentication_class = 10;
 }

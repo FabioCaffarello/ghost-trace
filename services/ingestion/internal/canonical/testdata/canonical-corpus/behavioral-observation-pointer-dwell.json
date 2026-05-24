@@ -3,6 +3,7 @@
   "actorRef": "actor-corpus-dwell",
   "sessionRef": "session-corpus-004",
   "collectorRef": "browser-sdk:v1",
+  "authenticationClass": "AUTHENTICATION_CLASS_CLIENT_WITNESSED",
   "pointerDwell": {
     "elementClass": "form-input",
     "dwellNs": "1500000000",
