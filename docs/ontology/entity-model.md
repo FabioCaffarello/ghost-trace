@@ -145,7 +145,11 @@ This distinction is constitutional, not merely architectural. See [Charter Invar
 
 ## Open Modeling Questions
 
-(None remaining.) All Open Modeling Questions previously recorded in this section have been resolved; entries are preserved under §Resolved Modeling Questions below with links to the decision-log entries that record each resolution.
+The following modeling questions remain open at this document's current revision:
+
+1. **Authentication-class typing on Cat I observation envelopes** (F4 anticipated at [`decision-log §0143`](../charter/decision-log.md) Domain Pack v0.1 anticipated-OMQs table; trigger fired at [`decision-log §0147`](../charter/decision-log.md) when F1 reached 3/3 modalities stable). F1 introduced four typed Cat I observation modalities; the three landed (Network, Behavioral, Attestation) expose a structural distinction the current envelope does not carry — observations differ in HOW the observed actor's identity was verified at observation time (server-authenticated / client-attested / client-witnessed). What structural surface should the substrate carry to make authentication-class explicit at the Cat I observation layer? RFC: [`ontology-revision-authentication-class-typing`](../rfcs/draft/ontology-revision-authentication-class-typing.md) (discussion-phase open).
+
+(Previously recorded OMQs have been resolved; entries are preserved under §Resolved Modeling Questions below with links to the decision-log entries that record each resolution.)
 
 ## Resolved Modeling Questions
 
