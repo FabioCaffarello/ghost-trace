@@ -418,11 +418,19 @@ func routeTier(r *http.Request) Tier {
 // unauthenticated clients.
 //
 // Per decision-log §0197 first observability advance: each handled
-// request emits ONE structured log entry at the end of dispatch with
+// request emits ONE structured entry at the end of dispatch with
 // method/path/status/duration_ms/tier/remote_addr fields. Defaults to a
 // no-op logger; production wires via WithLogger.
+//
+// Per decision-log §0198 second observability advance: each request is
+// assigned a request_id (X-Request-Id header value if non-empty, else
+// freshly generated via crypto/rand) + echoed in the response
+// X-Request-Id header. The id is added to the structured entry for
+// cross-service correlation.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
+	requestID := resolveRequestID(r)
+	w.Header().Set(requestIDHeader, requestID)
 	lw := &loggingResponseWriter{ResponseWriter: w}
 	defer func() {
 		tier := routeTier(r)
@@ -433,6 +441,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			slog.Int64("duration_ms", time.Since(start).Milliseconds()),
 			slog.String("tier", string(tier)),
 			slog.String("remote_addr", r.RemoteAddr),
+			slog.String("request_id", requestID),
 		)
 	}()
 	if h.requiresAuth(r) && !h.authorized(r) {
