@@ -258,3 +258,23 @@ type NetworkSignature interface {
 	EvaluateNetwork(ctx context.Context, observations []*eventsv1.NetworkObservation, attribution AttributionLookup) (*EvaluationResult, error)
 	isNetworkSignature()
 }
+
+// BehavioralSignature is the interface for signatures that consume
+// BehavioralObservation input. Mirrors BrowserSignature + NetworkSignature
+// on the behavioral-modality side per §0146 discriminated-union framing
+// per §0174.
+//
+// Per §0168 scope: BehavioralSignature does NOT accept an AttributionLookup
+// parameter. BehavioralObservation, like BrowserObservation, is client-
+// SDK-emitted and carries actor_ref directly; no Cat II attribution gap
+// exists for this modality at inception phase. Future RFC may extend if
+// a behavioral-attribution case emerges.
+type BehavioralSignature interface {
+	Signature
+	// EvaluateBehavioral evaluates the signature against a slice of
+	// BehavioralObservation records. Returns EvaluationResult
+	// (candidates + stats); error indicates a structural failure, not
+	// "no candidates found".
+	EvaluateBehavioral(ctx context.Context, observations []*eventsv1.BehavioralObservation) (*EvaluationResult, error)
+	isBehavioralSignature()
+}
