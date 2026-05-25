@@ -166,7 +166,7 @@ func TestTCPFingerprintClustering_AgainstCICIDS_NoActorSkipped(t *testing.T) {
 	// Step 3: Run tcp_fingerprint_clustering_v1 against the
 	// CIC-IDS-derived observations.
 	sig := &signatures.TCPFingerprintClusteringV1{}
-	res, err := sig.EvaluateNetwork(ctx, observations)
+	res, err := sig.EvaluateNetwork(ctx, observations, nil)
 	if err != nil {
 		t.Fatalf("EvaluateNetwork: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestTCPFingerprintClustering_AgainstSyntheticP0F_ClusterEmitted(t *testing.
 		t.Fatalf("NetworkObservation count: got %d want 3", len(observations))
 	}
 	sig := &signatures.TCPFingerprintClusteringV1{}
-	res, err := sig.EvaluateNetwork(ctx, observations)
+	res, err := sig.EvaluateNetwork(ctx, observations, nil)
 	if err != nil {
 		t.Fatalf("EvaluateNetwork: %v", err)
 	}
@@ -296,7 +296,7 @@ func TestTCPFingerprintClustering_MixedSubstrate_OnlySyntheticContributes(t *tes
 		t.Fatalf("NetworkObservation count: got %d want 12 (9 CIC-IDS + 3 synthetic)", len(observations))
 	}
 	sig := &signatures.TCPFingerprintClusteringV1{}
-	res, err := sig.EvaluateNetwork(ctx, observations)
+	res, err := sig.EvaluateNetwork(ctx, observations, nil)
 	if err != nil {
 		t.Fatalf("EvaluateNetwork: %v", err)
 	}

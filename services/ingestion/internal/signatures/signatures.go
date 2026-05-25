@@ -207,17 +207,54 @@ type BrowserSignature interface {
 	isBrowserSignature()
 }
 
+// AttributionLookup is the read-only Cat II actor-attribution lookup
+// surface F3 NetworkSignatures consume per decision-log §0168 Decision
+// A.1 (signature-aware consumption). When a Cat I NetworkObservation
+// lacks declared actor_ref (e.g., flow-level records from CIC-IDS),
+// the signature consults this lookup against the source observation's
+// content-hash to obtain the Cat II derived actor_ref.
+//
+// The interface is satisfied by attribution.AttributionView. Defined
+// here (in the signatures package) to avoid an upstream dependency
+// from attribution → signatures or vice-versa; the signature consumer
+// depends on a small read-only interface, not on the attribution
+// package's full implementation. The attribution package's
+// AttributionView satisfies this interface by structural method match.
+//
+// Per §2.2 + §0168 epistemic-separation discipline: the lookup
+// returns the Cat II derivation record's content-hash alongside the
+// derived actor_ref. Consuming signatures thread the Cat II hash
+// through the resulting hypothesis's source_event_hashes preserving
+// the §2.3 provenance chain (Cat III hypothesis → Cat II derivation
+// → Cat I observation).
+type AttributionLookup interface {
+	// For returns the derived actor_ref and the Cat II derivation
+	// record's content-hash for the given Cat I source hash. Returns
+	// ("", [32]byte{}, false) when no Cat II derivation exists for
+	// the source.
+	For(sourceHash [32]byte) (derivedActorRef string, attributionHash [32]byte, ok bool)
+}
+
 // NetworkSignature is the interface for signatures that consume
 // NetworkObservation input. Mirrors BrowserSignature for the
 // network-modality side per §0144 discriminated-union framing —
 // strong typing pressures F3 signature engines to name explicitly
 // which sub-modality class each signature consumes.
+//
+// Per §0168 Decision A.1: EvaluateNetwork accepts an optional
+// AttributionLookup parameter for Cat II derived-attribution
+// consumption. nil = no Cat II layer (current behavior; Cat I records
+// without actor_ref are skipped at ObservationsSkippedNoActor).
+// non-nil = signatures may consult the lookup for unattributed Cat I
+// records + emit hypotheses whose source_event_hashes include both
+// the Cat I source hash AND the Cat II derivation hash.
 type NetworkSignature interface {
 	Signature
 	// EvaluateNetwork evaluates the signature against a slice of
-	// NetworkObservation records. Returns EvaluationResult (candidates
-	// + stats); error indicates a structural failure, not "no
-	// candidates found".
-	EvaluateNetwork(ctx context.Context, observations []*eventsv1.NetworkObservation) (*EvaluationResult, error)
+	// NetworkObservation records. The attribution parameter is the
+	// Cat II derived-actor lookup (nil for backward-compat behavior
+	// pre-§0168). Returns EvaluationResult (candidates + stats);
+	// error indicates a structural failure, not "no candidates found".
+	EvaluateNetwork(ctx context.Context, observations []*eventsv1.NetworkObservation, attribution AttributionLookup) (*EvaluationResult, error)
 	isNetworkSignature()
 }

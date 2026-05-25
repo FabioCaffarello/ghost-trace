@@ -90,7 +90,7 @@ func TestFullPipeline_EndToEnd(t *testing.T) {
 		t.Fatalf("collectNetworkObservations: %v", err)
 	}
 	sig := &signatures.TCPFingerprintClusteringV1{}
-	result, err := sig.EvaluateNetwork(context.Background(), observations)
+	result, err := sig.EvaluateNetwork(context.Background(), observations, nil)
 	if err != nil {
 		t.Fatalf("EvaluateNetwork: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestFullPipeline_BelowThreshold_NoCandidates(t *testing.T) {
 		t.Fatalf("collectNetworkObservations: %v", err)
 	}
 	sig := &signatures.TCPFingerprintClusteringV1{}
-	result, err := sig.EvaluateNetwork(context.Background(), observations)
+	result, err := sig.EvaluateNetwork(context.Background(), observations, nil)
 	if err != nil {
 		t.Fatalf("EvaluateNetwork: %v", err)
 	}

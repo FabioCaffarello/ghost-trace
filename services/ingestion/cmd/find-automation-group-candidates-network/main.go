@@ -74,7 +74,7 @@ func run() error {
 	}
 
 	sig := &signatures.TCPFingerprintClusteringV1{Threshold: uint32(*threshold)}
-	result, err := sig.EvaluateNetwork(ctx, observations)
+	result, err := sig.EvaluateNetwork(ctx, observations, nil)
 	if err != nil {
 		return fmt.Errorf("signature.EvaluateNetwork: %w", err)
 	}
