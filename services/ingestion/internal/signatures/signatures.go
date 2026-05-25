@@ -79,11 +79,34 @@ type FormationCandidate struct {
 	// ConfidenceHint is the signature's advisory confidence in [0, 1].
 	// Orchestrator is authoritative for committed confidence.
 	ConfidenceHint float64
+
+	// Interactions is the optional set of UNDIRECTED coordination
+	// edges the signature has identified. Populated ONLY by signatures
+	// emitting HypothesisSubtypeCoordinationRing; left empty by all
+	// other subtypes per the interaction-centric ontology shape
+	// (entity-model.md §Category III + coordination_ring_formation.proto
+	// §0070 modeling choice — the inference is over INTERACTIONS
+	// between actors, NOT over a flat set of actors).
+	//
+	// Per §0070 canonicalization (mirrored at the candidate layer for
+	// orchestrator commit-time byte-identity preservation):
+	//   - within each edge: edge[0] MUST be lex-less-than edge[1]
+	//     (within-edge canonical ordering);
+	//   - the slice MUST be sorted ASCENDING by (edge[0], edge[1]);
+	//   - no edge MUST appear twice.
+	//
+	// Orchestrators committing CoordinationRingFormation convert each
+	// [2]string into a CoordinationRingInteraction proto with actor_a
+	// = edge[0] + actor_b = edge[1]. The repeated-field discipline
+	// from §0139 propagates structurally to the orchestrator side.
+	Interactions [][2]string
 }
 
 // HypothesisSubtype identifies the Cat III subtype a formation
 // candidate proposes. Mirrors the ontology subtype enumeration per
-// §0010 Q2-A.2. MVP scope (§0152): AutomationGroup only.
+// §0010 Q2-A.2. F3 corpus through §0185 spans all four subtypes:
+// AutomationGroup + BehavioralCluster + CampaignHypothesis +
+// CoordinationRing.
 type HypothesisSubtype int
 
 const (
