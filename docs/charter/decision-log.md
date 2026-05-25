@@ -8586,7 +8586,7 @@ The four methodological observations are the pilot's contribution to procedure b
 
   Pre-§0197 httpapi state: no observability surface. Handlers emit no structured events beyond what `writeIngestError` writes to the response body. Operators tracking request behavior in production have no structured stream to consume.
 
-- **Decision:** Add per-request structured logging via stdlib `log/slog` to the httpapi Handler. Three changes:
+- **Decision:** Add per-request structured logging via stdlib stdlib `slog` to the httpapi Handler. Three changes:
 
   1. **`services/ingestion/internal/httpapi/logging.go`** (~65 lines) — new file with `defaultLogger` (no-op `io.Discard`-backed logger) + `loggingResponseWriter` struct wrapping `http.ResponseWriter` to capture the status code written by inner handlers. `WriteHeader` is idempotent (first-write-wins matches net/http contract); `Write` implicitly records 200 when called without prior `WriteHeader` (matches net/http's implicit-200 semantic).
 
@@ -8596,7 +8596,7 @@ The four methodological observations are the pilot's contribution to procedure b
 
 - **Constitutional review:**
 
-  Subordinate to §0094 tier classification (tier field in structured entries reflects `routeTier(r)` per §0094). Subordinate to §0164 MO1 verification discipline. No new external dependencies — `log/slog` is stdlib (Go 1.22+). Default behavior preserved: WithLogger-unset handlers emit no structured output, matching pre-§0197 silent operation.
+  Subordinate to §0094 tier classification (tier field in structured entries reflects `routeTier(r)` per §0094). Subordinate to §0164 MO1 verification discipline. No new external dependencies — stdlib `slog` is stdlib (Go 1.22+). Default behavior preserved: WithLogger-unset handlers emit no structured output, matching pre-§0197 silent operation.
 
   Falsifiability: 9 unit tests cover the contract. The no-status-attribute-missing regression guard mechanically verifies every emitted entry carries the `status` field; the auth-path test specifically witnesses that the loggingResponseWriter wraps the 401 response too (a regression where `h.writeUnauthorized(w)` bypassed the wrapper would surface as a missing status).
 
@@ -8611,7 +8611,7 @@ The four methodological observations are the pilot's contribution to procedure b
   Per §0164 MO1 verification discipline: full `go test ./internal/httpapi/...` passes; full `go test ./...` from `services/ingestion/` reports 0 failures.
 
   Scope discipline per §0197: **structured request logging only** — no Prometheus metrics (deferred to §0198 or later if useful), no request-id middleware (deferred), no trace-id propagation (deferred until OpenTelemetry surface is needed). Does NOT introduce:
-  - New external dependencies (stdlib-only via `log/slog`).
+  - New external dependencies (stdlib-only via stdlib `slog`).
   - Per-handler structured fields beyond the 6 in the entry (method/path/status/duration_ms/tier/remote_addr); future advances can attach handler-specific attrs via slog's WithGroup or per-handler logger derivation.
   - Logger configuration in production main (operator wires `WithLogger(slog.New(...))` at service-start time; the package provides the surface, not the binding).
 
