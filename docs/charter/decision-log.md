@@ -8201,6 +8201,51 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0188` — GET /v1/morphology HTTP endpoint lands; first operational-tier advance post-§0187 F3-loop closure
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** With the §0157→§0187 F3-loop multi-PR arc program structurally complete, the operational tier was identified as the next direction (per the post-§0187 direction-change checkpoint). Three operational-HTTP gaps surfaced: morphology (`morphology.Measure` is CLI-only via `cmd/measure-chain-morphology`), Layer B verdict (`layerb.Evaluate` is CLI-only), and F3 candidate evaluation (`find-*-candidates` are CLI-only).
+
+  §0188 advances the smallest + cleanest of the three: the morphology endpoint. It is read-only, single-method, mirrors the CLI's wire shape exactly per the §0093 + §0163 CLI↔HTTP wire-parity precedent (verify endpoint's discipline), and has zero downstream effect on substrate state.
+
+- **Decision:** Add `GET /v1/morphology` HTTP endpoint exposing the `morphology.Measure` substrate walk. Five changes:
+
+  1. **`services/ingestion/internal/httpapi/morphology.go`** (~120 lines) — `handleMorphology` Handler method + 3 wire-shape structs (`morphologyHypothesisPayload`, `morphologyStatsPayload`, `morphologyPayload`). Method check (GET only) + substrate-availability check + `morphology.Measure` invocation + JSON envelope encoding. Mirrors the §0093 verify endpoint's structural pattern.
+
+  2. **`services/ingestion/internal/httpapi/handler.go`** — one new `case r.URL.Path == "/v1/morphology"` route in `ServeHTTP`'s path switch (placed between `/v1/verify` and `/v1/admin/orphan-cleanup` per the existing ordering — read-only diagnostics adjacent).
+
+  3. **`services/ingestion/internal/httpapi/morphology_test.go`** (~115 lines, 4 tests) — `TestMorphologyHTTPHappyPathBC` (single BC formation; verifies per-hypothesis payload field correctness against the §0093 + §0163 CLI wire-shape parity), `TestMorphologyHTTPEmptySubstrate` (empty envelope on zero formations), `TestMorphologyHTTPMethodNotAllowed` (405 + Allow header on non-GET), `TestMorphologyHTTPSubstrateNotConfigured` (503 when handler constructed without `WithSubstrate`).
+
+- **Constitutional review:**
+
+  Subordinate to §0093 + §0163 CLI↔HTTP wire-parity discipline (HTTP endpoint emits byte-identical wire shape to `cmd/measure-chain-morphology`'s `emissionEnvelope`). Subordinate to §0143 instrumentation-by-morfologia discipline (chains-fracas vs chains-fortes diagnostic counters exposed at HTTP layer). Subordinate to §0164 MO1 verification discipline.
+
+  Falsifiability discipline: 4 unit tests cover the contract — happy-path single-formation parity + empty-substrate envelope + method-allow-list + substrate-availability-gate. Wire-parity claim (HTTP payload matches CLI payload byte-for-byte) is structurally provable: both use the identical field set + JSON tag set + value extraction sequence; the wire-shape structs in `morphology.go` and the CLI's `main.go` are textually parallel.
+
+  Per Charter §2.5 BC5 + §0143: morphology is a Cat I-Cat III diagnostic projection; the endpoint is read-only over the substrate, does not commit any events, does not require auth. Operators consume the endpoint from dashboards + monitoring; the operational-cost profile is bounded (O(N + E) where N = formation count, E = direct_influenced_by edge count) and safe for interactive use.
+
+- **Consequences:**
+  - 2 new files in `services/ingestion/internal/httpapi/`; ~235 lines total.
+  - 1 modified file (`handler.go` route addition; 2 lines).
+  - 4 new unit tests.
+  - 1 new HTTP route exposing morphology measurements at the operational tier.
+  - **First operational-tier advance post-§0187 F3-loop closure.** Establishes that the operational tier is the active work direction; subsequent advances within this direction can mirror the §0188 pattern (CLI↔HTTP wire-parity, read-only diagnostic exposure, 4-test contract).
+  - **Two operational HTTP gaps remain** for follow-on advances: Layer B verdict endpoint (`POST /v1/hypotheses/<subtype>/layer-b-verdict`) + F3 candidate evaluation endpoints (`POST /v1/hypotheses/<subtype>/find-candidates` or equivalent). Both are larger-scope than §0188 (Layer B requires parameter binding via request body; F3 candidate eval requires per-subtype signature wiring).
+
+  Per §0164 MO1 verification discipline: empirical state inline. `grep -c "^func Test" services/ingestion/internal/httpapi/morphology_test.go` returns 4. Full `go test ./internal/httpapi/...` passes; full `go test ./...` from `services/ingestion/` passes.
+
+  Scope discipline per §0188: **single read-only HTTP endpoint with CLI wire-parity** — no Layer B verdict, no F3 candidate eval, no per-subtype morphology filter (deferred — query parameters could be added later if operator pressure surfaces). Does NOT introduce:
+  - New package dependencies for httpapi (reuses existing morphology package).
+  - New httpapi infrastructure (handler/middleware/auth/etc. unchanged).
+  - Wire-shape divergence from the CLI's emissionEnvelope — bytes match per §0093 precedent.
+
+  - **Methodological observation 1 — CLI↔HTTP wire-parity discipline (§0093) extends naturally to read-only diagnostic endpoints + makes operator-tooling parity structurally enforceable.** Each HTTP endpoint that has a CLI counterpart SHOULD emit the byte-identical wire shape; the per-file wire-shape struct definitions remain textually parallel between CLI and HTTP packages. This preserves the operator's right to switch channels (dashboard vs CLI script vs cron job) without learning a second wire vocabulary. **Pattern: new HTTP diagnostic endpoints (Layer B verdict, F3 candidate eval, future projections endpoints) SHOULD adopt the §0188 CLI↔HTTP wire-parity discipline. The per-package wire-shape struct duplication is the structural cost; the operator-tooling parity benefit dominates.**
+
+- **Supersession:** No prior decision-log entry superseded. Opens the operational-tier advance program post-§0187 F3-loop closure. Two operational HTTP gaps remain (Layer B verdict + F3 candidate eval); each can land as a separate downstream advance.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
