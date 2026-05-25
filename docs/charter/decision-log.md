@@ -7587,6 +7587,66 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0176` — Layer B firing integration test against BehavioralClusterFormation derived from F3 candidate; establishes BehavioralCluster F3-derived-formation anchor
+
+- **Status:** accepted.
+- **Date:** 2026-05-25.
+- **Context:** [`§0167`](#0167--split-e2e-integration-test-from-f3-derived-antecedent-closes-0011-automationgroup-lifecycle-integration-coverage) closed the AutomationGroup F3-derived-formation lifecycle integration coverage arc (§0157–§0167). Per its closing-note: "Future lifecycle-axis advances extend to other Cat III subtypes; each requires its own F3 signature first." [`§0174`](#0174--keystroke_timing_clustering_v1-lands-first-behavioralsignature-first-f3-emission-of-behavioralcluster-subtype-third-f3-interface-variant) discharged the F3 signature prerequisite for BehavioralCluster + [`§0175`](#0175--find-behavioral-cluster-candidates-cli-lands-behavioral-modality-f3-orchestrator-closes-operator-layer-asymmetry-from-0174-makefile-drift-fix-bundled) operationalized at the CLI layer. The BehavioralCluster subtype is now F3-reachable AT THE OPERATOR LAYER + ready for lifecycle integration coverage.
+
+  §0176 opens a parallel multi-PR arc: lifecycle integration tests for BehavioralCluster mirroring §0157–§0167 AutomationGroup arc structure. This first entry establishes the F3-derived-formation anchor for BehavioralCluster (helper `commitBehavioralClusterFormationFromCandidate` mirroring §0157's `commitFormationFromCandidate`) + applies it to the Layer B firing integration test path.
+
+- **Decision:** New test file `services/ingestion/cmd/find-behavioral-cluster-candidates/layerb_firing_test.go` with 2 integration tests:
+
+  - **`TestLayerBFiring_AgainstBehavioralClusterF3CandidateFormation`** — Full path validation:
+    1. Inject 3 BehavioralObservation records with identical quantized keystroke fingerprint (above default threshold 3).
+    2. Run `keystroke_timing_clustering_v1` signature → 1 multi-actor BehavioralCluster candidate.
+    3. `commitBehavioralClusterFormationFromCandidate` helper materializes + commits BehavioralClusterFormation.
+    4. Verify formation lands in substrate via `LookupRow`.
+    5. Unmarshal + verify formation proto matches candidate values (PatternSignature, ActorRefs count, SourceEventHashes count, paired-dimension presence per §2.6 BC3).
+    6. Call `layerb.Evaluate` with formation hash + §0138 default params.
+    7. Verify Verdict shape: `WindowEventCount > 0`; structural fields populated.
+
+  - **`TestLayerBFiring_BehavioralClusterRejectsNilParams`** — Documents the integration-path contract: `layerb.Evaluate` rejects nil LayerBParameters per §0138 N_A bundling. Mirrors §0157's equivalent for AutomationGroup.
+
+  **Helper `commitBehavioralClusterFormationFromCandidate`** — BehavioralCluster equivalent of §0157's `commitFormationFromCandidate`. Foundation for subsequent BehavioralCluster lifecycle integration tests (§0177+ demote/promote/merge/dissolve/split E2E). Structurally identical to §0157's helper modulo:
+
+  - Proto type: `*BehavioralClusterFormation` (vs `*AutomationGroupFormation`).
+  - Message type discriminator: `ghosttrace.events.v1.BehavioralClusterFormation`.
+  - Same §2.6 BC3 paired-dimension enforcement, §0139 hash-list discipline, §3 N3 operator-elected commit semantics.
+
+  Constitutional discipline at integration-test layer:
+
+  - **§0167 closing-note discharge (further extension)** — BehavioralCluster subtype now has F3-derived-formation anchor at integration-test layer (previously only at signature library layer via §0174 + operator CLI layer via §0175).
+  - **§2.6 BC3 paired-dimension at marshalling boundary** — BehavioralClusterFormation carries confidence + evidential_independence per §0136 paired-dimension subject set; substrate commit validates per §0140.
+  - **§0139 hash-list element-shape** — `source_event_hashes` inherits candidate's SourceHashes (pre-sorted ascending by signature emit per §0174 implementation).
+  - **§0141 Layer B service-tier integration** — `layerb.Evaluate` invoked identically to §0157's AutomationGroup path; same Verdict shape; same advisory pattern.
+  - **§3 N3 operator-elected commit boundary** — helper mirrors CLI substrate-level behavior; test bypasses CLI argument-parsing but uses identical substrate API.
+
+  Scope discipline per §0176: **structural connectivity validation across the F3 → BehavioralClusterFormation → Layer B path + foundation helper for subsequent lifecycle tests**. Does NOT introduce:
+
+  - Lifecycle E2E tests for BehavioralCluster (demote/promote/merge/dissolve/split) — separate downstream advances (~5 PRs to mirror §0160–§0167).
+  - Chain morphology integration test for BehavioralCluster (parallel to §0158 for AutomationGroup) — separate downstream advance (morphology package's `formationSubtypes` map already includes BehavioralClusterFormation; integration coverage for that path lands separately).
+  - F3-derived integration tests for CampaignHypothesis or CoordinationRing subtypes (still F3-emission-blocked per §0174 closing-note).
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. Test-only addition.
+
+  Falsifiability discipline: test behavior structurally observable. Test 1 verifies (a) F3 signature emits expected multi-actor candidate of BehavioralCluster subtype; (b) candidate-to-formation mapping produces valid BehavioralClusterFormation; (c) substrate commit accepts the formation; (d) read-back via LookupRow + Unmarshal preserves the payload; (e) layerb.Evaluate accepts the formation hash + returns structurally valid Verdict. Test 2 verifies layerb.Evaluate rejects nil params.
+
+  Per §0164 MO1 verification discipline: empirical state inline. `grep -c "^func Test" services/ingestion/cmd/find-behavioral-cluster-candidates/layerb_firing_test.go` returns 2. Behavioral CLI test count post-§0176 = 6 (4 base from §0175 + 2 new from §0176).
+
+- **Consequences:**
+  - New test file `cmd/find-behavioral-cluster-candidates/layerb_firing_test.go` (2 tests).
+  - New helper `commitBehavioralClusterFormationFromCandidate` (foundation for subsequent §0177+ lifecycle PRs).
+  - No new packages. No proto changes. No corpus regeneration. No schemas-evolution event.
+  - **First BehavioralCluster lifecycle integration test lands.** Discharges the FIRST OF SIX lifecycle integration test PRs needed to mirror §0157–§0167 AutomationGroup arc on the BehavioralCluster subtype side. Remaining: morphology (parallel to §0158), demote E2E (parallel to §0160), merge E2E (parallel to §0165), dissolution E2E (parallel to §0166), split E2E (parallel to §0167).
+  - **§0157 helper-foundation pattern replicated for BehavioralCluster.** Per §0167 MO3 ("F3-derived integration tests should extend §0157's pattern along ONE distinct downstream axis per test"): §0176 extends along the EVALUATION axis (Layer B firing); subsequent PRs extend along measurement (morphology), linear lifecycle (demote E2E), cross-formation lifecycle (merge / dissolve / split) axes.
+  - **Methodological observation 1 — Cross-subtype lifecycle-arc replication is bounded mechanical work once the F3 signature + CLI + foundation helper exist.** §0176 mirrors §0157 line-by-line modulo proto-type substitution. The replicate-per-subtype pattern (helper + Layer B firing test + 5 lifecycle E2E PRs ≈ 6 PRs per subtype) becomes mechanically applicable once §0174 + §0175 + §0176 establish the foundation. **Pattern: when adding F3-derived lifecycle integration tests for a new Cat III subtype, the FIRST PR establishes the foundation helper (commitXxxFormationFromCandidate) + applies it to the EVALUATION axis (Layer B firing). Subsequent PRs (one per remaining axis) inherit the helper. The 6-PR arc shape is now a structural template, not a per-subtype redesign.**
+  - **Methodological observation 2 — Foundation-helper-bundled-with-first-usage discipline reduces per-PR cognitive overhead.** §0176 bundled `commitBehavioralClusterFormationFromCandidate` with the Layer B firing test rather than landing helper + first test in separate PRs. The bundled landing means readers see the helper IN USE immediately; the helper's API is justified by an actual call site. **Pattern: when adding a foundation helper for a multi-PR arc, bundle it with its first concrete usage; don't land helper-only PRs that defer all usage to follow-ons. The first usage is the helper's structural justification.**
+
+- **Supersession:** No prior decision-log entry superseded. Opens the BehavioralCluster lifecycle integration coverage arc; remaining 5 PRs (morphology, demote E2E, merge, dissolve, split) will follow §0157–§0167 AutomationGroup arc structural template per §0176 MO1.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
