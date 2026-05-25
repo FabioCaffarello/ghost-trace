@@ -1,25 +1,15 @@
 package httpapi
 
 import (
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 
-	"google.golang.org/protobuf/proto"
-
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/attribution"
-	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
-
-// networkObservationMessageType is the proto message_type string for
-// NetworkObservation records. Local copy mirroring the F3 CLIs' equivalent
-// constant per §0190 MO1 pilot-first replication discipline. Shared
-// across §0192 + §0193 + §0194 network-modality endpoints.
-const networkObservationMessageType = "ghosttrace.events.v1.NetworkObservation"
 
 // handleFindCandidatesCH serves GET /v1/find-candidates/campaign-hypothesis
 // per decision-log §0192. Third F3 candidate evaluation HTTP endpoint;
@@ -89,7 +79,7 @@ func (h *Handler) handleFindCandidatesCH(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	observations, err := collectNetworkObservationsHTTP(r.Context(), h.sub)
+	observations, err := observationcollector.CollectNetwork(r.Context(), h.sub)
 	if err != nil {
 		writeIngestError(w, http.StatusInternalServerError, fmt.Sprintf("collect: %v", err))
 		return
@@ -155,26 +145,3 @@ func (h *Handler) handleFindCandidatesCH(w http.ResponseWriter, r *http.Request)
 	_ = enc.Encode(env)
 }
 
-// collectNetworkObservationsHTTP walks the substrate and unmarshals
-// every committed NetworkObservation record. Shared across §0192 +
-// §0193 + §0194 network-modality endpoints per §0190 MO1 pilot-first
-// replication discipline.
-func collectNetworkObservationsHTTP(ctx context.Context, sub *substrate.Substrate) ([]*eventsv1.NetworkObservation, error) {
-	var out []*eventsv1.NetworkObservation
-	err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
-		if row.MessageType != networkObservationMessageType {
-			return nil
-		}
-		payload, err := sub.ReadBlob(ctx, row.EventHash)
-		if err != nil {
-			return fmt.Errorf("ReadBlob %x: %w", row.EventHash[:8], err)
-		}
-		obs := &eventsv1.NetworkObservation{}
-		if err := proto.Unmarshal(payload, obs); err != nil {
-			return fmt.Errorf("Unmarshal %x: %w", row.EventHash[:8], err)
-		}
-		out = append(out, obs)
-		return nil
-	})
-	return out, err
-}

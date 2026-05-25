@@ -1,23 +1,14 @@
 package httpapi
 
 import (
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 
-	"google.golang.org/protobuf/proto"
-
-	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
-
-// browserObservationMessageType is the proto message_type string for
-// BrowserObservation records. Local copy mirroring the F3 CLIs' equivalent
-// constant per §0190 MO1 pilot-first replication discipline.
-const browserObservationMessageType = "ghosttrace.events.v1.BrowserObservation"
 
 // handleFindCandidatesAGBrowser serves GET
 // /v1/find-candidates/automation-group-browser per decision-log §0191.
@@ -71,7 +62,7 @@ func (h *Handler) handleFindCandidatesAGBrowser(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	observations, err := collectBrowserObservationsHTTP(r.Context(), h.sub)
+	observations, err := observationcollector.CollectBrowser(r.Context(), h.sub)
 	if err != nil {
 		writeIngestError(w, http.StatusInternalServerError, fmt.Sprintf("collect: %v", err))
 		return
@@ -126,27 +117,3 @@ func (h *Handler) handleFindCandidatesAGBrowser(w http.ResponseWriter, r *http.R
 	_ = enc.Encode(env)
 }
 
-// collectBrowserObservationsHTTP walks the substrate and unmarshals
-// every committed BrowserObservation record. Mirrors the
-// find-automation-group-candidates CLI's collectBrowserObservations
-// per §0190 MO1 pilot-first replication discipline (consolidation
-// refactor deferred until 3+ instances exist).
-func collectBrowserObservationsHTTP(ctx context.Context, sub *substrate.Substrate) ([]*eventsv1.BrowserObservation, error) {
-	var out []*eventsv1.BrowserObservation
-	err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
-		if row.MessageType != browserObservationMessageType {
-			return nil
-		}
-		payload, err := sub.ReadBlob(ctx, row.EventHash)
-		if err != nil {
-			return fmt.Errorf("ReadBlob %x: %w", row.EventHash[:8], err)
-		}
-		obs := &eventsv1.BrowserObservation{}
-		if err := proto.Unmarshal(payload, obs); err != nil {
-			return fmt.Errorf("Unmarshal %x: %w", row.EventHash[:8], err)
-		}
-		out = append(out, obs)
-		return nil
-	})
-	return out, err
-}

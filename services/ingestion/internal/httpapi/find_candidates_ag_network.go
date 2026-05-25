@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/attribution"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
 )
 
@@ -22,8 +23,8 @@ import (
 //     (§0169; CICFlowMeter-style adapters per §0162 gap (2) closure)
 //
 // Both signatures operate over NetworkObservation records + emit
-// AutomationGroup FormationCandidates. Reuses §0192's shared
-// collectNetworkObservationsHTTP + AttributionLookup consumption.
+// AutomationGroup FormationCandidates. Reuses §0195's shared
+// observationcollector.CollectNetwork + AttributionLookup consumption.
 //
 // Per §3 N3 + §0152: this endpoint does NOT commit formation events.
 //
@@ -82,7 +83,7 @@ func (h *Handler) handleFindCandidatesAGNetwork(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	observations, err := collectNetworkObservationsHTTP(r.Context(), h.sub)
+	observations, err := observationcollector.CollectNetwork(r.Context(), h.sub)
 	if err != nil {
 		writeIngestError(w, http.StatusInternalServerError, fmt.Sprintf("collect: %v", err))
 		return
