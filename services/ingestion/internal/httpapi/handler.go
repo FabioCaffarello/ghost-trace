@@ -420,6 +420,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleVerify(w, r)
 	case r.URL.Path == "/v1/morphology":
 		h.handleMorphology(w, r)
+	case r.URL.Path == "/v1/layer-b-verdict":
+		h.handleLayerBVerdict(w, r)
 	case r.URL.Path == "/v1/admin/orphan-cleanup":
 		h.handleAdminOrphanCleanup(w, r)
 	case r.URL.Path == "/v1/hypotheses/behavioral-cluster/promote":

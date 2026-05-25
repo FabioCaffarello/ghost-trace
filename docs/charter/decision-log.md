@@ -8246,6 +8246,53 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0189` — GET /v1/layer-b-verdict HTTP endpoint lands; second operational-tier advance per §0188 MO1; first wire-shape-from-scratch HTTP endpoint
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0188 opened the operational-tier advance program after the F3-loop multi-PR arc program closure and identified two remaining HTTP gaps: Layer B verdict + F3 candidate eval. Per §0188 MO1: "Future HTTP diagnostic endpoints (Layer B verdict, F3 candidate eval, future projections endpoints) SHOULD adopt the §0188 CLI↔HTTP wire-parity discipline."
+
+  §0189 advances the smaller of the two remaining gaps: Layer B verdict. Structurally simpler than F3 candidate eval (no per-signature wiring required — Layer B is subtype-agnostic since it consumes only formation hash + parameters). Single endpoint, single HTTP method (GET), single response shape.
+
+  **First HTTP endpoint without a CLI counterpart.** `layerb.Evaluate` is consumed in-process by the `demote-*` CLIs; no standalone CLI surfaces it. §0189 establishes the wire shape from scratch (§0188 MO1 wire-parity adapts: where no CLI exists, the JSON shape mirrors the package struct snake-case-converted).
+
+- **Decision:** Add `GET /v1/layer-b-verdict` HTTP endpoint exposing `layerb.Evaluate`. Three changes:
+
+  1. **`services/ingestion/internal/httpapi/layerb.go`** (~175 lines) — `handleLayerBVerdict` Handler method + `layerBVerdictPayload` wire-shape struct + two shared query-param parsers (`parseRequiredUint64Query`). Method check (GET only) + substrate-availability check + 7 required query-param checks (formation_event_hash_hex + 2 t_b fields + 2 k_c fields + n_window + n_a_duration_nanoseconds) + §2.6 rational-pair invariant gate (denominators > 0) + §0138 W-count window gate (n_window > 0) + `layerb.Evaluate` invocation + JSON envelope encoding.
+
+  2. **`services/ingestion/internal/httpapi/handler.go`** — one new `case r.URL.Path == "/v1/layer-b-verdict"` route placed immediately after the §0188 `/v1/morphology` route (read-only diagnostics adjacent grouping preserved).
+
+  3. **`services/ingestion/internal/httpapi/layerb_test.go`** (~155 lines, 7 tests) — `TestLayerBVerdictHTTPHappyPathBC` (verdict envelope shape + formation-hash echo + WindowEventCount > 0), `TestLayerBVerdictHTTPMissingHash` (400 on missing required param), `TestLayerBVerdictHTTPZeroDenominator` (400 from HTTP layer, NOT 500 from layerb — §2.6 rational-pair invariant gate enforces at the HTTP boundary), `TestLayerBVerdictHTTPZeroNWindow` (400 on n_window=0), `TestLayerBVerdictHTTPMalformedHash` (400 on 63-char hash — length check fires first), `TestLayerBVerdictHTTPMethodNotAllowed` (405 + Allow header), `TestLayerBVerdictHTTPSubstrateNotConfigured` (503 when handler lacks WithSubstrate).
+
+- **Constitutional review:**
+
+  Subordinate to §0135 + §0138 Layer B L-BC-OR semantic (verdict mirrors the disjunction). Subordinate to §2.6 rational-pair invariant (denominators > 0). Subordinate to §0188 MO1 CLI↔HTTP wire-parity discipline (extended pattern: where no CLI exists, mirror package struct). Subordinate to §0164 MO1 verification discipline.
+
+  Falsifiability discipline: 7 unit tests cover the contract — happy-path verdict + 4 input-validation gates (missing param, zero denominator, zero n_window, malformed hash) + 2 protocol gates (method-allow-list + substrate-availability-gate). Each validation gate has a specific failure surface that distinguishes HTTP-layer rejection (400) from package-layer rejection (500). The §2.6 rational-pair invariant gate at the HTTP boundary is the structural witness that input validation surfaces at the perimeter, not inside `layerb.Evaluate`.
+
+  Per Charter §2.5 BC5: Layer B verdict is a transient computation (not committed to substrate per §0141 D1 — DemoteReport extension only). The endpoint is read-only over the substrate, does not commit any events, does not require auth.
+
+- **Consequences:**
+  - 2 new files in `services/ingestion/internal/httpapi/`; ~330 lines total.
+  - 1 modified file (`handler.go` route addition; 2 lines).
+  - 7 new unit tests.
+  - 1 new HTTP route exposing Layer B verdicts at the operational tier.
+  - **Second operational-tier advance lands.** Discharges 2nd of 3 §0188 operational HTTP gaps (Layer B verdict). One remains: F3 candidate evaluation (per-subtype signature wiring — larger scope).
+  - **First wire-shape-from-scratch HTTP endpoint.** Establishes the §0188 MO1 wire-parity-by-package-struct sub-pattern (where no CLI exists, the JSON shape mirrors the package struct snake-case-converted). Two shared query-param parsers (`parseRequiredUint64Query`) introduced; available for future endpoints requiring required numeric query params.
+
+  Per §0164 MO1 verification discipline: empirical state inline. `grep -c "^func Test" services/ingestion/internal/httpapi/layerb_test.go` returns 7. Full `go test ./internal/httpapi/...` passes; full `go test ./...` from `services/ingestion/` passes.
+
+  Scope discipline per §0189: **single GET endpoint with 7 required query params** — no body parsing, no per-subtype routing (Layer B is subtype-agnostic), no auth requirement (read-only diagnostic). Does NOT introduce:
+  - Layer B parameter caching at substrate (each call computes fresh).
+  - POST request-body variant (query params suffice for scalar inputs).
+  - Per-subtype endpoint variants (Layer B's formation-hash-based API doesn't benefit from per-subtype routing — the formation hash carries the subtype identity).
+
+  - **Methodological observation 1 — Input-validation gates at the HTTP boundary distinguish package-layer rejection (500) from request-validation rejection (400) + reduce operator confusion on diagnostic endpoints.** §0189's three explicit validation gates (zero denominator → 400; zero n_window → 400; malformed hash → 400) all map to invariants enforced ALSO at the package layer (`layerb.Evaluate` would return an error for any of them). Duplicating the gates at the HTTP layer makes the HTTP status meaningful (operators tuning dashboards see 400 = "your query is wrong" vs 500 = "the system is wrong"). **Pattern: HTTP diagnostic endpoints with required-parameter contracts SHOULD duplicate the invariant gates at the request-validation boundary; the redundancy is structural, not behavioral — both layers reject the same inputs, but the HTTP status code carries the operator-actionable diagnosis. Future diagnostic endpoints (F3 candidate eval, projection rebuilds) SHOULD follow this pattern.**
+
+- **Supersession:** No prior decision-log entry superseded. Discharges 2nd of 3 §0188 operational HTTP gaps. One operational HTTP gap remains: F3 candidate evaluation endpoint (per-subtype signature wiring — larger scope than §0188 or §0189).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
