@@ -8578,6 +8578,49 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0197` — httpapi per-request structured logging via slog; first observability instrumentation advance; opens the operational-tier observability direction
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** Post-§0196 (observationcollector consolidation program complete), the operational-tier direction-change checkpoint surfaced observability instrumentation as one of the natural next advances. §0197 opens that direction with the smallest foundational piece: per-request structured logging at the httpapi handler layer.
+
+  Pre-§0197 httpapi state: no observability surface. Handlers emit no structured events beyond what `writeIngestError` writes to the response body. Operators tracking request behavior in production have no structured stream to consume.
+
+- **Decision:** Add per-request structured logging via stdlib stdlib `slog` to the httpapi Handler. Three changes:
+
+  1. **`services/ingestion/internal/httpapi/logging.go`** (~65 lines) — new file with `defaultLogger` (no-op `io.Discard`-backed logger) + `loggingResponseWriter` struct wrapping `http.ResponseWriter` to capture the status code written by inner handlers. `WriteHeader` is idempotent (first-write-wins matches net/http contract); `Write` implicitly records 200 when called without prior `WriteHeader` (matches net/http's implicit-200 semantic).
+
+  2. **`services/ingestion/internal/httpapi/handler.go`** — adds `logger *slog.Logger` field to `Handler` struct + `WithLogger(*slog.Logger) Option` (nil → preserves default discard logger per the WithSubstrate(nil) ergonomic). `New` initializes `logger: defaultLogger`. `ServeHTTP` wraps `w` with `loggingResponseWriter` + defers a `LogAttrs` call with method/path/status/duration_ms/tier/remote_addr fields. Auth-rejection path also flows through the wrapper so 401 responses are captured.
+
+  3. **`services/ingestion/internal/httpapi/logging_test.go`** (~190 lines, 9 tests) — covers: structured-entry emission on /healthz (T0 — empty tier field), tier capture on operator-read endpoint (/v1/hypotheses → "operator-read"), 405 status capture on POST to GET-only /v1/morphology, 401 status capture on missing-auth /v1/events, default-logger-emits-nothing contract, WithLogger(nil) preserves default, loggingResponseWriter contracts (implicit-200 on Write, first-WriteHeader-wins, default-status-200 when never written), no-status-attribute-missing regression guard across two paths.
+
+- **Constitutional review:**
+
+  Subordinate to §0094 tier classification (tier field in structured entries reflects `routeTier(r)` per §0094). Subordinate to §0164 MO1 verification discipline. No new external dependencies — stdlib `slog` is stdlib (Go 1.22+). Default behavior preserved: WithLogger-unset handlers emit no structured output, matching pre-§0197 silent operation.
+
+  Falsifiability: 9 unit tests cover the contract. The no-status-attribute-missing regression guard mechanically verifies every emitted entry carries the `status` field; the auth-path test specifically witnesses that the loggingResponseWriter wraps the 401 response too (a regression where `h.writeUnauthorized(w)` bypassed the wrapper would surface as a missing status).
+
+- **Consequences:**
+  - 1 new file (logging.go ~65 lines) + 1 new test file (logging_test.go ~190 lines).
+  - 1 modified file (handler.go: ~30 lines added — field + option + ServeHTTP wrap).
+  - 9 new unit tests.
+  - **First observability instrumentation advance lands.** Establishes that observability is the active operational-tier work direction; subsequent advances (Prometheus metrics, request-id propagation, tracing hooks) can follow under the same direction.
+  - **No new external dependencies.** Stdlib slog avoids the Prometheus client_golang + OpenTelemetry SDK weight at this advance; deferred until concrete metric/trace requirements surface.
+  - **Logger is per-Handler, not global.** Enables per-handler configuration (e.g., separate loggers for ingestion vs control-plane handlers if operators choose to split); matches the existing Handler-scoped configuration discipline (substrate, auth tokens, fatal reporter, request body limit).
+
+  Per §0164 MO1 verification discipline: full `go test ./internal/httpapi/...` passes; full `go test ./...` from `services/ingestion/` reports 0 failures.
+
+  Scope discipline per §0197: **structured request logging only** — no Prometheus metrics (deferred to §0198 or later if useful), no request-id middleware (deferred), no trace-id propagation (deferred until OpenTelemetry surface is needed). Does NOT introduce:
+  - New external dependencies (stdlib-only via stdlib `slog`).
+  - Per-handler structured fields beyond the 6 in the entry (method/path/status/duration_ms/tier/remote_addr); future advances can attach handler-specific attrs via slog's WithGroup or per-handler logger derivation.
+  - Logger configuration in production main (operator wires `WithLogger(slog.New(...))` at service-start time; the package provides the surface, not the binding).
+
+  - **Methodological observation 1 — Structured-logging instrumentation SHOULD default to a no-op (io.Discard-backed) logger to preserve test silence + pre-instrumentation behavior; explicit opt-in via WithLogger keeps the contract minimal.** Alternative designs (e.g., default to slog.Default() which emits to stderr) would surface output noise in every existing handler test — 100+ tests at the httpapi layer pre-§0197 — without any per-test mitigation. The discard-default discipline preserves the pre-§0197 silent-operation contract; tests that need to exercise structured-emission paths opt in via WithLogger(slog.New(slog.NewJSONHandler(&buf, nil))). **Pattern: when adding instrumentation infrastructure (logging, metrics, tracing) to an established handler/service surface, default to a no-op implementation; require explicit opt-in via Options or constructor parameters. The discipline preserves the pre-instrumentation test surface + lets the production wiring be a single explicit configuration site (typically in main()).**
+
+- **Supersession:** No prior decision-log entry superseded. Opens the operational-tier observability instrumentation direction. Future advances within this direction (Prometheus metrics, request-id middleware, OpenTelemetry tracing) can land as separate downstream advances each following the §0197 no-op-default discipline per MO1.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
