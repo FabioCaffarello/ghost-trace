@@ -7777,6 +7777,42 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0180` — Dissolution E2E integration test from F3-derived BehavioralCluster formation; extends §0179 along unary cross-formation axis
+
+- **Status:** accepted.
+- **Date:** 2026-05-25.
+- **Context:** Fifth PR in the §0176-opened BehavioralCluster lifecycle integration coverage arc. Extends along the UNARY CROSS-FORMATION lifecycle axis (dissolution: 1 formation → 1 dissolution event). Mirrors §0166 on the BehavioralCluster subtype side.
+
+  Per glossary + lifecycle-semantics.md: dissolution is DISTINGUISHED from demotion. Demotion (§0178) withdraws operational use; dissolution recognizes non-existence. Dissolve does NOT require prior promotion — formation may be dissolved directly. This test exercises that direct path.
+
+- **Decision:** New test file `services/ingestion/cmd/find-behavioral-cluster-candidates/dissolution_e2e_test.go`:
+
+  - **`TestDissolveBehavioralCluster_FromF3CandidateFormation`** — Full path NO promotion in between: inject BehavioralObservation → F3 → 1 candidate → commit formation via §0176 helper → `hypothesis.Dissolve` → verify formation + dissolution in substrate + dissolution proto references formation hash via `bytes.Equal`.
+
+  - **`TestDissolveBehavioralCluster_IdempotencyUnderRepeatedCommit`** — Content-hash idempotency: second commit with identical opts surfaces `AlreadyDissolved=true` + identical hash hex.
+
+  Uses `hypothesis.Dissolve` (BehavioralCluster-targeted generic-named per §0178 MO1).
+
+  Constitutional discipline:
+  - Direct dissolution per §2.5 BC5 + lifecycle-semantics.md.
+  - §3 N3 two operator-elected commits (formation, dissolution).
+  - §2.5 BC5 lifecycle event immutability.
+  - §0048 content-hash idempotency.
+
+  Per §0164 MO1 verification discipline: empirical state inline. `grep -c "^func Test" services/ingestion/cmd/find-behavioral-cluster-candidates/dissolution_e2e_test.go` returns 2. Behavioral CLI test count post-§0180 = 12.
+
+- **Constitutional review:** No Charter prose modified. Test-only addition.
+
+  Falsifiability discipline: verifies (a) F3 emits candidate; (b) formation + dissolution commit; (c) dissolution proto references formation hash exactly; (d) repeat-commit idempotency surfaces via report boolean + hash equality.
+
+- **Consequences:**
+  - New test file (2 tests).
+  - **Fifth BehavioralCluster lifecycle integration test lands.** Discharges PR #5 of 6 in §0176-opened arc. Remaining: split E2E (§0181, parallel to §0167).
+
+- **Supersession:** No prior decision-log entry superseded. Fifth PR of 6 in §0176-opened arc.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
