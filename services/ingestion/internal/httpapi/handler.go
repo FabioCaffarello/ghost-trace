@@ -187,6 +187,13 @@ type Handler struct {
 	// production main wires a real slog.Logger (typically slog.Default()
 	// after slog.SetDefault on stdout/stderr-bound handler).
 	logger *slog.Logger
+
+	// metrics is the Prometheus-style counter registry per decision-log
+	// §0199 third observability advance. Nil when WithMetrics is not
+	// configured — the /metrics route returns 503 + per-request Inc
+	// is a no-op (nil-check in ServeHTTP defer). Production main wires
+	// a fresh Metrics via WithMetrics + scrapes via /metrics.
+	metrics *Metrics
 }
 
 // Option configures a Handler at construction. See WithAuthToken,
@@ -298,6 +305,28 @@ func WithLogger(logger *slog.Logger) Option {
 	return func(h *Handler) {
 		if logger != nil {
 			h.logger = logger
+		}
+	}
+}
+
+// WithMetrics enables the Prometheus-style counter registry + the
+// /metrics scrape endpoint per decision-log §0199 third observability
+// advance. Per-(path, status) requests are counted; the registry is
+// exposed at GET /metrics in Prometheus text exposition format.
+//
+// Default (no WithMetrics call): the /metrics route returns 503 + no
+// per-request counter increment occurs (Inc is a no-op when the
+// metrics pointer is nil). Production main constructs a fresh
+// *Metrics via NewMetrics + passes via WithMetrics; tests construct
+// per-test metrics to avoid cross-test counter pollution.
+//
+// nil metrics is treated as the default (disabled) — no panic at
+// construction; matches the WithSubstrate(nil) + WithLogger(nil)
+// ergonomic.
+func WithMetrics(metrics *Metrics) Option {
+	return func(h *Handler) {
+		if metrics != nil {
+			h.metrics = metrics
 		}
 	}
 }
@@ -434,15 +463,19 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	lw := &loggingResponseWriter{ResponseWriter: w}
 	defer func() {
 		tier := routeTier(r)
+		status := lw.effectiveStatus()
 		h.logger.LogAttrs(r.Context(), slog.LevelInfo, "httpapi request",
 			slog.String("method", r.Method),
 			slog.String("path", r.URL.Path),
-			slog.Int("status", lw.effectiveStatus()),
+			slog.Int("status", status),
 			slog.Int64("duration_ms", time.Since(start).Milliseconds()),
 			slog.String("tier", string(tier)),
 			slog.String("remote_addr", r.RemoteAddr),
 			slog.String("request_id", requestID),
 		)
+		if h.metrics != nil {
+			h.metrics.Inc(r.URL.Path, status)
+		}
 	}()
 	if h.requiresAuth(r) && !h.authorized(r) {
 		h.writeUnauthorized(lw)
@@ -453,6 +486,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/healthz":
 		h.handleHealthz(w, r)
+	case r.URL.Path == "/metrics":
+		h.handleMetrics(w, r)
 	case r.URL.Path == "/v1/events" || r.URL.Path == "/v1/events/":
 		// Untyped path: surface the dispatch contract rather than 404
 		// so producers running against pre-dispatch wire shape see a
