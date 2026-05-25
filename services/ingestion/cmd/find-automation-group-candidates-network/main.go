@@ -37,6 +37,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/attribution"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
@@ -57,8 +58,10 @@ func main() {
 func run() error {
 	dbPath := flag.String("db", "./ghost-trace.db", "SQLite primary-event-log path")
 	blobDir := flag.String("blobs", "./blobs", "content-addressed blob-store directory")
-	threshold := flag.Uint("threshold", 0, "tcp_fingerprint_clustering_v1 threshold override (0 = signature default = 3)")
+	threshold := flag.Uint("threshold", 0, "signature threshold override (0 = signature default = 3)")
 	limitCandidates := flag.Int("limit", 0, "maximum candidates to emit (0 = unlimited)")
+	signatureName := flag.String("signature", "p0f", "signature to invoke: 'p0f' (tcp_fingerprint_clustering_v1) or 'flow-features' (tcp_flow_features_clustering_v1; closes §0162 gap (2) for CICFlowMeter-style adapters per §0169)")
+	useAttribution := flag.Bool("with-attribution", false, "consult Cat II DerivedActorAttribution records (§0168) to fill empty actor_ref on Cat I observations; off by default for backward-compat")
 	flag.Parse()
 
 	ctx := context.Background()
@@ -73,8 +76,26 @@ func run() error {
 		return fmt.Errorf("collect: %w", err)
 	}
 
-	sig := &signatures.TCPFingerprintClusteringV1{Threshold: uint32(*threshold)}
-	result, err := sig.EvaluateNetwork(ctx, observations, nil)
+	sig, sigThreshold, err := selectNetworkSignature(*signatureName, uint32(*threshold))
+	if err != nil {
+		return err
+	}
+
+	// AttributionView: nil unless explicitly requested. Per §0168
+	// Decision A.1: signature consumption of Cat II derived
+	// attribution is OPT-IN at orchestrator dispatch — operators
+	// who have run attribution.DeriveAll on the substrate pass
+	// -with-attribution to consume the resulting Cat II records.
+	var attributionView signatures.AttributionLookup
+	if *useAttribution {
+		v, err := attribution.CollectAttributionView(ctx, sub)
+		if err != nil {
+			return fmt.Errorf("attribution.CollectAttributionView: %w", err)
+		}
+		attributionView = v
+	}
+
+	result, err := sig.EvaluateNetwork(ctx, observations, attributionView)
 	if err != nil {
 		return fmt.Errorf("signature.EvaluateNetwork: %w", err)
 	}
@@ -87,16 +108,35 @@ func run() error {
 	if err := emitCandidatesJSON(os.Stdout, sig.Name(), candidates, result.Stats); err != nil {
 		return fmt.Errorf("emit JSON: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "find-automation-group-candidates-network: scanned=%d observations; candidates=%d (signature=%s threshold=%d; actors_aggregated=%d; actors_above_threshold=%d; skipped_no_actor=%d; skipped_wrong_modality=%d)\n",
+	fmt.Fprintf(os.Stderr, "find-automation-group-candidates-network: scanned=%d observations; candidates=%d (signature=%s threshold=%d with_attribution=%v; actors_aggregated=%d; actors_above_threshold=%d; skipped_no_actor=%d; skipped_wrong_modality=%d)\n",
 		result.Stats.ObservationsScanned,
 		len(candidates),
 		sig.Name(),
-		thresholdOrDefault(sig),
+		sigThreshold,
+		*useAttribution,
 		result.Stats.ActorsAggregated,
 		result.Stats.ActorsAboveThreshold,
 		result.Stats.ObservationsSkippedNoActor,
 		result.Stats.ObservationsSkippedWrongModality)
 	return nil
+}
+
+// selectNetworkSignature constructs the configured NetworkSignature
+// instance and returns the effective threshold (signature's default
+// when the override is 0). Per §0170: explicit name → signature
+// mapping kept simple at inception; future signature additions extend
+// the switch.
+func selectNetworkSignature(name string, thresholdOverride uint32) (signatures.NetworkSignature, uint32, error) {
+	switch name {
+	case "p0f":
+		s := &signatures.TCPFingerprintClusteringV1{Threshold: thresholdOverride}
+		return s, thresholdOrDefaultP0F(s), nil
+	case "flow-features":
+		s := &signatures.TCPFlowFeaturesClusteringV1{Threshold: thresholdOverride}
+		return s, thresholdOrDefaultFlowFeatures(s), nil
+	default:
+		return nil, 0, fmt.Errorf("unknown -signature value %q (valid: p0f, flow-features)", name)
+	}
 }
 
 // collectNetworkObservations walks the substrate and unmarshals every
@@ -208,7 +248,14 @@ func subtypeName(s signatures.HypothesisSubtype) string {
 	}
 }
 
-func thresholdOrDefault(sig *signatures.TCPFingerprintClusteringV1) uint32 {
+func thresholdOrDefaultP0F(sig *signatures.TCPFingerprintClusteringV1) uint32 {
+	if sig.Threshold != 0 {
+		return sig.Threshold
+	}
+	return 3
+}
+
+func thresholdOrDefaultFlowFeatures(sig *signatures.TCPFlowFeaturesClusteringV1) uint32 {
 	if sig.Threshold != 0 {
 		return sig.Threshold
 	}
