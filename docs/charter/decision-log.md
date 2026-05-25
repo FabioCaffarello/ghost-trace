@@ -7120,6 +7120,74 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0169` — tcp_flow_features_clustering_v1 closes §0162 gap (2) via flow-feature clustering; CIC-IDS path now F3-reachable end-to-end
+
+- **Status:** accepted.
+- **Date:** 2026-05-25.
+- **Context:** [`§0168`](#0168--first-identity-synthesizing-cat-ii-construct-derivedactorattribution--network_5tuple_actor_v1-closes-0162-gap-1-decision-a1-signature-aware-cravada) closed §0162 gap (1) (no actor_ref on CIC-IDS NetworkObservation records) via DerivedActorAttribution + network_5tuple_actor_v1. Gap (2) (CICFlowMeter does not preserve TCP options → adapter emits tcp_fingerprint without p0f_signature) remained open: even with Cat II attribution populated, `tcp_fingerprint_clustering_v1` (§0161) still skipped CIC-IDS records at ObservationsSkippedWrongModality because empty p0f cannot participate in equality-based clustering.
+
+  Two paths were available to close gap (2):
+  - **(a)** Extend cic_ids adapter to synthesize partial p0f canonical form from `(window_size, flags_sequence, header_length)` with explicit `synth:` provenance marker.
+  - **(b)** Land an alternative NetworkSignature that clusters by the available fields directly, without requiring p0f canonical form.
+
+  User selected option (b). This entry implements it.
+
+  Constitutional preference for (b) over (a): (a) would fabricate canonical form from incomplete inputs (CICFlowMeter measures flag-counts; p0f reads ordered TCP options — the two are NOT equivalent). Even with explicit `synth:` provenance marker, the synthesized form would conflict with the §0151 + §0144 framing of p0f canonical form as a CAPTURED observational artifact, not a derived one. (b) avoids that semantic load entirely by treating flow-feature clustering as a distinct detection axis. §3 N1 truth-vs-structure pressure is lower at (b).
+
+- **Decision:** New F3 signature `tcp_flow_features_clustering_v1` in `services/ingestion/internal/signatures/tcp_flow_features_clustering.go`:
+
+  - **Modality**: NetworkSignature consuming NetworkObservation with tcp_fingerprint sub-modality.
+  - **Cluster key**: canonical-form `"flags=<comma-sep control-bit byte sequence>;window=<value>"` from `(FlagsSequence, WindowSize)` tuple. Operator-inspectable; not hashed. Form parallel to §0168's plain-string `derived_actor_ref` discipline.
+  - **Threshold**: default 3 distinct actors per cluster (mirrors §0161 conservative-default for cluster-cardinality signatures).
+  - **Subtype**: AutomationGroup (consistent with §0161's framing — multi-actor identical-stack pattern is AutomationGroup-shaped per §0010 Q2-A.2).
+  - **§0168 AttributionLookup consumption**: identical pattern to §0161. Declared-precedes-derived; Cat II derivation hash threaded into candidate SourceHashes alongside Cat I observation hash.
+  - **Skip semantics**:
+    - empty actor_ref AND no AttributionLookup-derived actor: `ObservationsSkippedNoActor++`.
+    - non-tcp_fingerprint modality: `ObservationsSkippedWrongModality++`.
+    - tcp_fingerprint with EMPTY flags_sequence AND window_size == 0: `ObservationsSkippedWrongModality++` (no clusterable features).
+
+  Constitutional discipline:
+
+  - **§3 N1 truth-vs-structure** preserved — signature clusters by features the adapter ACTUALLY records; no fabrication of canonical form.
+  - **§0144 discriminated-union framing** honored — signature consumes NetworkObservation typed envelope + extracts tcp_fingerprint sub-modality via `GetTcpFingerprint()`.
+  - **§0168 Decision A.1** inherited — AttributionLookup consumption identical to §0161.
+  - **§0139 hash-list element-shape** — SourceHashes sorted ascending at emit time.
+  - **§3 N1 ConfidenceHint cap at 0.9** via shared `confidenceFromCount` helper.
+  - **§0161 corpus discipline** preserved — signature is ALTERNATIVE to §0161's `tcp_fingerprint_clustering_v1`, not replacement. Both coexist in the signatures package; operators pick based on substrate state. Future advances may add a registry to dispatch automatically.
+
+  Test coverage:
+
+  - **11 unit tests** in `tcp_flow_features_clustering_test.go`: contract fields, NetworkSignature interface, below/at threshold, distinct features no cross-cluster, window-difference separates clusters, no-features skip, window-only-not-skipped, empty-actor skip without attribution, AttributionLookup fills empty actor per §0168 (with §2.3 chain assertion), deterministic order.
+  - **1 end-to-end integration test** in `cmd/find-automation-group-candidates-network/cic_ids_full_loop_integration_test.go`: ingest CIC-IDS sample → DeriveAll attribution → CollectAttributionView → run signature → verify candidate emits with 3 derived actor_refs + 6 hashes in SourceHashes (3 Cat I + 3 Cat II per §2.3). **This is the structural witness that BOTH §0162 gaps are closed end-to-end.**
+
+  Scope discipline per §0169: **second NetworkSignature lands + first BOTH-gaps-closed end-to-end witness.** Does NOT introduce:
+
+  - cic_ids adapter changes (per scope discipline at strategic-direction selection time — option (b) was specifically the "meet the substrate where it is" path that preserves adapter as ingestion-faithful).
+  - Multi-modality dispatch CLI or signature registry (separate downstream advance per §0163).
+  - Updated find-automation-group-candidates-network CLI to invoke BOTH signatures (current CLI invokes tcp_fingerprint_clustering_v1 only; updating to support choice or dispatch is separate advance).
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. New non-Charter capability (F3 signature corpus extension + first BOTH-gaps-closed empirical witness).
+
+  Falsifiability discipline: signature behavior structurally observable + exhaustively tested. The 11 unit tests cover 11 distinct behavior shapes. The integration test asserts (a) ingestion produces 9 NetworkObservation records (3 tcp_fingerprint + 6 ip_asn); (b) DeriveAll produces 9 Cat II records (none skipped); (c) signature produces 1 cluster of 3 derived actors with 6 SourceHashes; (d) skip counters split correctly (0 no-actor, 6 wrong-modality for the ip_asn obs). The structural witness is binary: either the candidate emits with the expected shape, or it does not.
+
+  Reachability claim correction history per §0162 + §0168 + §0169: §0161 over-projected "CIC-IDS path is F3-reachable"; §0162 empirically corrected to "NOT reachable due to TWO gaps"; §0168 closed gap (1); §0169 closes gap (2) + provides empirical witness that the full loop now operates. The §0161 → §0162 → §0168 → §0169 four-entry arc is the empirical-correction discipline (per §0164 MO1) applied across multiple advance steps.
+
+- **Consequences:**
+  - New signature file `services/ingestion/internal/signatures/tcp_flow_features_clustering.go` (~180 lines).
+  - New unit test file `services/ingestion/internal/signatures/tcp_flow_features_clustering_test.go` (11 tests).
+  - New integration test file `services/ingestion/cmd/find-automation-group-candidates-network/cic_ids_full_loop_integration_test.go` (1 test).
+  - No proto changes. No package additions. No canonical-corpus changes (no new paired-dimension subject type). No Makefile changes.
+  - **§0162 gap (2) STRUCTURALLY CLOSED.** Combined with §0168 (gap (1)), CIC-IDS adversarial-pressure path is now F3-reachable end-to-end. The §0162 → §0168 → §0169 three-entry sequence empirically discharges the reachability problem the §0161 over-projection introduced.
+  - **F3 corpus now includes 3 signatures**: `cdp_marker_density_v1` (§0152, BrowserSignature on cdp_marker modality, per-actor density); `tcp_fingerprint_clustering_v1` (§0161, NetworkSignature on tcp_fingerprint with p0f canonical form, cluster-cardinality); `tcp_flow_features_clustering_v1` (§0169, NetworkSignature on tcp_fingerprint with available-fields clustering, cluster-cardinality). Two signatures share the NetworkSignature interface; they target DIFFERENT substrate states (p0f-rich vs CICFlowMeter-style); operator selects per the substrate's adapter heritage.
+  - **First demotion-capable empirical loop now structurally available.** Per strategic-direction framing at session start: "prioritize work that makes first non-trivial demotion possible within Domain Pack v0.1 6-month window." With §0169 landed, the substrate can be populated end-to-end (CIC-IDS ingest → Cat II attribution → F3 candidate → operator-elected formation commit → promotion → demotion candidacy via Layer B). Each step is integration-tested per the §0157-§0167 + §0168 + §0169 arc. Remaining work for the first non-trivial demotion is operational deployment, not implementation.
+  - **Methodological observation 1 — Alternative signatures can coexist in the F3 corpus without subsuming one another.** §0169's `tcp_flow_features_clustering_v1` does NOT replace §0161's `tcp_fingerprint_clustering_v1`; both consume tcp_fingerprint modality but target DIFFERENT substrate states (p0f-rich vs CICFlowMeter-style). Operators select the signature whose feature requirements match the adapter's emission shape. **Pattern: F3 corpus expansion under substrate-availability constraints SHOULD favor signature additions over adapter modifications when the adapter is faithful to its source. The signature meets the substrate where it is; the adapter remains ingestion-faithful. Cross-adapter substrate population enriches the corpus naturally as new sources land.**
+  - **Methodological observation 2 — Substrate-availability constraints at the adapter layer define signature design space, not the reverse.** §0162 surfaced gap (2) as a CICFlowMeter limitation; §0169 designed around it rather than forcing CICFlowMeter to emit features it cannot capture. The constitutional preference for (b) over (a) reflects this: §3 N1 + §0151 + §0144 frame p0f canonical form as a CAPTURED observational artifact; synthesizing it from non-equivalent inputs would conflict with that framing. **Pattern: when an adapter cannot emit a specific feature, the constitutional-cleanest response is to design a signature that works without that feature, not to extend the adapter to fabricate it. Adapter extensions that synthesize features carry §3 N1 risk (fabrication-as-observation); signature additions on available features do not.**
+  - **Methodological observation 3 — End-to-end integration tests at the LAST advance of a multi-step gap-closure arc are the empirical-correction discipline's natural completion.** The §0161 → §0162 → §0168 → §0169 arc spans four entries: claim → correction → first gap close → second gap close + end-to-end witness. The integration test at §0169 verifies the WHOLE LOOP now operates as §0161 over-projected. Per §0164 MO1 + §0162 MO1: forward-projected reachability claims are structural hypotheses that must be empirically verified. The §0169 integration test IS that verification. **Pattern: multi-step gap-closure arcs benefit from an end-to-end integration test at the LAST advance — verifies all gaps closed together, not just individually. Single-gap closure tests (per the §0168 unit test pattern) verify the local component; the end-to-end test verifies the COMPOSITION of all closures. Both layers of test are necessary.**
+
+- **Supersession:** No prior decision-log entry superseded. §0162 + §0168 + §0169 form a three-entry sequence empirically discharging the §0161 over-projection. Per §0007 append-only discipline: no prior prose rewritten. Future F3 reachability assessments for CIC-IDS-shaped substrate should consult §0169 as the empirical witness of end-to-end reachability via the (`network_5tuple_actor_v1` Cat II + `tcp_flow_features_clustering_v1` signature) pair.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
