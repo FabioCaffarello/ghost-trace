@@ -8450,6 +8450,48 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0194` — GET /v1/find-candidates/automation-group-network HTTP endpoint; CLOSES §0188 operational HTTP gap program; 5th + final find-candidates-* endpoint with two-signature selection
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0190-§0193 landed 4-of-5 find-candidates-* HTTP endpoints. §0194 lands the 5th + final endpoint (AG-network) which has TWO signatures behind a query param: `tcp_fingerprint_clustering_v1` (p0f) per §0161 + `tcp_flow_features_clustering_v1` (flow-features) per §0169. This is the two-signature-selection complexity §0191 + §0192 + §0193 deferred to the final entry.
+
+  With §0194 landed, the §0188 operational HTTP gap program is structurally COMPLETE: all 3 gaps (morphology §0188 + Layer B verdict §0189 + F3 candidate eval §0190-§0194) are discharged. The operational tier has 7 new HTTP endpoints exposing previously-CLI-only diagnostic + evaluation surfaces.
+
+- **Decision:** Add `GET /v1/find-candidates/automation-group-network` HTTP endpoint exposing two signatures via REQUIRED `signature` query param. Three changes:
+
+  1. **`services/ingestion/internal/httpapi/find_candidates_ag_network.go`** (~165 lines) — `handleFindCandidatesAGNetwork` Handler method + `selectAGNetworkSignature` helper mirroring `cmd/find-automation-group-candidates-network`'s `selectNetworkSignature`. The `signature` query param is REQUIRED (no default) — operators choose explicitly; missing → 400. Two signature paths: `signature=p0f` → `TCPFingerprintClusteringV1`; `signature=flow-features` → `TCPFlowFeaturesClusteringV1`. Reuses §0192's shared `collectNetworkObservationsHTTP` + AttributionLookup pattern.
+
+  2. **`services/ingestion/internal/httpapi/handler.go`** — one new route adjacent to §0193.
+
+  3. **`services/ingestion/internal/httpapi/find_candidates_ag_network_test.go`** (6 tests): `TestFindCandidatesAGNetworkHTTPHappyPathP0F` (3 actors sharing p0f fingerprint → 1 AutomationGroup candidate; SignatureName = tcp_fingerprint_clustering_v1) + `TestFindCandidatesAGNetworkHTTPMissingSignature` (400 on missing param) + `TestFindCandidatesAGNetworkHTTPUnknownSignature` (400 on invalid value) + `TestFindCandidatesAGNetworkHTTPFlowFeaturesAcceptance` (signature=flow-features accepted; SignatureName = tcp_flow_features_clustering_v1) + method-allow-list + substrate-not-configured.
+
+- **Constitutional review:**
+
+  Subordinate to §0161 (tcp_fingerprint_clustering_v1) + §0169 (tcp_flow_features_clustering_v1) + §0163 + §0188 MO1 + §0168 (AttributionLookup) + §0190 MO1 + §0192 MO1 + §0164 MO1. Falsifiability: 6 unit tests cover both signature paths + missing-param/unknown-value gates + protocol gates.
+
+  Per §0194 MO1: the `signature` query param is REQUIRED (no default) — unlike the CLI's `-signature=p0f` default. Rationale: HTTP-layer explicit-selection forces operators to consciously choose the signature rather than receive a silent default. Network-modality has two structurally distinct signatures emitting the same subtype (AutomationGroup); silent defaulting could surface wrong-modality empty results without diagnostic feedback.
+
+- **Consequences:**
+  - 2 new files; ~350 lines total.
+  - 1 modified file (route addition).
+  - 6 new unit tests.
+  - **5th of 5 find-candidates-* endpoints lands.** F3 candidate eval gap fully discharged.
+  - **§0188 operational HTTP gap program structurally CLOSED.** All 3 §0188 gaps discharged: morphology (§0188) + Layer B verdict (§0189) + F3 candidate eval (§0190-§0194, 5 endpoints).
+  - **Shared-helper consolidation refactor unblocked.** Per §0190 MO1 + §0192 MO1: 5 find-candidates-* endpoints exist; the per-modality collectors (collectBehavioralObservationsHTTP §0190, collectBrowserObservationsHTTP §0191, collectNetworkObservationsHTTP §0192) + the subtypeNameHTTP mapper + the wire-shape struct family could now extract to a shared `internal/observationcollector/` package. Deferred to a separate follow-on PR per §0190 MO1 (consolidation lands as a separate structural advance, not bundled with the final endpoint).
+
+  Per §0164 MO1: full `go test ./internal/httpapi/...` passes; full `go test ./...` from `services/ingestion/` reports 0 failures.
+
+  Scope discipline per §0194: **single per-subtype endpoint with two-signature selection + program-closure structural witness** — no consolidation refactor (deferred), no new wire-shape extension (CR §0193 wire-shape struct family reused as-is).
+
+  - **Methodological observation 1 — Multi-signature HTTP endpoints SHOULD require explicit signature selection at the query-param layer; silent CLI-style defaults break operator diagnosis.** §0194's `signature` query param is REQUIRED (400 when missing). The CLI's `-signature=p0f` default is acceptable because the CLI surface is interactive — operators see the flag they invoked. HTTP endpoints often serve dashboards / cron jobs / external integrations where the request line is the only diagnostic surface; a silent default could surface wrong-signature empty results without informing the operator which signature actually ran. **Pattern: HTTP endpoints dispatching among MULTIPLE structurally-distinct backends (signatures, projections, derivation processes) via a query param SHOULD require the param explicitly (no default), even when the corresponding CLI surface defaults; the explicit-selection discipline preserves operator-side diagnostic clarity at scale.**
+
+  - **Methodological observation 2 — §0188 operational HTTP gap program closure milestone surfaces structurally; 7 endpoints across 4 PR PRs (§0188+§0189+§0190+§0191+§0192+§0193+§0194 = 7 endpoints in 7 PRs).** Program-arc closure entries (per §0187 MO3) SHOULD identify the per-PR + per-endpoint coverage map + identify remaining structural surfaces. §0188 morphology + §0189 layer-b-verdict + §0190-§0194 find-candidates-* = 7 endpoints over 7 PRs. Remaining structural surface within the operational tier: shared-helper consolidation refactor (per §0190 MO1) + per-subtype list endpoints if needed (current `/v1/hypotheses?subtype=` query-param suffices but per-subtype routes could simplify dashboards). **Pattern: operational-tier program closures SHOULD enumerate endpoints + identify the consolidation-refactor candidate as the natural NEXT advance. The §0157→§0187 F3-loop program closed similarly with consolidation refactors absent because no shared-helper opportunity surfaced; the §0188→§0194 operational program closes WITH a structurally apparent consolidation opportunity per §0190 MO1.**
+
+- **Supersession:** No prior decision-log entry superseded. CLOSES §0188 operational HTTP gap program (3 gaps discharged across 7 endpoints + 7 PRs). Next advance: shared-helper consolidation refactor extracting `internal/observationcollector/` per §0190 MO1; subsequent advances under ordinary operational-tier discipline.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
