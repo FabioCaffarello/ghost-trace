@@ -7247,6 +7247,68 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0171` — ReplayDerivedActorAttribution closes Phase 1 replay coverage asymmetry between Cat II types
+
+- **Status:** accepted.
+- **Date:** 2026-05-25.
+- **Context:** The replay package implements Phase 1 deterministic replay per `docs/architecture/replay-model.md` + §0084. Pre-§0171 scope was OperationalSession only (the only Cat II type committed before §0168). [`§0168`](#0168--first-identity-synthesizing-cat-ii-construct-derivedactorattribution--network_5tuple_actor_v1-closes-0162-gap-1-decision-a1-signature-aware-cravada) introduced a second Cat II type — `DerivedActorAttribution` — without parallel replay coverage. This created a Phase 1 replay coverage asymmetry: one Cat II type was replayable; the other was not, even though both share the same constitutional discipline (deterministic over observation alone per §2.2 Cat II requirement).
+
+  Per the empirical-correction discipline established at §0162 + §0164: this asymmetry is a STRUCTURAL drift introduced at §0168 (which scoped to construct landing without parallel replay coverage). Per §0163 → §0164 pairing pattern (structural asymmetry surfaced + closed via subsequent entry), this entry closes the gap with a parallel `ReplayDerivedActorAttribution` function mirroring `ReplayOperationalSession`.
+
+- **Decision:** Extend `services/ingestion/internal/replay/replay.go` with parallel attribution-replay surface:
+
+  - **`ReplayDerivedActorAttribution(ctx, sub, targetHash) → (DerivedActorAttributionReport, error)`** — mirrors `ReplayOperationalSession` on the attribution Cat II side. Same Phase 1 discipline: re-derives Cat II from declared Cat I source, compares hashes, reports Match.
+  - **`DerivedActorAttributionReport`** — mirrors `OperationalSessionReport` shape (TargetHashHex, RecomputedHashHex, Match, DefinitionVersion, DefinitionParameters, SourceEventHashHex).
+  - **`ResolveAttributionDefinition(version, parameters) → (AttributionDefinition, error)`** — mirrors `ResolveOperationalDefinition` on the attribution side. Currently registers `network-5tuple-actor-v1` only (the single attribution definition landed at §0168).
+  - **Two new constants**: `derivedActorAttributionMessageType` + `networkObservationMessageType`.
+  - **Sentinels reused**: `ErrTargetNotFound`, `ErrTargetWrongType`, `ErrDefinitionUnknown`, `ErrDefinitionParameterMismatch`, `ErrSourceNotFound`, `ErrSourceWrongType` — already defined for OperationalSession; semantics identical for attribution.
+  - **One additional error case** specific to attribution: when `def.Derive(source)` returns `ok=false`, replay reports the inability to reproduce. Structurally impossible for OperationalSession (no skip semantics at derive time); attribution-side replay introduces it as explicit error path.
+
+  Package docstring updated to reflect both Cat II types now supported.
+
+  Test coverage (`attribution_test.go`, 7 tests):
+
+  - `TestReplayDerivedActorAttribution_HappyPath` — substrate with 2 derived Cat II records; replay first; verify Match + DefinitionVersion + DefinitionParameters fields.
+  - `TestReplayDerivedActorAttribution_MatchAcrossMultiple` — replay all derived records; verify Match for each.
+  - `TestReplayDerivedActorAttribution_UnknownTarget` — bogus hash → ErrTargetNotFound.
+  - `TestReplayDerivedActorAttribution_WrongMessageType` — Cat I NetworkObservation hash → ErrTargetWrongType.
+  - `TestResolveAttributionDefinition_Network5TupleActorV1` — known version + empty parameters → instance.
+  - `TestResolveAttributionDefinition_UnknownVersion` → ErrDefinitionUnknown.
+  - `TestResolveAttributionDefinition_RejectsNonEmptyParameters` — v1 takes no parameters; non-empty → ErrDefinitionParameterMismatch.
+
+  Constitutional discipline:
+
+  - **§2.2 Cat II determinism** — replay verifies derivation reproducibility; Match=true is the structural witness that determinism holds per (source, definition_version, definition_parameters) tuple.
+  - **§2.1 substrate-immutability defense** — Match failure surfaces either definition-implementation drift OR substrate inconsistency.
+  - **§2.3 provenance-chain reconstructibility** — replay traverses Cat II → Cat I chain explicitly via source_event_hash.
+
+  Scope discipline per §0171: **closes replay coverage asymmetry between Cat II types**. Does NOT introduce:
+
+  - Phase 3 reconstructive replay for Cat III hypotheses (out of scope per replay-model.md).
+  - Replay CLI for DerivedActorAttribution (existing `replay-operational-session` CLI has no attribution equivalent; separate downstream advance).
+  - Cross-definition replay (replaying with a DIFFERENT definition_version than original; would conflict with §2.2 Cat II identity semantics).
+  - Multi-source attribution definitions (network_5tuple_actor_v1 is single-source; multi-source future definitions would need an AttributionContext analog to derivation.DerivationContext).
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. Package-internal extension.
+
+  Falsifiability discipline: replay behavior structurally observable + tested. The 7 new tests cover happy path (Match=true), unknown target (sentinel), wrong message type (sentinel), and resolver dispatch across all three branches (known/unknown/format-error). The Match boolean is the binary structural witness.
+
+  Per §0164 MO1 verification discipline: empirical state inline. `grep -c "^func Test" services/ingestion/internal/replay/attribution_test.go` returns 7. Replay package total test count post-§0171 = 20 (existing 13 + new 7).
+
+- **Consequences:**
+  - `replay.go` extended with `ReplayDerivedActorAttribution`, `DerivedActorAttributionReport`, `ResolveAttributionDefinition`, two new constants, +1 import (`attribution` package).
+  - `attribution_test.go` added (7 tests).
+  - Package docstring updated to reflect both-Cat-II-types support.
+  - **Phase 1 replay coverage symmetric across all committed Cat II types**: OperationalSession (§0043) + DerivedActorAttribution (§0168) both have parallel replay surfaces.
+  - **§0167 in-arc closure pattern applied to §0168.** §0168 landed the Cat II construct without parallel replay; §0171 closes the asymmetry in the same session arc.
+  - **Methodological observation 1 — Replay surfaces for new Cat II constructs are bounded mechanical extensions, NOT independent design.** §0171's `ReplayDerivedActorAttribution` mirrors `ReplayOperationalSession` line-by-line modulo (a) different Cat II message type, (b) different Cat I source message type, (c) absence of DerivationContext (network_5tuple_actor_v1 doesn't consume context), (d) one additional error case for `def.Derive` returning ok=false. **Pattern: new Cat II construct landing PRs should include the parallel replay extension by default; the extension is bounded mechanical work + the parallel structure is already established. Future Cat II construct landings should bundle the replay extension, not defer it.**
+  - **Methodological observation 2 — `ResolveX` registry functions are extension points + need explicit testing per known/unknown/format-error trichotomy.** §0171's `ResolveAttributionDefinition` mirrors `ResolveOperationalDefinition`'s structure. The 3-test trichotomy (known/unknown/format-error) catches typos in registration, missing-from-registry definitions, and format drift in canonical-parameter encoding. **Pattern: every `ResolveX` registry function added should ship with the 3-test trichotomy; the per-trichotomy tests are bounded + provide drift defense for the registry's known-set.**
+  - **Methodological observation 3 — Phase 1 replay coverage symmetry between Cat II types is a structural commitment, NOT optional uniformity.** Per §2.2 Cat II determinism: ALL Cat II types must be deterministic over (source, definition, parameters). Replay is the structural witness for that determinism per-type. Without replay coverage for a Cat II type, the determinism commitment is unverified + can silently drift. **Pattern: Phase 1 replay coverage SHOULD be a structural prerequisite for committing a new Cat II construct to production. Future Cat II construct PRs should pre-include replay coverage, OR explicitly defer it with a §0007-style follow-up tracking commitment.**
+
+- **Supersession:** No prior decision-log entry superseded. Closes Phase 1 replay coverage asymmetry introduced at §0168 (Cat II construct landing without parallel replay). The §0168 → §0171 pairing follows the §0163 → §0164 pattern (structural asymmetry surfaced + closed via subsequent entry). Future Cat II construct landings should bundle replay coverage per §0171 MO3.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

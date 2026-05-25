@@ -29,10 +29,11 @@
 // + §2.2, the substrate's record is authoritative — replay verifies
 // the derivation logic, not the substrate.
 //
-// Scope: this package currently supports OperationalSession (the only
-// Cat II type committed today; per §0043). Cat III hypothesis replay
-// is Phase 3 reconstructive replay per replay-model.md and is out of
-// scope here.
+// Scope: this package supports both Cat II types committed today —
+// OperationalSession (per §0043) via ReplayOperationalSession, and
+// DerivedActorAttribution (per §0168) via ReplayDerivedActorAttribution
+// (added at §0171). Cat III hypothesis replay is Phase 3 reconstructive
+// replay per replay-model.md and is out of scope here.
 package replay
 
 import (
@@ -46,6 +47,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/attribution"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/canonical"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/derivation"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
@@ -53,8 +55,10 @@ import (
 )
 
 const (
-	operationalSessionMessageType = "ghosttrace.events.v1.OperationalSession"
-	declaredSessionMessageType    = "ghosttrace.events.v1.DeclaredSession"
+	operationalSessionMessageType       = "ghosttrace.events.v1.OperationalSession"
+	declaredSessionMessageType          = "ghosttrace.events.v1.DeclaredSession"
+	derivedActorAttributionMessageType  = "ghosttrace.events.v1.DerivedActorAttribution"
+	networkObservationMessageType       = "ghosttrace.events.v1.NetworkObservation"
 )
 
 // Sentinels reported by ReplayOperationalSession.
@@ -264,4 +268,163 @@ func parseIntParam(parameters, key string) (int64, error) {
 		}
 	}
 	return 0, fmt.Errorf("parameter %s not found in %q", key, parameters)
+}
+
+// DerivedActorAttributionReport is the per-ReplayDerivedActorAttribution
+// outcome per §0171. Mirrors OperationalSessionReport on the attribution
+// Cat II side. Match is true iff the re-derived canonical-hash equals
+// the substrate's committed hash for the original record.
+type DerivedActorAttributionReport struct {
+	// TargetHashHex is the hex content-hash of the
+	// DerivedActorAttribution being replayed (input).
+	TargetHashHex string
+
+	// RecomputedHashHex is the hex content-hash of the re-derived
+	// DerivedActorAttribution (output of replay).
+	RecomputedHashHex string
+
+	// Match is true iff TargetHashHex == RecomputedHashHex.
+	Match bool
+
+	// DefinitionVersion is the version string read from the original
+	// DerivedActorAttribution.
+	DefinitionVersion string
+
+	// DefinitionParameters is the canonical-parameter string read
+	// from the original DerivedActorAttribution.
+	DefinitionParameters string
+
+	// SourceEventHashHex is the hex content-hash of the source Cat I
+	// observation (typically NetworkObservation) referenced by the
+	// original DerivedActorAttribution.
+	SourceEventHashHex string
+}
+
+// ReplayDerivedActorAttribution re-derives the DerivedActorAttribution
+// identified by targetHash from its declared source Cat I observation,
+// under the same attribution definition + parameters recorded on the
+// original record per §0171. Returns a report carrying both the
+// original and recomputed content-hashes; Match is true iff they agree.
+//
+// Phase 1 replay per docs/architecture/replay-model.md: deterministic
+// over observation alone. Mirrors ReplayOperationalSession on the
+// attribution Cat II side.
+//
+// The replay does NOT consult the original DerivedActorAttribution's
+// payload beyond its definition_version + definition_parameters +
+// source_event_hash fields; it freshly re-derives from the Cat I
+// observation. Match failure indicates either (a) attribution
+// definition implementation drift since original commit, or (b)
+// substrate inconsistency between the Cat II record and its declared
+// source observation per Charter §2.1.
+func ReplayDerivedActorAttribution(ctx context.Context, sub *substrate.Substrate, targetHash [32]byte) (DerivedActorAttributionReport, error) {
+	row, err := sub.LookupRow(ctx, targetHash)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return DerivedActorAttributionReport{}, fmt.Errorf("%w: %x", ErrTargetNotFound, targetHash)
+		}
+		return DerivedActorAttributionReport{}, fmt.Errorf("replay.ReplayDerivedActorAttribution: lookup target: %w", err)
+	}
+	if row.MessageType != derivedActorAttributionMessageType {
+		return DerivedActorAttributionReport{}, fmt.Errorf("%w: %x is %q (expected %s)",
+			ErrTargetWrongType, targetHash, row.MessageType, derivedActorAttributionMessageType)
+	}
+
+	payload, err := sub.ReadBlob(ctx, targetHash)
+	if err != nil {
+		return DerivedActorAttributionReport{}, fmt.Errorf("replay.ReplayDerivedActorAttribution: read target blob: %w", err)
+	}
+	original := &eventsv1.DerivedActorAttribution{}
+	if err := proto.Unmarshal(payload, original); err != nil {
+		return DerivedActorAttributionReport{}, fmt.Errorf("replay.ReplayDerivedActorAttribution: unmarshal target: %w", err)
+	}
+
+	def, err := ResolveAttributionDefinition(original.DefinitionVersion, original.DefinitionParameters)
+	if err != nil {
+		return DerivedActorAttributionReport{}, err
+	}
+	if def.Parameters() != original.DefinitionParameters {
+		return DerivedActorAttributionReport{}, fmt.Errorf("%w: definition %q produced %q, original carried %q",
+			ErrDefinitionParameterMismatch, def.Version(),
+			def.Parameters(), original.DefinitionParameters)
+	}
+
+	var sourceHash [32]byte
+	if len(original.SourceEventHash) != 32 {
+		return DerivedActorAttributionReport{}, fmt.Errorf("replay.ReplayDerivedActorAttribution: source_event_hash must be 32 bytes; got %d",
+			len(original.SourceEventHash))
+	}
+	copy(sourceHash[:], original.SourceEventHash)
+
+	sourceRow, err := sub.LookupRow(ctx, sourceHash)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return DerivedActorAttributionReport{}, fmt.Errorf("%w: %x", ErrSourceNotFound, sourceHash)
+		}
+		return DerivedActorAttributionReport{}, fmt.Errorf("replay.ReplayDerivedActorAttribution: lookup source: %w", err)
+	}
+	if sourceRow.MessageType != networkObservationMessageType {
+		return DerivedActorAttributionReport{}, fmt.Errorf("%w: source %x is %q (expected %s)",
+			ErrSourceWrongType, sourceHash, sourceRow.MessageType, networkObservationMessageType)
+	}
+
+	sourcePayload, err := sub.ReadBlob(ctx, sourceHash)
+	if err != nil {
+		return DerivedActorAttributionReport{}, fmt.Errorf("replay.ReplayDerivedActorAttribution: read source blob: %w", err)
+	}
+	source := &eventsv1.NetworkObservation{}
+	if err := proto.Unmarshal(sourcePayload, source); err != nil {
+		return DerivedActorAttributionReport{}, fmt.Errorf("replay.ReplayDerivedActorAttribution: unmarshal source: %w", err)
+	}
+
+	rederived, ok := def.Derive(source)
+	if !ok || rederived == nil {
+		return DerivedActorAttributionReport{}, fmt.Errorf("replay.ReplayDerivedActorAttribution: definition %q declined to derive from source %x (Derive returned ok=false); cannot reproduce original record",
+			def.Version(), sourceHash)
+	}
+	rederived.DefinitionVersion = def.Version()
+	rederived.DefinitionParameters = def.Parameters()
+	rederived.SourceEventHash = sourceHash[:]
+
+	_, recomputedHash, err := canonical.MarshalAndHash(rederived)
+	if err != nil {
+		return DerivedActorAttributionReport{}, fmt.Errorf("replay.ReplayDerivedActorAttribution: marshal rederived: %w", err)
+	}
+	recomputedHex := canonical.HashHex(recomputedHash)
+	targetHex := canonical.HashHex(targetHash)
+
+	return DerivedActorAttributionReport{
+		TargetHashHex:        targetHex,
+		RecomputedHashHex:    recomputedHex,
+		Match:                bytes.Equal(targetHash[:], recomputedHash[:]),
+		DefinitionVersion:    original.DefinitionVersion,
+		DefinitionParameters: original.DefinitionParameters,
+		SourceEventHashHex:   canonical.HashHex(sourceHash),
+	}, nil
+}
+
+// ResolveAttributionDefinition maps a DerivedActorAttribution's
+// (definition_version, definition_parameters) tuple back to a concrete
+// AttributionDefinition implementation per §0171. Mirrors
+// ResolveOperationalDefinition on the attribution side.
+//
+// Currently supports network_5tuple_actor_v1 (no parameters; per
+// §0168 v1 inception scope). New attribution definitions register
+// here. ErrDefinitionUnknown for unrecognized versions.
+func ResolveAttributionDefinition(version, parameters string) (attribution.AttributionDefinition, error) {
+	switch version {
+	case attribution.Network5TupleActorV1Version:
+		// v1 takes no operator-supplied parameters; the canonical
+		// parameters string is empty.
+		if parameters != "" {
+			return nil, fmt.Errorf("%w: network-5tuple-actor-v1 expects empty parameters, got %q",
+				ErrDefinitionParameterMismatch, parameters)
+		}
+		return attribution.Network5TupleActorV1{}, nil
+
+	default:
+		return nil, fmt.Errorf("%w: %q (known attribution definitions: %s)",
+			ErrDefinitionUnknown, version,
+			attribution.Network5TupleActorV1Version)
+	}
 }
