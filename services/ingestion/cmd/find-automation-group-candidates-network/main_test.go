@@ -213,6 +213,57 @@ func TestFullPipeline_BelowThreshold_NoCandidates(t *testing.T) {
 	}
 }
 
+// TestSelectNetworkSignature_KnownNames verifies the §0170
+// signature-selector dispatcher returns the correct concrete type +
+// default threshold for each documented signature name.
+func TestSelectNetworkSignature_KnownNames(t *testing.T) {
+	cases := []struct {
+		name              string
+		wantSignatureName string
+		wantDefaultThresh uint32
+	}{
+		{"p0f", "tcp_fingerprint_clustering_v1", 3},
+		{"flow-features", "tcp_flow_features_clustering_v1", 3},
+	}
+	for _, tc := range cases {
+		sig, threshold, err := selectNetworkSignature(tc.name, 0)
+		if err != nil {
+			t.Errorf("selectNetworkSignature(%q): unexpected error: %v", tc.name, err)
+			continue
+		}
+		if sig.Name() != tc.wantSignatureName {
+			t.Errorf("selectNetworkSignature(%q): signature name got %q want %q", tc.name, sig.Name(), tc.wantSignatureName)
+		}
+		if threshold != tc.wantDefaultThresh {
+			t.Errorf("selectNetworkSignature(%q): threshold got %d want %d", tc.name, threshold, tc.wantDefaultThresh)
+		}
+	}
+}
+
+// TestSelectNetworkSignature_UnknownName confirms unknown signature
+// names surface as errors (not silent fallback to a default).
+func TestSelectNetworkSignature_UnknownName(t *testing.T) {
+	_, _, err := selectNetworkSignature("unknown-signature", 0)
+	if err == nil {
+		t.Fatal("selectNetworkSignature(unknown): expected error, got nil")
+	}
+}
+
+// TestSelectNetworkSignature_ThresholdOverride verifies the threshold
+// override propagates through both signature types.
+func TestSelectNetworkSignature_ThresholdOverride(t *testing.T) {
+	for _, name := range []string{"p0f", "flow-features"} {
+		_, threshold, err := selectNetworkSignature(name, 7)
+		if err != nil {
+			t.Errorf("selectNetworkSignature(%q, 7): unexpected error: %v", name, err)
+			continue
+		}
+		if threshold != 7 {
+			t.Errorf("selectNetworkSignature(%q, 7): threshold got %d want 7", name, threshold)
+		}
+	}
+}
+
 // TestSubtypeName_AllValuesNamed verifies the subtypeName helper
 // covers all enum values + the unknown fallback. Symmetric to the
 // equivalent test in find-automation-group-candidates' main_test.go.

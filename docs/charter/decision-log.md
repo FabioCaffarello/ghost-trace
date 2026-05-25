@@ -7188,6 +7188,65 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0170` — find-automation-group-candidates-network CLI gains `-signature` selector + `-with-attribution` argument; operationalizes §0168 + §0169 at operator layer
+
+- **Status:** accepted.
+- **Date:** 2026-05-25.
+- **Context:** [`§0169`](#0169--tcp_flow_features_clustering_v1-closes-0162-gap-2-via-flow-feature-clustering-cic-ids-path-now-f3-reachable-end-to-end) landed `tcp_flow_features_clustering_v1` as the second NetworkSignature + provided the end-to-end integration witness via `cmd/find-automation-group-candidates-network/cic_ids_full_loop_integration_test.go`. The new signature is operational at the library level + has integration coverage, but the CLI binary itself does NOT support invoking it. An operator running `find-automation-group-candidates-network` from the command line could only invoke `tcp_fingerprint_clustering_v1` (§0161) — the new signature was test-reachable but not operator-reachable.
+
+  Similarly, §0168 introduced `AttributionLookup` consumption at the signature interface; integration tests pass populated lookups; but the CLI passed `nil` unconditionally — operators couldn't activate the Cat II attribution layer at invocation time.
+
+  This entry closes both operator-facing gaps with a minimal CLI extension.
+
+- **Decision:** Extend `services/ingestion/cmd/find-automation-group-candidates-network/main.go` with two new arguments:
+
+  - **`-signature <name>`** — selects the NetworkSignature to invoke. Values: `p0f` (default, backward-compat — `tcp_fingerprint_clustering_v1` per §0161) or `flow-features` (new — `tcp_flow_features_clustering_v1` per §0169). Unknown values surface as error (no silent fallback).
+  - **`-with-attribution`** — when true, the CLI runs `attribution.CollectAttributionView(sub)` before signature evaluation + passes the returned view to `EvaluateNetwork`. Default false for backward-compat (CLI continues to pass nil; signature falls back to pre-§0168 skip-on-empty-actor behavior). Operators who have run the attribution derivation walker on the substrate pass this argument to consume the resulting Cat II records.
+
+  New helper `selectNetworkSignature(name, thresholdOverride) → (NetworkSignature, threshold, error)` encapsulates the dispatch logic + threshold-default propagation. Per §0170 inception scope: explicit name → signature mapping; future signature additions extend the switch.
+
+  Helper renaming: `thresholdOrDefault` (singular, p0f-typed) → `thresholdOrDefaultP0F` + new `thresholdOrDefaultFlowFeatures`. Each signature carries its own default; the CLI's stderr summary surfaces the effective threshold per the dispatched signature.
+
+  Diagnostic stderr summary extended: adds `with_attribution=<bool>` to the existing `scanned/candidates/actors/skipped` fields. Operators see at-a-glance whether Cat II attribution was active during the run.
+
+  Constitutional discipline:
+
+  - **§0168 Decision A.1 (signature-aware consumption)** preserved at CLI layer — `-with-attribution` is OPT-IN; signatures continue to fall back to skip-on-empty-actor when nil is passed.
+  - **§0169 alternative-signatures-coexist discipline** preserved — both signatures available via `-signature` argument; operator selects per substrate adapter heritage.
+  - **§0163 stable wire contract** preserved — JSON envelope shape unchanged (same `emissionEnvelope`, `candidateJSON`, `statsJSON`).
+  - **§3 N3 operator-elected commit boundary** preserved — CLI emits candidates only; does not commit formation events.
+
+  Test coverage:
+
+  - **3 new tests** in `main_test.go`: `TestSelectNetworkSignature_KnownNames` (verifies both `p0f` and `flow-features` dispatch correctly), `TestSelectNetworkSignature_UnknownName` (verifies unknown surfaces as error), `TestSelectNetworkSignature_ThresholdOverride` (verifies threshold override propagates through both signature types).
+
+  Scope discipline per §0170: **minimal CLI extension exposing existing library capabilities**. Does NOT introduce:
+
+  - Multi-modality unified CLI (e.g., one CLI auto-detecting browser vs network presence) — separate downstream per §0163.
+  - Signature registry / discovery surface (would require `Signature` interface registration; deferred).
+  - Auto-detection of substrate adapter heritage to pick `p0f` vs `flow-features` — would require introspecting tcp_fingerprint records for `p0f_signature` presence; operator-explicit selection is cleaner at inception.
+  - Multi-signature dispatch (running BOTH signatures + merging candidates) — would conflict with §0161 MO1's signature-corpus-coexist discipline (operator selects; not auto-merge).
+  - Find-automation-group-candidates (browser CLI) equivalent extension — only one BrowserSignature exists (`cdp_marker_density_v1`); no selector needed yet.
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. CLI extension only.
+
+  Falsifiability discipline: CLI behavior structurally observable + unit-tested. The 3 new tests cover the 3 dispatch cases (known/unknown/threshold-override). End-to-end behavior with both signatures + attribution is integration-tested via §0169's `cic_ids_full_loop_integration_test.go` (which uses the library directly; equivalent CLI-binary E2E test deferred to future advance if CLI argument-parsing path needs structural coverage).
+
+- **Consequences:**
+  - `main.go` extended with `-signature` + `-with-attribution` arguments + dispatcher helper.
+  - `main_test.go` extended with 3 new tests (selector contract).
+  - Helper renaming: `thresholdOrDefault` → `thresholdOrDefaultP0F`; new `thresholdOrDefaultFlowFeatures`.
+  - **§0168 + §0169 operationalized at operator layer.** Operators can invoke `tcp_flow_features_clustering_v1` from the CLI + activate Cat II attribution consumption — neither was possible pre-§0170.
+  - **§0163 stable wire contract preserved** — JSON envelope unchanged.
+  - **Default behavior backward-compat** — pre-§0170 invocations (no `-signature` or `-with-attribution` arguments) continue to produce identical output to pre-§0170.
+  - **Methodological observation 1 — Operator-layer CLI extensions for library-layer capabilities are bounded by the library's existing interfaces.** §0170 added zero library-layer changes; the library interfaces (`NetworkSignature`, `AttributionLookup`, `attribution.CollectAttributionView`) already exposed everything the CLI needed. The CLI extension was purely a argument-parsing + dispatch refactor. **Pattern: when a library-layer advance adds a new capability, the corresponding CLI extension is typically smaller than the library advance — the library does the structural work; the CLI does the operator-facing wiring. Split the advances accordingly: library PR first, CLI PR second.**
+  - **Methodological observation 2 — Backward-compat argument defaults preserve script-level continuity across PR boundaries.** §0170's `-signature` defaults to `p0f` + `-with-attribution` defaults to false; pre-§0170 invocations produce identical output. Operators with scripts invoking the CLI do not need to revise their scripts. **Pattern: CLI argument additions should default to pre-argument behavior whenever feasible. Mandatory new arguments (no sensible default) mark a breaking change requiring explicit migration; optional arguments with backward-compat defaults preserve script-level continuity across operator-facing capability additions.**
+  - **Methodological observation 3 — Explicit unknown-value error beats silent-fallback at CLI dispatch.** `selectNetworkSignature` returns an error for unknown `-signature` values rather than silently falling back to `p0f`. The operator's script will fail loudly if a typo or version-skew introduces an unknown name. **Pattern: CLI dispatchers SHOULD treat unknown enum-shaped argument values as errors, not silent fallbacks. Silent fallback masks operator intent + can produce surprising correct-looking output from incorrect invocations. The §0170 selector's `default: return error` clause is the structural enforcement.**
+
+- **Supersession:** No prior decision-log entry superseded. §0170 operationalizes §0168 + §0169 library-layer capabilities at the CLI layer; backward-compat preserved via default-argument values. Future signature additions (e.g., third NetworkSignature for a new feature axis) extend the `selectNetworkSignature` switch + add a new argument-value document.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
