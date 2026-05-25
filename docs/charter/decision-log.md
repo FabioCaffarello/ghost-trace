@@ -7857,6 +7857,85 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0182` — temporal_endpoint_cohort_v1 lands first event-centric F3 signature; first CampaignHypothesis emission; partial §0181 closing-note discharge
+
+- **Status:** accepted.
+- **Date:** 2026-05-25.
+- **Context:** F3 corpus through §0181 covered two of four Cat III subtypes at the F3 emission layer: AutomationGroup (3 signatures: §0152, §0161, §0169) + BehavioralCluster (1 signature: §0174). CampaignHypothesis + CoordinationRing remained F3-emission-blocked per §0181 closing-note: "Remaining Cat III subtypes... remain F3-emission-blocked at the signature layer; each requires its own F3 signature before lifecycle integration arc can open."
+
+  Per `CampaignHypothesisFormation` proto comment (line 86-89): "CampaignHypothesis does NOT carry an actor_refs field — the inference is event-centric." This is a STRUCTURAL break from the prior F3 corpus, which is uniformly actor-centric. §0182 lands the first event-centric F3 signature emitting CampaignHypothesis candidates.
+
+  Note: `TemporalDescriptorCohortV1` already exists in the hypothesis package (operates directly on DeclaredSession.session_descriptor for CampaignHypothesis formation). §0182's `TemporalEndpointCohortV1` is the PARALLEL F3-signature-layer implementation (operates on typed F1 NetworkObservation via the modality-typed signatures interface).
+
+- **Decision:** New file `services/ingestion/internal/signatures/temporal_endpoint_cohort.go`:
+
+  - **`TemporalEndpointCohortV1`** — implements `NetworkSignature` interface (no new interface variant needed).
+  - **Detection axis**: NetworkObservation events sharing identical `(endpoint_ref, time_bucket)` cluster as a CampaignHypothesis per the event-centric ontology "set of events whose patterns suggest membership in a unified operation" (§0010 Q2-A.2).
+  - **Cluster key**: `"endpoint=<ref>;bucket=<unix_minute>"` (operator-inspectable plain string per §0169 discipline).
+  - **Time bucket**: default 60 seconds (configurable via `BucketSeconds` field). Inception-phase choice balancing campaign-burst observability vs noise.
+  - **Threshold**: default 3 distinct EVENTS per cluster (not actors — event-centric ontology).
+  - **Subtype**: `HypothesisSubtypeCampaignHypothesis` (third F3 subtype emission after AutomationGroup + BehavioralCluster).
+  - **Sub-modality**: NONE required. **First F3 signature to be envelope-only** — reads only `endpoint_ref` + `observed_at` envelope fields; sub-modality (tcp_fingerprint, ip_asn, etc.) is irrelevant to event-set clustering.
+
+  **Structurally distinct skip semantics from prior F3 corpus:**
+
+  - `nil obs` → silent skip.
+  - empty `endpoint_ref` → `SkippedWrongModality` (no targeting context).
+  - `observed_at == 0` → `SkippedWrongModality` (no temporal context).
+  - **Empty `actor_ref` is NOT a skip reason.** Events without actor still count in the event-set. Per the event-centric ontology, actors are incidental to campaign membership.
+
+  **ActorRefs in FormationCandidate as enrichment enrichment-field only:**
+
+  - Collected from cluster's events (deduplicated, sorted).
+  - May be empty when no events had actor_ref (all events lacked attribution).
+  - **NOT structurally committed to the CampaignHypothesisFormation proto** (proto has no `actor_refs` field per §0063). The orchestrator drops this field at formation commit; surfaced at candidate layer for operator-review-time visibility only.
+
+  Per §0168 Decision A.1: `AttributionLookup` accepted as parameter; used for actor enrichment when present + actor_ref empty; Cat II derivation hash threaded into candidate `SourceHashes` per §2.3 chain preservation. `EvidenceCount` reflects total source hash count (Cat I + Cat II).
+
+  Threshold check is against `eventCount` (Cat I observations only), NOT `len(sourceHashes)` (which includes Cat II attribution hashes). Per the event-centric ontology: campaign membership is defined by Cat I event count, not by total hash count.
+
+  13 unit tests covering: contract, NetworkSignature interface, threshold boundary, distinct-endpoint separation, distinct-bucket separation, **event-centric ontology** (empty actor_ref NOT a skip), envelope-only skip cases (empty endpoint + zero observed_at), empty input, **AttributionLookup enrichment per §0168 + §2.3 chain**, deterministic order, custom-bucket override.
+
+  Constitutional discipline:
+
+  - **§3 N3 operator-elected commit boundary** preserved (mirrors §0152 / §0161 / §0169 / §0174).
+  - **§0139 hash-list element-shape** — SourceHashes sorted ascending.
+  - **§3 N1 truth-vs-structure** — ConfidenceHint capped at 0.9; time-bucket quantization is derivation marker (operator-inspectable), not fabrication.
+  - **§0144 discriminated-union framing** — signature consumes NetworkObservation envelope without sub-modality dispatch (first F3 signature of this shape; structurally novel — envelope-only-read).
+  - **§0146 / §0151 / §0144 modality discipline** preserved — signature lives in `signatures` package + uses `NetworkSignature` interface (no new variant).
+  - **§0023 single-tier actor_ref** — enrichment enrichment-field is plain string.
+  - **§0063 CampaignHypothesis event-centric ontology** preserved — candidate's ActorRefs is enrichment enrichment-field; formation proto carries no actor_refs.
+  - **§0181 closing-note partial discharge** — CampaignHypothesis subtype now has an F3 emission path; future lifecycle integration tests for this subtype can land parallel to §0157-§0167 + §0176-§0181 arcs. CoordinationRing remains F3-emission-blocked.
+
+  Scope discipline per §0182: **first concrete CampaignHypothesis F3 signature**. Does NOT introduce:
+
+  - Orchestrator CLI for CampaignHypothesis (analog to `find-automation-group-candidates` / `find-behavioral-cluster-candidates`) — separate downstream advance.
+  - Lifecycle integration tests for CampaignHypothesis — separate downstream multi-PR arc (per §0181 MO2 should evaluate bundling 2-3 axes per PR).
+  - Other CampaignHypothesis F3 signatures (e.g., payload-signature clustering, descriptor-coherence) — separate signatures per their own detection axes.
+  - F3 signature for CoordinationRing subtype (still emission-blocked).
+
+  Per §0164 MO1 verification discipline: empirical state inline. `grep -c "^func Test" services/ingestion/internal/signatures/temporal_endpoint_cohort_test.go` returns 13. F3 corpus signature count post-§0182 = 5 (cdp_marker_density_v1 + tcp_fingerprint_clustering_v1 + tcp_flow_features_clustering_v1 + keystroke_timing_clustering_v1 + temporal_endpoint_cohort_v1).
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. New non-Charter capability (F3 corpus extension to third subtype emission + first event-centric signature).
+
+  Falsifiability discipline: signature behavior structurally observable + tested. The 13 unit tests cover contract + interface + threshold + clustering separation (endpoint + bucket axes) + event-centric ontology (empty actor_ref NOT a skip) + envelope-only skip cases + AttributionLookup enrichment + deterministic order + custom bucket. The event-centric-ontology test (`TestTemporalEndpointCohortV1_EventCentric_EmptyActorRefs_NotSkipped`) is the structural witness for the §0063 framing — failure would surface as either `SkippedNoActor > 0` (signature wrongly enforces actor presence) or `Candidates == 0` (signature wrongly drops actorless events).
+
+- **Consequences:**
+  - New signature file (~230 lines).
+  - 13 unit tests.
+  - No proto changes. No package additions. No Makefile changes.
+  - **Third F3 subtype emission lands.** F3 corpus now spans 3 of 4 Cat III subtypes (AutomationGroup + BehavioralCluster + CampaignHypothesis). CoordinationRing remains F3-emission-blocked.
+  - **First event-centric F3 signature.** Structurally novel pattern in the corpus; precedent for future event-centric signatures (across modalities, including potential future CoordinationRing signatures).
+  - **First envelope-only F3 signature.** Reads only NetworkObservation envelope fields (endpoint_ref + observed_at); sub-modality dispatch skipped. Precedent for future envelope-only signatures where sub-modality is irrelevant to the detection axis.
+  - **§0167 closing-note discharged for CampaignHypothesis at signature layer.** Lifecycle integration tests for CampaignHypothesis can land parallel to §0157-§0167 + §0176-§0181 arcs (separate downstream advance per §0181 MO2 bundling discipline).
+  - **Methodological observation 1 — Event-centric vs actor-centric ontology distinction is structurally enforced at the signature's skip semantics, NOT at the FormationCandidate shape.** `FormationCandidate.ActorRefs` field is shared across all F3 signatures. The distinction surfaces in (a) whether empty actor_ref is a skip reason (event-centric: no; actor-centric: yes), and (b) whether the orchestrator commits ActorRefs to the formation proto (event-centric: drops it; actor-centric: commits it). The candidate's ActorRefs semantics is determined by the signature + the orchestrator's per-subtype commit logic, NOT by the FormationCandidate struct shape. **Pattern: when adding a signature for an ontologically-distinct subtype (event-centric, interaction-centric, etc.), the FormationCandidate struct does NOT need new shape — the skip semantics + orchestrator commit logic carry the ontology distinction. This preserves FormationCandidate as a shared structural surface across all F3 signature shapes.**
+  - **Methodological observation 2 — Envelope-only-read signatures are structurally simpler than sub-modality-dispatch signatures + applicable when detection axis is modality-agnostic.** `tcp_fingerprint_clustering_v1` (§0161) consumes tcp_fingerprint sub-modality + reads `p0f_signature`. `temporal_endpoint_cohort_v1` (§0182) consumes NetworkObservation envelope without sub-modality dispatch + reads `endpoint_ref` + `observed_at`. Both are NetworkSignatures; the latter is structurally simpler because no sub-modality discrimination is needed. **Pattern: F3 signatures whose detection axis is on envelope fields (not sub-modality content) SHOULD be envelope-only — no `GetXxxxxModality()` dispatch in the loop. The pattern reduces signature complexity + makes the detection axis structurally explicit (envelope-vs-modality is itself a category distinction in the F3 corpus design).**
+  - **Methodological observation 3 — Threshold check semantics must distinguish event count from sourceHash count when AttributionLookup is consumed.** §0182's threshold check is against `eventCount` (Cat I observation count) NOT `len(sourceHashes)` (which includes Cat II attribution hashes per §0168 chain). Conflating these would over-count: a 2-event cluster with attribution would have `sourceHashes count == 4` (2 Cat I + 2 Cat II), incorrectly meeting a threshold of 3. **Pattern: signatures consuming AttributionLookup MUST track event count separately from sourceHash count for threshold-check purposes; conflating them inflates the perceived cluster size. The `cluster.eventCount` field in §0182's implementation is the structural enforcement.**
+
+- **Supersession:** No prior decision-log entry superseded. Discharges §0181 closing-note partial obligation for CampaignHypothesis subtype emission. Future lifecycle integration tests for CampaignHypothesis can land parallel to §0157-§0167 + §0176-§0181 arcs. CoordinationRing remains F3-emission-blocked; separate F3 signature required.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
