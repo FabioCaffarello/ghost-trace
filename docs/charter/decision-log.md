@@ -8097,6 +8097,60 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0186` — find-coordination-ring-candidates CLI + foundation helper + linear lifecycle bundle (CoordinationRing lifecycle integration arc PR #1 of 2)
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0185 landed `endpoint_co_visit_v1` as the first interaction-centric F3 signature emitting CoordinationRing candidates, closing the F3 corpus to all 4 Cat III subtypes at the per-subtype emission layer. The §0184 + §0185 closing-notes recorded that "Future CoordinationRing lifecycle integration arc (CLI + foundation helper + 6 lifecycle axes) can land parallel to §0183-§0184 arc per §0184 MO2 2-PR bundling shape."
+
+  Per §0184 MO2 empirical validation: the 2-PR bundled shape (PR #1 = CLI + foundation helper + 3 linear axes; PR #2 = 3 cross-formation axes) reduces 6-PR baseline to 2 PRs without per-axis falsifiability loss. §0186 (this entry, PR #1) covers CLI + foundation helper + linear lifecycle axes. §0187 (planned next, PR #2) covers cross-formation lifecycle axes.
+
+- **Decision:** Land the CoordinationRing lifecycle integration arc PR #1 as a single bundle covering 3 lifecycle axes + CLI + foundation helper:
+
+  1. **`services/ingestion/cmd/find-coordination-ring-candidates/main.go`** (~245 lines) — F3-loop CLI invoking `EndpointCoVisitV1`. Mirrors `find-campaign-hypothesis-candidates` pattern (§0183) + the §0163 stable wire contract. **Wire-contract extension per §0186 MO1**: `candidateJSON` gains optional `Interactions [][2]string` field with `omitempty` — interaction-centric subtypes populate it; other CLIs leave it absent (per-CLI candidateJSON definitions). Common-field discipline preserved.
+
+  2. **`services/ingestion/cmd/find-coordination-ring-candidates/main_test.go`** (4 tests) — `TestCollectNetworkObservations_EndToEnd` + `TestFullPipeline_EndToEnd` (asserts `hypothesis_subtype == "CoordinationRing"` in JSON envelope + verifies Interactions field populated with 3 lex-canonical edges) + `TestFullPipeline_BelowThreshold_NoCandidates` + `TestSubtypeName_AllValuesNamed`. Local helper `appendNetworkObs` for NetworkObservation injection.
+
+  3. **`services/ingestion/cmd/find-coordination-ring-candidates/layerb_firing_test.go`** (2 tests + foundation helper) — covers the F3 → CoordinationRingFormation → Layer B evaluation axis (parallel to §0157 + §0176 + §0183). Introduces `commitCoordinationRingFormationFromCandidate` as the §0186 foundation helper. **STRUCTURAL DIVERGENCE from prior foundation helpers**: CONVERTS candidate.Interactions [][2]string into []*CoordinationRingInteraction protos (actor_a=edge[0] + actor_b=edge[1] per §0070 within-edge lex) — CoordinationRingFormation has NO actor_refs field; interactions IS the structural membership shape. Tests: `TestLayerBFiring_AgainstCoordinationRingF3CandidateFormation`, `TestLayerBFiring_CoordinationRingRejectsNilParams`.
+
+  4. **`services/ingestion/cmd/find-coordination-ring-candidates/morphology_integration_test.go`** (1 test + chain helper) — covers the F3 → CoordinationRingFormation chain → `morphology.Measure` axis (parallel to §0158 + §0177 + §0184). Extends the foundation helper with explicit `direct_influenced_by` + `closure_hashes` parameters as `commitCoordinationRingFormationFromCandidateWithChain`. Test: `TestMorphology_AgainstCoordinationRingF3DerivedFormationChain` — 3-formation chain (depths 0/1/2; breadths 0/1/1; closures 0/1/2; subtype `CoordinationRingFormation`). Helper: `sortHashListAscending` (local copy mirroring §0158 + §0177 + §0184).
+
+  5. **`services/ingestion/cmd/find-coordination-ring-candidates/demote_e2e_test.go`** (1 test + hex helpers) — covers the F3 → formation → promotion → demotion lifecycle arc (parallel to §0160 + §0178 + §0183). Uses **subtype-suffixed** lifecycle functions per §0178 MO1: `hypothesis.PromoteCoordinationRing` + `hypothesis.DemoteCoordinationRing`. Test: `TestDemoteCoordinationRing_FromF3CandidateLifecycle`. Local hex helpers (`hexDecodeInto`, `hexNibble`, `hexLenErr`) — local copies mirroring §0160 / §0178 / §0183 pattern.
+
+  6. **`services/ingestion/Makefile`** — adds `find-coordination-ring-candidates-build` PHONY target + help-line registration. Mirrors `find-campaign-hypothesis-candidates-build` exactly.
+
+- **Constitutional review:**
+
+  Subordinate to §0070 + §0185 (interaction-centric ontology preserved at formation commit — interactions converted from candidate, actor_refs absent because proto has no such field). Subordinate to §0163 stable wire contract (`emissionEnvelope` JSON common fields identical to prior CLIs; per-CLI candidateJSON extension for Interactions). Subordinate to §0178 MO1 (subtype-suffixed lifecycle functions for non-BehavioralCluster subtypes). Subordinate to §0184 MO2 bundling discipline (3 axes per PR vs single-axis-per-PR baseline). Subordinate to §0164 MO1 verification discipline (test counts empirically verified inline below).
+
+  Per §0070 + §0185 interaction-centric ontology: the §0186 foundation helper `commitCoordinationRingFormationFromCandidate` is STRUCTURALLY DISTINCT from the three prior helpers — both actor-centric helpers commit actor_refs; the event-centric helper drops them; the interaction-centric helper instead commits INTERACTIONS (lex-canonical edge list per §0070). The structural witness is the helper's source comment block explicitly recording the conversion + citing §0070 + §0185.
+
+  Falsifiability discipline: each test's lifecycle event is structurally observable — formation hash + promotion hash + demotion hash all looked up in substrate post-commit; proto round-trip equality verified. The Layer B verdict + morphology measurement output structurally verified. The demotion-within-cadence test verifies `CadenceSatisfied == false` + `CadenceElapsedSeconds == 100` (matches §0160 + §0178 + §0183 advisory pattern). Layer B test additionally verifies the Interactions edge canonicalization per §0070 round-trip (within-edge lex preserved through MarshalAndHash + Unmarshal).
+
+- **Consequences:**
+  - 1 new CLI directory with 5 Go files (main + 4 test files); ~870 lines total.
+  - 8 new tests (4 unit + 4 integration: 2 layer-b + 1 morphology + 1 demote E2E).
+  - 1 Makefile addition + help-line registration.
+  - No proto changes. No package additions. No `internal/hypothesis` changes.
+  - **First CoordinationRing lifecycle integration tests land.** Lifecycle integration coverage now spans 3 of 4 Cat III subtypes fully (AutomationGroup + BehavioralCluster + CampaignHypothesis) + 1 of 4 partially (CoordinationRing: linear axes covered, cross-formation axes deferred to §0187).
+  - **First interaction-centric foundation helper landed.** The three prior foundation helpers covered actor-centric (§0157, §0176) + event-centric (§0183) ontologies. §0186 lands the third ontology-class helper (interaction-centric); each helper's ActorRefs/Interactions handling makes the ontology class structurally explicit at the commit boundary.
+  - **§0184 MO2 bundling discipline re-applied (third arc).** §0176-§0181 was the 6-PR-baseline arc. §0183-§0184 was the first 2-PR-bundled arc. §0186-§0187 is the second 2-PR-bundled arc. Two empirical validations of the bundled shape so far; pattern is becoming the new default for Cat III subtype lifecycle arcs.
+  - **§0184 + §0185 closing-notes (CoordinationRing) partially discharged.** Linear axes covered; cross-formation axes (merge + dissolve + split) remain for §0187.
+
+  Per §0164 MO1 verification discipline: empirical state inline. `grep -c "^func Test" services/ingestion/cmd/find-coordination-ring-candidates/*.go` returns 8 across 4 test files (4 unit + 2 layerb + 1 morphology + 1 demote). Full `go test ./cmd/find-coordination-ring-candidates/...` passes. Full `go test ./...` from `services/ingestion/` passes.
+
+  Scope discipline per §0186: **CLI + foundation helper + 3 linear lifecycle axes ONLY** (evaluation + measurement + promotion+demotion E2E). Does NOT introduce:
+  - Cross-formation lifecycle tests (binary merge, unary dissolve, k-ary split) — deferred to §0187.
+  - Changes to `internal/signatures` or `internal/hypothesis` packages — both reused as-is.
+
+  - **Methodological observation 1 — Per-CLI candidateJSON wire-contract extension preserves §0163 common-field discipline while accommodating subtype-specific ontology shapes.** §0163 codified `emissionEnvelope` JSON identical across F3-loop CLIs. §0186's `Interactions [][2]string` field with `json:",omitempty"` extends the per-CLI candidateJSON without breaking the common-fields contract — other CLIs' candidateJSON definitions simply do not include the field. **Pattern: when a new Cat III subtype's ontology shape introduces structural fields beyond the common set (vertex+source+confidence+evidence), the per-CLI candidateJSON SHOULD add the extension as an `omitempty` field; other CLIs' definitions need NOT change because Go's struct-per-file scoping isolates the extension. The §0163 contract is preserved at the SHARED-field level; per-subtype extensions live at the per-CLI level. Future interaction-centric / hyperedge-centric / directed-graph-centric subtypes follow this pattern.**
+
+  - **Methodological observation 2 — Per-subtype foundation helper variation IS now a 3-class structural surface that distinguishes ontology classes empirically across the full F3 corpus.** §0157 (`commitFormationFromCandidate` — AutomationGroup): commits actor_refs (actor-centric). §0176 (`commitBehavioralClusterFormationFromCandidate`): commits actor_refs (actor-centric). §0183 (`commitCampaignHypothesisFormationFromCandidate`): DROPS actor_refs (event-centric; proto field absent). §0186 (`commitCoordinationRingFormationFromCandidate`): converts INTERACTIONS (interaction-centric; proto carries edge list, no actor_refs field). The four helpers' divergence at the membership-field axis is the structural witness for the three ontology classes empirically materialized at the lifecycle-integration-test layer. **Pattern: extends §0184 MO1 from 2-class (actor-centric vs event-centric) to 3-class (actor-centric vs event-centric vs interaction-centric). When a Cat III subtype's lifecycle integration arc opens, the foundation helper's membership-field handling (commit actor_refs / drop actor_refs / convert interactions) is the first structural disambiguation surface to verify against the proto's required-fields shape. The helper's source comment block SHOULD record the membership-shape decision + cite the governing ontology framing decision-log entry (§0157 / §0183 / §0186).**
+
+- **Supersession:** No prior decision-log entry superseded. Discharges §0184 + §0185 closing-notes partial obligations for CoordinationRing subtype linear lifecycle axes. Cross-formation axes (merge + dissolve + split) remain for §0187.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

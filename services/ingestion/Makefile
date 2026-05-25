@@ -27,6 +27,7 @@ help:
 	@echo "  find-automation-group-candidates-network-build  go build -trimpath -o $(BIN_DIR)/find-automation-group-candidates-network ./cmd/find-automation-group-candidates-network"
 	@echo "  find-behavioral-cluster-candidates-build  go build -trimpath -o $(BIN_DIR)/find-behavioral-cluster-candidates ./cmd/find-behavioral-cluster-candidates"
 	@echo "  find-campaign-hypothesis-candidates-build  go build -trimpath -o $(BIN_DIR)/find-campaign-hypothesis-candidates ./cmd/find-campaign-hypothesis-candidates"
+	@echo "  find-coordination-ring-candidates-build  go build -trimpath -o $(BIN_DIR)/find-coordination-ring-candidates ./cmd/find-coordination-ring-candidates"
 	@echo "  measure-chain-morphology-build  go build -trimpath -o $(BIN_DIR)/measure-chain-morphology ./cmd/measure-chain-morphology"
 	@echo "  summarize-hypotheses-build  go build -trimpath -o $(BIN_DIR)/summarize-hypotheses ./cmd/summarize-hypotheses"
 	@echo "  form-automation-group-build  go build -trimpath -o $(BIN_DIR)/form-automation-group ./cmd/form-automation-group"
@@ -214,6 +215,11 @@ find-behavioral-cluster-candidates-build:
 find-campaign-hypothesis-candidates-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/find-campaign-hypothesis-candidates ./cmd/find-campaign-hypothesis-candidates
+
+.PHONY: find-coordination-ring-candidates-build
+find-coordination-ring-candidates-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/find-coordination-ring-candidates ./cmd/find-coordination-ring-candidates
 
 .PHONY: measure-chain-morphology-build
 measure-chain-morphology-build:
