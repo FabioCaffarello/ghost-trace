@@ -7813,6 +7813,50 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0181` — Split E2E integration test from F3-derived BehavioralCluster antecedent; CLOSES §0176-opened BehavioralCluster lifecycle integration coverage arc
+
+- **Status:** accepted.
+- **Date:** 2026-05-25.
+- **Context:** Sixth and final PR in the §0176-opened BehavioralCluster lifecycle integration coverage arc. Extends along the K-ARY CROSS-FORMATION lifecycle axis (split: 1 antecedent → K≥2 successors). Mirrors §0167 on the BehavioralCluster subtype side.
+
+  Per §0176 MO1 + §0167: split is the structurally most complex cross-formation operation; requires K operator-synthesized successor formations + enforces two §0050 sentinels (ErrSplitInsufficientSuccessors + ErrSplitSuccessorsNotDistinct).
+
+- **Decision:** New test file `services/ingestion/cmd/find-behavioral-cluster-candidates/split_e2e_test.go` with 3 integration tests:
+
+  - **`TestSplitBehavioralCluster_FromF3CandidateAntecedent`** — Full path (1 antecedent → 2 successors): inject 3 BehavioralObservation → 1 multi-actor candidate → commit antecedent via §0176 helper → commit 2 successors via new helper `commitBehavioralClusterSplitSuccessor` (each with distinct pattern_signature per §0167 MO2) → `hypothesis.Split(antecedent, [succA, succB])` → verify split event references antecedent + both successors exactly + all 4 records present.
+
+  - **`TestSplitBehavioralCluster_RejectsInsufficientSuccessors`** — §0050 sentinel verification.
+
+  - **`TestSplitBehavioralCluster_RejectsAntecedentInSuccessorSet`** — §0050 sentinel verification.
+
+  Uses `hypothesis.Split` (BehavioralCluster-targeted generic-named per §0178 MO1).
+
+  New helper `commitBehavioralClusterSplitSuccessor` mirrors §0167's `commitSplitSuccessor` on the BehavioralCluster subtype side.
+
+  Constitutional discipline:
+  - **§0050 + §2.5 BC5 split-operation invariants** — min 2 successors + distinctness across (antecedent, succ_1...succ_K); both sentinels integration-tested via `errors.Is`.
+  - **§3 N3** — four operator-elected commits (antecedent, succA, succB, split).
+  - **§2.6 BC3** — paired-dimension at marshalling for successor formations.
+  - **§0139** — successor `source_event_hashes` sorted ascending.
+
+  Per §0164 MO1 verification discipline: empirical state inline. `grep -c "^func Test" services/ingestion/cmd/find-behavioral-cluster-candidates/split_e2e_test.go` returns 3. Behavioral CLI test count post-§0181 = 15.
+
+- **Constitutional review:** No Charter prose modified. Test-only addition.
+
+  Falsifiability discipline: split behavior structurally observable. Happy-path test verifies F3 → antecedent + 2 successors → split commits + references all three + all 4 records present. Sentinel tests verify §0050 invariants surface at integration path via `errors.Is`.
+
+- **Consequences:**
+  - New test file (3 tests).
+  - **CLOSES §0176-opened BehavioralCluster lifecycle integration coverage arc.** All 6 axes covered: evaluation (§0176), measurement (§0177), linear lifecycle (§0178), binary cross-formation (§0179), unary cross-formation (§0180), k-ary cross-formation (§0181). BehavioralCluster now has parity with AutomationGroup at the F3-derived lifecycle integration test layer.
+  - **§0167 closing-note COMPLETELY discharged for BehavioralCluster subtype.** Future lifecycle-axis advances extend to other Cat III subtypes (CampaignHypothesis + CoordinationRing remain F3-emission-blocked); each requires its own F3 signature first per §0174 closing-note.
+  - **§0176-opened multi-PR arc empirically validated.** 6 PRs (§0176-§0181), each landing one axis, mechanically applied the §0157–§0167 AutomationGroup arc template. Per §0176 MO1: cross-subtype lifecycle-arc replication IS bounded mechanical work once F3 signature + CLI + foundation helper exist. The template is now empirically validated across TWO subtypes.
+  - **Methodological observation 1 — Multi-PR mini-arc completion is a useful structural unit beyond individual PR landings.** The §0176-§0181 arc spans 6 PRs across one Cat III subtype's lifecycle integration coverage. Each PR is bounded; the arc-as-a-whole is the meaningful structural unit (BehavioralCluster reaches AutomationGroup parity at integration-test layer). **Pattern: track multi-PR mini-arcs as first-class units; arc-closing PRs (like §0181) should explicitly identify the arc + verify completeness per §0164 MO1 verification discipline. Mid-arc PRs should reference the arc opener + their position within it.**
+  - **Methodological observation 2 — Subsequent Cat III subtype lifecycle arcs SHOULD bundle aggressively per §0175 MO1 proactive-empirical-correction discipline.** §0176-§0181 was 6 PRs because each axis was landed separately per §0176 MO1 single-axis-per-PR discipline. Future Cat III subtype arcs (CampaignHypothesis when F3 signature lands; CoordinationRing same) COULD bundle multiple axes per PR if the per-PR cognitive overhead is manageable. The §0157-§0167 + §0176-§0181 PRs are all small (single-axis + foundation helper); bundling 2-3 axes per PR would reduce 6 PRs to 2-3 without sacrificing falsifiability. **Pattern: future Cat III subtype lifecycle arcs SHOULD evaluate bundling 2-3 axes per PR vs single-axis-per-PR; the §0176-§0181 arc establishes the maximum-PR-count baseline; bundling reduces it.**
+
+- **Supersession:** No prior decision-log entry superseded. CLOSES §0176-opened BehavioralCluster lifecycle integration coverage arc (sixth and final PR). Together with §0157-§0167 AutomationGroup arc, F3-derived lifecycle integration coverage now spans TWO Cat III subtypes (AutomationGroup + BehavioralCluster). Remaining Cat III subtypes (CampaignHypothesis + CoordinationRing) remain F3-emission-blocked at the signature layer per §0174 closing-note; each requires its own F3 signature before lifecycle integration arc can open.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
