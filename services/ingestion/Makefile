@@ -47,6 +47,7 @@ help:
 	@echo "  replay-operational-session-build  go build -trimpath -o $(BIN_DIR)/replay-operational-session ./cmd/replay-operational-session"
 	@echo "  replay-derived-actor-attribution-build  go build -trimpath -o $(BIN_DIR)/replay-derived-actor-attribution ./cmd/replay-derived-actor-attribution"
 	@echo "  replay-all-operational-sessions-build  go build -trimpath -o $(BIN_DIR)/replay-all-operational-sessions ./cmd/replay-all-operational-sessions"
+	@echo "  replay-all-derived-actor-attributions-build  go build -trimpath -o $(BIN_DIR)/replay-all-derived-actor-attributions ./cmd/replay-all-derived-actor-attributions"
 	@echo "  replay-behavioral-cluster-formation-build  go build -trimpath -o $(BIN_DIR)/replay-behavioral-cluster-formation ./cmd/replay-behavioral-cluster-formation"
 	@echo "  replay-automation-group-formation-build  go build -trimpath -o $(BIN_DIR)/replay-automation-group-formation ./cmd/replay-automation-group-formation"
 	@echo "  replay-campaign-hypothesis-formation-build  go build -trimpath -o $(BIN_DIR)/replay-campaign-hypothesis-formation ./cmd/replay-campaign-hypothesis-formation"
@@ -310,6 +311,11 @@ replay-derived-actor-attribution-build:
 replay-all-operational-sessions-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/replay-all-operational-sessions ./cmd/replay-all-operational-sessions
+
+.PHONY: replay-all-derived-actor-attributions-build
+replay-all-derived-actor-attributions-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/replay-all-derived-actor-attributions ./cmd/replay-all-derived-actor-attributions
 
 .PHONY: replay-behavioral-cluster-formation-build
 replay-behavioral-cluster-formation-build:
