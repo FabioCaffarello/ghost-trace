@@ -8510,7 +8510,7 @@ The four methodological observations are the pilot's contribution to procedure b
 
   4. **`services/ingestion/internal/httpapi/find_candidates_ag_browser.go`** — same shape as #3 for the browser modality; ~25 lines removed.
 
-  5. **`services/ingestion/internal/httpapi/find_candidates_ch.go`** — same shape as #3 for the network modality; ~25 lines removed. The other two network-modality consumers (`find_candidates_cr.go` + `find_candidates_ag_network.go`) only update their handler call sites + their doc comments cite §0195 instead of §0192; the `collectNetworkObservationsHTTP` function lived in find_candidates_ch.go pre-§0195 and is deleted there.
+  5. **`services/ingestion/internal/httpapi/find_candidates_ch.go`** — same shape as #3 for the network modality; ~25 lines removed. The other two network-modality consumers (`find_candidates_cr.go` + `find_candidates_ag_network.go`) only rewrite their handler call sites + their doc comments cite §0195 instead of §0192; the `collectNetworkObservationsHTTP` function lived in find_candidates_ch.go pre-§0195 and is deleted there.
 
   CLI helpers (`cmd/find-*-candidates/main.go` local `collectBehavioralObservations` / `collectBrowserObservations` / `collectNetworkObservations` functions) intentionally remain unchanged in §0195 — extracting them would expand scope substantially (5 CLI updates + go.sum touch) and the CLIs are stable surfaces. CLI consolidation can land as a follow-on refactor if structurally useful.
 
