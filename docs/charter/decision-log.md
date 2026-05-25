@@ -8293,6 +8293,51 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0190` — GET /v1/find-candidates/behavioral-cluster HTTP endpoint lands; first F3 candidate evaluation HTTP endpoint; per-subtype pilot for §0188 MO1 closing-note
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0188 + §0189 advances landed the morphology + Layer B verdict HTTP endpoints (1st + 2nd operational HTTP gaps discharged). §0188 closing-note identified F3 candidate evaluation as the 3rd remaining gap, larger scope than the prior two because each F3 signature has per-subtype wiring + a per-modality observation walk.
+
+  §0190 advances the F3 candidate evaluation gap with the smallest pilot: GET /v1/find-candidates/behavioral-cluster (BehavioralCluster has the simplest F3 CLI surface — single signature, single modality, two query params). The pilot establishes the per-subtype endpoint pattern; subsequent advances will extend the pattern to AutomationGroup (2 signatures across browser + network modalities), CampaignHypothesis, and CoordinationRing per §0188 MO1 wire-parity discipline.
+
+- **Decision:** Add `GET /v1/find-candidates/behavioral-cluster` HTTP endpoint exposing the `keystroke_timing_clustering_v1` F3 signature (§0174). Four changes:
+
+  1. **`services/ingestion/internal/httpapi/find_candidates_bc.go`** (~205 lines) — `handleFindCandidatesBC` Handler method + 3 wire-shape structs (`findCandidatesCandidatePayload`, `findCandidatesStatsPayload`, `findCandidatesPayload`) + `collectBehavioralObservationsHTTP` substrate walk helper + `subtypeNameHTTP` enum-to-string mapper. Wire shape mirrors `cmd/find-behavioral-cluster-candidates`'s `emissionEnvelope` byte-for-byte per §0163 + §0188 MO1 CLI↔HTTP wire-parity discipline. Two optional query params: `threshold` (uint, 0 = signature default) + `limit` (int, 0 = unlimited).
+
+  2. **`services/ingestion/internal/httpapi/handler.go`** — one new `case r.URL.Path == "/v1/find-candidates/behavioral-cluster"` route placed immediately after the §0189 `/v1/layer-b-verdict` route.
+
+  3. **`services/ingestion/internal/httpapi/find_candidates_bc_test.go`** (~155 lines, 6 tests) — `substrateWithKeystrokeObservations` helper + 6 tests: `TestFindCandidatesBCHTTPHappyPath` (3-actor cluster emits 1 candidate; verifies wire shape + ActorRefs count + SourceHashesHex format), `TestFindCandidatesBCHTTPBelowThreshold` (2-actor cluster emits 0 candidates), `TestFindCandidatesBCHTTPThresholdOverride` (threshold=5 suppresses 3-actor cluster), `TestFindCandidatesBCHTTPNegativeThreshold` (400 on negative param), `TestFindCandidatesBCHTTPMethodNotAllowed` (405 + Allow header), `TestFindCandidatesBCHTTPSubstrateNotConfigured` (503 when handler lacks WithSubstrate).
+
+- **Constitutional review:**
+
+  Subordinate to §0163 stable wire contract (HTTP `findCandidatesPayload` mirrors CLI `emissionEnvelope` byte-for-byte). Subordinate to §0188 MO1 CLI↔HTTP wire-parity discipline. Subordinate to §0174 (keystroke_timing_clustering_v1 signature). Subordinate to §3 N3 + §0152 operator-elected-commit discipline (this endpoint does NOT commit formation events — operators consume the JSON envelope + decide whether to invoke form-* endpoints downstream). Subordinate to §0164 MO1 verification discipline.
+
+  Per §0188 MO1 + §0190 MO1 deferral: `collectBehavioralObservationsHTTP` duplicates the substrate-walk logic from the CLI's local helper. A shared `internal/observationcollector/` package would eliminate the duplication across the 5 F3 CLIs + the (eventually 4) HTTP endpoints, but the consolidation is deferred to a follow-on refactor PR once multiple F3-eval endpoints have landed — the duplication cost surfaces empirically only after multiple instances exist + the shared-helper shape becomes structurally apparent at that point.
+
+  Falsifiability discipline: 6 unit tests cover the contract — happy-path with 3-actor cluster + below-threshold suppression + threshold-override suppression + 1 input-validation gate + 2 protocol gates. Wire-parity claim (HTTP payload matches CLI payload byte-for-byte) is structurally provable: both use textually parallel candidateJSON / statsJSON / emissionEnvelope structs.
+
+- **Consequences:**
+  - 2 new files in `services/ingestion/internal/httpapi/`; ~360 lines total.
+  - 1 modified file (`handler.go` route addition; 2 lines).
+  - 6 new unit tests.
+  - 1 new HTTP route exposing the keystroke_timing_clustering_v1 F3 signature at the operational tier.
+  - **Third operational-tier advance lands.** Discharges PILOT of the 3rd of 3 §0188 operational HTTP gaps (F3 candidate evaluation). Remaining work within this gap: 4 more per-subtype/per-signature endpoints (find-candidates for AutomationGroup browser + AutomationGroup network + CampaignHypothesis + CoordinationRing).
+  - **First F3 candidate evaluation HTTP endpoint.** Establishes the per-subtype endpoint pattern + the `findCandidatesPayload` shared wire-shape struct family. Subsequent advances replicate the pattern: per-subtype handler file + per-subtype substrate-walk helper + per-subtype route registration. The CoordinationRing variant will extend `findCandidatesCandidatePayload` with an `Interactions` field per §0185 interaction-centric ontology + §0186 MO1 CLI wire-contract extension precedent.
+
+  Per §0164 MO1 verification discipline: empirical state inline. `grep -c "^func Test" services/ingestion/internal/httpapi/find_candidates_bc_test.go` returns 6. Full `go test ./internal/httpapi/...` passes; full `go test ./...` from `services/ingestion/` passes.
+
+  Scope discipline per §0190: **single subtype pilot (BehavioralCluster)** — no per-subtype endpoint replication, no shared collector package, no Interactions wire-shape extension (deferred to CoordinationRing endpoint). Does NOT introduce:
+  - Per-subtype endpoint replication for AutomationGroup / CampaignHypothesis / CoordinationRing (deferred to follow-on PRs).
+  - Shared `internal/observationcollector/` package (deferred per §0190 MO1 — duplication-cost surfaces empirically after multiple instances).
+  - Interactions wire-shape extension at findCandidatesCandidatePayload (deferred to CoordinationRing endpoint per §0186 MO1 per-CLI extension pattern).
+
+  - **Methodological observation 1 — Pilot-first replication discipline for per-subtype HTTP endpoints; defer shared-helper extraction until duplication surfaces empirically.** §0190 duplicates `collectBehavioralObservationsHTTP` from the CLI's `collectBehavioralObservations` rather than extracting both to a shared package. Rationale: the shared-helper shape becomes structurally apparent only after multiple instances exist (e.g., per-modality variants: browser, network, behavioral). Premature extraction risks a shape that fits the pilot but breaks under the second + third instance. **Pattern: HTTP-endpoint advances that mirror a CLI's structural surface SHOULD duplicate per-CLI local helpers at the pilot stage; consolidation to a shared package SHOULD wait until 3+ instances exist + the shape is empirically validated. The duplication is structural cost; the consolidation benefit dominates only at scale. Future find-candidates-* endpoints SHOULD follow this discipline; the consolidation refactor SHOULD land after all 5 endpoints exist (4 subtypes + 1 modality variant for AG-network).**
+
+- **Supersession:** No prior decision-log entry superseded. Pilots the F3 candidate evaluation gap (3rd of 3 §0188 operational HTTP gaps). 4 follow-on per-subtype endpoints remain (AG-browser, AG-network, CH, CR); each can land as a separate downstream advance, with the shared-helper consolidation refactor following per §0190 MO1.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

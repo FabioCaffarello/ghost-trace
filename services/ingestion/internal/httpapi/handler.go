@@ -422,6 +422,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleMorphology(w, r)
 	case r.URL.Path == "/v1/layer-b-verdict":
 		h.handleLayerBVerdict(w, r)
+	case r.URL.Path == "/v1/find-candidates/behavioral-cluster":
+		h.handleFindCandidatesBC(w, r)
 	case r.URL.Path == "/v1/admin/orphan-cleanup":
 		h.handleAdminOrphanCleanup(w, r)
 	case r.URL.Path == "/v1/hypotheses/behavioral-cluster/promote":
