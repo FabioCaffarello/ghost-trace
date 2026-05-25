@@ -424,6 +424,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleLayerBVerdict(w, r)
 	case r.URL.Path == "/v1/find-candidates/behavioral-cluster":
 		h.handleFindCandidatesBC(w, r)
+	case r.URL.Path == "/v1/find-candidates/automation-group-browser":
+		h.handleFindCandidatesAGBrowser(w, r)
 	case r.URL.Path == "/v1/admin/orphan-cleanup":
 		h.handleAdminOrphanCleanup(w, r)
 	case r.URL.Path == "/v1/hypotheses/behavioral-cluster/promote":
