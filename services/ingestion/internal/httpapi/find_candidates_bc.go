@@ -140,15 +140,17 @@ func (h *Handler) handleFindCandidatesBC(w http.ResponseWriter, r *http.Request)
 // findCandidatesCandidatePayload is the per-candidate wire shape.
 // Mirrors the F3 CLIs' candidateJSON exactly per §0163 + §0188 MO1
 // CLI↔HTTP wire-parity discipline. Interaction-centric subtypes
-// (CoordinationRing) extend this shape with an optional Interactions
-// field at the per-subtype endpoint (deferred until §0193 or equivalent).
+// (CoordinationRing) populate the Interactions field; all other
+// subtypes leave it empty (omitempty removes it from JSON) per §0186 MO1
+// CLI wire-contract extension pattern landed at §0193.
 type findCandidatesCandidatePayload struct {
-	SignatureName     string   `json:"signature_name"`
-	HypothesisSubtype string   `json:"hypothesis_subtype"`
-	ActorRefs         []string `json:"actor_refs"`
-	SourceHashesHex   []string `json:"source_event_hashes_hex"`
-	EvidenceCount     uint32   `json:"evidence_count"`
-	ConfidenceHint    float64  `json:"confidence_hint"`
+	SignatureName     string      `json:"signature_name"`
+	HypothesisSubtype string      `json:"hypothesis_subtype"`
+	ActorRefs         []string    `json:"actor_refs"`
+	SourceHashesHex   []string    `json:"source_event_hashes_hex"`
+	EvidenceCount     uint32      `json:"evidence_count"`
+	ConfidenceHint    float64     `json:"confidence_hint"`
+	Interactions      [][2]string `json:"interactions,omitempty"`
 }
 
 // findCandidatesStatsPayload is the per-evaluation stats wire shape.
