@@ -24,6 +24,8 @@ help:
 	@echo "  hypothesis-state-build  go build -trimpath -o $(BIN_DIR)/hypothesis-state ./cmd/hypothesis-state"
 	@echo "  list-hypotheses-build  go build -trimpath -o $(BIN_DIR)/list-hypotheses ./cmd/list-hypotheses"
 	@echo "  find-automation-group-candidates-build  go build -trimpath -o $(BIN_DIR)/find-automation-group-candidates ./cmd/find-automation-group-candidates"
+	@echo "  find-automation-group-candidates-network-build  go build -trimpath -o $(BIN_DIR)/find-automation-group-candidates-network ./cmd/find-automation-group-candidates-network"
+	@echo "  find-behavioral-cluster-candidates-build  go build -trimpath -o $(BIN_DIR)/find-behavioral-cluster-candidates ./cmd/find-behavioral-cluster-candidates"
 	@echo "  measure-chain-morphology-build  go build -trimpath -o $(BIN_DIR)/measure-chain-morphology ./cmd/measure-chain-morphology"
 	@echo "  summarize-hypotheses-build  go build -trimpath -o $(BIN_DIR)/summarize-hypotheses ./cmd/summarize-hypotheses"
 	@echo "  form-automation-group-build  go build -trimpath -o $(BIN_DIR)/form-automation-group ./cmd/form-automation-group"
@@ -196,6 +198,16 @@ list-hypotheses-build:
 find-automation-group-candidates-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/find-automation-group-candidates ./cmd/find-automation-group-candidates
+
+.PHONY: find-automation-group-candidates-network-build
+find-automation-group-candidates-network-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/find-automation-group-candidates-network ./cmd/find-automation-group-candidates-network
+
+.PHONY: find-behavioral-cluster-candidates-build
+find-behavioral-cluster-candidates-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/find-behavioral-cluster-candidates ./cmd/find-behavioral-cluster-candidates
 
 .PHONY: measure-chain-morphology-build
 measure-chain-morphology-build:
