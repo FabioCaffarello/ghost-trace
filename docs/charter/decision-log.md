@@ -7936,6 +7936,61 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0183` — find-campaign-hypothesis-candidates CLI + foundation helper + linear lifecycle bundle (CampaignHypothesis lifecycle integration arc PR #1 of 2)
+
+- **Status:** accepted
+- **Date:** 2026-05-24
+- **Context:** §0182 landed `temporal_endpoint_cohort_v1` as the first event-centric F3 signature emitting CampaignHypothesis candidates, discharging the §0167 closing-note F3-emission gate for the CampaignHypothesis subtype. The §0181 closing-note (parallel to §0167) recorded that "Lifecycle integration tests for CampaignHypothesis can land parallel to §0157-§0167 + §0176-§0181 arcs (separate downstream advance per §0181 MO2 bundling discipline)." Per §0181 MO2: "Future Cat III subtype lifecycle arcs SHOULD evaluate bundling 2-3 axes per PR vs single-axis-per-PR; the §0176-§0181 arc establishes the maximum-PR-count baseline; bundling reduces it."
+
+  The CampaignHypothesis lifecycle integration arc applies §0181 MO2 bundling discipline: 2 PRs of 3 axes each rather than the §0176-§0181 6-PRs-of-1-axis baseline. PR #1 (§0183, this entry) covers the CLI + foundation helper + linear lifecycle axes (evaluation, measurement, promotion+demotion E2E). PR #2 (§0184, planned next) covers cross-formation lifecycle axes (binary merge, unary dissolve, k-ary split).
+
+- **Decision:** Land the CampaignHypothesis lifecycle integration arc PR #1 as a single bundle covering 3 lifecycle axes + CLI + foundation helper:
+
+  1. **`services/ingestion/cmd/find-campaign-hypothesis-candidates/main.go`** (~233 lines) — F3-loop CLI invoking `TemporalEndpointCohortV1`. Mirrors `find-behavioral-cluster-candidates` pattern (§0173) + the §0163 stable wire contract (`emissionEnvelope` JSON identical across all F3-loop CLIs). Argument set: `-db`, `-blobs`, `-threshold` (defaults to signature's `MinCohortSize=3`), `-bucket-seconds` (NEW, exposes §0182 `BucketSeconds` override; defaults to signature's 60s), `-limit`, `-with-attribution`. Helpers: `emitCandidatesJSON`, `subtypeName`, `thresholdOrDefault`, `bucketSecondsOrDefault`.
+
+  2. **`services/ingestion/cmd/find-campaign-hypothesis-candidates/main_test.go`** (4 tests) — `TestCollectNetworkObservations_EndToEnd` + `TestFullPipeline_EndToEnd` (asserts `hypothesis_subtype == "CampaignHypothesis"` in JSON envelope, the first F3 emission of this subtype per §0182) + `TestFullPipeline_BelowThreshold_NoCandidates` (per §0154 MO4 + §0163 MO3 4-test contract) + `TestSubtypeName_AllValuesNamed`. Local helper `appendNetworkObs` for NetworkObservation injection.
+
+  3. **`services/ingestion/cmd/find-campaign-hypothesis-candidates/layerb_firing_test.go`** (2 tests + foundation helper) — covers the F3 → CampaignHypothesisFormation → Layer B evaluation axis (parallel to §0157 + §0176). Introduces `commitCampaignHypothesisFormationFromCandidate` as the §0183 foundation helper. STRUCTURAL DIVERGENCE from §0157 + §0176 foundation helpers: ActorRefs are INTENTIONALLY DROPPED at formation commit per §0182 + §0063 event-centric ontology — `CampaignHypothesisFormation` proto has no `actor_refs` field. Tests: `TestLayerBFiring_AgainstCampaignHypothesisF3CandidateFormation`, `TestLayerBFiring_CampaignHypothesisRejectsNilParams`.
+
+  4. **`services/ingestion/cmd/find-campaign-hypothesis-candidates/morphology_integration_test.go`** (1 test + chain helper) — covers the F3 → CampaignHypothesisFormation chain → `morphology.Measure` axis (parallel to §0158 + §0177). Extends the foundation helper with explicit `direct_influenced_by` + `closure_hashes` parameters as `commitCampaignHypothesisFormationFromCandidateWithChain`. Test: `TestMorphology_AgainstCampaignHypothesisF3DerivedFormationChain` — 3-formation chain (depths 0/1/2; breadths 0/1/1; closures 0/1/2; subtype `CampaignHypothesisFormation`). Helper: `sortHashListAscending` (local copy mirroring §0158 + §0177).
+
+  5. **`services/ingestion/cmd/find-campaign-hypothesis-candidates/demote_e2e_test.go`** (1 test + hex helpers) — covers the F3 → formation → promotion → demotion lifecycle arc (parallel to §0160 + §0178). Uses **subtype-suffixed** lifecycle functions per §0178 MO1: `hypothesis.PromoteCampaignHypothesis` + `hypothesis.DemoteCampaignHypothesis` (only `BehavioralCluster` uses generic-named `Promote` / `Demote` per §0178). Test: `TestDemoteCampaignHypothesis_FromF3CandidateLifecycle`. Local hex helpers (`hexDecodeInto`, `hexNibble`, `hexLenErr`) — local copies mirroring §0160 / §0178 pattern.
+
+  6. **`services/ingestion/Makefile`** — adds `find-campaign-hypothesis-candidates-build` PHONY target + help-line registration. Mirrors `find-behavioral-cluster-candidates-build` exactly.
+
+- **Constitutional review:**
+
+  Subordinate to §0182 (event-centric ontology preserved at formation commit — ActorRefs dropped via foundation helper). Subordinate to §0163 stable wire contract (`emissionEnvelope` JSON identical to AutomationGroup + BehavioralCluster CLIs). Subordinate to §0178 MO1 (subtype-suffixed lifecycle functions for non-BehavioralCluster subtypes). Subordinate to §0181 MO2 bundling discipline (3 axes per PR vs single-axis-per-PR baseline). Subordinate to §0164 MO1 verification discipline (test counts empirically verified inline below).
+
+  Per §0182 + §0063 event-centric ontology: the §0183 foundation helper `commitCampaignHypothesisFormationFromCandidate` is STRUCTURALLY DISTINCT from the §0157 (`commitFormationFromCandidate` — AutomationGroup) + §0176 (`commitBehavioralClusterFormationFromCandidate` — BehavioralCluster) helpers — both prior helpers commit `actor_refs`; the CampaignHypothesis helper drops them at commit (the proto field does not exist). The structural witness is the foundation helper's source comment block explicitly recording the drop.
+
+  Falsifiability discipline: each test's lifecycle event is structurally observable — formation hash + promotion hash + demotion hash all looked up in substrate post-commit; proto round-trip equality verified. The Layer B verdict + morphology measurement output structurally verified. The demotion-within-cadence test verifies `CadenceSatisfied == false` + `CadenceElapsedSeconds == 100` (matches §0160 + §0178 advisory pattern).
+
+- **Consequences:**
+  - 1 new CLI directory with 5 Go files (main + 4 test files); ~750 lines total.
+  - 8 new tests (4 unit + 4 integration: 2 layer-b + 1 morphology + 1 demote E2E).
+  - 1 Makefile addition + help-line registration.
+  - No proto changes. No package additions. No `internal/hypothesis` changes.
+  - **First CampaignHypothesis lifecycle integration tests land.** Lifecycle integration coverage now spans 2 of 4 Cat III subtypes fully (AutomationGroup + BehavioralCluster) + 1 of 4 partially (CampaignHypothesis: linear axes covered, cross-formation axes deferred to §0184).
+  - **First subtype-suffixed lifecycle-function consumer at the integration-test layer.** Prior integration tests at the CLI layer used `hypothesis.Promote` / `hypothesis.Demote` (BehavioralCluster generic-named per §0178). §0183 is the first integration-test surface consuming `PromoteCampaignHypothesis` / `DemoteCampaignHypothesis` — verifies the §0178 MO1 subtype-suffixed convention empirically at the integration boundary.
+  - **§0181 MO2 bundling discipline empirically validated.** §0176-§0181 was 6 PRs of 1 axis each. §0183 bundles 3 axes (CLI + foundation helper + linear lifecycle) in 1 PR; §0184 will bundle 3 more (binary + unary + k-ary cross-formation). CampaignHypothesis arc completes in 2 PRs vs 6, a 67% reduction without sacrificing falsifiability — each PR remains structurally bounded + each axis remains independently testable post-commit.
+  - **§0181 closing-note + §0167 closing-note (CampaignHypothesis half) partially discharged.** Linear axes covered; cross-formation axes (merge + dissolve + split) remain for §0184.
+
+  Per §0164 MO1 verification discipline: empirical state inline. `grep -c "^func Test" services/ingestion/cmd/find-campaign-hypothesis-candidates/*.go` returns 8 across 4 test files (4 unit + 2 layerb + 1 morphology + 1 demote). Full `go test ./cmd/find-campaign-hypothesis-candidates/...` passes.
+
+  Scope discipline per §0183: **CLI + foundation helper + 3 linear lifecycle axes ONLY** (evaluation + measurement + promotion+demotion E2E). Does NOT introduce:
+  - Cross-formation lifecycle tests (binary merge, unary dissolve, k-ary split) — deferred to §0184.
+  - Changes to `internal/signatures` or `internal/hypothesis` packages — both reused as-is.
+  - CoordinationRing F3 signature — remains F3-emission-blocked; separate downstream advance.
+
+  - **Methodological observation 1 — §0181 MO2 bundling discipline cleanly reduces PR count without sacrificing axis-by-axis falsifiability when axes are structurally independent.** §0183 bundles 3 axes (evaluation + measurement + linear lifecycle) into one PR; each axis remains independently testable + each failure remains structurally localizable to its axis (Layer B verdict for evaluation; morphology output for measurement; lifecycle event hashes for linear lifecycle). The cognitive overhead per PR remains bounded because the foundation helper is shared across axes — the per-axis additions are integration tests + a single chain-extension helper. **Pattern: 3-axes-per-PR bundling is the empirical sweet spot for Cat III subtype lifecycle integration arcs where the foundation helper is shared; bundling axes that share a foundation helper amortizes the helper cost across more axes within the same PR.**
+
+  - **Methodological observation 2 — Per-subtype foundation helper variation IS a structural surface that distinguishes ontology classes empirically.** §0157 (`commitFormationFromCandidate`) commits ActorRefs. §0176 (`commitBehavioralClusterFormationFromCandidate`) commits ActorRefs. §0183 (`commitCampaignHypothesisFormationFromCandidate`) DROPS ActorRefs (proto field absent per §0063 event-centric ontology). The three helpers' divergence at the ActorRefs axis is the structural witness that AutomationGroup + BehavioralCluster are actor-centric ontology classes while CampaignHypothesis is event-centric. **Pattern: when a Cat III subtype's lifecycle integration arc opens, the foundation helper's ActorRefs handling (commit vs drop) is the first structural disambiguation surface to verify against the proto's `actor_refs` field presence. The helper's source comment block SHOULD record the drop/commit decision + cite the governing ontology framing decision-log entry.**
+
+- **Supersession:** No prior decision-log entry superseded. Discharges §0181 closing-note + §0167 closing-note partial obligations for CampaignHypothesis subtype linear lifecycle axes. Cross-formation axes (merge + dissolve + split) remain for §0184. CoordinationRing remains F3-emission-blocked; separate F3 signature required.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
