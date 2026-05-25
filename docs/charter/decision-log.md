@@ -8364,13 +8364,13 @@ The four methodological observations are the pilot's contribution to procedure b
   - 2 new files; ~300 lines total.
   - 1 modified file (route addition; 2 lines).
   - 4 new unit tests.
-  - **2nd of 5 find-candidates-* endpoints lands.** 3 remain (AG-network with 2-signature flag, CampaignHypothesis, CoordinationRing with interaction-centric wire-shape extension). Per §0190 MO1: consolidation refactor extracts `internal/observationcollector/` once all 5 land.
+  - **2nd of 5 find-candidates-* endpoints lands.** 3 remain (AG-network with two-signature selection, CampaignHypothesis, CoordinationRing with interaction-centric wire-shape extension). Per §0190 MO1: consolidation refactor extracts `internal/observationcollector/` once all 5 land.
 
   Per §0164 MO1: `grep -c "^func Test" services/ingestion/internal/httpapi/find_candidates_ag_browser_test.go` returns 4. Full `go test ./internal/httpapi/...` passes; full `go test ./...` from `services/ingestion/` passes.
 
   Scope discipline per §0191: **single per-subtype endpoint replication only** — no shared-collector extraction (deferred per §0190 MO1), no wire-shape modifications (§0190's findCandidatesPayload family reused as-is).
 
-- **Supersession:** No prior decision-log entry superseded. Extends §0190 along the browser-modality AutomationGroup axis. 3 follow-on per-subtype endpoints remain: AG-network (with two-signature-via-flag complexity), CH (network-modality, single signature), CR (network-modality + interaction-centric wire-shape extension per §0186 MO1).
+- **Supersession:** No prior decision-log entry superseded. Extends §0190 along the browser-modality AutomationGroup axis. 3 follow-on per-subtype endpoints remain: AG-network (with two-signature selection complexity), CH (network-modality, single signature), CR (network-modality + interaction-centric wire-shape extension per §0186 MO1).
 
 ---
 
