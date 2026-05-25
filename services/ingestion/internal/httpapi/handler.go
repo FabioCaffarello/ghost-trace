@@ -464,17 +464,19 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		tier := routeTier(r)
 		status := lw.effectiveStatus()
+		durationMs := float64(time.Since(start)) / float64(time.Millisecond)
 		h.logger.LogAttrs(r.Context(), slog.LevelInfo, "httpapi request",
 			slog.String("method", r.Method),
 			slog.String("path", r.URL.Path),
 			slog.Int("status", status),
-			slog.Int64("duration_ms", time.Since(start).Milliseconds()),
+			slog.Int64("duration_ms", int64(durationMs)),
 			slog.String("tier", string(tier)),
 			slog.String("remote_addr", r.RemoteAddr),
 			slog.String("request_id", requestID),
 		)
 		if h.metrics != nil {
 			h.metrics.Inc(r.URL.Path, status)
+			h.metrics.Observe(r.URL.Path, durationMs)
 		}
 	}()
 	if h.requiresAuth(r) && !h.authorized(r) {
