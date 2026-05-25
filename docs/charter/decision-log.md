@@ -7364,6 +7364,69 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0173` — replay-all-derived-actor-attributions batch CLI + library function close batch-replay symmetry between Cat II types
+
+- **Status:** accepted.
+- **Date:** 2026-05-25.
+- **Context:** [`§0172`](#0172--replay-derived-actor-attribution-cli-lands-operator-invocable-replay-surface-symmetric-across-both-cat-ii-types) closed per-record replay-CLI symmetry between OperationalSession and DerivedActorAttribution. The §0172 Scope discipline section explicitly flagged the BATCH variant as a separate downstream advance ("`replay-all-derived-actor-attributions` batch CLI (parallel to `replay-all-operational-sessions`) — could land as separate downstream advance if operational pressure surfaces"). With per-record symmetry landed + the Cat II construct end-to-end-operational, batch symmetry is the natural in-arc closure following §0172 MO2's per-record-first-batch-natural-follow-on pattern.
+
+  This entry closes the batch-replay asymmetry: both Cat II types now have parallel per-record AND batch replay surfaces at BOTH library + CLI layers.
+
+- **Decision:** Two changes:
+
+  **1. Library function**: `replay.ReplayAllDerivedActorAttributions(ctx, sub) → (BatchReplayReport, error)` in new file `services/ingestion/internal/replay/replay_all_attributions.go`. Mirrors `ReplayAllOperationalSessions` on the attribution side modulo:
+
+  - No DerivationContext pre-collection (attribution definitions registered today take input from source Cat I only; `network_5tuple_actor_v1` per §0168 reads no cross-observation context).
+  - Cost: 1 substrate walk + 1 lookup per DerivedActorAttribution (cheaper than the OperationalSession batch which pre-collects context).
+  - Reuses the existing `BatchReplayReport`, `BatchReplayEntry`, `BatchReplayOutcome` types per §0173 stable-structure discipline — operators parsing the JSON output apply the same logic against either function's output.
+
+  Private helper `replayOneAttributionFromRow` mirrors `replayOneFromRow` on the attribution side; reuses all 6 sentinels established at §0171.
+
+  **2. CLI**: `services/ingestion/cmd/replay-all-derived-actor-attributions/main.go` mirrors `replay-all-operational-sessions` line-by-line modulo command name + library call. Same wire contract:
+
+  - Same argument shape (`-db`, `-blobs`).
+  - Same JSON output (identical `BatchReplayReport` shape).
+  - Same exit code shape (0=clean, 1=drift, 2=tool error, 3=substrate-precondition).
+
+  Makefile updates: new `replay-all-derived-actor-attributions-build` PHONY target + help line registered.
+
+  Test coverage (3 new tests in `replay_all_attributions_test.go`):
+
+  - `TestReplayAllDerivedActorAttributions_HappyPath` — substrate with 2 derived Cat II records; verify all match + no drift + no error.
+  - `TestReplayAllDerivedActorAttributions_EmptySubstrate` — fresh substrate with no Cat II records; verify all-zero report.
+  - `TestReplayAllDerivedActorAttributions_StableReportShape` — verify the returned type IS `BatchReplayReport` (compile-time check via type assertion).
+
+  Constitutional discipline:
+
+  - **§0163 stable wire contract** preserved — `BatchReplayReport` shared between both batch functions; CLI JSON outputs are structurally identical.
+  - **§0084 + §0085 + §0171 Phase 1 replay** semantics preserved — no new replay semantics; CLI exposes existing library capability.
+  - **§3 N3 operator-elected commit boundary** — CLI is READ-ONLY.
+
+  Scope discipline per §0173: **minimal batch library + CLI shim**. Does NOT introduce:
+
+  - Cross-Cat-II-type batch CLI (one CLI replaying all Cat II types together) — would conflict with per-type per-CLI discipline established at §0172.
+  - Concurrency primitives for parallel per-record replay — current sequential walk is sufficient at inception scale; concurrent replay would need substrate-walker concurrency review.
+  - Replay-as-test for Phase 3 reconstructive (Cat III) — out of scope per replay-model.md.
+
+  Per §0164 MO1 verification discipline: empirical state inline. `ls services/ingestion/cmd/ | grep -c replay-` returns 9 (was 8; added `replay-all-derived-actor-attributions`). Both Cat II types now have parallel per-record CLI (`replay-{operational-session,derived-actor-attribution}`) + parallel batch CLI (`replay-all-{operational-sessions,derived-actor-attributions}`).
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. New CLI binary + library function. The library function reuses the existing `BatchReplayReport` type without modification per stable-structure discipline.
+
+  Falsifiability discipline: batch behavior structurally observable + tested. Happy-path test verifies all-match for non-empty substrate; empty-substrate test verifies the all-zero baseline; stable-report-shape test prevents type drift between OperationalSession + DerivedActorAttribution batch reports. The `BatchReplayReport.Total` count is the structural witness — divergence between walked-count + accumulated-Total would surface as a test failure.
+
+- **Consequences:**
+  - New library file `replay_all_attributions.go` (~140 lines).
+  - New test file `replay_all_attributions_test.go` (3 tests).
+  - New CLI directory + Makefile entries.
+  - **Phase 1 replay coverage symmetric across BOTH Cat II types at BOTH library AND CLI layers, BOTH per-record AND batch granularities.** The §0168 → §0171 → §0172 → §0173 chain completes the replay-symmetry surface.
+  - **§0172 MO2 confirmed empirically**: per-record CLI lands first (§0172); batch CLI follows naturally (§0173). The two-step landing is observably cheaper than landing both simultaneously because batch design questions (concurrency, cost model, stable-report-shape) become bounded after per-record establishes the shape.
+  - **Methodological observation 1 — Batch library + CLI for new Cat II types are bounded mechanical extensions when the per-record + batch precedent exists for another type.** §0173's mirror of `ReplayAllOperationalSessions` reused `BatchReplayReport` (no new types), the same outcome enum, and the same dispatch shape; only the per-row helper differs (attribution-specific replay logic). **Pattern: when adding batch operations for a new Cat II type that has per-record + batch precedent for another type, the work is purely mechanical: reuse the existing report types, mirror the dispatch shape, write a per-row helper specific to the new type. Future Cat II construct PRs should bundle batch coverage alongside per-record coverage to avoid the §0172 → §0173 follow-on PR pattern.**
+  - **Methodological observation 2 — Five-instance empirical-correction pattern catalogue now established for this session.** §0161 → §0162 (CIC-IDS reachability), §0163 → §0164 (CLI test symmetry), §0168 → §0171 (Cat II library replay), §0171 → §0172 (Cat II CLI replay), §0172 → §0173 (Cat II batch replay). Five asymmetry-closure pairings demonstrate the pattern is structurally recurring at distinct layers (CLI, library, batch). **Pattern: at the SESSION-ARC level, asymmetry-closure follow-on PRs accumulate naturally; bundling them into the originating PR is preferable when bounded (per §0172 MO3) but unavoidable when the originating PR's scope discipline excludes them. Either way, future operators should READ paired entries together for the full picture.**
+
+- **Supersession:** No prior decision-log entry superseded. Completes the §0168 → §0171 → §0172 → §0173 Cat-II-replay-symmetry chain at the batch granularity. Per §0173 MO1: future Cat II construct PRs should bundle per-record + batch replay coverage to avoid the chain-of-follow-ons pattern.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
