@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -258,5 +259,182 @@ func TestMetricsHTTP_NoIncWhenMetricsNotConfigured(t *testing.T) {
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Errorf("status: got %d, want 200", rr.Code)
+	}
+}
+
+// ----------------------------------------------------------------------
+// §0200 histogram tests
+// ----------------------------------------------------------------------
+
+// TestMetricsHistogram_ObserveAggregatesPerPath verifies per-path
+// histogram accumulation: observations land in the bucket whose
+// upper bound is the smallest >= observation.
+func TestMetricsHistogram_ObserveAggregatesPerPath(t *testing.T) {
+	m := NewMetrics()
+	// /healthz: three sub-ms observations → all in bucket le=1.
+	m.Observe("/healthz", 0.3)
+	m.Observe("/healthz", 0.5)
+	m.Observe("/healthz", 0.7)
+	// /slow: one 50ms + one 500ms observation.
+	m.Observe("/slow", 50)
+	m.Observe("/slow", 500)
+
+	var buf bytes.Buffer
+	if err := m.Encode(&buf); err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	out := buf.String()
+	// /healthz: 3 in le=1; also count=3, sum=1.5.
+	for _, want := range []string{
+		`ghosttrace_httpapi_request_duration_ms_bucket{path="/healthz",le="1"} 3`,
+		`ghosttrace_httpapi_request_duration_ms_bucket{path="/healthz",le="+Inf"} 3`,
+		`ghosttrace_httpapi_request_duration_ms_sum{path="/healthz"} 1.5`,
+		`ghosttrace_httpapi_request_duration_ms_count{path="/healthz"} 3`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q\nfull output:\n%s", want, out)
+		}
+	}
+	// /slow: 1 in le=50 (cumulative), 2 in le=500 (cumulative), count=2, sum=550.
+	for _, want := range []string{
+		`ghosttrace_httpapi_request_duration_ms_bucket{path="/slow",le="50"} 1`,
+		`ghosttrace_httpapi_request_duration_ms_bucket{path="/slow",le="500"} 2`,
+		`ghosttrace_httpapi_request_duration_ms_bucket{path="/slow",le="+Inf"} 2`,
+		`ghosttrace_httpapi_request_duration_ms_sum{path="/slow"} 550`,
+		`ghosttrace_httpapi_request_duration_ms_count{path="/slow"} 2`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q\nfull output:\n%s", want, out)
+		}
+	}
+}
+
+// TestMetricsHistogram_BucketsCumulativeAscending verifies the
+// Prometheus convention: each bucket count is the count of
+// observations <= that upper bound — cumulative ascending. The 10s
+// bucket count is GE the 100ms bucket count, etc.
+func TestMetricsHistogram_BucketsCumulativeAscending(t *testing.T) {
+	m := NewMetrics()
+	// Observations spanning multiple buckets.
+	durations := []float64{0.5, 3, 7, 20, 40, 80, 200, 400, 800, 1500, 3000, 7500}
+	for _, d := range durations {
+		m.Observe("/varied", d)
+	}
+	var buf bytes.Buffer
+	_ = m.Encode(&buf)
+	lines := strings.Split(buf.String(), "\n")
+
+	var bucketCounts []uint64
+	for _, l := range lines {
+		if !strings.HasPrefix(l, `ghosttrace_httpapi_request_duration_ms_bucket{path="/varied"`) {
+			continue
+		}
+		// Parse trailing number.
+		parts := strings.Fields(l)
+		if len(parts) < 2 {
+			continue
+		}
+		var n uint64
+		if _, err := fmt.Sscanf(parts[len(parts)-1], "%d", &n); err != nil {
+			continue
+		}
+		bucketCounts = append(bucketCounts, n)
+	}
+	if len(bucketCounts) < 2 {
+		t.Fatalf("expected >=2 bucket lines for /varied, got %d:\n%s", len(bucketCounts), buf.String())
+	}
+	// Cumulative monotone-non-decreasing.
+	for i := 1; i < len(bucketCounts); i++ {
+		if bucketCounts[i] < bucketCounts[i-1] {
+			t.Errorf("bucket count at index %d (%d) is less than previous (%d) — buckets must be cumulative ascending", i, bucketCounts[i], bucketCounts[i-1])
+		}
+	}
+}
+
+// TestMetricsHistogram_NegativeObservationClampsToZero verifies the
+// defensive clamp: a negative duration is treated as 0 (lands in the
+// le=1 bucket) without panicking or producing a negative sum.
+func TestMetricsHistogram_NegativeObservationClampsToZero(t *testing.T) {
+	m := NewMetrics()
+	m.Observe("/negative", -5)
+	var buf bytes.Buffer
+	_ = m.Encode(&buf)
+	out := buf.String()
+	if !strings.Contains(out, `ghosttrace_httpapi_request_duration_ms_sum{path="/negative"} 0`) {
+		t.Errorf("negative observation should clamp sum to 0:\n%s", out)
+	}
+	if !strings.Contains(out, `ghosttrace_httpapi_request_duration_ms_bucket{path="/negative",le="1"} 1`) {
+		t.Errorf("clamped-to-0 observation should land in le=1 bucket:\n%s", out)
+	}
+}
+
+// TestMetricsHistogram_ConcurrentObserveIsSafe verifies Observe is
+// concurrent-safe (mirrors the §0199 concurrent-Inc-stress test).
+func TestMetricsHistogram_ConcurrentObserveIsSafe(t *testing.T) {
+	m := NewMetrics()
+	const goroutines = 10
+	const perGoroutine = 100
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < perGoroutine; j++ {
+				m.Observe("/concurrent-hist", float64(j%50))
+			}
+		}()
+	}
+	wg.Wait()
+	var buf bytes.Buffer
+	_ = m.Encode(&buf)
+	want := `ghosttrace_httpapi_request_duration_ms_count{path="/concurrent-hist"} 1000`
+	if !strings.Contains(buf.String(), want) {
+		t.Errorf("expected histogram count = 1000 after concurrent Observe:\n%s", buf.String())
+	}
+}
+
+// TestMetricsHistogram_EncodeEmptyHistogramRegistry verifies an empty
+// registry emits the histogram HELP + TYPE preamble but no per-path
+// sample lines.
+func TestMetricsHistogram_EncodeEmptyHistogramRegistry(t *testing.T) {
+	m := NewMetrics()
+	var buf bytes.Buffer
+	_ = m.Encode(&buf)
+	out := buf.String()
+	if !strings.Contains(out, "# HELP ghosttrace_httpapi_request_duration_ms") {
+		t.Errorf("missing histogram HELP line:\n%s", out)
+	}
+	if !strings.Contains(out, "# TYPE ghosttrace_httpapi_request_duration_ms histogram") {
+		t.Errorf("missing histogram TYPE line:\n%s", out)
+	}
+	if strings.Contains(out, "ghosttrace_httpapi_request_duration_ms_bucket{") {
+		t.Errorf("empty registry emitted a histogram bucket sample:\n%s", out)
+	}
+}
+
+// TestMetricsHTTP_HistogramObservedOnServeHTTP exercises end-to-end:
+// requests against the /healthz endpoint populate the histogram
+// observable via /metrics scrape.
+func TestMetricsHTTP_HistogramObservedOnServeHTTP(t *testing.T) {
+	doAppend, _ := stubAppendFunc(nil)
+	metrics := NewMetrics()
+	h := MustNew(doAppend, nil, WithMetrics(metrics))
+
+	// Three /healthz requests should yield count=3 + le=+Inf bucket=3.
+	for i := 0; i < 3; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	body := rr.Body.String()
+	if !strings.Contains(body, `ghosttrace_httpapi_request_duration_ms_count{path="/healthz"} 3`) {
+		t.Errorf("expected histogram count=3 for /healthz:\n%s", body)
+	}
+	if !strings.Contains(body, `ghosttrace_httpapi_request_duration_ms_bucket{path="/healthz",le="+Inf"} 3`) {
+		t.Errorf("expected +Inf bucket=3 for /healthz:\n%s", body)
 	}
 }

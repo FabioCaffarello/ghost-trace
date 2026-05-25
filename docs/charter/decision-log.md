@@ -8712,6 +8712,55 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0200` — httpapi request-duration histogram; fourth observability advance; stdlib-only despite §0199 MO1 threshold framing (Metrics retains 2 metric types + 2 effective labels)
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0197-§0199 established the observability foundation (structured entries + request-id + per-(path, status) counter). §0199 MO1 anticipated that the histogram advance would "likely cross [the stdlib-only] threshold + justify `client_golang` adoption." On §0200 implementation, the threshold framing was re-evaluated: the histogram adds ONE metric type (now 2 total: counter + histogram) and ONE label-axis (`path` for histogram; cumulative `le` is the implicit bucket label, not a separate dimension). The MO1 threshold (≤2 metric types AND ≤3 labels) is satisfied — `client_golang` adoption is NOT yet justified.
+
+  Per §0200 implementation: histograms with pre-defined buckets + Prometheus text-format exposition are ~80 lines of ad-hoc code; `client_golang` would add ~20 transitive packages for the same wire output. The §0199 MO1 threshold remains the operative decision boundary; future advances (summaries, exemplars, push gateway integration, OTel SDK) would re-cross the threshold.
+
+- **Decision:** Add request-duration histogram to the Metrics registry + emit in Prometheus text exposition format. Three changes:
+
+  1. **`services/ingestion/internal/httpapi/metrics.go`** (~95 lines added) — `Metrics` struct gains `histograms map[string]*histogramState` field; `latencyBucketsMs` var (12 ascending boundaries: 1/5/10/25/50/100/250/500/1000/2500/5000/10000ms covering sub-ms healthz to multi-second substrate walks); `histogramState` struct (bucketCounts + totalCount + sumMs); `newHistogramState()` constructor; `Observe(path, durationMs)` method (defensive clamp on negative; per-bucket increment for observations <= each upper bound; totalCount + sumMs aggregates). `snapshot()` extended to return (counters, histograms). `Encode` extended to emit histogram samples in Prometheus convention (per-path: N bucket lines with `le=<boundary>` + 1 `le="+Inf"` bucket + `_sum` + `_count` aggregates per the histogram exposition spec).
+
+  2. **`services/ingestion/internal/httpapi/handler.go`** — deferred Inc + Observe in ServeHTTP (durationMs computed as `float64(time.Since(start)) / float64(time.Millisecond)`; passes to both Inc + Observe under nil-check skip).
+
+  3. **`services/ingestion/internal/httpapi/metrics_test.go`** (~150 lines added, 6 tests) — `TestMetricsHistogram_ObserveAggregatesPerPath` (per-bucket cumulative aggregation across 2 paths) + `TestMetricsHistogram_BucketsCumulativeAscending` (12-observation spread; mechanically verifies cumulative-monotone-non-decreasing per the Prometheus contract) + `TestMetricsHistogram_NegativeObservationClampsToZero` (defensive clamp witness) + `TestMetricsHistogram_ConcurrentObserveIsSafe` (1000-observation-across-10-goroutines stress) + `TestMetricsHistogram_EncodeEmptyHistogramRegistry` (empty-registry preamble-only output) + `TestMetricsHTTP_HistogramObservedOnServeHTTP` (end-to-end ServeHTTP populates histogram visible via /metrics scrape).
+
+- **Constitutional review:**
+
+  Subordinate to §0197-§0199 (extends observability advance series). Subordinate to §0199 MO1 (threshold re-evaluation in MO2 — the histogram advance does NOT cross the threshold despite the §0199 prospective framing). Subordinate to §0164 MO1 verification discipline.
+
+  Stdlib-only — no new external dependencies retained. The 12-bucket default matches typical httpapi latency spectrum (sub-ms healthz probes → multi-second substrate-walk endpoints like /v1/morphology); operators wanting different boundaries can override via a future `WithMetricsHistogramBuckets` option (deferred — no operator pressure today).
+
+  Per §0197 MO1 no-op-default: WithMetrics-unset handlers do NOT observe (nil-check skip in deferred Observe). Per §0198 MO1 pre-auth-echo: Observe fires AFTER auth gate — auth-rejection latencies are observed per-path (operators dashboarding auth-failure-spike latencies see them per-(path, +Inf-bucket) just as they see counter increments).
+
+  Falsifiability: 6 unit tests cover the contract. The bucket-cumulative-ascending test mechanically verifies the Prometheus histogram-encoding contract — a regression where bucketCounts[i] is decremented or zeroed would surface as a non-monotone bucket sequence. The concurrent-Observe-stress (1000 observations, count must equal 1000) witnesses sync.Mutex correctness.
+
+- **Consequences:**
+  - 1 modified file (metrics.go: ~95 lines added — histogram state + Observe + Encode extension).
+  - 1 modified file (handler.go: ~5 lines added — durationMs computation + Observe call).
+  - 1 modified file (metrics_test.go: ~150 lines added — 6 new histogram tests).
+  - 6 new unit tests.
+  - **Fourth observability advance lands.** Request-duration p50/p95/p99-style aggregation now possible via Prometheus `histogram_quantile` against the /metrics scrape output. Operators consuming the structured stream + metrics endpoint have both per-request latency (in the §0197 `duration_ms` field) + aggregate latency distribution (per-path histogram). The two surfaces are complementary: structured stream for per-request investigation, histogram for dashboard p99 trends.
+  - **§0199 MO1 threshold framing empirically re-evaluated.** §0199 prospectively predicted that the histogram advance would cross the stdlib-only threshold; §0200 implementation re-evaluated and found the threshold still satisfied (2 metric types + 2 effective labels). The MO1 framing remains operative; `client_golang` adoption deferred until a real threshold-crossing advance arrives (summaries, exemplars, push gateway, OTel SDK).
+  - **Pre-defined buckets, no per-handler override.** §0200 ships fixed `latencyBucketsMs` boundaries; operator override via future `WithMetricsHistogramBuckets` option (deferred). The fixed-default discipline keeps the §0199 MO1 narrow surface; if operators surface concrete need for different boundaries, override-Option can land as a separate advance.
+
+  Per §0164 MO1: 6 tests pass; full `go test ./...` from `services/ingestion/` reports 0 failures.
+
+  Scope discipline per §0200: **histogram only, no summary, no exemplars, no histogram-bucket-override** — defers per-handler bucket customization, summary metric type, OpenTelemetry exemplars. Does NOT introduce:
+  - `prometheus/client_golang` dependency (still stdlib-only per §0199 MO1 threshold re-evaluation).
+  - Summary metric type (different statistical surface; deferred until operator pressure).
+  - WithMetricsHistogramBuckets option (deferred; fixed-default suffices for current operational scenarios).
+  - Per-tier label expansion on histogram (would 4x cardinality; tier present in §0197 structured entry already).
+
+  - **Methodological observation 1 — Prospective threshold-crossing predictions (per §0199 MO1) SHOULD be re-evaluated empirically at implementation time; a prediction that "X will cross the threshold" is a hypothesis, not a directive.** §0199 MO1 framed: "future histogram advance WILL likely cross this threshold + justify `client_golang` adoption." On §0200 implementation, the threshold framing was checked empirically: 2 metric types (counter + histogram, still ≤2), 2 effective labels per metric (still ≤3). The prediction was wrong — `client_golang` adoption is NOT yet justified. **Pattern: prospective MO predictions about future threshold crossings SHOULD be marked as hypotheses; the downstream advance SHOULD re-evaluate the threshold empirically + record the re-evaluation (whether the prediction held or not) at decision-log layer. Future MO predictions on observability surface expansion SHOULD adopt this discipline. The §0199 MO1 → §0200 MO1 sequence is the first instance of the prospective-prediction-then-empirical-re-evaluation pattern at the operational tier.**
+
+- **Supersession:** No prior decision-log entry superseded. Fourth observability advance after §0197-§0199. Subsequent advances (OpenTelemetry trace-id propagation; `context.Value` propagation of request-id; substrate-side instrumentation; per-handler bucket-override option) can land as separate downstream advances.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
