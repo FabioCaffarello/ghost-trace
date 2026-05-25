@@ -27,6 +27,7 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/hypothesis/layerb"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
 
@@ -119,9 +120,9 @@ func TestLayerBFiring_AgainstCampaignHypothesisF3CandidateFormation(t *testing.T
 	appendNetworkObs(t, in, "actor-3", "10.0.0.1:443", bucketStart+20_000_000_000)
 
 	// Step 2: Run F3 → 1 event-centric candidate.
-	observations, err := collectNetworkObservations(ctx, sub)
+	observations, err := observationcollector.CollectNetwork(ctx, sub)
 	if err != nil {
-		t.Fatalf("collectNetworkObservations: %v", err)
+		t.Fatalf("observationcollector.CollectNetwork: %v", err)
 	}
 	sig := &signatures.TemporalEndpointCohortV1{}
 	result, err := sig.EvaluateNetwork(ctx, observations, nil)

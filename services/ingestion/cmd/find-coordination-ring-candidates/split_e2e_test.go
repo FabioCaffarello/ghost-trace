@@ -35,6 +35,7 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/hypothesis"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
 
@@ -124,9 +125,9 @@ func TestSplitCoordinationRing_FromF3CandidateAntecedent(t *testing.T) {
 	appendNetworkObs(t, in, "actor-suspect-3", "10.0.0.20:443", bucketStart+20_000_000_000)
 	appendNetworkObs(t, in, "actor-suspect-4", "10.0.0.20:443", bucketStart+30_000_000_000)
 
-	observations, err := collectNetworkObservations(ctx, sub)
+	observations, err := observationcollector.CollectNetwork(ctx, sub)
 	if err != nil {
-		t.Fatalf("collectNetworkObservations: %v", err)
+		t.Fatalf("observationcollector.CollectNetwork: %v", err)
 	}
 	sig := &signatures.EndpointCoVisitV1{}
 	result, err := sig.EvaluateNetwork(ctx, observations, nil)
@@ -261,9 +262,9 @@ func TestSplitCoordinationRing_RejectsInsufficientSuccessors(t *testing.T) {
 	appendNetworkObs(t, in, "actor-x-2", "10.0.0.21:443", bucketStart+10_000_000_000)
 	appendNetworkObs(t, in, "actor-x-3", "10.0.0.21:443", bucketStart+20_000_000_000)
 
-	observations, err := collectNetworkObservations(ctx, sub)
+	observations, err := observationcollector.CollectNetwork(ctx, sub)
 	if err != nil {
-		t.Fatalf("collectNetworkObservations: %v", err)
+		t.Fatalf("observationcollector.CollectNetwork: %v", err)
 	}
 	sig := &signatures.EndpointCoVisitV1{}
 	result, err := sig.EvaluateNetwork(ctx, observations, nil)
@@ -302,9 +303,9 @@ func TestSplitCoordinationRing_RejectsAntecedentInSuccessorSet(t *testing.T) {
 	appendNetworkObs(t, in, "actor-y-2", "10.0.0.22:443", bucketStart+10_000_000_000)
 	appendNetworkObs(t, in, "actor-y-3", "10.0.0.22:443", bucketStart+20_000_000_000)
 
-	observations, err := collectNetworkObservations(ctx, sub)
+	observations, err := observationcollector.CollectNetwork(ctx, sub)
 	if err != nil {
-		t.Fatalf("collectNetworkObservations: %v", err)
+		t.Fatalf("observationcollector.CollectNetwork: %v", err)
 	}
 	sig := &signatures.EndpointCoVisitV1{}
 	result, err := sig.EvaluateNetwork(ctx, observations, nil)

@@ -13,6 +13,7 @@ import (
 	commonv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
@@ -64,9 +65,9 @@ func TestCollectBrowserObservations_EndToEnd(t *testing.T) {
 	appendBrowserObs(t, in, "actor-b", []string{"$cdc_test"}, 1)
 	appendBrowserObs(t, in, "actor-a", []string{"missing-chrome.csi"}, 2)
 
-	observations, err := collectBrowserObservations(context.Background(), sub)
+	observations, err := observationcollector.CollectBrowser(context.Background(), sub)
 	if err != nil {
-		t.Fatalf("collectBrowserObservations: %v", err)
+		t.Fatalf("observationcollector.CollectBrowser: %v", err)
 	}
 	if got, want := len(observations), 3; got != want {
 		t.Fatalf("expected %d BrowserObservation records, got %d (note: IngestionEvent records must be excluded)", want, got)
@@ -85,9 +86,9 @@ func TestFullPipeline_EndToEnd(t *testing.T) {
 	// actor-b: 1 detection → below threshold → 0 candidates
 	appendBrowserObs(t, in, "actor-b", []string{"$cdc_test"}, 1)
 
-	observations, err := collectBrowserObservations(context.Background(), sub)
+	observations, err := observationcollector.CollectBrowser(context.Background(), sub)
 	if err != nil {
-		t.Fatalf("collectBrowserObservations: %v", err)
+		t.Fatalf("observationcollector.CollectBrowser: %v", err)
 	}
 
 	sig := &signatures.CDPMarkerDensityV1{}
@@ -177,9 +178,9 @@ func TestFullPipeline_BelowThreshold_NoCandidates(t *testing.T) {
 	appendBrowserObs(t, in, "actor-a", []string{"navigator.webdriver=true"}, 1)
 	appendBrowserObs(t, in, "actor-b", []string{"$cdc_test"}, 1)
 
-	observations, err := collectBrowserObservations(context.Background(), sub)
+	observations, err := observationcollector.CollectBrowser(context.Background(), sub)
 	if err != nil {
-		t.Fatalf("collectBrowserObservations: %v", err)
+		t.Fatalf("observationcollector.CollectBrowser: %v", err)
 	}
 	sig := &signatures.CDPMarkerDensityV1{}
 	result, err := sig.EvaluateBrowser(context.Background(), observations)

@@ -32,17 +32,12 @@ import (
 	"fmt"
 	"os"
 
-	"google.golang.org/protobuf/proto"
-
-	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
 
-const (
-	exitToolError = 2
-	browserObservationMessageType = "ghosttrace.events.v1.BrowserObservation"
-)
+const exitToolError = 2
 
 func main() {
 	if err := run(); err != nil {
@@ -65,7 +60,7 @@ func run() error {
 	}
 	defer sub.Close()
 
-	observations, err := collectBrowserObservations(ctx, sub)
+	observations, err := observationcollector.CollectBrowser(ctx, sub)
 	if err != nil {
 		return fmt.Errorf("collect: %w", err)
 	}
@@ -92,31 +87,6 @@ func run() error {
 		result.Stats.ActorsAggregated,
 		result.Stats.ActorsAboveThreshold)
 	return nil
-}
-
-// collectBrowserObservations walks the substrate and unmarshals every
-// committed BrowserObservation record into memory. O(N) memory per
-// call; suitable for inception-phase substrates with bounded record
-// counts. Future revision may stream candidates incrementally if
-// substrate size pressure surfaces.
-func collectBrowserObservations(ctx context.Context, sub *substrate.Substrate) ([]*eventsv1.BrowserObservation, error) {
-	var out []*eventsv1.BrowserObservation
-	err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
-		if row.MessageType != browserObservationMessageType {
-			return nil
-		}
-		payload, err := sub.ReadBlob(ctx, row.EventHash)
-		if err != nil {
-			return fmt.Errorf("ReadBlob %x: %w", row.EventHash[:8], err)
-		}
-		obs := &eventsv1.BrowserObservation{}
-		if err := proto.Unmarshal(payload, obs); err != nil {
-			return fmt.Errorf("Unmarshal %x: %w", row.EventHash[:8], err)
-		}
-		out = append(out, obs)
-		return nil
-	})
-	return out, err
 }
 
 // candidateJSON is the operator-facing serialization shape. Distinct

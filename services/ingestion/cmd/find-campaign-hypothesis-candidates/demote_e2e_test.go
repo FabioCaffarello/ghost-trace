@@ -19,6 +19,7 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/hypothesis"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
 
@@ -44,9 +45,9 @@ func TestDemoteCampaignHypothesis_FromF3CandidateLifecycle(t *testing.T) {
 	appendNetworkObs(t, in, "actor-2", "10.0.0.1:443", bucketStart+10_000_000_000)
 	appendNetworkObs(t, in, "actor-3", "10.0.0.1:443", bucketStart+20_000_000_000)
 
-	observations, err := collectNetworkObservations(ctx, sub)
+	observations, err := observationcollector.CollectNetwork(ctx, sub)
 	if err != nil {
-		t.Fatalf("collectNetworkObservations: %v", err)
+		t.Fatalf("observationcollector.CollectNetwork: %v", err)
 	}
 	sig := &signatures.TemporalEndpointCohortV1{}
 	result, err := sig.EvaluateNetwork(ctx, observations, nil)

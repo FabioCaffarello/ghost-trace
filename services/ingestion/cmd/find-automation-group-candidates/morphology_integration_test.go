@@ -32,6 +32,7 @@ import (
 	commonv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/morphology"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
@@ -138,9 +139,9 @@ func TestMorphology_AgainstF3DerivedFormationChain(t *testing.T) {
 	appendBrowserObs(t, in, "actor-c", []string{"missing-chrome.csi"}, 3)
 
 	// Step 2: Run F3 signature → expect 3 candidates.
-	observations, err := collectBrowserObservations(ctx, sub)
+	observations, err := observationcollector.CollectBrowser(ctx, sub)
 	if err != nil {
-		t.Fatalf("collectBrowserObservations: %v", err)
+		t.Fatalf("observationcollector.CollectBrowser: %v", err)
 	}
 	if got, want := len(observations), 3; got != want {
 		t.Fatalf("observations count: got %d want %d", got, want)

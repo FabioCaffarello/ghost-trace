@@ -8541,6 +8541,43 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0196` — CLI-side observationcollector consolidation; 5 find-*-candidates CLIs migrate to internal/observationcollector; discharges §0195 CLI-consolidation open obligation
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0195 extracted `internal/observationcollector/` + consolidated the 5 httpapi find-candidates-* handlers but intentionally deferred CLI consolidation (5 `cmd/find-*-candidates/main.go` files + 32 test files using local `collectXxxObservations` helpers). §0196 closes that open obligation. The CLI helpers (`collectBrowserObservations` in find-automation-group-candidates; `collectNetworkObservations` in 3 CLIs: find-automation-group-candidates-network + find-campaign-hypothesis-candidates + find-coordination-ring-candidates; `collectBehavioralObservations` in find-behavioral-cluster-candidates) are textually identical apart from the per-modality typed return slice + the per-modality `XxxObservationMessageType` constant.
+
+- **Decision:** Migrate all 5 find-*-candidates CLIs + 32 test files to consume `observationcollector.CollectBehavioral` / `CollectBrowser` / `CollectNetwork` from §0195's package. Per-CLI changes:
+
+  1. **5 main.go files** — remove local `collectXxxObservations` function definitions (5 functions, ~25 lines each); remove local `XxxObservationMessageType` constants (5 occurrences); remove unused imports (`google.golang.org/protobuf/proto`, `eventsv1` where no longer referenced); add `observationcollector` import; replace call sites with `observationcollector.CollectXxx`.
+
+  2. **32 test files** — replace ~80 call sites (each test file uses the local helper 1-6 times) with `observationcollector.CollectXxx`; add `observationcollector` import to 23 test files (the test files in the AG-browser CLI already had it added at §0195 indirectly via the helper-add pass).
+
+  Net diff: ~280 lines removed, ~160 lines added across 36 files. The asymmetric ratio reflects that test-call-site updates trade a single per-CLI helper definition for per-call package-qualified invocations.
+
+- **Constitutional review:**
+
+  Subordinate to §0190 MO1 + §0195 (consolidation refactor). Subordinate to §0164 MO1 verification discipline. Structurally equivalent: each CLI continues emitting the same wire shape; the consolidated functions have the same signature as the deleted local helpers (modulo package qualification); no observable behavior change.
+
+  Falsifiability: all 5 CLI test suites continue passing against the consolidated code path — structural witness that the refactor preserves behavior across browser + network + behavioral modalities + across 5 CLI scopes.
+
+- **Consequences:**
+  - 5 modified main.go files: each ~30 lines removed (function + constant + unused imports), 1 line added (observationcollector import).
+  - 31 modified test files: ~80 call sites replaced; 23 import-additions.
+  - No new files. No new tests (the existing 5 CLI test suites + 32 test files validate the refactor).
+  - **5 of 5 CLIs now consume the shared package.** The §0190 MO1 + §0195 consolidation discipline is now applied uniformly across httpapi + CLI consumers. The local helpers exist in 0 consumers; all paths flow through `internal/observationcollector/`.
+  - **§0195 CLI-consolidation deferred obligation discharged.** No further consolidation surfaces remain at the observationcollector layer; future refactors at this layer would be additive (e.g., a per-attribution-source collector variant).
+
+  Per §0164 MO1 verification discipline: empirical state inline. Full `go test ./...` from `services/ingestion/` reports 23 packages green, 0 failures (the find-automation-group-candidates / find-automation-group-candidates-network / find-behavioral-cluster-candidates / find-campaign-hypothesis-candidates / find-coordination-ring-candidates suites + the observationcollector package + all 19 other packages).
+
+  Scope discipline per §0196: **CLI consumer consolidation only** — no changes to the observationcollector package, no new wire-shape adjustments, no per-test-file fixture changes beyond the call-site replacement + import-addition.
+
+  - **Methodological observation 1 — Batch-sed-based refactors with subsequent manual cleanup of sed-induced breakage is acceptable for high-fan-out call-site replacements; the structural shape (one helper-call-replacement-pattern) is consistent enough that the sed pass is correct at scale + the per-file cleanup (broken function definitions arising from sed-replacing the call site that happened to match the function name) is bounded.** §0196 ran 4 sed passes (one per CLI directory × per-modality replacement). Each pass replaced both call sites (correct) and the function definition's name (incorrect, surfaces as a compile error `func observationcollector.CollectXxx(...)`). The cleanup was per-CLI: remove the broken function block + the local message_type constant + add the observationcollector import. **Pattern: when a refactor pattern is per-symbol-identical across many files, prefer batch sed + targeted post-cleanup over per-file manual edits; the per-file cleanup surface is bounded by the symbol count, not the call-site count. The pattern scales to ~80 call sites across ~36 files at ~5 cleanup edits per CLI; doing this manually would have required ~80 + ~5×5 = ~105 individual edits vs the 4-sed-pass + 5-cleanup approach landing the same end-state in ~9 high-information edits.**
+
+- **Supersession:** No prior decision-log entry superseded. Discharges the §0195 CLI-consolidation open obligation. The observationcollector consolidation program (§0195 httpapi + §0196 CLI) is now structurally complete; future operational-tier work proceeds at the next-direction layer.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

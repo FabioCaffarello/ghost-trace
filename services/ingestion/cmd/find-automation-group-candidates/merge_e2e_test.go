@@ -35,6 +35,7 @@ import (
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/hypothesis"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
@@ -122,9 +123,9 @@ func TestMergeAutomationGroup_FromF3CandidateAntecedents(t *testing.T) {
 	appendBrowserObs(t, in, "actor-suspect-b", []string{"$cdc_test"}, 3)
 
 	// Step 2: Run F3 signature → 2 candidates.
-	observations, err := collectBrowserObservations(ctx, sub)
+	observations, err := observationcollector.CollectBrowser(ctx, sub)
 	if err != nil {
-		t.Fatalf("collectBrowserObservations: %v", err)
+		t.Fatalf("observationcollector.CollectBrowser: %v", err)
 	}
 	sig := &signatures.CDPMarkerDensityV1{}
 	result, err := sig.EvaluateBrowser(ctx, observations)
@@ -259,9 +260,9 @@ func TestMergeAutomationGroup_RejectsIdenticalAntecedents(t *testing.T) {
 
 	appendBrowserObs(t, in, "actor-x", []string{"navigator.webdriver=true"}, 3)
 
-	observations, err := collectBrowserObservations(ctx, sub)
+	observations, err := observationcollector.CollectBrowser(ctx, sub)
 	if err != nil {
-		t.Fatalf("collectBrowserObservations: %v", err)
+		t.Fatalf("observationcollector.CollectBrowser: %v", err)
 	}
 	sig := &signatures.CDPMarkerDensityV1{}
 	result, err := sig.EvaluateBrowser(ctx, observations)
