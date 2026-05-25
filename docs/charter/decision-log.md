@@ -7740,6 +7740,43 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0179` — Merge E2E integration test from F3-derived BehavioralCluster antecedents; extends §0178 along binary cross-formation axis
+
+- **Status:** accepted.
+- **Date:** 2026-05-25.
+- **Context:** Fourth PR in the §0176-opened BehavioralCluster lifecycle integration coverage arc. Extends along the BINARY CROSS-FORMATION lifecycle axis (merge: 2 antecedents + 1 produced). Mirrors §0165 on the BehavioralCluster subtype side.
+
+- **Decision:** New test file `services/ingestion/cmd/find-behavioral-cluster-candidates/merge_e2e_test.go` with 2 integration tests:
+
+  - **`TestMergeBehavioralCluster_FromF3CandidateAntecedents`** — Full path validation: inject 6 BehavioralObservation across 2 distinct fingerprint clusters → 2 multi-actor candidates → commit formation_A + formation_B via §0176 helper → commit formation_P (merged hypothesis) via new helper `commitMergedBehavioralClusterFormation` → `hypothesis.Merge(A, B, P)` → verify merge event in substrate + antecedents sorted ascending per §0049 + produced hash exact match + all 4 records present.
+
+  - **`TestMergeBehavioralCluster_RejectsIdenticalAntecedents`** — Confirms ErrMergeAntecedentsIdentical surfaces at integration path (§0049 symmetric-relation merge constraint).
+
+  Uses `hypothesis.Merge` (BehavioralCluster-targeted generic-named per §0178 MO1).
+
+  New helper `commitMergedBehavioralClusterFormation` — mirrors §0165's `commitMergedFormation` on the BehavioralCluster subtype side.
+
+  Constitutional discipline:
+
+  - **§0049 + §2.5 BC5 symmetric-relation discipline** — antecedents sorted ascending at commit; byte-order verified post-roundtrip via `bytes.Compare`.
+  - **§3 N3** — four operator-elected commits (A, B, P, merge).
+  - **§2.6 BC3** — paired-dimension at marshalling for formation_P.
+  - **§0139** — formation_P source_hashes sorted ascending.
+
+  Per §0164 MO1 verification discipline: empirical state inline. `grep -c "^func Test" services/ingestion/cmd/find-behavioral-cluster-candidates/merge_e2e_test.go` returns 2. Behavioral CLI test count post-§0179 = 10.
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. Test-only addition.
+
+  Falsifiability discipline: merge behavior structurally observable. Verifies F3 → 2 formations → operator-elected merge → all 4 records committed + merge event references all three formations + antecedents sorted ascending. Identical-antecedents test verifies §0049 sentinel surfaces at integration path.
+
+- **Consequences:**
+  - New test file (2 tests).
+  - **Fourth BehavioralCluster lifecycle integration test lands.** Discharges PR #4 of 6 in the §0176-opened arc. Remaining: dissolution E2E (§0180, parallel to §0166), split E2E (§0181, parallel to §0167).
+
+- **Supersession:** No prior decision-log entry superseded. Fourth PR of 6 in §0176-opened arc.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
