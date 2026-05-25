@@ -428,6 +428,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleFindCandidatesAGBrowser(w, r)
 	case r.URL.Path == "/v1/find-candidates/campaign-hypothesis":
 		h.handleFindCandidatesCH(w, r)
+	case r.URL.Path == "/v1/find-candidates/coordination-ring":
+		h.handleFindCandidatesCR(w, r)
 	case r.URL.Path == "/v1/admin/orphan-cleanup":
 		h.handleAdminOrphanCleanup(w, r)
 	case r.URL.Path == "/v1/hypotheses/behavioral-cluster/promote":

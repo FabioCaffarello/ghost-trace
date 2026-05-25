@@ -8411,6 +8411,45 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0193` — GET /v1/find-candidates/coordination-ring HTTP endpoint; fourth F3 candidate evaluation endpoint; first HTTP endpoint populating Interactions wire-shape per §0186 MO1
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0190-§0192 landed F3 candidate eval endpoints for BehavioralCluster, AutomationGroup-browser, CampaignHypothesis. §0193 extends to the network-modality CoordinationRing axis — the FIRST HTTP endpoint emitting interaction-centric ontology output per §0186 MO1 CLI wire-contract extension pattern. The §0186 MO1 pattern at the CLI layer extended `candidateJSON` with an optional `Interactions [][2]string` field via `omitempty`; §0193 extends the SHARED `findCandidatesCandidatePayload` at the HTTP layer with the same pattern.
+
+- **Decision:** Add `GET /v1/find-candidates/coordination-ring` HTTP endpoint exposing the `endpoint_co_visit_v1` F3 signature (§0185). Three changes:
+
+  1. **`services/ingestion/internal/httpapi/find_candidates_cr.go`** (~140 lines) — `handleFindCandidatesCR` Handler method. Reuses §0192's shared `collectNetworkObservationsHTTP` + `networkObservationMessageType`. Identical query-param surface as §0192 (threshold + bucket_seconds + limit + with_attribution). The structural delta is the candidate-payload population: `Interactions: c.Interactions` is set per emitted candidate (the §0186 MO1 wire-shape extension activates for this endpoint).
+
+  2. **`services/ingestion/internal/httpapi/find_candidates_bc.go`** — extends `findCandidatesCandidatePayload` with one new field: `Interactions [][2]string \`json:"interactions,omitempty"\``. Doc comment updated to record §0186 MO1 extension lineage. Other endpoints (BC, AG-browser, CH) leave Interactions empty → omitempty removes the field from their JSON responses, preserving backward-compatibility.
+
+  3. **`services/ingestion/internal/httpapi/handler.go`** — one new route adjacent to §0192.
+
+  4. **`services/ingestion/internal/httpapi/find_candidates_cr_test.go`** (5 tests) — happy-path (3 actors → 1 candidate; Interactions populated with 3 lex-canonical edges per §0070) + omitempty witness test (BC endpoint JSON body must NOT contain "interactions" — the backward-compat structural witness) + below-threshold + method-allow-list + substrate-not-configured.
+
+- **Constitutional review:**
+
+  Subordinate to §0070 + §0185 (interaction-centric ontology preserved through HTTP layer), §0163 + §0188 MO1 (wire-parity), §0186 MO1 (CLI wire-contract extension pattern applied at HTTP layer), §0168 (AttributionLookup), §0190 MO1 + §0192 MO1 (shared-helper extraction). Falsifiability: 5 unit tests; omitempty witness test is the structural witness for the backward-compat extension claim — a regression would surface as an unexpected `interactions` field in the BC endpoint's response body.
+
+  Per §0186 MO1 + §0070: emitted Interactions edges satisfy within-edge lex order (edge[0] < edge[1]); the happy-path test mechanizes this assertion per emitted edge.
+
+- **Consequences:**
+  - 2 new files; ~310 lines total.
+  - 2 modified files (route addition + shared payload extension).
+  - 5 new unit tests including the omitempty backward-compat witness.
+  - **4th of 5 find-candidates-* endpoints lands.** 1 remains: AG-network (two-signature selection: `tcp_fingerprint_clustering_v1` vs `tcp_flow_features_clustering_v1`).
+  - **First HTTP endpoint populating the Interactions wire-shape field.** Establishes the §0186 MO1 extension at HTTP layer — the per-CLI extension pattern (where the per-file candidateJSON struct gains the field) translates at HTTP layer to a SHARED struct extension with omitempty (since httpapi has only one findCandidatesCandidatePayload struct, not per-file copies). The omitempty discipline preserves backward-compatibility across the 4 already-landed endpoints (BC, AG-browser, CH) that do NOT populate Interactions.
+
+  Per §0164 MO1: 5 tests pass; full `go test ./...` from `services/ingestion/` reports 0 failures.
+
+  Scope discipline per §0193: **single per-subtype endpoint + shared payload extension with backward-compat witness** — no new shared-helper extractions (§0192 already extracted the network-modality collector), no AG-network endpoint (deferred to §0194 due to two-signature selection complexity).
+
+  - **Methodological observation 1 — Shared wire-shape extension at HTTP layer uses omitempty discipline; the backward-compat witness is mechanizable as a string-level absence-check.** §0186 MO1 at CLI layer added a new field to per-file candidateJSON definitions (each CLI's `main.go` got its own struct). At HTTP layer with shared structs, the per-CLI strategy doesn't fit — instead, the SHARED struct gains the field with `json:",omitempty"`. The omitempty witness test (TestFindCandidatesCRHTTPInteractionsOmittedForOtherSubtypes) mechanizes the backward-compat claim at the JSON-string level — a regression where another endpoint populates Interactions would surface as an unexpected `"interactions"` substring in that endpoint's response body. **Pattern: when shared wire-shape structs gain optional fields, the backward-compat claim SHOULD be witnessed by an explicit absence-check test against an endpoint that does NOT populate the field. The witness scales with the number of endpoints sharing the struct; future shared-struct extensions SHOULD follow this discipline.**
+
+- **Supersession:** No prior decision-log entry superseded. Extends §0190-§0192. 1 follow-on endpoint remains: AG-network with two-signature selection complexity (final find-candidates-* endpoint).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
