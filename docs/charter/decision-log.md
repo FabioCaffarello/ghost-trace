@@ -7697,6 +7697,49 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0178` — Demote E2E integration test from F3-derived BehavioralCluster candidate; extends §0177 along linear lifecycle axis
+
+- **Status:** accepted.
+- **Date:** 2026-05-25.
+- **Context:** Third PR in the §0176-opened BehavioralCluster lifecycle integration coverage arc. Extends along the LINEAR LIFECYCLE axis (formation → promotion → demotion). Mirrors §0160 on the BehavioralCluster subtype side.
+
+- **Decision:** New test file `services/ingestion/cmd/find-behavioral-cluster-candidates/demote_e2e_test.go`:
+
+  - **`TestDemoteBehavioralCluster_FromF3CandidateLifecycle`** — Full lifecycle: inject 3 BehavioralObservation → `keystroke_timing_clustering_v1` → 1 multi-actor candidate → commit BehavioralClusterFormation via §0176 helper → `hypothesis.Promote` with LayerBParameters → `hypothesis.Demote` within cadence → verify all 3 lifecycle events in substrate + demotion proto references promotion + cadence state + Layer B verdict captured per §0141 E1.
+
+  Uses `hypothesis.Promote` / `hypothesis.Demote` (generic-named functions targeting BehavioralCluster per the package's first-subtype-discipline) rather than `PromoteAutomationGroup` / `DemoteAutomationGroup` used at §0160.
+
+  Helpers:
+  - `newDemoteE2ESubstrate` — substrate + Ingester per the §0160 pattern.
+  - `hexDecodeInto` / `hexNibble` / `hexLenErr` — local copies mirroring §0160's hex helpers.
+  - Reuses §0176's `commitBehavioralClusterFormationFromCandidate` + `appendKeystrokeObs` + `collectBehavioralObservations`.
+
+  Constitutional discipline:
+
+  - **§0011 Layer A advisory CANDIDACY-not-barrier** — demote within cadence; `CadenceSatisfied=false` but demotion commits; per §0160 MO1 the within-cadence demotion case validates Layer A's CANDIDACY-not-barrier semantics structurally.
+  - **§0138 N_A parameter-bundling round-trip** — promotion event carries LayerBParameters; demotion's `evaluateLayerB` recovers them.
+  - **§0141 E1 advisory pattern** — demotion commits regardless of verdict; verdict captured in DemoteReport.LayerB.
+  - **§3 N3 three operator-elected commits** — formation, promotion, demotion; each explicit.
+  - **§2.5 BC5 lifecycle event immutability** — each event via Append.
+
+  Scope discipline per §0178: structural connectivity across the full BehavioralCluster lifecycle arc. Per-operation semantics covered by hypothesis + layerb package unit tests.
+
+  Per §0164 MO1 verification discipline: empirical state inline. `grep -c "^func Test" services/ingestion/cmd/find-behavioral-cluster-candidates/demote_e2e_test.go` returns 1. Behavioral CLI test count post-§0178 = 8.
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. Test-only addition.
+
+  Falsifiability discipline: lifecycle behavior structurally observable. Verifies (a) F3 emits expected candidate; (b) formation + promotion + demotion all commit; (c) demotion proto references promotion exactly (bytes.Equal); (d) Layer A cadence state correctly surfaced (CadenceSatisfied=false for within-cadence demotion); (e) Layer B verdict structurally captured in report.
+
+- **Consequences:**
+  - New test file (1 test).
+  - **Third BehavioralCluster lifecycle integration test lands.** Discharges PR #3 of 6 in the §0176-opened arc. Remaining: merge E2E (parallel to §0165), dissolution E2E (parallel to §0166), split E2E (parallel to §0167).
+  - **§0167 MO3 axis discipline applied**: §0176 EVALUATION axis; §0177 MEASUREMENT axis; §0178 LINEAR LIFECYCLE axis; remaining 3 PRs extend along CROSS-FORMATION lifecycle axes (binary/unary/k-ary).
+  - **Methodological observation 1 — Generic-named lifecycle functions (Promote/Demote without subtype suffix) target the first subtype landing.** §0178 uses `hypothesis.Promote` / `hypothesis.Demote` rather than `PromoteBehavioralCluster` / `DemoteBehavioralCluster`. Per package history: BehavioralCluster was the first subtype to receive lifecycle functions, so the generic-named functions target it; subsequent subtypes (AutomationGroup, CampaignHypothesis, CoordinationRing) got subtype-suffixed functions. **Pattern: test code targeting the first subtype's lifecycle uses generic-named functions; subsequent subtypes use subtype-suffixed ones. Future readers should NOT assume the generic name means "subtype-agnostic" — it's a historical artifact of the first-subtype-discipline that locks the name to that specific subtype.**
+
+- **Supersession:** No prior decision-log entry superseded. Third PR of 6 in §0176-opened BehavioralCluster lifecycle arc.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
