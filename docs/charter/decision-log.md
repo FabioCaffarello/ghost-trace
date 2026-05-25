@@ -7991,6 +7991,57 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0184` — CampaignHypothesis cross-formation lifecycle bundle (binary merge + unary dissolve + k-ary split); CLOSES §0183-opened arc
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0183 opened the CampaignHypothesis lifecycle integration coverage arc under §0181 MO2 bundling discipline (2 PRs of 3 axes each vs §0176-§0181 6-PRs-of-1-axis baseline). PR #1 (§0183) covered the CLI + foundation helper + linear lifecycle axes (evaluation, measurement, promotion+demotion E2E). PR #2 (this entry, §0184) closes the arc by covering the 3 cross-formation axes — binary merge + unary dissolve + k-ary split.
+
+  With §0184 landed, CampaignHypothesis reaches AutomationGroup + BehavioralCluster parity at the F3-derived lifecycle integration test layer; all six §0011 lifecycle operations (formation + promotion + demotion + merge + dissolution + split) have integration tests driven by F3-derived candidates across all three subtypes covered by the F3 corpus.
+
+- **Decision:** Land the CampaignHypothesis lifecycle integration arc PR #2 as a single bundle covering 3 cross-formation lifecycle axes:
+
+  1. **`services/ingestion/cmd/find-campaign-hypothesis-candidates/merge_e2e_test.go`** (2 tests + helper) — covers the F3 → 2 formations → operator-elected merge arc (parallel to §0165 + §0179). Introduces `commitMergedCampaignHypothesisFormation` for the merged "produced" formation_P. STRUCTURAL DIVERGENCE from §0165 (`commitMergedFormation`) + §0179 (`commitMergedBehavioralClusterFormation`): merged formation_P DROPS ActorRefs per §0182 + §0063 event-centric ontology (proto has no `actor_refs` field). Tests: `TestMergeCampaignHypothesis_FromF3CandidateAntecedents`, `TestMergeCampaignHypothesis_RejectsIdenticalAntecedents`. Uses subtype-suffixed `MergeCampaignHypothesis` + `CampaignHypothesisMergeOptions` per §0178 MO1.
+
+  2. **`services/ingestion/cmd/find-campaign-hypothesis-candidates/dissolution_e2e_test.go`** (2 tests) — covers the F3 → formation → dissolution arc with NO promotion in between (per `lifecycle-semantics.md`: dissolution is structurally direct from formation, distinct from demotion). Parallel to §0166 + §0180. Tests: `TestDissolveCampaignHypothesis_FromF3CandidateFormation`, `TestDissolveCampaignHypothesis_IdempotencyUnderRepeatedCommit`. Uses subtype-suffixed `DissolveCampaignHypothesis` + `CampaignHypothesisDissolveOptions` per §0178 MO1.
+
+  3. **`services/ingestion/cmd/find-campaign-hypothesis-candidates/split_e2e_test.go`** (3 tests + helper) — covers the F3 → 1 formation → operator-elected split into K≥2 successors arc (parallel to §0167 + §0181). Introduces `commitCampaignHypothesisSplitSuccessor` for per-successor formations. STRUCTURAL DIVERGENCE from §0167 (`commitSplitSuccessor`) + §0181 (`commitBehavioralClusterSplitSuccessor`): successor formations DROP ActorRefs per §0182 + §0063. Per §0167 MO2: per-successor pattern_signature labels (`"+split:campaign-a"` / `"+split:campaign-b"`) surface operator's split decision semantically. Tests: `TestSplitCampaignHypothesis_FromF3CandidateAntecedent`, `TestSplitCampaignHypothesis_RejectsInsufficientSuccessors`, `TestSplitCampaignHypothesis_RejectsAntecedentInSuccessorSet`. Uses subtype-suffixed `SplitCampaignHypothesis` + `CampaignHypothesisSplitOptions` per §0178 MO1.
+
+- **Constitutional review:**
+
+  Subordinate to §0182 (event-centric ontology preserved at every CampaignHypothesisFormation commit site — antecedents + merged formation_P + split successors all DROP ActorRefs). Subordinate to §0178 MO1 (subtype-suffixed lifecycle functions for non-BehavioralCluster subtypes). Subordinate to §0181 MO2 bundling discipline (3 axes per PR vs single-axis-per-PR baseline). Subordinate to §0049 (merge antecedents ascending-sort sentinel) + §0050 (split sentinels: ErrSplitInsufficientSuccessors + ErrSplitSuccessorsNotDistinct). Subordinate to §0164 MO1 verification discipline (test counts empirically verified inline below).
+
+  Falsifiability discipline: each lifecycle operation is structurally observable — all formation hashes + merge/dissolution/split event hashes looked up in substrate post-commit; proto round-trip equality verified. Sentinel coverage: merge identical-antecedent sentinel; split insufficient-successors sentinel; split successors-not-distinct sentinel. Idempotency verified for dissolution (content-hash collision on repeat commit). Sort discipline verified for merge antecedents (ascending per §0049).
+
+  Per §0183 MO2 enforcement: each new helper's source comment block records the ActorRefs-drop decision + cites §0182 + §0063 as the governing ontology framing — the structural disambiguation surface for CampaignHypothesis as event-centric vs AutomationGroup/BehavioralCluster as actor-centric is preserved at every formation site.
+
+- **Consequences:**
+  - 3 new Go test files in `services/ingestion/cmd/find-campaign-hypothesis-candidates/`; ~720 lines total.
+  - 7 new tests (2 merge + 2 dissolution + 3 split).
+  - 2 new helper functions (`commitMergedCampaignHypothesisFormation` + `commitCampaignHypothesisSplitSuccessor`).
+  - No proto changes. No package additions. No `internal/hypothesis` changes. No Makefile changes.
+  - **CLOSES §0183-opened CampaignHypothesis lifecycle integration coverage arc.** All 6 axes covered across 2 PRs (vs §0176-§0181 6 PRs): evaluation + measurement + linear lifecycle (§0183) + binary cross-formation + unary cross-formation + k-ary cross-formation (§0184). CampaignHypothesis now has parity with AutomationGroup + BehavioralCluster at the F3-derived lifecycle integration test layer.
+  - **§0181 MO2 bundling discipline empirically validated end-to-end.** §0176-§0181 baseline: 6 PRs of 1 axis each. §0183-§0184 alternative: 2 PRs of 3 axes each. 67% reduction in PR count without sacrificing per-axis falsifiability. Each PR remains structurally bounded; each axis remains independently testable post-commit.
+  - **§0181 closing-note + §0167 closing-note (CampaignHypothesis half) FULLY DISCHARGED.** CoordinationRing remains F3-emission-blocked; separate F3 signature required.
+  - **F3-derived lifecycle integration coverage now spans 3 of 4 Cat III subtypes** (AutomationGroup §0157-§0167 + BehavioralCluster §0176-§0181 + CampaignHypothesis §0183-§0184). Only CoordinationRing remains uncovered, blocked at the F3 signature layer (no F3 signature emits CoordinationRing).
+
+  Per §0164 MO1 verification discipline: empirical state inline. `grep -c "^func Test" services/ingestion/cmd/find-campaign-hypothesis-candidates/*.go` returns 15 total across 8 files (4 unit + 2 layerb + 1 morphology + 1 demote + 2 merge + 2 dissolution + 3 split). Full `go test ./cmd/find-campaign-hypothesis-candidates/...` passes; full `go test ./...` from `services/ingestion/` passes.
+
+  Scope discipline per §0184: **3 cross-formation lifecycle axes ONLY** (binary merge + unary dissolve + k-ary split). Does NOT introduce:
+  - Changes to `internal/signatures` or `internal/hypothesis` packages — both reused as-is.
+  - CoordinationRing F3 signature — remains F3-emission-blocked; separate downstream advance.
+  - New CampaignHypothesis test axes beyond the §0011 lifecycle operations — arc is now complete at integration-test layer.
+
+  - **Methodological observation 1 — Cross-formation helpers DROP ActorRefs at every commit site for event-centric subtypes; the discipline propagates from formation helper to merge-produced helper to split-successor helper uniformly.** §0184 introduces 2 new helpers (`commitMergedCampaignHypothesisFormation` + `commitCampaignHypothesisSplitSuccessor`). Both DROP ActorRefs at commit, mirroring the §0183 foundation helper `commitCampaignHypothesisFormationFromCandidate`. The ActorRefs-drop pattern is now applied uniformly across all 3 CampaignHypothesisFormation commit surfaces in the test corpus (antecedent + merged-produced + split-successor). **Pattern: for event-centric subtypes, the ActorRefs-drop discipline applies at every CampaignHypothesisFormation commit site uniformly; per-site helper source comments SHOULD cite the same governing framing (§0182 + §0063) to make the cross-site discipline structurally explicit.**
+
+  - **Methodological observation 2 — §0181 MO2 bundling validated empirically: 6-axis lifecycle arc reduces to 2 PRs without falsifiability loss when bundling preserves axis-level boundaries.** §0183-§0184 closes the CampaignHypothesis lifecycle arc in 2 PRs. Each PR bundles 3 axes; each axis maintains its own test file + independent failure surface. Compared to §0176-§0181 single-axis-per-PR baseline: same axis coverage (6 axes), same falsifiability per axis (each axis has its own structurally-observable verdict), 67% fewer PRs. **Pattern: future Cat III subtype lifecycle arcs SHOULD adopt the §0183-§0184 2-PR bundling shape: PR #1 = CLI + foundation helper + 3 linear axes (evaluation + measurement + linear lifecycle); PR #2 = 3 cross-formation axes (binary + unary + k-ary). The shape is now empirically validated; CoordinationRing's eventual lifecycle arc SHOULD follow it.**
+
+  - **Methodological observation 3 — Multi-PR arc closure entries SHOULD enumerate per-axis discharge against the original arc-opener.** §0184 closes the §0183-opened arc; this entry's Consequences list maps the 6 axes to their landing PRs (§0183 covered 3; §0184 covers 3). Mirrors §0181's closing pattern for the §0176-opened BehavioralCluster arc. **Pattern: arc-closing entries SHOULD include an axis-by-axis map between the arc opener + the closing landing, even when bundled — this preserves the falsifiability witness that all originally-scoped axes were in fact landed and not silently dropped. The map is the structural antidote to bundle-by-shape coverage drift.**
+
+- **Supersession:** No prior decision-log entry superseded. CLOSES §0183-opened CampaignHypothesis lifecycle integration coverage arc + DISCHARGES §0181 closing-note + §0167 closing-note (CampaignHypothesis half) in full. CoordinationRing remains F3-emission-blocked at the signature layer; a future F3 signature emitting CoordinationRing candidates would re-open a parallel arc (per §0184 MO2: SHOULD adopt the 2-PR bundling shape).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
