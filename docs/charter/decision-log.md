@@ -7647,6 +7647,56 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0177` — Chain morphology integration test against BehavioralCluster F3-derived formation chain; extends §0176 along measurement axis
+
+- **Status:** accepted.
+- **Date:** 2026-05-25.
+- **Context:** [`§0176`](#0176--layer-b-firing-integration-test-against-behavioralclusterformation-derived-from-f3-candidate-establishes-behavioralcluster-f3-derived-formation-anchor) opened the BehavioralCluster lifecycle integration coverage arc along the evaluation axis (Layer B firing) + established the foundation helper `commitBehavioralClusterFormationFromCandidate`. §0177 extends the arc along the MEASUREMENT axis (chain morphology). Mirrors §0158 on the BehavioralCluster subtype side.
+
+  Per §0176 MO1: replicate-per-subtype lifecycle arc is bounded mechanical work once F3 signature + CLI + foundation helper exist. §0177 is the second PR in that 6-PR arc.
+
+- **Decision:** New test file `services/ingestion/cmd/find-behavioral-cluster-candidates/morphology_integration_test.go` with 1 integration test:
+
+  - **`TestMorphology_AgainstBehavioralClusterF3DerivedFormationChain`** — Full path validation:
+    1. Inject 9 BehavioralObservation records across 3 distinct fingerprint sets (3 actors each).
+    2. Run `keystroke_timing_clustering_v1` → 3 multi-actor BehavioralCluster candidates.
+    3. Commit 3-formation chain via new helper `commitBehavioralClusterFormationFromCandidateWithChain` (BehavioralCluster equivalent of §0158's `commitFormationFromCandidateWithChain`).
+    4. Run `morphology.Measure` → verify aggregate stats + per-formation morphology values (chain depth + breadth + closure counts; subtype name).
+
+  Helpers:
+  - `commitBehavioralClusterFormationFromCandidateWithChain` — extends §0176's foundation helper with explicit `direct_influenced_by` + `closure_hashes` parameters; mirrors §0158's `commitFormationFromCandidateWithChain` line-by-line modulo proto-type substitution.
+  - `sortHashListAscending` — local copy of §0158's helper for §0139 hash-list discipline.
+  - `findCandidateByActor` — local copy of §0158's helper.
+  - `newBehavioralMorphologySubstrate` — substrate + Ingester helper per the §0158 pattern.
+
+  Reuses §0176's `appendKeystrokeObs` + `collectBehavioralObservations` (existing test-package helpers).
+
+  Constitutional discipline:
+
+  - **§0143 chain morphology measurement** — applies the existing morphology package's `Measure` function against BehavioralClusterFormation records; morphology package's `formationSubtypes` map already includes BehavioralClusterFormation (no package changes needed).
+  - **§0139 hash-list element-shape** — multi-element `direct_influenced_by` + `closure_hashes` auto-sorted via helper.
+  - **§0134-τ + §0136 transitive closure semantics** — formation_c's closure_hashes union of A + B per §0134-τ; morphology.Measure reads both fields.
+  - **§2.6 BC3 paired-dimension** — each formation carries confidence + evidential_independence; §0140 enforcement validates commit acceptance for F3-derived BehavioralClusterFormation.
+
+  Scope discipline per §0177: **single-shape connectivity validation** mirroring §0158. Does NOT introduce aggregate stats correctness coverage (covered by morphology package unit tests) or DAG-shape coverage (also unit-test-covered).
+
+  Per §0164 MO1 verification discipline: empirical state inline. `grep -c "^func Test" services/ingestion/cmd/find-behavioral-cluster-candidates/morphology_integration_test.go` returns 1. Behavioral CLI test count post-§0177 = 7 (4 base + 2 from §0176 + 1 from §0177).
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. Test-only addition.
+
+  Falsifiability discipline: test behavior structurally observable. Verifies (a) F3 emits 3 expected candidates; (b) 3-formation chain commits via new helper; (c) morphology.Measure walks all 3 formations + computes depth + breadth + closure per formation; (d) aggregate stats match expected (3 fracas, 0 fortes — all formations have depth ≤ 2 OR breadth ≤ 3).
+
+- **Consequences:**
+  - New test file `cmd/find-behavioral-cluster-candidates/morphology_integration_test.go` (1 test).
+  - New helper `commitBehavioralClusterFormationFromCandidateWithChain` (extends §0176 foundation with chain-construction parameters).
+  - **Second BehavioralCluster lifecycle integration test lands.** Discharges PR #2 of 6 in the §0176-opened arc. Remaining: demote E2E (parallel to §0160), merge E2E (§0165), dissolution E2E (§0166), split E2E (§0167).
+  - **§0167 MO3 axis discipline applied to BehavioralCluster.** §0176 extended along EVALUATION axis; §0177 extends along MEASUREMENT axis; remaining 4 PRs extend along lifecycle axes (linear + binary + unary + k-ary cross-formation).
+  - **Methodological observation 1 — Cross-subtype morphology integration test reuses the morphology PACKAGE without modification.** §0158 + §0177 both call `morphology.Measure` against the same package; subtype distinction is via the message-type discriminator that the morphology package already supports (`formationSubtypes` map includes all 4 Cat III subtype formations). **Pattern: when adding integration tests for a new subtype along the measurement axis, the morphology package needs ZERO changes — the integration test reuses existing measurement infrastructure. This is a feature of the measurement-axis design: per-subtype morphology is the same code path.**
+
+- **Supersession:** No prior decision-log entry superseded. Extends §0176-opened BehavioralCluster arc along measurement axis; remaining 4 PRs (demote/merge/dissolve/split E2E) follow §0157–§0167 template per §0176 MO1.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
