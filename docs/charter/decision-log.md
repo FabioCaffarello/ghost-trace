@@ -8221,7 +8221,7 @@ The four methodological observations are the pilot's contribution to procedure b
 
   Subordinate to §0093 + §0163 CLI↔HTTP wire-parity discipline (HTTP endpoint emits byte-identical wire shape to `cmd/measure-chain-morphology`'s `emissionEnvelope`). Subordinate to §0143 instrumentation-by-morfologia discipline (chains-fracas vs chains-fortes diagnostic counters exposed at HTTP layer). Subordinate to §0164 MO1 verification discipline.
 
-  Falsifiability discipline: 4 unit tests cover the contract — happy-path single-formation parity + empty-substrate envelope + method-allow-list + substrate-availability-gate. Wire-parity claim (HTTP payload matches CLI payload byte-for-byte) is structurally provable: both use the identical field set + JSON tag set + value extraction sequence; the wire-shape structs in `morphology.go` and the CLI's `main.go` are textually parallel.
+  Falsifiability discipline: 4 unit tests cover the contract — happy-path single-formation parity + empty-substrate envelope + method-allow-list + substrate-availability-gate. Wire-parity claim (HTTP payload matches CLI payload byte-for-byte) is structurally provable: both use the identical field set + JSON field-name set + value extraction sequence; the wire-shape structs in `morphology.go` and the CLI's `main.go` are textually parallel.
 
   Per Charter §2.5 BC5 + §0143: morphology is a Cat I-Cat III diagnostic projection; the endpoint is read-only over the substrate, does not commit any events, does not require auth. Operators consume the endpoint from dashboards + monitoring; the operational-cost profile is bounded (O(N + E) where N = formation count, E = direct_influenced_by edge count) and safe for interactive use.
 
