@@ -8374,6 +8374,43 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0192` — GET /v1/find-candidates/campaign-hypothesis HTTP endpoint; third F3 candidate evaluation endpoint; introduces shared network-modality collector per §0190 MO1
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0190 + §0191 landed F3 candidate eval endpoints for BehavioralCluster (behavioral-modality) + AutomationGroup browser-modality. §0192 extends to the network-modality CampaignHypothesis axis. Per §0190 MO1 pilot-first replication discipline: this is the third instance — the empirical threshold for evaluating shared-helper extraction. Network-modality collector (`collectNetworkObservationsHTTP`) lands here as a shared helper for §0192 + §0193 + §0194 (all three remaining endpoints are network-modality).
+
+- **Decision:** Add `GET /v1/find-candidates/campaign-hypothesis` HTTP endpoint exposing the `temporal_endpoint_cohort_v1` F3 signature (§0182). Three changes:
+
+  1. **`services/ingestion/internal/httpapi/find_candidates_ch.go`** (~180 lines) — `handleFindCandidatesCH` Handler method + `collectNetworkObservationsHTTP` shared helper + `networkObservationMessageType` constant (shared across the 3 network-modality endpoints). Two structural deltas vs §0191: (a) adds `bucket_seconds` + `with_attribution` query params per the CH CLI's surface; (b) consumes optional `AttributionLookup` via `attribution.CollectAttributionView` when `with_attribution=true`.
+
+  2. **`services/ingestion/internal/httpapi/handler.go`** — one new route adjacent to §0191.
+
+  3. **`services/ingestion/internal/httpapi/find_candidates_ch_test.go`** (5 tests) — happy-path + below-threshold + bucket-seconds-override (300s widens to single cohort) + method-allow-list + substrate-not-configured.
+
+- **Constitutional review:**
+
+  Subordinate to §0163 + §0188 MO1 (wire-parity), §0182 + §0063 (event-centric ontology — emitted ActorRefs are enrichment-only at CH commit downstream), §0168 (AttributionLookup consumption), §0190 MO1 (pilot-first replication; this is the 3rd instance triggering shared-helper consideration), §0164 MO1 (verification).
+
+  Falsifiability: 5 unit tests; bucket-seconds-override test is the structural witness for the §0182 widen-cluster-window semantic preservation.
+
+- **Consequences:**
+  - 2 new files; ~340 lines total.
+  - 1 modified file (route addition).
+  - 5 new unit tests.
+  - **3rd of 5 find-candidates-* endpoints lands.** 2 remain (AG-network with two-signature selection, CR with interaction-centric wire-shape extension).
+  - **First shared-helper introduction within the find-candidates-* family.** `collectNetworkObservationsHTTP` is shared at first definition with §0193 + §0194 in mind; the §0190 MO1 deferral threshold is reached structurally (network-modality has 3 planned instances) — extracting at first introduction within the modality is cleaner than re-extracting later. The browser-modality (§0191) and behavioral-modality (§0190) helpers remain unshared (1 instance each).
+
+  Per §0164 MO1: full `go test ./internal/httpapi/...` passes; `go test ./...` from `services/ingestion/` returns 23 packages green, 0 failures.
+
+  Scope discipline per §0192: **single per-subtype endpoint replication + first-of-modality shared helper** — no wire-shape extension (deferred to CR endpoint per §0186 MO1), no cross-modality consolidation (deferred to post-§0194 consolidation refactor).
+
+  - **Methodological observation 1 — Shared-helper extraction triggers at modality-introduction, not at first-instance-overall.** §0190 MO1 codified "defer extraction until 3+ instances exist." §0192 refines: extract per-modality at the FIRST instance within that modality when MULTIPLE instances are planned in the SAME modality. Network-modality has 3 planned endpoints (§0192 + §0193 + §0194); behavioral-modality has 1 (§0190 KeystrokeTimingClusteringV1); browser-modality has 1 (§0191 CDPMarkerDensityV1). Sharing `collectNetworkObservationsHTTP` at §0192 first definition is cheaper than re-extracting at §0194. **Pattern: per-modality shared helpers SHOULD extract at the first instance within that modality when the modality has 2+ planned instances; per-modality helpers with 1 planned instance SHOULD remain unshared (extraction overhead outweighs the share benefit). The shared-collector consolidation refactor across modalities (post-§0194) becomes a 3-helper consolidation (one per modality) rather than 5-helper.**
+
+- **Supersession:** No prior decision-log entry superseded. Extends §0190 + §0191 along the network-modality CampaignHypothesis axis. 2 follow-on endpoints remain: AG-network (with two-signature selection — `tcp_fingerprint_clustering_v1` vs `tcp_flow_features_clustering_v1`), CR (interaction-centric wire-shape extension per §0186 MO1).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
