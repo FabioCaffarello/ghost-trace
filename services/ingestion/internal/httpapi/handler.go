@@ -60,6 +60,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -178,6 +179,14 @@ type Handler struct {
 	// authRealm is the value advertised in WWW-Authenticate on 401
 	// responses. Defaults to "ghost-trace-ingestion".
 	authRealm string
+
+	// logger is the structured-logging surface per decision-log §0197
+	// first observability advance. One structured log entry per request:
+	// method, path, status, duration_ms, tier, remote_addr. Defaults to
+	// a no-op io.Discard-backed logger when WithLogger is not configured;
+	// production main wires a real slog.Logger (typically slog.Default()
+	// after slog.SetDefault on stdout/stderr-bound handler).
+	logger *slog.Logger
 }
 
 // Option configures a Handler at construction. See WithAuthToken,
@@ -271,6 +280,28 @@ func WithSubstrate(sub *substrate.Substrate) Option {
 	return func(h *Handler) { h.sub = sub }
 }
 
+// WithLogger sets the structured-logging surface per decision-log §0197
+// first observability advance. Each handled request emits ONE log entry
+// at Info level with fields: method, path, status, duration_ms, tier
+// (when applicable per §0094 classification; empty for /healthz),
+// remote_addr.
+//
+// Default (no WithLogger call): a no-op io.Discard-backed logger so
+// handler tests emit no log noise unless they explicitly configure a
+// logger via WithLogger. Production main SHOULD wire slog.Default() or
+// a JSON-handler-backed logger for structured ingestion into the
+// operator's log pipeline.
+//
+// nil logger is treated as the default (discarded) — no panic at
+// construction; matches the WithSubstrate(nil) ergonomic.
+func WithLogger(logger *slog.Logger) Option {
+	return func(h *Handler) {
+		if logger != nil {
+			h.logger = logger
+		}
+	}
+}
+
 // New constructs a Handler. doAppend MUST NOT be nil. fatal MAY be nil
 // in tests where unrecoverable-error escalation is not exercised; in
 // production main wires a real FatalReporter. Options apply
@@ -291,6 +322,7 @@ func New(doAppend AppendFunc, fatal FatalReporter, opts ...Option) (*Handler, er
 		fatal:            fatal,
 		requestBodyLimit: 1 << 20, // 1 MiB
 		authRealm:        "ghost-trace-ingestion",
+		logger:           defaultLogger,
 	}
 	for _, opt := range opts {
 		opt(h)
@@ -384,11 +416,30 @@ func routeTier(r *http.Request) Tier {
 // valid Authorization header. Unauthenticated probes for unknown paths
 // return 401 (not 404) so the path structure is not leaked to
 // unauthenticated clients.
+//
+// Per decision-log §0197 first observability advance: each handled
+// request emits ONE structured log entry at the end of dispatch with
+// method/path/status/duration_ms/tier/remote_addr fields. Defaults to a
+// no-op logger; production wires via WithLogger.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	lw := &loggingResponseWriter{ResponseWriter: w}
+	defer func() {
+		tier := routeTier(r)
+		h.logger.LogAttrs(r.Context(), slog.LevelInfo, "httpapi request",
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
+			slog.Int("status", lw.effectiveStatus()),
+			slog.Int64("duration_ms", time.Since(start).Milliseconds()),
+			slog.String("tier", string(tier)),
+			slog.String("remote_addr", r.RemoteAddr),
+		)
+	}()
 	if h.requiresAuth(r) && !h.authorized(r) {
-		h.writeUnauthorized(w)
+		h.writeUnauthorized(lw)
 		return
 	}
+	w = lw
 
 	switch {
 	case r.URL.Path == "/healthz":
