@@ -7309,6 +7309,61 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0172` — replay-derived-actor-attribution CLI lands; operator-invocable replay surface symmetric across both Cat II types
+
+- **Status:** accepted.
+- **Date:** 2026-05-25.
+- **Context:** [`§0171`](#0171--replayderivedactorattribution-closes-phase-1-replay-coverage-asymmetry-between-cat-ii-types) added the `ReplayDerivedActorAttribution` library function but explicitly deferred the operator-invocable CLI to a separate advance per its Scope discipline section ("existing `replay-operational-session` CLI has no attribution equivalent; separate downstream advance"). Without the CLI, operators could replay OperationalSession records via `replay-operational-session` but had no equivalent command for DerivedActorAttribution records — they would need to write custom Go code to invoke the library function.
+
+  This is a parallel asymmetry to the §0168 → §0171 library-replay asymmetry: §0171 closed the LIBRARY asymmetry; §0172 closes the OPERATOR-LAYER asymmetry. Pattern parallel to §0169 → §0170 (library capability landed at §0169; CLI exposure landed at §0170).
+
+- **Decision:** New CLI at `services/ingestion/cmd/replay-derived-actor-attribution/main.go`. Mirrors `replay-operational-session` line-by-line modulo:
+
+  - Command name + binary output path.
+  - Library call: `replay.ReplayDerivedActorAttribution` (vs `replay.ReplayOperationalSession`).
+  - Stderr summary prefix matches command name.
+
+  Same wire contract per §0163 stable-wire-contract discipline:
+  - Same argument shape: `-db`, `-blobs`, `-target-event-hash` (required).
+  - Same JSON output payload shape (`target_event_hash`, `recomputed_event_hash`, `match`, `definition_version`, `definition_parameters`, `source_event_hash`).
+  - Same exit code shape: 0 (match), 1 (drift detected), 2 (tool error), 3 (substrate-integrity error).
+  - Same sentinel set surfaced (all 6 errors from §0171 + reused from §0084).
+
+  Makefile updates:
+  - New `replay-derived-actor-attribution-build` PHONY target.
+  - Help line registered alongside `replay-operational-session-build`.
+
+  Constitutional discipline:
+
+  - **§0163 stable wire contract** preserved — JSON envelope shape identical across both replay CLIs; operator tooling (jq queries, dashboards) works against both without dual-schema handling.
+  - **§0084 + §0171 Phase 1 replay** — CLI exposes the existing library function without adding new replay semantics.
+  - **§3 N3 operator-elected commit boundary** — CLI is READ-ONLY; emits JSON to stdout + diagnostic to stderr; no commit.
+
+  Scope discipline per §0172: **minimal CLI extension exposing existing library capability per §0171**. Does NOT introduce:
+
+  - `replay-all-derived-actor-attributions` batch CLI (parallel to `replay-all-operational-sessions`) — could land as separate downstream advance if operational pressure surfaces.
+  - Replay CLIs for Cat III formation events (separate axis; already exists via `replay-automation-group-formation` etc.).
+  - Library-layer changes (none needed; §0171 already provides everything).
+
+  Per §0164 MO1 verification discipline: empirical state inline. `ls services/ingestion/cmd/ | grep -c replay-` returns 8 (was 7 pre-§0172; added `replay-derived-actor-attribution`). Both Cat II types now have parallel single-record replay CLIs (`replay-operational-session` + `replay-derived-actor-attribution`); OperationalSession also has the batch variant (`replay-all-operational-sessions`) — DerivedActorAttribution batch variant is the natural next-asymmetry candidate.
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. New CLI binary.
+
+  Falsifiability discipline: CLI behavior structurally observable. Build verification via `go build ./...` passes; existing `replay.ReplayDerivedActorAttribution` library coverage (7 tests at §0171) verifies the underlying library contract; CLI itself is a thin shim (stable-wire-contract + exit-code dispatch), no new logic to test independently beyond what `replay-operational-session` already validates structurally.
+
+- **Consequences:**
+  - New CLI directory `services/ingestion/cmd/replay-derived-actor-attribution/` with single `main.go` file.
+  - Makefile extended with build target + help line.
+  - **Phase 1 replay coverage symmetric at BOTH library AND CLI layers across all committed Cat II types.** Combined with §0171 library symmetry, this completes the symmetric replay surface for OperationalSession + DerivedActorAttribution.
+  - **§0169 → §0170 pattern reapplied** (library capability landed at §0171; CLI exposure landed at §0172). Pattern is now recurring: library-layer advance for new Cat II construct → CLI-layer exposure in immediate downstream advance.
+  - **Methodological observation 1 — CLI shim PRs after library capability PRs are bounded by stable-wire-contract discipline.** §0172's main.go mirrors `replay-operational-session`'s main.go line-by-line modulo the library call + command name. Both emit identical JSON envelopes per §0163. **Pattern: CLI shim PRs after library advances are mechanical bounded work + should ship within the same session arc; deferring them creates operator-experience asymmetry that compounds across releases. The §0163 stable-wire-contract discipline means the CLI shim's design is already constrained — there's nothing structural to decide.**
+  - **Methodological observation 2 — Per-record replay CLIs lead batch replay CLIs structurally; batch is the natural follow-on.** OperationalSession has both per-record (`replay-operational-session`) + batch (`replay-all-operational-sessions`) variants. DerivedActorAttribution has the per-record variant landed (§0172) + the batch variant deferred. **Pattern: when adding replay CLIs for a new Cat II type, START with the per-record variant (mirrors `replay-operational-session`'s structural commitments + exit code semantics on a single substrate row); the batch variant is the natural follow-on after operational pressure surfaces it as needed.**
+  - **Methodological observation 3 — Library/CLI pairing is itself a structural asymmetry to track.** Per §0171 MO3, Phase 1 replay coverage symmetry is a structural commitment per §2.2 Cat II determinism. The CORRESPONDING discipline at the operator layer: Phase 1 replay invocation symmetry across all Cat II types via CLI. Without CLI parity, operators can verify determinism for OperationalSession (via `replay-operational-session`) but cannot verify it for DerivedActorAttribution without writing Go code. **Pattern: structural commitments at the library layer (like §2.2 Cat II determinism) imply parallel operator-experience commitments at the CLI layer; ship both together. Library-without-CLI is incomplete operationalization.**
+
+- **Supersession:** No prior decision-log entry superseded. Completes the §0168 → §0171 → §0172 chain: Cat II construct landed (§0168) → library replay symmetry (§0171) → CLI replay symmetry (§0172). Future Cat II construct landings should bundle ALL THREE (construct + library replay + CLI replay) per §0171 MO3 + §0172 MO3.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

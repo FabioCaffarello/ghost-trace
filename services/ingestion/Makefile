@@ -45,6 +45,7 @@ help:
 	@echo "  merge-coordination-rings-build  go build -trimpath -o $(BIN_DIR)/merge-coordination-rings ./cmd/merge-coordination-rings"
 	@echo "  split-coordination-ring-build  go build -trimpath -o $(BIN_DIR)/split-coordination-ring ./cmd/split-coordination-ring"
 	@echo "  replay-operational-session-build  go build -trimpath -o $(BIN_DIR)/replay-operational-session ./cmd/replay-operational-session"
+	@echo "  replay-derived-actor-attribution-build  go build -trimpath -o $(BIN_DIR)/replay-derived-actor-attribution ./cmd/replay-derived-actor-attribution"
 	@echo "  replay-all-operational-sessions-build  go build -trimpath -o $(BIN_DIR)/replay-all-operational-sessions ./cmd/replay-all-operational-sessions"
 	@echo "  replay-behavioral-cluster-formation-build  go build -trimpath -o $(BIN_DIR)/replay-behavioral-cluster-formation ./cmd/replay-behavioral-cluster-formation"
 	@echo "  replay-automation-group-formation-build  go build -trimpath -o $(BIN_DIR)/replay-automation-group-formation ./cmd/replay-automation-group-formation"
@@ -299,6 +300,11 @@ split-coordination-ring-build:
 replay-operational-session-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/replay-operational-session ./cmd/replay-operational-session
+
+.PHONY: replay-derived-actor-attribution-build
+replay-derived-actor-attribution-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/replay-derived-actor-attribution ./cmd/replay-derived-actor-attribution
 
 .PHONY: replay-all-operational-sessions-build
 replay-all-operational-sessions-build:
