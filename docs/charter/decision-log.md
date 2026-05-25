@@ -8151,6 +8151,56 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0187` — CoordinationRing cross-formation lifecycle bundle (binary merge + unary dissolve + k-ary split); CLOSES §0186-opened arc; F3-derived integration coverage reaches 4-of-4 Cat III subtypes
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0186 opened the CoordinationRing lifecycle integration coverage arc under §0184 MO2 bundling discipline (second 2-PR-bundled arc after §0183-§0184). PR #1 (§0186) covered the CLI + foundation helper + linear lifecycle axes. PR #2 (this entry, §0187) closes the arc by covering the 3 cross-formation axes — binary merge + unary dissolve + k-ary split.
+
+  With §0187 landed, CoordinationRing reaches AutomationGroup + BehavioralCluster + CampaignHypothesis parity at the F3-derived lifecycle integration test layer. All six §0011 lifecycle operations (formation + promotion + demotion + merge + dissolution + split) now have integration tests driven by F3-derived candidates across all 4 Cat III subtypes — the F3-loop multi-PR arc program is structurally complete.
+
+- **Decision:** Land the CoordinationRing lifecycle integration arc PR #2 as a single bundle covering 3 cross-formation lifecycle axes:
+
+  1. **`services/ingestion/cmd/find-coordination-ring-candidates/merge_e2e_test.go`** (2 tests + 2 helpers) — covers the F3 → 2 formations → operator-elected merge arc (parallel to §0165 + §0179 + §0184). Introduces `commitMergedCoordinationRingFormation` for the merged "produced" formation_P + `mergeEdges` for union-edge canonicalization across antecedents. STRUCTURAL DIVERGENCE from §0165 (`commitMergedFormation`) + §0179 (`commitMergedBehavioralClusterFormation`) (actor-centric: commit actor_refs) + §0184 (`commitMergedCampaignHypothesisFormation`) (event-centric: drop actor_refs): merged formation_P CONVERTS edges via interaction union per §0070. Tests: `TestMergeCoordinationRing_FromF3CandidateAntecedents`, `TestMergeCoordinationRing_RejectsIdenticalAntecedents`. Uses subtype-suffixed `MergeCoordinationRing` per §0178 MO1.
+
+  2. **`services/ingestion/cmd/find-coordination-ring-candidates/dissolution_e2e_test.go`** (2 tests) — covers the F3 → formation → dissolution arc with NO promotion in between (per `lifecycle-semantics.md`: dissolution is structurally direct from formation). Parallel to §0166 + §0180 + §0184. Tests: `TestDissolveCoordinationRing_FromF3CandidateFormation`, `TestDissolveCoordinationRing_IdempotencyUnderRepeatedCommit`. Uses subtype-suffixed `DissolveCoordinationRing` per §0178 MO1.
+
+  3. **`services/ingestion/cmd/find-coordination-ring-candidates/split_e2e_test.go`** (3 tests + helper) — covers the F3 → 1 formation → operator-elected split into K≥2 successors arc (parallel to §0167 + §0181 + §0184). Introduces `commitCoordinationRingSplitSuccessor` for per-successor formations with partitioned edge subsets. STRUCTURAL DIVERGENCE: successor formations CONVERT edges per §0070 (interaction-centric). Per §0167 MO2: per-successor pattern_signature labels (`"+split:ring-a"` / `"+split:ring-b"`) surface operator's split decision semantically. Tests: `TestSplitCoordinationRing_FromF3CandidateAntecedent`, `TestSplitCoordinationRing_RejectsInsufficientSuccessors`, `TestSplitCoordinationRing_RejectsAntecedentInSuccessorSet`. Uses subtype-suffixed `SplitCoordinationRing` per §0178 MO1.
+
+- **Constitutional review:**
+
+  Subordinate to §0070 + §0185 (interaction-centric ontology preserved at every CoordinationRingFormation commit site — antecedents + merged formation_P + split successors all CONVERT edges to []CoordinationRingInteraction protos). Subordinate to §0178 MO1 (subtype-suffixed lifecycle functions). Subordinate to §0184 MO2 bundling discipline (3 axes per PR). Subordinate to §0049 (merge antecedents ascending-sort) + §0050 (split sentinels). Subordinate to §0164 MO1 (verification discipline).
+
+  Falsifiability discipline: each lifecycle operation is structurally observable — formation/merge/dissolution/split event hashes all looked up in substrate post-commit; proto round-trip equality verified. Sentinel coverage: merge identical-antecedent + split insufficient-successors + split successors-not-distinct. Idempotency verified for dissolution. Sort discipline verified for merge antecedents. Merge test additionally verifies §0070 edge canonicalization round-trip in the merged formation_P (within-edge lex preserved through union → MarshalAndHash → Unmarshal).
+
+  Per §0186 MO2 enforcement: each new helper's source comment block records the edge-conversion + cites §0070 + §0185 — the structural disambiguation surface for CoordinationRing as interaction-centric is preserved at every formation commit site.
+
+- **Consequences:**
+  - 3 new Go test files in `services/ingestion/cmd/find-coordination-ring-candidates/`; ~810 lines total.
+  - 7 new tests (2 merge + 2 dissolution + 3 split).
+  - 3 new helper functions (`commitMergedCoordinationRingFormation`, `mergeEdges`, `commitCoordinationRingSplitSuccessor`).
+  - No proto changes. No package additions. No `internal/hypothesis` changes. No Makefile changes.
+  - **CLOSES §0186-opened CoordinationRing lifecycle integration coverage arc.** All 6 axes covered across 2 PRs: evaluation + measurement + linear lifecycle (§0186) + binary cross-formation + unary cross-formation + k-ary cross-formation (§0187).
+  - **F3-derived lifecycle integration coverage reaches 4-of-4 Cat III subtypes** (AutomationGroup §0157-§0167 + BehavioralCluster §0176-§0181 + CampaignHypothesis §0183-§0184 + CoordinationRing §0186-§0187). The F3-loop multi-PR arc program is structurally complete; every Cat III subtype has a CLI + foundation helper + 6-axis lifecycle integration suite. No Cat III subtype remains without lifecycle integration coverage.
+  - **§0184 MO2 bundling discipline empirically validated TWICE (second arc).** §0183-§0184 (CampaignHypothesis): 2 PRs, 6 axes. §0186-§0187 (CoordinationRing): 2 PRs, 6 axes. Combined: 4 PRs vs 12-PR single-axis baseline = 67% PR reduction across two arcs. The bundled shape is now the empirical default for Cat III subtype lifecycle integration arcs.
+  - **§0184 + §0185 closing-notes (CoordinationRing) FULLY DISCHARGED.** No Cat III subtype remains F3-emission-blocked + no Cat III subtype remains lifecycle-integration-uncovered.
+
+  Per §0164 MO1 verification discipline: empirical state inline. `grep -c "^func Test" services/ingestion/cmd/find-coordination-ring-candidates/*.go` returns 15 total across 8 files (4 unit + 2 layerb + 1 morphology + 1 demote + 2 merge + 2 dissolution + 3 split). Full `go test ./cmd/find-coordination-ring-candidates/...` passes; full `go test ./...` from `services/ingestion/` passes.
+
+  Scope discipline per §0187: **3 cross-formation lifecycle axes ONLY** (binary merge + unary dissolve + k-ary split). Does NOT introduce:
+  - Changes to `internal/signatures` or `internal/hypothesis` packages — both reused as-is.
+  - New CoordinationRing test axes beyond the §0011 lifecycle operations — arc is now complete at integration-test layer.
+
+  - **Methodological observation 1 — Interaction-centric edge-merge requires explicit union+canonicalize helper; the §0184 MO1 ActorRefs-drop discipline extension reaches its third structural shape.** §0184 (CampaignHypothesis) introduced `commitMergedCampaignHypothesisFormation` that simply concatenated source_event_hashes (no actor_refs combination). §0187 (CoordinationRing) requires `mergeEdges` — union-with-dedup + ascending-sort across edges — because edge sets do NOT trivially concatenate (duplicate edges would violate §0070). The merge helper's edge handling makes the interaction-centric ontology empirically explicit at the cross-formation lifecycle layer. **Pattern: when an interaction-centric subtype's lifecycle integration arc adds cross-formation axes, the merge-produced helper SHOULD include an explicit edge-union helper that preserves §0070 canonicalization. Future hyperedge / directed-graph subtypes will need analogous canonicalization helpers per their respective edge-shape canonical forms.**
+
+  - **Methodological observation 2 — §0184 MO2 bundling discipline empirically validated across BOTH non-actor-centric Cat III subtypes; SHOULD now be considered the DEFAULT shape for Cat III subtype lifecycle integration arcs.** §0184 MO2 had ONE empirical validation (CampaignHypothesis §0183-§0184). §0187 closes the SECOND empirical validation (CoordinationRing §0186-§0187). Combined: 4 PRs delivered 12 axes (6 per subtype × 2 subtypes) at the same falsifiability density as 12-PR single-axis-per-PR baseline. Both validations preserved per-axis test-file independence (each axis has its own test file + independent failure surface). **Pattern: the §0183-§0184 / §0186-§0187 2-PR bundled shape (PR #1 = CLI + foundation helper + 3 linear axes; PR #2 = 3 cross-formation axes) SHOULD be the default for Cat III subtype lifecycle integration arcs. The §0176-§0181 6-PR shape remains valid for ontology-discovery arcs (where the team is learning the structural surface) but is no longer the default for replication arcs (where the structural surface is already known).**
+
+  - **Methodological observation 3 — F3-loop multi-PR arc program closure surfaces a structural completion milestone.** The F3-derived lifecycle integration coverage program ran from §0157 (AutomationGroup arc opener) through §0187 (CoordinationRing arc closer) across 31 decision-log entries + ~35 PRs. With §0187 landed, the program is structurally complete: every Cat III subtype has an F3-loop CLI, a foundation helper, a chain helper, a 6-axis lifecycle integration suite, and a documented cross-helper variation per ontology class (actor-centric / event-centric / interaction-centric). **Pattern: multi-PR arc programs (programs spanning multiple multi-PR arcs sharing a common structural intent — here: F3-loop lifecycle integration coverage) SHOULD have explicit closure entries marking program-level completion. The closure entry SHOULD enumerate per-arc + per-subtype coverage + identify remaining structural surfaces (here: corpus-density expansion within existing subtypes; future signatures emitting CoordinationRing across non-network modalities; cross-modality F3 signatures).**
+
+- **Supersession:** No prior decision-log entry superseded. CLOSES §0186-opened CoordinationRing lifecycle integration coverage arc + DISCHARGES §0184 + §0185 closing-notes (CoordinationRing) in full. F3-derived lifecycle integration coverage program is now structurally complete at 4-of-4 Cat III subtypes; future work is corpus-density expansion within existing subtypes (additional signatures) + cross-modality signatures (e.g., browser-modality CoordinationRing) + non-F3-corpus work (projections, operational tier).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
