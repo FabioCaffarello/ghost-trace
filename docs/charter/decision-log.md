@@ -8621,6 +8621,49 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0198` — httpapi request-id middleware; second observability instrumentation advance; X-Request-Id echo + structured-entry propagation for cross-service correlation
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0197 opened the observability direction with per-request structured entries. §0198 adds the second instrumentation piece: a request-id correlation surface. Operators upstream of the ingestion service (reverse proxies, edge gateways) often issue per-request correlation IDs and propagate them via `X-Request-Id`; without an explicit echo + propagation contract, those IDs are lost at the httpapi boundary.
+
+  §0198 establishes the wire contract: requests with `X-Request-Id` set carry the operator-supplied id through to the response header + structured entry; requests without `X-Request-Id` receive a freshly-generated id (32 hex chars, 16 random bytes via crypto/rand).
+
+- **Decision:** Add request-id correlation surface to the httpapi Handler. Three changes:
+
+  1. **`services/ingestion/internal/httpapi/request_id.go`** (~55 lines) — `requestIDHeader` constant (`X-Request-Id`), `generateRequestID()` (16-byte crypto/rand → 32-char hex), `resolveRequestID(*http.Request)` (returns header value if non-empty, else generates). Stdlib-only (crypto/rand + encoding/hex).
+
+  2. **`services/ingestion/internal/httpapi/handler.go`** — `ServeHTTP` resolves the request id at the start of dispatch, echoes via `w.Header().Set(requestIDHeader, requestID)` BEFORE the auth gate fires (so 401 responses carry the correlation), adds `request_id` field to the §0197 structured entry.
+
+  3. **`services/ingestion/internal/httpapi/request_id_test.go`** (~155 lines, 8 tests) — covers: response header echo (operator-supplied id round-trips), generation when header absent (32-hex format), propagation into structured entry, uniqueness across 100 consecutive generated ids (collision resistance), echo on 401 (correlation survives auth failure), generateRequestID format contract, resolveRequestID header preference (3 sub-cases: uuid format / short id / long id — no validation), resolveRequestID generation when header empty.
+
+- **Constitutional review:**
+
+  Subordinate to §0197 (structured entry extension). Subordinate to §0164 MO1 verification discipline. Stdlib-only (no new dependencies). No format validation on the wire — operator upstream may use any id scheme (UUID, ULID, hex, custom); downstream operators filter as they choose.
+
+  Falsifiability: 8 unit tests cover the contract. The collision-resistance test (100 consecutive generated ids must be unique) mechanically verifies the random source has enough entropy for correlation purposes; the 401-echo test specifically witnesses that the header is set BEFORE the auth gate fires (a regression that moved the Set call after auth would surface as a missing X-Request-Id on the 401 response).
+
+- **Consequences:**
+  - 1 new file (request_id.go ~55 lines) + 1 new test file (request_id_test.go ~155 lines).
+  - 1 modified file (handler.go: ~5 lines added — resolve + echo + propagate to structured entry).
+  - 8 new unit tests.
+  - **Second observability instrumentation advance lands.** Cross-service correlation surface established; operators with upstream-edge id propagation can trace a single request across edge → ingestion → downstream-services boundaries via the X-Request-Id wire contract.
+  - **No new external dependencies.** crypto/rand + encoding/hex are stdlib; the 32-char hex format matches UUID-4 length without depending on `google/uuid` (which exists as an indirect dep but not a direct one).
+  - **Echo BEFORE auth gate.** Auth-rejection (401) responses carry the X-Request-Id — operators investigating auth-failure spikes can correlate the failures to the upstream-edge request stream.
+
+  Per §0164 MO1: 8 tests pass; full `go test ./...` from `services/ingestion/` reports 0 failures.
+
+  Scope discipline per §0198: **request-id correlation surface only** — no Prometheus metrics (separate advance), no OpenTelemetry trace context (separate; trace-id is a different correlation primitive), no in-handler `context.Value` propagation (deferred until downstream consumers need the id — current consumers only need the structured-entry field + response header). Does NOT introduce:
+  - Format validation on incoming request ids (operator scheme is sovereign).
+  - context.Value propagation of the id (deferred).
+  - Trace-id correlation (OpenTelemetry surface; deferred to a separate advance).
+
+  - **Methodological observation 1 — Header echo BEFORE the auth gate is the structural witness for "correlation survives every failure mode." Auth-rejection responses are the most common operator-investigated failure mode; without the pre-auth echo, every 401 would lose correlation upstream.** §0198's `w.Header().Set(requestIDHeader, requestID)` call precedes `h.requiresAuth(r) && !h.authorized(r)` because the auth-rejection path's `h.writeUnauthorized(lw)` does NOT round-trip through any pre-flight header-setting hook. The 401-echo test mechanically verifies this ordering. **Pattern: when adding request-correlation infrastructure to a handler with auth gates, the correlation-header-set MUST precede the auth check; the test suite SHOULD include an explicit "id present on 401" regression guard. Future advances introducing correlation primitives (trace-id, span-id, etc.) SHOULD follow this pattern.**
+
+- **Supersession:** No prior decision-log entry superseded. Extends §0197 with cross-service correlation. Subsequent observability advances (Prometheus metrics, OpenTelemetry tracing) can land as separate downstream advances each adopting the §0197 MO1 no-op-default + §0198 MO1 pre-auth-echo disciplines as applicable.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
