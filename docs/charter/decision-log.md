@@ -8492,6 +8492,55 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0195` — internal/observationcollector package extracted; shared-helper consolidation refactor per §0190 MO1 + §0194 MO2
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0190-§0194 landed 5 find-candidates-* HTTP endpoints. §0190 MO1 codified pilot-first replication discipline: "consolidation refactor extracts `internal/observationcollector/` once all 5 instances exist." §0194 MO2 reinforced this as the natural next advance post-§0188 program closure.
+
+  Pre-§0195, the substrate-walk-by-modality logic lived as private helpers in the httpapi package: `collectBehavioralObservationsHTTP` (§0190), `collectBrowserObservationsHTTP` (§0191), `collectNetworkObservationsHTTP` (§0192, shared across §0192 + §0193 + §0194). Three message_type constants (`behavioralObservationMessageType`, `browserObservationMessageType`, `networkObservationMessageType`) were each defined once in the httpapi package. The structural shape (substrate.WalkEvents → filter on row.MessageType → ReadBlob → proto.Unmarshal → append) was textually parallel across the three helpers; only the typed return slice + message_type filter constant varied.
+
+- **Decision:** Extract the three substrate-walk-by-modality helpers + three message_type constants to a new `internal/observationcollector/` package. Five changes:
+
+  1. **`services/ingestion/internal/observationcollector/observationcollector.go`** (~110 lines) — new package exporting `CollectBehavioral`, `CollectBrowser`, `CollectNetwork` + three constants (`BehavioralObservationMessageType`, `BrowserObservationMessageType`, `NetworkObservationMessageType`). Package doc cites §0195 + §0190 MO1 + the 8-instance pre-extraction count (5 httpapi handlers + 3 per-modality CLI helpers).
+
+  2. **`services/ingestion/internal/observationcollector/observationcollector_test.go`** (~120 lines, 4 tests) — `TestCollectBehavioral_FiltersOnMessageType` + `TestCollectBrowser_FiltersOnMessageType` + `TestCollectNetwork_FiltersOnMessageType` (each verifies that the returned slice contains ONLY the typed modality records, excluding paired IngestionEvent records emitted by Ingester.Append) + `TestCollect_EmptySubstrate` (all three return (nil, nil) on empty substrate).
+
+  3. **`services/ingestion/internal/httpapi/find_candidates_bc.go`** — replaces local `collectBehavioralObservationsHTTP` call with `observationcollector.CollectBehavioral`; removes the local function + the `behavioralObservationMessageType` constant + 2 imports (context, substrate via the function signature; proto via Unmarshal; eventsv1 still needed elsewhere? — no, deleted). Net delta: ~25 lines removed.
+
+  4. **`services/ingestion/internal/httpapi/find_candidates_ag_browser.go`** — same shape as #3 for the browser modality; ~25 lines removed.
+
+  5. **`services/ingestion/internal/httpapi/find_candidates_ch.go`** — same shape as #3 for the network modality; ~25 lines removed. The other two network-modality consumers (`find_candidates_cr.go` + `find_candidates_ag_network.go`) only update their handler call sites + their doc comments cite §0195 instead of §0192; the `collectNetworkObservationsHTTP` function lived in find_candidates_ch.go pre-§0195 and is deleted there.
+
+  CLI helpers (`cmd/find-*-candidates/main.go` local `collectBehavioralObservations` / `collectBrowserObservations` / `collectNetworkObservations` functions) intentionally remain unchanged in §0195 — extracting them would expand scope substantially (5 CLI updates + go.sum touch) and the CLIs are stable surfaces. CLI consolidation can land as a follow-on refactor if structurally useful.
+
+- **Constitutional review:**
+
+  Subordinate to §0190 MO1 + §0194 MO2 (consolidation refactor unblocked + structurally indicated). Subordinate to §0164 MO1 verification discipline. The refactor is structurally equivalent: the 5 httpapi handlers continue emitting the same wire shape; the consolidated functions have the same call signature as the deleted local helpers (modulo package qualification); no observable behavior change.
+
+  Falsifiability discipline: 4 new tests cover the consolidated package + the 5 httpapi handler tests (pre-existing, unchanged) continue passing — the structural witness that the refactor preserves behavior is that the unmodified tests pass against the consolidated code path.
+
+- **Consequences:**
+  - 1 new package directory (`internal/observationcollector/`) with 2 files (~230 lines total).
+  - 3 modified httpapi files (find_candidates_bc.go, find_candidates_ag_browser.go, find_candidates_ch.go): each removes one local helper + one message_type constant + 2 imports (context, proto, substrate where no longer referenced) + adds one import (observationcollector). Net ~75 lines removed across the 3 files.
+  - 2 modified httpapi files (find_candidates_cr.go, find_candidates_ag_network.go): each updates call site + adds observationcollector import + updates doc comment. Net ~3 lines changed each.
+  - 4 new unit tests in observationcollector package + 24 pre-existing tests continue passing.
+  - **First non-feature operational-tier advance post-§0188 program closure.** Establishes that refactor advances are part of the operational-tier discipline; future operational-tier work can include similar consolidation passes.
+  - **Pre-extraction count empirically captured (8 instances).** The §0190 MO1 "3+ instances" heuristic conservatively understated the actual pre-extraction surface — 8 instances existed (5 httpapi handlers + 3 CLI helpers). The discipline triggered correctly at the 5-httpapi-handler threshold; CLI helpers remain unshared (1 instance per CLI; no per-CLI duplication of the same modality except for two AG-network signatures sharing one CLI file).
+
+  Per §0164 MO1: full `go test ./internal/observationcollector/...` passes; full `go test ./...` from `services/ingestion/` reports 24 packages green, 0 failures.
+
+  Scope discipline per §0195: **httpapi consumer consolidation only** — CLI helpers remain unchanged (separate downstream refactor if useful). Does NOT introduce:
+  - CLI consolidation (5 CLI updates deferred to a separate PR if structurally indicated).
+  - New collector functions beyond the three existing per-modality variants (e.g., per-attribution-source collectors deferred until consumers surface).
+  - Substrate-walk-callback abstractions beyond the WalkEvents primitive (the per-call closure is cheap + composable; abstracting at a higher level would constrain future per-collector customization).
+
+  - **Methodological observation 1 — Consolidation refactors SHOULD land as separate non-feature advances; bundling with a final feature PR conflates "feature complete" with "structure consolidated."** §0195 lands as a standalone refactor PR — distinct from §0194 which closed the feature surface. The separation makes the consolidation diff structurally legible (refactor-only changes are easy to review for behavior preservation) and avoids the "did the consolidation break a feature added in the same PR?" risk. **Pattern: when a feature-program closure surfaces a consolidation refactor opportunity (per §0190 MO1 + §0194 MO2 precedent), the consolidation SHOULD land as a separate PR with its own decision-log entry; the program-closure entry SHOULD identify the consolidation as the natural NEXT advance + the consolidation PR's entry SHOULD cite back to the program-closure entry. The two-entry chain preserves the structural narrative (feature completion → consolidation refactor) at the decision-log layer.**
+
+- **Supersession:** No prior decision-log entry superseded. Discharges the §0190 MO1 + §0194 MO2 consolidation-refactor obligation at the httpapi consumer layer. CLI consolidation remains open as a potential downstream advance.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

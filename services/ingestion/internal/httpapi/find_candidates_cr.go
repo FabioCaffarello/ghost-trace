@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/attribution"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
 )
 
@@ -27,9 +28,8 @@ import (
 // CoordinationRingInteraction protos (actor_a=edge[0], actor_b=edge[1]
 // per §0070 within-edge lex).
 //
-// Reuses §0192's shared collectNetworkObservationsHTTP +
-// networkObservationMessageType + (when with_attribution=true)
-// §0168 AttributionLookup consumption.
+// Reuses §0195's shared observationcollector.CollectNetwork +
+// (when with_attribution=true) §0168 AttributionLookup consumption.
 //
 // Query parameters (all optional):
 //   - threshold: endpoint_co_visit_v1 threshold override (0 = signature
@@ -83,7 +83,7 @@ func (h *Handler) handleFindCandidatesCR(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	observations, err := collectNetworkObservationsHTTP(r.Context(), h.sub)
+	observations, err := observationcollector.CollectNetwork(r.Context(), h.sub)
 	if err != nil {
 		writeIngestError(w, http.StatusInternalServerError, fmt.Sprintf("collect: %v", err))
 		return

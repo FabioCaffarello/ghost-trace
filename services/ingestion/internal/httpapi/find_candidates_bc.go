@@ -1,23 +1,14 @@
 package httpapi
 
 import (
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 
-	"google.golang.org/protobuf/proto"
-
-	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
-
-// behavioralObservationMessageType is the proto message_type string
-// for BehavioralObservation records. Local copy mirroring the F3 CLIs'
-// equivalent constant (per-CLI scoping; no shared symbol exists today).
-const behavioralObservationMessageType = "ghosttrace.events.v1.BehavioralObservation"
 
 // handleFindCandidatesBC serves GET /v1/find-candidates/behavioral-cluster
 // per decision-log §0190. Third operational-tier advance after §0188
@@ -82,7 +73,7 @@ func (h *Handler) handleFindCandidatesBC(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	observations, err := collectBehavioralObservationsHTTP(r.Context(), h.sub)
+	observations, err := observationcollector.CollectBehavioral(r.Context(), h.sub)
 	if err != nil {
 		writeIngestError(w, http.StatusInternalServerError, fmt.Sprintf("collect: %v", err))
 		return
@@ -172,31 +163,6 @@ type findCandidatesPayload struct {
 	CandidateCount int                             `json:"candidate_count"`
 	Candidates     []findCandidatesCandidatePayload `json:"candidates"`
 	Stats          findCandidatesStatsPayload      `json:"stats"`
-}
-
-// collectBehavioralObservationsHTTP walks the substrate and unmarshals
-// every committed BehavioralObservation record. Mirrors the
-// find-behavioral-cluster-candidates CLI's collectBehavioralObservations
-// (local-helper duplication discipline preserved per §0190 MO1 — see
-// decision-log entry for shared-collector-package deferral rationale).
-func collectBehavioralObservationsHTTP(ctx context.Context, sub *substrate.Substrate) ([]*eventsv1.BehavioralObservation, error) {
-	var out []*eventsv1.BehavioralObservation
-	err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
-		if row.MessageType != behavioralObservationMessageType {
-			return nil
-		}
-		payload, err := sub.ReadBlob(ctx, row.EventHash)
-		if err != nil {
-			return fmt.Errorf("ReadBlob %x: %w", row.EventHash[:8], err)
-		}
-		obs := &eventsv1.BehavioralObservation{}
-		if err := proto.Unmarshal(payload, obs); err != nil {
-			return fmt.Errorf("Unmarshal %x: %w", row.EventHash[:8], err)
-		}
-		out = append(out, obs)
-		return nil
-	})
-	return out, err
 }
 
 // subtypeNameHTTP maps a signatures.HypothesisSubtype to its
