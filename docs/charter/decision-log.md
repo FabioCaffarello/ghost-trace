@@ -8584,7 +8584,7 @@ The four methodological observations are the pilot's contribution to procedure b
 - **Date:** 2026-05-25
 - **Context:** Post-§0196 (observationcollector consolidation program complete), the operational-tier direction-change checkpoint surfaced observability instrumentation as one of the natural next advances. §0197 opens that direction with the smallest foundational piece: per-request structured logging at the httpapi handler layer.
 
-  Pre-§0197 httpapi state: no logging surface. Handlers emit no structured events beyond what `writeIngestError` writes to the response body. Operators tracking request behavior in production have no log stream to consume.
+  Pre-§0197 httpapi state: no observability surface. Handlers emit no structured events beyond what `writeIngestError` writes to the response body. Operators tracking request behavior in production have no structured stream to consume.
 
 - **Decision:** Add per-request structured logging via stdlib `log/slog` to the httpapi Handler. Three changes:
 
@@ -8596,7 +8596,7 @@ The four methodological observations are the pilot's contribution to procedure b
 
 - **Constitutional review:**
 
-  Subordinate to §0094 tier classification (tier field in log entries reflects `routeTier(r)` per §0094). Subordinate to §0164 MO1 verification discipline. No new external dependencies — `log/slog` is stdlib (Go 1.22+). Default behavior preserved: WithLogger-unset handlers emit no log output, matching pre-§0197 silent operation.
+  Subordinate to §0094 tier classification (tier field in structured entries reflects `routeTier(r)` per §0094). Subordinate to §0164 MO1 verification discipline. No new external dependencies — `log/slog` is stdlib (Go 1.22+). Default behavior preserved: WithLogger-unset handlers emit no structured output, matching pre-§0197 silent operation.
 
   Falsifiability: 9 unit tests cover the contract. The no-status-attribute-missing regression guard mechanically verifies every emitted entry carries the `status` field; the auth-path test specifically witnesses that the loggingResponseWriter wraps the 401 response too (a regression where `h.writeUnauthorized(w)` bypassed the wrapper would surface as a missing status).
 
@@ -8611,11 +8611,11 @@ The four methodological observations are the pilot's contribution to procedure b
   Per §0164 MO1 verification discipline: full `go test ./internal/httpapi/...` passes; full `go test ./...` from `services/ingestion/` reports 0 failures.
 
   Scope discipline per §0197: **structured request logging only** — no Prometheus metrics (deferred to §0198 or later if useful), no request-id middleware (deferred), no trace-id propagation (deferred until OpenTelemetry surface is needed). Does NOT introduce:
-  - New external dependencies (stdlib-only via log/slog).
-  - Per-handler log fields beyond the 6 in the structured entry (method/path/status/duration_ms/tier/remote_addr); future advances can attach handler-specific attrs via slog's WithGroup or per-handler logger derivation.
+  - New external dependencies (stdlib-only via `log/slog`).
+  - Per-handler structured fields beyond the 6 in the entry (method/path/status/duration_ms/tier/remote_addr); future advances can attach handler-specific attrs via slog's WithGroup or per-handler logger derivation.
   - Logger configuration in production main (operator wires `WithLogger(slog.New(...))` at service-start time; the package provides the surface, not the binding).
 
-  - **Methodological observation 1 — Structured-logging instrumentation SHOULD default to a no-op (io.Discard-backed) logger to preserve test silence + pre-instrumentation behavior; explicit opt-in via WithLogger keeps the contract minimal.** Alternative designs (e.g., default to slog.Default() which emits to stderr) would surface log noise in every existing handler test — 100+ tests at the httpapi layer pre-§0197 — without any per-test mitigation. The discard-default discipline preserves the pre-§0197 silent-operation contract; tests that need to exercise log-emission paths opt in via WithLogger(slog.New(slog.NewJSONHandler(&buf, nil))). **Pattern: when adding instrumentation infrastructure (logging, metrics, tracing) to an established handler/service surface, default to a no-op implementation; require explicit opt-in via Options or constructor parameters. The discipline preserves the pre-instrumentation test surface + lets the production wiring be a single explicit configuration site (typically in main()).**
+  - **Methodological observation 1 — Structured-logging instrumentation SHOULD default to a no-op (io.Discard-backed) logger to preserve test silence + pre-instrumentation behavior; explicit opt-in via WithLogger keeps the contract minimal.** Alternative designs (e.g., default to slog.Default() which emits to stderr) would surface output noise in every existing handler test — 100+ tests at the httpapi layer pre-§0197 — without any per-test mitigation. The discard-default discipline preserves the pre-§0197 silent-operation contract; tests that need to exercise structured-emission paths opt in via WithLogger(slog.New(slog.NewJSONHandler(&buf, nil))). **Pattern: when adding instrumentation infrastructure (logging, metrics, tracing) to an established handler/service surface, default to a no-op implementation; require explicit opt-in via Options or constructor parameters. The discipline preserves the pre-instrumentation test surface + lets the production wiring be a single explicit configuration site (typically in main()).**
 
 - **Supersession:** No prior decision-log entry superseded. Opens the operational-tier observability instrumentation direction. Future advances within this direction (Prometheus metrics, request-id middleware, OpenTelemetry tracing) can land as separate downstream advances each following the §0197 no-op-default discipline per MO1.
 
