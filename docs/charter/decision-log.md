@@ -7512,6 +7512,81 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0175` — find-behavioral-cluster-candidates CLI lands behavioral-modality F3 orchestrator; closes operator-layer asymmetry from §0174; Makefile drift fix bundled
+
+- **Status:** accepted.
+- **Date:** 2026-05-25.
+- **Context:** [`§0174`](#0174--keystroke_timing_clustering_v1-lands-first-behavioralsignature-first-f3-emission-of-behavioralcluster-subtype-third-f3-interface-variant) landed `keystroke_timing_clustering_v1` as the first BehavioralSignature + first F3 emission of BehavioralCluster subtype. The Scope discipline section explicitly flagged the operator CLI as a separate downstream advance ("Orchestrator CLI for BehavioralSignature (`find-behavioral-cluster-candidates` analog) — separate downstream advance"). Without the CLI, operators could invoke the new signature only via Go test code; the F3-loop CLI asymmetry mirrored the §0168 → §0171 → §0172 chain (library capability landed; CLI exposure deferred).
+
+  This is the third instance of the library-then-CLI two-PR pattern at the F3 orchestrator layer: §0153 (BrowserSignature CLI) preceded §0163 (NetworkSignature CLI); §0163 preceded §0174's BehavioralSignature library landing; §0175 closes the operator-layer asymmetry for BehavioralSignature.
+
+  Empirical-correction discipline applied inline: pre-§0175 audit also surfaced that `find-automation-group-candidates-network` (§0163) had NO Makefile build target — the network CLI was buildable only via direct `go build ./cmd/find-automation-group-candidates-network` invocation, not via the standard `make find-automation-group-candidates-network-build` operator path. §0175 bundles this fix per §0164 MO1 (empirical audit surfaces forward-projected asymmetry; close inline rather than defer).
+
+- **Decision:** Three changes:
+
+  **1. New CLI `services/ingestion/cmd/find-behavioral-cluster-candidates/main.go`** — mirrors `find-automation-group-candidates` line-by-line modulo:
+
+  - Command name + binary output path.
+  - Library call: `signatures.KeystrokeTimingClusteringV1` (vs `CDPMarkerDensityV1`); `EvaluateBehavioral` (vs `EvaluateBrowser`).
+  - Substrate message-type discriminator: `ghosttrace.events.v1.BehavioralObservation` (vs BrowserObservation).
+  - `collectBehavioralObservations` walker (substrate walk → `*BehavioralObservation` slice).
+  - `thresholdOrDefault` typed for `*KeystrokeTimingClusteringV1` (vs `*CDPMarkerDensityV1`).
+
+  Same wire contract per §0163 stable-wire-contract discipline:
+  - Same argument shape: `-db`, `-blobs`, `-threshold`, `-limit`.
+  - Same JSON envelope (`signature_name`, `candidate_count`, `candidates`, `stats`).
+  - Same `candidateJSON` + `statsJSON` shapes.
+  - Same `subtypeName` helper covering all 5 enum values.
+
+  **2. `main_test.go` with the 4-test contract** per §0163 MO3 + §0164:
+
+  - `TestCollectBehavioralObservations_EndToEnd` — substrate walk returns BehavioralObservation only (excludes paired IngestionEvent).
+  - `TestFullPipeline_EndToEnd` — 3 actors with identical fingerprint → 1 candidate; JSON envelope shape verified; `hypothesis_subtype == "BehavioralCluster"` (first F3 emission of this subtype per §0174).
+  - `TestFullPipeline_BelowThreshold_NoCandidates` — 2 actors below threshold → 0 candidates + populated diagnostic counters per §0154 MO4.
+  - `TestSubtypeName_AllValuesNamed` — subtypeName exhaustiveness contract.
+
+  All three F3-loop orchestrator CLIs now have IDENTICAL 4-test main_test.go shape per §0164 grep-verification: `grep -c "^func Test" services/ingestion/cmd/find-{automation-group-candidates,automation-group-candidates-network,behavioral-cluster-candidates}/main_test.go` returns 4 for each (well, 7 for the network CLI per §0170's 3 additional selector tests; 4-base + extensions is the established shape).
+
+  **3. Makefile drift fixes** (per §0164 MO1 empirical-audit discipline):
+
+  - `find-automation-group-candidates-network-build` PHONY target + help line registered (closes §0163-introduced drift; the network CLI was missing from the Makefile build targets list).
+  - `find-behavioral-cluster-candidates-build` PHONY target + help line registered.
+
+  Constitutional discipline:
+
+  - **§0163 stable wire contract preserved** — JSON envelope identical across all 3 F3-loop CLIs; operator tooling (jq queries, dashboards) works against any without dual-schema handling.
+  - **§3 N3 operator-elected commit boundary** preserved — CLI emits candidates only; does not commit formation events.
+  - **§0153 read-only substrate access** — `collectBehavioralObservations` uses `WalkEvents` + `ReadBlob`; no `AppendPair`; no writeMu contention.
+  - **§0174 BehavioralSignature scope** preserved — CLI invokes `EvaluateBehavioral` without an `AttributionLookup` parameter (BehavioralObservation is SDK-emitted; no Cat II attribution path at inception).
+  - **§0164 MO1 empirical-audit discipline** applied inline — Makefile-target drift surfaced + closed in same PR rather than deferred.
+
+  Scope discipline per §0175: **minimal CLI extension exposing existing library capability + bundled Makefile drift fix**. Does NOT introduce:
+
+  - Lifecycle integration tests for BehavioralCluster subtype — separate downstream advance (would mirror §0157–§0167 AutomationGroup arc; ~8 PRs of similar shape).
+  - Other BehavioralSignature implementations (mouse, scroll, pointer-dwell).
+  - F3 signatures for CampaignHypothesis or CoordinationRing subtypes.
+  - Unified multi-modality dispatch CLI (one CLI invoking signatures across all 3 modalities).
+
+  Per §0164 MO1 verification discipline: empirical state inline. `ls services/ingestion/cmd/ | grep -c find-` returns 3 (was 2 pre-§0175; added `find-behavioral-cluster-candidates`). All 3 F3-loop CLIs now have parallel build targets + identical main_test.go contract shape + identical JSON wire contract.
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. New CLI binary + Makefile drift fix.
+
+  Falsifiability discipline: CLI behavior structurally observable + unit-tested. The 4-test contract covers substrate-walk endpoint, full-pipeline-at-threshold, below-threshold non-firing diagnostics, and subtypeName exhaustiveness. The BehavioralCluster emission assertion (`hypothesis_subtype == "BehavioralCluster"`) is the structural witness that §0174's first-of-subtype emission path connects end-to-end through the operator CLI layer.
+
+- **Consequences:**
+  - New CLI directory `cmd/find-behavioral-cluster-candidates/` with `main.go` + `main_test.go`.
+  - Makefile extended with TWO new build targets + help lines: one for the §0175 new CLI, one closing the §0163-introduced Makefile drift for `find-automation-group-candidates-network`.
+  - **All three F3-loop orchestrator CLIs now have parallel operator surfaces.** F3 corpus operationally complete at the operator-invocation layer across all three F1 modalities at signature layer (Browser + Network + Behavioral).
+  - **Two-PR pattern (library → CLI) re-applied for BehavioralSignature.** §0174 → §0175 mirrors §0152 → §0153 (browser) and §0161 + §0169 → §0163 + §0170 (network). The pattern is now stable across all three F1-modality signature variants.
+  - **§0167 closing-note discharge extended.** BehavioralCluster subtype now reachable through F3 AT THE OPERATOR LAYER (not just library). The remaining §0167-blocked subtypes (CampaignHypothesis + CoordinationRing) remain F3-emission-blocked at both library + operator layers.
+  - **Empirical-correction pattern catalogue: 6th instance.** Pre-§0175 audit surfaced the §0163-introduced Makefile drift; closed inline. Sixth instance after §0161→§0162 (CIC-IDS reachability), §0163→§0164 (CLI test symmetry), §0168→§0171 (Cat II library replay), §0171→§0172 (Cat II CLI replay), §0172→§0173 (Cat II batch replay). The pattern at this point should be treated as an explicit design discipline, not an emergent observation — future PRs introducing new symmetric surfaces should run pre-commit verification of related symmetric surfaces (Makefile targets, test files, registry entries) rather than relying on the drift to surface in a follow-on PR.
+  - **Methodological observation 1 — Bundling empirical-correction follow-on with same-arc PR is cheaper than deferring.** §0175 bundled the §0163 Makefile-drift fix with the new CLI landing (cost: 1 minute of additional editing; surfaces a related asymmetry that would have required a separate follow-up PR). The bundle is small enough that splitting would have been make-work. **Pattern: when a new symmetric surface is being added (here: third F3-loop CLI), pre-add audit related symmetric surfaces (existing CLIs) for drift; close inline if cost is minimal; only spin off separate PR if the drift surfaces broader structural concern. The §0164 MO1 empirical-correction discipline should be APPLIED PROACTIVELY during PR construction, not REACTIVELY in follow-on PRs.**
+  - **Methodological observation 2 — Three-CLI parallel operator surface is the empirical reference point for F3-loop discipline.** All 3 F3-loop CLIs now share: same wire contract (§0163), same 4-test minimum main_test.go contract (§0164), same Makefile build target pattern (§0175). Future F3-loop additions (e.g., hypothetical AttestationSignature orchestrator CLI for §0147 modality) should inherit ALL THREE disciplines simultaneously. **Pattern: the F3-loop orchestrator CLI shape is now a structural constant — wire contract + main_test.go contract + Makefile target. New F3-loop CLIs SHOULD ship with all three from day 1; deferring any creates the asymmetry pattern §0175 had to close.**
+
+- **Supersession:** §0163's Makefile-target asymmetry (network CLI missing from Makefile build targets) is CORRECTED by this entry's bundled Makefile fix. Per §0007 append-only discipline: no §0163 prose rewritten. Future readers should treat §0163 + §0175 as a paired record for the network CLI's Makefile target.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
