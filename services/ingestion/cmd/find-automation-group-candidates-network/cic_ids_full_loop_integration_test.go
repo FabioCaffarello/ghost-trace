@@ -52,6 +52,7 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/attribution"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
 
@@ -135,9 +136,9 @@ func TestCICIDS_FullLoop_BothGapsClosed_EmitsCandidate(t *testing.T) {
 
 	// Step 4: Collect NetworkObservation records + run the new
 	// signature (closes §0162 gap (2) via flow-feature clustering).
-	observations, err := collectNetworkObservations(ctx, sub)
+	observations, err := observationcollector.CollectNetwork(ctx, sub)
 	if err != nil {
-		t.Fatalf("collectNetworkObservations: %v", err)
+		t.Fatalf("observationcollector.CollectNetwork: %v", err)
 	}
 	if len(observations) != 9 {
 		t.Fatalf("observations count: got %d want 9", len(observations))

@@ -36,18 +36,13 @@ import (
 	"fmt"
 	"os"
 
-	"google.golang.org/protobuf/proto"
-
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/attribution"
-	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
 
-const (
-	exitToolError                 = 2
-	networkObservationMessageType = "ghosttrace.events.v1.NetworkObservation"
-)
+const exitToolError = 2
 
 func main() {
 	if err := run(); err != nil {
@@ -72,7 +67,7 @@ func run() error {
 	}
 	defer sub.Close()
 
-	observations, err := collectNetworkObservations(ctx, sub)
+	observations, err := observationcollector.CollectNetwork(ctx, sub)
 	if err != nil {
 		return fmt.Errorf("collect: %w", err)
 	}
@@ -116,29 +111,6 @@ func run() error {
 		result.Stats.ObservationsSkippedNoActor,
 		result.Stats.ObservationsSkippedWrongModality)
 	return nil
-}
-
-// collectNetworkObservations walks the substrate and unmarshals every
-// committed NetworkObservation record. Local helper mirroring
-// find-automation-group-candidates-network's equivalent.
-func collectNetworkObservations(ctx context.Context, sub *substrate.Substrate) ([]*eventsv1.NetworkObservation, error) {
-	var out []*eventsv1.NetworkObservation
-	err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
-		if row.MessageType != networkObservationMessageType {
-			return nil
-		}
-		payload, err := sub.ReadBlob(ctx, row.EventHash)
-		if err != nil {
-			return fmt.Errorf("ReadBlob %x: %w", row.EventHash[:8], err)
-		}
-		obs := &eventsv1.NetworkObservation{}
-		if err := proto.Unmarshal(payload, obs); err != nil {
-			return fmt.Errorf("Unmarshal %x: %w", row.EventHash[:8], err)
-		}
-		out = append(out, obs)
-		return nil
-	})
-	return out, err
 }
 
 // candidateJSON / statsJSON / emissionEnvelope mirror the shared

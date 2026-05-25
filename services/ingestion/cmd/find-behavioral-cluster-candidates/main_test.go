@@ -14,6 +14,7 @@ import (
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
 
@@ -71,9 +72,9 @@ func TestCollectBehavioralObservations_EndToEnd(t *testing.T) {
 	appendKeystrokeObs(t, in, "actor-b", ivs, 2)
 	appendKeystrokeObs(t, in, "actor-c", ivs, 3)
 
-	observations, err := collectBehavioralObservations(context.Background(), sub)
+	observations, err := observationcollector.CollectBehavioral(context.Background(), sub)
 	if err != nil {
-		t.Fatalf("collectBehavioralObservations: %v", err)
+		t.Fatalf("observationcollector.CollectBehavioral: %v", err)
 	}
 	if got, want := len(observations), 3; got != want {
 		t.Fatalf("expected %d BehavioralObservation records, got %d (IngestionEvent records must be excluded)", want, got)
@@ -93,9 +94,9 @@ func TestFullPipeline_EndToEnd(t *testing.T) {
 	appendKeystrokeObs(t, in, "actor-bot-2", ivs, 2)
 	appendKeystrokeObs(t, in, "actor-bot-3", ivs, 3)
 
-	observations, err := collectBehavioralObservations(context.Background(), sub)
+	observations, err := observationcollector.CollectBehavioral(context.Background(), sub)
 	if err != nil {
-		t.Fatalf("collectBehavioralObservations: %v", err)
+		t.Fatalf("observationcollector.CollectBehavioral: %v", err)
 	}
 	sig := &signatures.KeystrokeTimingClusteringV1{}
 	result, err := sig.EvaluateBehavioral(context.Background(), observations)
@@ -182,9 +183,9 @@ func TestFullPipeline_BelowThreshold_NoCandidates(t *testing.T) {
 	appendKeystrokeObs(t, in, "actor-a", ivs, 1)
 	appendKeystrokeObs(t, in, "actor-b", ivs, 2)
 
-	observations, err := collectBehavioralObservations(context.Background(), sub)
+	observations, err := observationcollector.CollectBehavioral(context.Background(), sub)
 	if err != nil {
-		t.Fatalf("collectBehavioralObservations: %v", err)
+		t.Fatalf("observationcollector.CollectBehavioral: %v", err)
 	}
 	sig := &signatures.KeystrokeTimingClusteringV1{}
 	result, err := sig.EvaluateBehavioral(context.Background(), observations)

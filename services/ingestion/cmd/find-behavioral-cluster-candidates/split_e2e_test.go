@@ -36,6 +36,7 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/hypothesis"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
 
@@ -115,9 +116,9 @@ func TestSplitBehavioralCluster_FromF3CandidateAntecedent(t *testing.T) {
 	appendKeystrokeObs(t, in, "actor-suspect-3", ivs, 3)
 
 	// Step 2: F3 → 1 candidate.
-	observations, err := collectBehavioralObservations(ctx, sub)
+	observations, err := observationcollector.CollectBehavioral(ctx, sub)
 	if err != nil {
-		t.Fatalf("collectBehavioralObservations: %v", err)
+		t.Fatalf("observationcollector.CollectBehavioral: %v", err)
 	}
 	sig := &signatures.KeystrokeTimingClusteringV1{}
 	result, err := sig.EvaluateBehavioral(ctx, observations)
@@ -250,9 +251,9 @@ func TestSplitBehavioralCluster_RejectsInsufficientSuccessors(t *testing.T) {
 	appendKeystrokeObs(t, in, "actor-x-2", ivs, 2)
 	appendKeystrokeObs(t, in, "actor-x-3", ivs, 3)
 
-	observations, err := collectBehavioralObservations(ctx, sub)
+	observations, err := observationcollector.CollectBehavioral(ctx, sub)
 	if err != nil {
-		t.Fatalf("collectBehavioralObservations: %v", err)
+		t.Fatalf("observationcollector.CollectBehavioral: %v", err)
 	}
 	sig := &signatures.KeystrokeTimingClusteringV1{}
 	result, err := sig.EvaluateBehavioral(ctx, observations)
@@ -291,9 +292,9 @@ func TestSplitBehavioralCluster_RejectsAntecedentInSuccessorSet(t *testing.T) {
 	appendKeystrokeObs(t, in, "actor-y-2", ivs, 2)
 	appendKeystrokeObs(t, in, "actor-y-3", ivs, 3)
 
-	observations, err := collectBehavioralObservations(ctx, sub)
+	observations, err := observationcollector.CollectBehavioral(ctx, sub)
 	if err != nil {
-		t.Fatalf("collectBehavioralObservations: %v", err)
+		t.Fatalf("observationcollector.CollectBehavioral: %v", err)
 	}
 	sig := &signatures.KeystrokeTimingClusteringV1{}
 	result, err := sig.EvaluateBehavioral(ctx, observations)

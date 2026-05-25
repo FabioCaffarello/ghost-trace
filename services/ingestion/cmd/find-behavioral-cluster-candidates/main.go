@@ -37,17 +37,12 @@ import (
 	"fmt"
 	"os"
 
-	"google.golang.org/protobuf/proto"
-
-	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
 
-const (
-	exitToolError                    = 2
-	behavioralObservationMessageType = "ghosttrace.events.v1.BehavioralObservation"
-)
+const exitToolError = 2
 
 func main() {
 	if err := run(); err != nil {
@@ -70,7 +65,7 @@ func run() error {
 	}
 	defer sub.Close()
 
-	observations, err := collectBehavioralObservations(ctx, sub)
+	observations, err := observationcollector.CollectBehavioral(ctx, sub)
 	if err != nil {
 		return fmt.Errorf("collect: %w", err)
 	}
@@ -99,32 +94,6 @@ func run() error {
 		result.Stats.ObservationsSkippedNoActor,
 		result.Stats.ObservationsSkippedWrongModality)
 	return nil
-}
-
-// collectBehavioralObservations walks the substrate and unmarshals
-// every committed BehavioralObservation record into memory. O(N)
-// memory per call; mirrors find-automation-group-candidates'
-// collectBrowserObservations + find-automation-group-candidates-
-// network's collectNetworkObservations on the behavioral-modality
-// side.
-func collectBehavioralObservations(ctx context.Context, sub *substrate.Substrate) ([]*eventsv1.BehavioralObservation, error) {
-	var out []*eventsv1.BehavioralObservation
-	err := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
-		if row.MessageType != behavioralObservationMessageType {
-			return nil
-		}
-		payload, err := sub.ReadBlob(ctx, row.EventHash)
-		if err != nil {
-			return fmt.Errorf("ReadBlob %x: %w", row.EventHash[:8], err)
-		}
-		obs := &eventsv1.BehavioralObservation{}
-		if err := proto.Unmarshal(payload, obs); err != nil {
-			return fmt.Errorf("Unmarshal %x: %w", row.EventHash[:8], err)
-		}
-		out = append(out, obs)
-		return nil
-	})
-	return out, err
 }
 
 // candidateJSON is the operator-facing serialization shape, identical

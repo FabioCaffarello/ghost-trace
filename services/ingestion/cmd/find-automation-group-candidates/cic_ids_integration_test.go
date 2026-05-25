@@ -24,6 +24,7 @@ import (
 
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/cic_ids"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
@@ -98,9 +99,9 @@ func TestCICIDSIngestionThenSignature_NonFiringByModalityMismatch(t *testing.T) 
 	// Step 2: Run orchestrator's BrowserObservation walk.
 	// The substrate has 9 NetworkObservation records but ZERO
 	// BrowserObservation records.
-	observations, err := collectBrowserObservations(ctx, sub)
+	observations, err := observationcollector.CollectBrowser(ctx, sub)
 	if err != nil {
-		t.Fatalf("collectBrowserObservations: %v", err)
+		t.Fatalf("observationcollector.CollectBrowser: %v", err)
 	}
 	if len(observations) != 0 {
 		t.Fatalf("BrowserObservation count: got %d want 0 (CIC-IDS only produces NetworkObservation)", len(observations))
@@ -198,9 +199,9 @@ func TestCICIDSIngestionThenSignature_WithInjectedBrowserObservation(t *testing.
 	appendBrowserObs(t, in, "actor-other", []string{"$cdc_test"}, 1)
 
 	// Step 3: Run orchestrator.
-	observations, err := collectBrowserObservations(ctx, sub)
+	observations, err := observationcollector.CollectBrowser(ctx, sub)
 	if err != nil {
-		t.Fatalf("collectBrowserObservations: %v", err)
+		t.Fatalf("observationcollector.CollectBrowser: %v", err)
 	}
 	if got, want := len(observations), 2; got != want {
 		t.Fatalf("BrowserObservation count: got %d want %d (2 injected)", got, want)

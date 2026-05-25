@@ -14,6 +14,7 @@ import (
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/observationcollector"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
 
@@ -64,9 +65,9 @@ func TestCollectNetworkObservations_EndToEnd(t *testing.T) {
 	appendNetworkObsWithP0F(t, in, "actor-b", p0f)
 	appendNetworkObsWithP0F(t, in, "actor-c", p0f)
 
-	observations, err := collectNetworkObservations(context.Background(), sub)
+	observations, err := observationcollector.CollectNetwork(context.Background(), sub)
 	if err != nil {
-		t.Fatalf("collectNetworkObservations: %v", err)
+		t.Fatalf("observationcollector.CollectNetwork: %v", err)
 	}
 	if got, want := len(observations), 3; got != want {
 		t.Fatalf("expected %d NetworkObservation records, got %d (note: IngestionEvent records must be excluded)", want, got)
@@ -85,9 +86,9 @@ func TestFullPipeline_EndToEnd(t *testing.T) {
 	appendNetworkObsWithP0F(t, in, "actor-bot-2", p0f)
 	appendNetworkObsWithP0F(t, in, "actor-bot-3", p0f)
 
-	observations, err := collectNetworkObservations(context.Background(), sub)
+	observations, err := observationcollector.CollectNetwork(context.Background(), sub)
 	if err != nil {
-		t.Fatalf("collectNetworkObservations: %v", err)
+		t.Fatalf("observationcollector.CollectNetwork: %v", err)
 	}
 	sig := &signatures.TCPFingerprintClusteringV1{}
 	result, err := sig.EvaluateNetwork(context.Background(), observations, nil)
@@ -172,9 +173,9 @@ func TestFullPipeline_BelowThreshold_NoCandidates(t *testing.T) {
 	appendNetworkObsWithP0F(t, in, "actor-a", p0f)
 	appendNetworkObsWithP0F(t, in, "actor-b", p0f)
 
-	observations, err := collectNetworkObservations(context.Background(), sub)
+	observations, err := observationcollector.CollectNetwork(context.Background(), sub)
 	if err != nil {
-		t.Fatalf("collectNetworkObservations: %v", err)
+		t.Fatalf("observationcollector.CollectNetwork: %v", err)
 	}
 	sig := &signatures.TCPFingerprintClusteringV1{}
 	result, err := sig.EvaluateNetwork(context.Background(), observations, nil)
