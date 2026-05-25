@@ -7427,6 +7427,91 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0174` — keystroke_timing_clustering_v1 lands first BehavioralSignature; first F3 emission of BehavioralCluster subtype; third F3 interface variant
+
+- **Status:** accepted.
+- **Date:** 2026-05-25.
+- **Context:** F3 corpus through §0173 covered two of three F1 modalities at the signature layer: BrowserSignature (§0152 `cdp_marker_density_v1`) and NetworkSignature (§0161 `tcp_fingerprint_clustering_v1`, §0169 `tcp_flow_features_clustering_v1`). BehavioralObservation (§0146) had proto-level structure but NO F3 signature consuming it. Per §0167 closing-note: "Future lifecycle-axis advances extend to other Cat III subtypes; each requires its own F3 signature first." All F3 signatures emitted AutomationGroup; BehavioralCluster, CampaignHypothesis, and CoordinationRing subtypes had NO emission path.
+
+  This entry lands the first BehavioralSignature + first F3 emission of the BehavioralCluster subtype. Unblocks future lifecycle integration tests for BehavioralCluster (§0167 closing-note discharge for one of three remaining subtypes).
+
+- **Decision:** Two changes in `services/ingestion/internal/signatures/`:
+
+  **1. BehavioralSignature interface** (added to `signatures.go`):
+
+  - Embeds `Signature` (Name + Subtype common surface).
+  - Adds `EvaluateBehavioral(ctx, []*BehavioralObservation) → *EvaluationResult`.
+  - Adds `isBehavioralSignature()` marker.
+  - **No `AttributionLookup` parameter** per §0168 scope: BehavioralObservation, like BrowserObservation, is client-SDK-emitted and carries `actor_ref` directly. Mirrors BrowserSignature, not NetworkSignature. Future RFC may extend if a behavioral-attribution case emerges.
+
+  Per §0161 minimal-refactor discipline: third interface variant is additive (Browser + Network + Behavioral); existing concrete signatures unaffected.
+
+  **2. `KeystrokeTimingClusteringV1`** (`keystroke_timing_clustering.go` + tests):
+
+  - First concrete BehavioralSignature.
+  - **Detection axis**: identical quantized keystroke fingerprint across multiple distinct actors. Multi-actor identical-fingerprint pattern → BehavioralCluster ontology shape per §0010 Q2-A.2 ("set of actors operating under a common underlying entity" — same person typing across accounts).
+  - **Cluster key**: canonical `"f<flight_ms>d<dwell_ms>,..."` (comma-separated quantized tuples in chronological order). Operator-inspectable plain string per §0169 plain-string discipline.
+  - **Quantization**: 50ms bucket (50_000_000 ns). Round-half-up. Balances over-clustering (too tolerant) vs under-clustering (too strict). Inception-phase choice per §0174; empirical pressure will surface adjustment need.
+  - **Threshold**: default 3 distinct actors per cluster (mirrors §0161 / §0169 conservative-default discipline).
+  - **Minimum keystrokes per observation**: 3 intervals. Records with fewer skip at `ObservationsSkippedWrongModality` — single-keystroke "fingerprints" collide coincidentally too easily.
+  - **Subtype**: `HypothesisSubtypeBehavioralCluster` (first F3 emission of this subtype).
+  - **Skip semantics**: empty actor_ref → SkippedNoActor; non-keystroke_timing modality → SkippedWrongModality; <3 intervals → SkippedWrongModality.
+  - **No AttributionLookup parameter** per the interface discipline.
+
+  Per §0139 hash-list discipline: SourceHashes sorted ascending at candidate emit time.
+
+  Per §3 N1 truth-vs-structure: ConfidenceHint capped at 0.9 via shared `confidenceFromCount` helper.
+
+  Test coverage (11 unit tests):
+
+  - `NameAndSubtype` + `SatisfiesBehavioralSignatureInterface` — contract.
+  - `BelowThreshold_NoCandidate` / `AtThreshold_OneCandidate` — threshold boundary.
+  - `QuantizationClustersSimilarTimings` — empirical witness that 50ms quantization clusters timings within ±25ms.
+  - `QuantizationSeparatesDifferentRhythms` — converse: distinct rhythms don't cluster.
+  - `EmptyActorRef_Skipped` / `InsufficientIntervals_Skipped` / `WrongModality_Skipped` / `EmptyInput_NoCandidates` — skip semantics.
+  - `DeterministicOrder` — fingerprint-key alphabetical emission.
+  - `CanonicalKeystrokeFingerprint_Quantization` — quantization function unit-tested for bucket boundaries + round-half-up + empty case.
+
+  Constitutional discipline:
+
+  - **§3 N3 operator-elected commit boundary** preserved (mirrors §0152 / §0161 / §0169 — candidates emitted; not committed).
+  - **§0139 hash-list element-shape** — SourceHashes sorted ascending.
+  - **§3 N1 truth-vs-structure** — ConfidenceHint capped at 0.9; quantization is derivation marker (operator-inspectable), not fabrication.
+  - **§0146 discriminated-union framing** honored — signature consumes BehavioralObservation typed envelope + extracts keystroke_timing sub-modality via `GetKeystrokeTiming()`.
+  - **§0143 Sub-benchmark 1 instrumentation parity** — `EvaluationStats` populated identically to §0152 / §0161 / §0169 (per-collector + per-skip-reason counters + actor aggregation counts).
+  - **§0023 single-tier actor_ref** — output is plain string per inception phase.
+  - **§0167 closing-note discharge (partial)** — BehavioralCluster subtype now has an F3 emission path; future lifecycle integration tests for this subtype can land parallel to §0157–§0167 AutomationGroup arc. CampaignHypothesis + CoordinationRing remain emission-blocked; require separate F3 signatures.
+
+  Scope discipline per §0174: **minimal interface refactor + first concrete BehavioralSignature**. Does NOT introduce:
+
+  - Orchestrator CLI for BehavioralSignature (`find-behavioral-cluster-candidates` analog) — separate downstream advance.
+  - Lifecycle integration tests for BehavioralCluster subtype — separate downstream advance (would mirror §0157–§0167 AutomationGroup arc).
+  - Other BehavioralSignature implementations (mouse, scroll, pointer-dwell) — separate signatures per their own detection axes.
+  - Statistical-similarity clustering (vs exact-match quantized fingerprint) — would need different ontology framing + statistical distance functions.
+  - F3 signatures for CampaignHypothesis or CoordinationRing subtypes — separate emission paths needed.
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. New non-Charter capability (F3 corpus extension to BehavioralSignature variant + BehavioralCluster subtype emission).
+
+  Falsifiability discipline: signature behavior structurally observable + exhaustively tested. The 11 unit tests cover the 11 distinct behavior shapes (contract, interface, threshold boundary, quantization in both directions, all 4 skip cases, deterministic order, quantization function correctness). The quantization function's 4-case test (bucket boundary / round-half-up / round-down / empty) catches drift in the quantization arithmetic — round-half-up is a deliberate choice that future revisions could accidentally change.
+
+  Per §0164 MO1 verification discipline: empirical state inline. `grep -c "^func Test" services/ingestion/internal/signatures/keystroke_timing_clustering_test.go` returns 11. F3 corpus signature count post-§0174 = 4 (cdp_marker_density_v1 + tcp_fingerprint_clustering_v1 + tcp_flow_features_clustering_v1 + keystroke_timing_clustering_v1).
+
+- **Consequences:**
+  - `signatures.go`: BehavioralSignature interface added (~25 lines including docstring).
+  - `keystroke_timing_clustering.go`: new signature (~210 lines).
+  - `keystroke_timing_clustering_test.go`: 11 unit tests.
+  - No proto changes. No package additions. No Makefile changes (no new CLI in this PR per scope).
+  - **First BehavioralSignature lands.** Third interface variant; F3 corpus now spans all three F1 modalities (Browser + Network + Behavioral). Attestation modality (§0147) remains F3-unconsumed; no AttestationSignature yet.
+  - **First F3 emission of BehavioralCluster subtype.** Discharges §0167 closing-note partial obligation: BehavioralCluster subtype now reachable through F3. Lifecycle integration tests for this subtype can land parallel to §0157–§0167 AutomationGroup arc (separate downstream advance).
+  - **Quantization-based clustering as a new detection-axis pattern in the corpus.** Pre-§0174 the corpus had: per-actor density (§0152), per-canonical-form exact-match (§0161), per-feature-tuple exact-match (§0169). §0174 introduces quantization-based exact-match: continuous-value features quantized to discrete buckets, then exact-match clustering. Bridges per-canonical-form (feature IS exact) and statistical-similarity (feature needs distance metric). Future signatures may adopt this pattern for other continuous-value features (mouse-velocity buckets, scroll-cadence buckets, etc.).
+  - **Methodological observation 1 — Quantization granularity is a constitutional-judgment choice; inception-phase defaults need explicit justification.** §0174 chose 50ms quantization with explicit rationale: 10ms too strict (natural human typing variation exceeds 10ms; coincidence required for cluster formation); 100ms too tolerant (clusters span unrelated rhythms); 50ms balances. The choice is operator-falsifiable: deploy + observe whether real clusters emerge under known shared-operator scenarios. **Pattern: continuous-value quantization signatures SHOULD record the quantization rationale + the falsifiability path in the docstring + decision-log entry; future revisions adjusting the bucket size should reference the original rationale + the empirical observation that motivated the adjustment. Naive bucket-size choice without falsifiability path is a §3 N1 risk (clusters fabricated by quantization choice rather than observed structurally).**
+  - **Methodological observation 2 — Minimum-evidence threshold per observation is a falsifiability prerequisite, NOT a parameter knob.** §0174 requires ≥3 keystrokes per observation before fingerprint formation. With 1 keystroke, the "fingerprint" is one (flight, dwell) pair → many actors coincidentally collide. With 3+ keystrokes, the fingerprint's combinatorial space grows sufficiently that coincidental collision becomes structurally implausible. **Pattern: clustering signatures with continuous-value features SHOULD enforce a minimum-evidence threshold per observation; the threshold is a falsifiability prerequisite (without it, clusters are trivially fabricated by single-feature coincidence). The threshold is NOT operator-tunable like the cluster-cardinality threshold — it's a structural constant of the signature's design.**
+  - **Methodological observation 3 — Third interface variant confirms the per-modality-interface pattern's generalizability.** §0161 introduced the BrowserSignature/NetworkSignature split + refactored the Signature interface to common-surface-only. §0174 extends to BehavioralSignature as a third additive variant. The pattern works without modification across three F1 modalities. **Pattern: per-modality interface variants (BrowserSignature, NetworkSignature, BehavioralSignature, [future] AttestationSignature) are an established F3 corpus extension shape — each new modality adds one interface + one or more concrete signatures. The common Signature interface remains stable across additions; no further refactoring is anticipated as the corpus extends.**
+
+- **Supersession:** No prior decision-log entry superseded. Discharges §0167 closing-note partial obligation for BehavioralCluster subtype emission. Future lifecycle integration tests for BehavioralCluster can land parallel to §0157–§0167 AutomationGroup arc. CampaignHypothesis + CoordinationRing subtypes remain F3-emission-blocked; separate F3 signatures required.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
