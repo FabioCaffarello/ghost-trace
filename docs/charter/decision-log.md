@@ -8338,6 +8338,42 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0191` — GET /v1/find-candidates/automation-group-browser HTTP endpoint; second F3 candidate evaluation endpoint per §0190 MO1 replication discipline
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0190 piloted the F3 candidate evaluation HTTP endpoint pattern with the BehavioralCluster subtype. §0190 MO1 codified pilot-first replication: duplicate per-CLI local helpers until 3+ instances exist; consolidation refactor deferred. §0191 extends the pattern to the browser-modality AutomationGroup axis — second of 5 planned find-candidates-* endpoints.
+
+- **Decision:** Add `GET /v1/find-candidates/automation-group-browser` HTTP endpoint exposing the `cdp_marker_density_v1` F3 signature (§0152). Mechanical replication of §0190 with two structural deltas:
+
+  1. **Signature**: `CDPMarkerDensityV1` (browser-modality) instead of `KeystrokeTimingClusteringV1` (behavioral-modality).
+  2. **Observation walk**: `collectBrowserObservationsHTTP` for `BrowserObservation` records (with new `browserObservationMessageType` constant) instead of `collectBehavioralObservationsHTTP`.
+
+  Reuses §0190's `findCandidatesPayload` family + `subtypeNameHTTP` mapper (per-package consolidation already present at the response-wire-shape level).
+
+  Three changes:
+  - **`internal/httpapi/find_candidates_ag_browser.go`** (~160 lines).
+  - **`internal/httpapi/handler.go`** — one new route adjacent to §0190.
+  - **`internal/httpapi/find_candidates_ag_browser_test.go`** (~140 lines, 4 tests): happy-path (3 above-threshold detections → 1 candidate; verifies SignatureName = cdp_marker_density_v1 + HypothesisSubtype = AutomationGroup) + below-threshold + method-allow-list + substrate-not-configured.
+
+- **Constitutional review:**
+
+  Same subordination as §0190 (§0163 + §0188 MO1 + §0152 signature + §3 N3 + §0190 MO1 + §0164 MO1). Falsifiability: 4 unit tests cover the contract; mechanical-replication discipline preserves the per-PR test density established at §0190.
+
+- **Consequences:**
+  - 2 new files; ~300 lines total.
+  - 1 modified file (route addition; 2 lines).
+  - 4 new unit tests.
+  - **2nd of 5 find-candidates-* endpoints lands.** 3 remain (AG-network with two-signature selection, CampaignHypothesis, CoordinationRing with interaction-centric wire-shape extension). Per §0190 MO1: consolidation refactor extracts `internal/observationcollector/` once all 5 land.
+
+  Per §0164 MO1: `grep -c "^func Test" services/ingestion/internal/httpapi/find_candidates_ag_browser_test.go` returns 4. Full `go test ./internal/httpapi/...` passes; full `go test ./...` from `services/ingestion/` passes.
+
+  Scope discipline per §0191: **single per-subtype endpoint replication only** — no shared-collector extraction (deferred per §0190 MO1), no wire-shape modifications (§0190's findCandidatesPayload family reused as-is).
+
+- **Supersession:** No prior decision-log entry superseded. Extends §0190 along the browser-modality AutomationGroup axis. 3 follow-on per-subtype endpoints remain: AG-network (with two-signature selection complexity), CH (network-modality, single signature), CR (network-modality + interaction-centric wire-shape extension per §0186 MO1).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
