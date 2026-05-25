@@ -6,6 +6,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/canonical"
 	commonv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 )
@@ -34,7 +35,7 @@ func TestTCPFingerprintClusteringV1_BelowThreshold_NoCandidate(t *testing.T) {
 		newNetworkObservationWithTCPFingerprint("actor-a", "4:64:0:1460:mss*44,7:mss,sok,ts,nop,ws:df:0"),
 		newNetworkObservationWithTCPFingerprint("actor-b", "4:64:0:1460:mss*44,7:mss,sok,ts,nop,ws:df:0"),
 	}
-	res, err := sig.EvaluateNetwork(context.Background(), observations)
+	res, err := sig.EvaluateNetwork(context.Background(), observations, nil)
 	if err != nil {
 		t.Fatalf("EvaluateNetwork: %v", err)
 	}
@@ -57,7 +58,7 @@ func TestTCPFingerprintClusteringV1_AtThreshold_OneCandidate(t *testing.T) {
 		newNetworkObservationWithTCPFingerprint("actor-b", p0f),
 		newNetworkObservationWithTCPFingerprint("actor-c", p0f),
 	}
-	res, err := sig.EvaluateNetwork(context.Background(), observations)
+	res, err := sig.EvaluateNetwork(context.Background(), observations, nil)
 	if err != nil {
 		t.Fatalf("EvaluateNetwork: %v", err)
 	}
@@ -120,7 +121,7 @@ func TestTCPFingerprintClusteringV1_MultipleClusters_OneAboveThreshold(t *testin
 		newNetworkObservationWithTCPFingerprint("actor-d", p0fB),
 		newNetworkObservationWithTCPFingerprint("actor-e", p0fB),
 	}
-	res, err := sig.EvaluateNetwork(context.Background(), observations)
+	res, err := sig.EvaluateNetwork(context.Background(), observations, nil)
 	if err != nil {
 		t.Fatalf("EvaluateNetwork: %v", err)
 	}
@@ -150,7 +151,7 @@ func TestTCPFingerprintClusteringV1_DuplicateActorInSameCluster_CountedOnce(t *t
 		newNetworkObservationWithTCPFingerprint("actor-b", p0f),
 		newNetworkObservationWithTCPFingerprint("actor-c", p0f),
 	}
-	res, err := sig.EvaluateNetwork(context.Background(), observations)
+	res, err := sig.EvaluateNetwork(context.Background(), observations, nil)
 	if err != nil {
 		t.Fatalf("EvaluateNetwork: %v", err)
 	}
@@ -176,7 +177,7 @@ func TestTCPFingerprintClusteringV1_EmptyActorRef_Skipped(t *testing.T) {
 		newNetworkObservationWithTCPFingerprint("", p0f),
 		newNetworkObservationWithTCPFingerprint("actor-a", p0f),
 	}
-	res, err := sig.EvaluateNetwork(context.Background(), observations)
+	res, err := sig.EvaluateNetwork(context.Background(), observations, nil)
 	if err != nil {
 		t.Fatalf("EvaluateNetwork: %v", err)
 	}
@@ -194,7 +195,7 @@ func TestTCPFingerprintClusteringV1_EmptyP0FSignature_Skipped(t *testing.T) {
 		newNetworkObservationWithTCPFingerprint("actor-a", ""),
 		newNetworkObservationWithTCPFingerprint("actor-b", "4:64:0:1460:mss*44,7:mss,sok,ts,nop,ws:df:0"),
 	}
-	res, err := sig.EvaluateNetwork(context.Background(), observations)
+	res, err := sig.EvaluateNetwork(context.Background(), observations, nil)
 	if err != nil {
 		t.Fatalf("EvaluateNetwork: %v", err)
 	}
@@ -216,7 +217,7 @@ func TestTCPFingerprintClusteringV1_WrongModality_Skipped(t *testing.T) {
 			},
 		},
 	}
-	res, err := sig.EvaluateNetwork(context.Background(), []*eventsv1.NetworkObservation{obs})
+	res, err := sig.EvaluateNetwork(context.Background(), []*eventsv1.NetworkObservation{obs}, nil)
 	if err != nil {
 		t.Fatalf("EvaluateNetwork: %v", err)
 	}
@@ -230,7 +231,7 @@ func TestTCPFingerprintClusteringV1_WrongModality_Skipped(t *testing.T) {
 
 func TestTCPFingerprintClusteringV1_EmptyInput_NoCandidates(t *testing.T) {
 	sig := &TCPFingerprintClusteringV1{}
-	res, err := sig.EvaluateNetwork(context.Background(), []*eventsv1.NetworkObservation{})
+	res, err := sig.EvaluateNetwork(context.Background(), []*eventsv1.NetworkObservation{}, nil)
 	if err != nil {
 		t.Fatalf("EvaluateNetwork: %v", err)
 	}
@@ -256,7 +257,7 @@ func TestTCPFingerprintClusteringV1_DeterministicOrder(t *testing.T) {
 		newNetworkObservationWithTCPFingerprint("actor-5", p0fB),
 		newNetworkObservationWithTCPFingerprint("actor-6", p0fB),
 	}
-	res, err := sig.EvaluateNetwork(context.Background(), observations)
+	res, err := sig.EvaluateNetwork(context.Background(), observations, nil)
 	if err != nil {
 		t.Fatalf("EvaluateNetwork: %v", err)
 	}
@@ -285,6 +286,145 @@ func TestTCPFingerprintClusteringV1_NameAndSubtype(t *testing.T) {
 
 func TestTCPFingerprintClusteringV1_SatisfiesNetworkSignatureInterface(t *testing.T) {
 	var _ NetworkSignature = &TCPFingerprintClusteringV1{}
+}
+
+// stubAttributionLookup implements AttributionLookup over a fixed
+// in-memory map. Used to drive §0168 Decision A.1 tests without
+// requiring the full attribution package + substrate machinery.
+type stubAttributionLookup struct {
+	entries map[[32]byte]stubAttributionEntry
+}
+
+type stubAttributionEntry struct {
+	derivedActorRef string
+	attributionHash [32]byte
+}
+
+func (s *stubAttributionLookup) For(sourceHash [32]byte) (string, [32]byte, bool) {
+	e, ok := s.entries[sourceHash]
+	if !ok {
+		return "", [32]byte{}, false
+	}
+	return e.derivedActorRef, e.attributionHash, true
+}
+
+// TestTCPFingerprintClusteringV1_AttributionFillsEmptyActor_v0168 confirms
+// the §0168 Decision A.1 signature-aware Cat II consumption: when
+// attribution is provided AND obs.ActorRef is empty AND For returns
+// ok, the signature treats the derived actor_ref as the effective
+// actor + threads BOTH source observation hash AND Cat II derivation
+// hash into the candidate's SourceHashes (preserves §2.3 chain).
+func TestTCPFingerprintClusteringV1_AttributionFillsEmptyActor_v0168(t *testing.T) {
+	sig := &TCPFingerprintClusteringV1{}
+	p0f := "4:64:0:1460:mss*44,7:mss,sok,ts,nop,ws:df:0"
+
+	observations := []*eventsv1.NetworkObservation{
+		newNetworkObservationWithTCPFingerprint("", p0f),
+		newNetworkObservationWithTCPFingerprint("", p0f),
+		newNetworkObservationWithTCPFingerprint("", p0f),
+	}
+	for i, o := range observations {
+		o.ObservedAt += int64(i)
+	}
+
+	hashes := make([][32]byte, len(observations))
+	for i, o := range observations {
+		_, h, err := canonical.MarshalAndHash(o)
+		if err != nil {
+			t.Fatalf("hash obs %d: %v", i, err)
+		}
+		hashes[i] = h
+	}
+
+	entries := map[[32]byte]stubAttributionEntry{
+		hashes[0]: {derivedActorRef: "actor-derived-1", attributionHash: [32]byte{0xa1}},
+		hashes[1]: {derivedActorRef: "actor-derived-2", attributionHash: [32]byte{0xa2}},
+		hashes[2]: {derivedActorRef: "actor-derived-3", attributionHash: [32]byte{0xa3}},
+	}
+	lookup := &stubAttributionLookup{entries: entries}
+
+	res, err := sig.EvaluateNetwork(context.Background(), observations, lookup)
+	if err != nil {
+		t.Fatalf("EvaluateNetwork: %v", err)
+	}
+	if len(res.Candidates) != 1 {
+		t.Fatalf("Candidates: got %d want 1", len(res.Candidates))
+	}
+	c := res.Candidates[0]
+	expectedActors := []string{"actor-derived-1", "actor-derived-2", "actor-derived-3"}
+	if !equalStringSlices(c.ActorRefs, expectedActors) {
+		t.Errorf("ActorRefs: got %v want %v", c.ActorRefs, expectedActors)
+	}
+
+	if len(c.SourceHashes) != 6 {
+		t.Errorf("SourceHashes count: got %d want 6 (3 Cat I + 3 Cat II per §2.3)", len(c.SourceHashes))
+	}
+
+	if res.Stats.ObservationsSkippedNoActor != 0 {
+		t.Errorf("ObservationsSkippedNoActor: got %d want 0 (attribution filled all)", res.Stats.ObservationsSkippedNoActor)
+	}
+	if res.Stats.ActorsAggregated != 3 {
+		t.Errorf("ActorsAggregated: got %d want 3 (derived attributions)", res.Stats.ActorsAggregated)
+	}
+}
+
+// TestTCPFingerprintClusteringV1_DeclaredActorPrecedesDerived_v0168
+// confirms that when Cat I declared actor_ref is present, Cat II
+// attribution is NOT consulted (declared takes precedence; Cat II
+// only fills the GAP per §0168, does not OVERRIDE).
+func TestTCPFingerprintClusteringV1_DeclaredActorPrecedesDerived_v0168(t *testing.T) {
+	sig := &TCPFingerprintClusteringV1{}
+	p0f := "4:64:0:1460:mss*44,7:mss,sok,ts,nop,ws:df:0"
+
+	obs := newNetworkObservationWithTCPFingerprint("actor-declared", p0f)
+	_, h, err := canonical.MarshalAndHash(obs)
+	if err != nil {
+		t.Fatalf("hash obs: %v", err)
+	}
+
+	// Stub would return a DIFFERENT derived actor — declared takes
+	// precedence so this MUST NOT be consulted.
+	lookup := &stubAttributionLookup{entries: map[[32]byte]stubAttributionEntry{
+		h: {derivedActorRef: "actor-derived-WRONG", attributionHash: [32]byte{0xff}},
+	}}
+
+	res, err := sig.EvaluateNetwork(context.Background(), []*eventsv1.NetworkObservation{obs}, lookup)
+	if err != nil {
+		t.Fatalf("EvaluateNetwork: %v", err)
+	}
+	if res.Stats.ActorsAggregated != 1 {
+		t.Errorf("ActorsAggregated: got %d want 1", res.Stats.ActorsAggregated)
+	}
+	if res.Stats.ObservationsSkippedNoActor != 0 {
+		t.Errorf("ObservationsSkippedNoActor: got %d want 0 (declared present)", res.Stats.ObservationsSkippedNoActor)
+	}
+}
+
+// TestTCPFingerprintClusteringV1_AttributionAbsent_FallbackToSkip_v0168
+// confirms that when attribution is nil OR For returns ok=false, the
+// signature falls back to the pre-§0168 skip-on-empty-actor behavior.
+func TestTCPFingerprintClusteringV1_AttributionAbsent_FallbackToSkip_v0168(t *testing.T) {
+	sig := &TCPFingerprintClusteringV1{}
+	p0f := "4:64:0:1460:mss*44,7:mss,sok,ts,nop,ws:df:0"
+
+	obs := newNetworkObservationWithTCPFingerprint("", p0f)
+
+	res1, err := sig.EvaluateNetwork(context.Background(), []*eventsv1.NetworkObservation{obs}, nil)
+	if err != nil {
+		t.Fatalf("EvaluateNetwork nil attribution: %v", err)
+	}
+	if res1.Stats.ObservationsSkippedNoActor != 1 {
+		t.Errorf("nil attribution: ObservationsSkippedNoActor got %d want 1", res1.Stats.ObservationsSkippedNoActor)
+	}
+
+	emptyLookup := &stubAttributionLookup{entries: map[[32]byte]stubAttributionEntry{}}
+	res2, err := sig.EvaluateNetwork(context.Background(), []*eventsv1.NetworkObservation{obs}, emptyLookup)
+	if err != nil {
+		t.Fatalf("EvaluateNetwork empty lookup: %v", err)
+	}
+	if res2.Stats.ObservationsSkippedNoActor != 1 {
+		t.Errorf("empty lookup: ObservationsSkippedNoActor got %d want 1", res2.Stats.ObservationsSkippedNoActor)
+	}
 }
 
 // equalStringSlices reports whether two string slices contain the

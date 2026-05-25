@@ -87,7 +87,17 @@ func (s *TCPFingerprintClusteringV1) effectiveThreshold() uint32 {
 //     (signature requires the canonical p0f form for clustering;
 //     records lacking it cannot participate in equality-based
 //     clustering).
-func (s *TCPFingerprintClusteringV1) EvaluateNetwork(ctx context.Context, observations []*eventsv1.NetworkObservation) (*EvaluationResult, error) {
+//
+// Per §0168 Decision A.1 (signature-aware Cat II attribution): when
+// obs.ActorRef is empty AND attribution != nil AND attribution.For(
+// obs_hash) returns ok, the signature treats the derived actor_ref
+// as the effective actor for clustering + threads the Cat II
+// derivation hash into the candidate's SourceHashes alongside the
+// Cat I observation hash (preserves §2.3 provenance chain: Cat III
+// hypothesis → Cat II derivation → Cat I observation). When
+// attribution is nil OR For returns ok=false, the empty-actor skip
+// fires (pre-§0168 backward-compat behavior).
+func (s *TCPFingerprintClusteringV1) EvaluateNetwork(ctx context.Context, observations []*eventsv1.NetworkObservation, attribution AttributionLookup) (*EvaluationResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -114,10 +124,32 @@ func (s *TCPFingerprintClusteringV1) EvaluateNetwork(ctx context.Context, observ
 		if obs.CollectorRef != "" {
 			stats.PerCollector[obs.CollectorRef]++
 		}
-		if obs.ActorRef == "" {
+
+		// Compute observation hash once (used both for attribution
+		// lookup AND for source_event_hashes threading).
+		_, obsHash, err := canonical.MarshalAndHash(obs)
+		if err != nil {
+			return nil, fmt.Errorf("tcp_fingerprint_clustering_v1: hash observation: %w", err)
+		}
+
+		// Resolve effective actor: declared (Cat I) OR derived (Cat II
+		// via AttributionLookup). Per §0168: declared takes precedence
+		// when present; derived fills only when declared is empty.
+		effectiveActor := obs.ActorRef
+		var attributionHash [32]byte
+		var attributionPresent bool
+		if effectiveActor == "" && attribution != nil {
+			if derived, attHash, ok := attribution.For(obsHash); ok {
+				effectiveActor = derived
+				attributionHash = attHash
+				attributionPresent = true
+			}
+		}
+		if effectiveActor == "" {
 			stats.ObservationsSkippedNoActor++
 			continue
 		}
+
 		tcpVariant := obs.GetTcpFingerprint()
 		if tcpVariant == nil {
 			stats.ObservationsSkippedWrongModality++
@@ -127,22 +159,29 @@ func (s *TCPFingerprintClusteringV1) EvaluateNetwork(ctx context.Context, observ
 			stats.ObservationsSkippedWrongModality++
 			continue
 		}
-		distinctActors[obs.ActorRef] = struct{}{}
+		distinctActors[effectiveActor] = struct{}{}
 
 		c, ok := perSignature[tcpVariant.P0FSignature]
 		if !ok {
 			c = &cluster{actors: make(map[string]struct{})}
 			perSignature[tcpVariant.P0FSignature] = c
 		}
-		c.actors[obs.ActorRef] = struct{}{}
+		c.actors[effectiveActor] = struct{}{}
 
-		_, h, err := canonical.MarshalAndHash(obs)
-		if err != nil {
-			return nil, fmt.Errorf("tcp_fingerprint_clustering_v1: hash observation: %w", err)
+		// Thread Cat I source hash into candidate SourceHashes.
+		obsHashCopy := make([]byte, 32)
+		copy(obsHashCopy, obsHash[:])
+		c.sourceHashes = append(c.sourceHashes, obsHashCopy)
+
+		// Per §2.3 + §0168: when attribution was consumed, ALSO thread
+		// the Cat II derivation hash so the resulting hypothesis's
+		// source_event_hashes carries the full provenance chain
+		// (Cat III → Cat II → Cat I).
+		if attributionPresent {
+			attHashCopy := make([]byte, 32)
+			copy(attHashCopy, attributionHash[:])
+			c.sourceHashes = append(c.sourceHashes, attHashCopy)
 		}
-		hashCopy := make([]byte, len(h))
-		copy(hashCopy, h[:])
-		c.sourceHashes = append(c.sourceHashes, hashCopy)
 	}
 	stats.ActorsAggregated = uint32(len(distinctActors))
 

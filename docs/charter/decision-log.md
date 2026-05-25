@@ -7021,6 +7021,105 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0168` — First identity-synthesizing Cat II construct: DerivedActorAttribution + network_5tuple_actor_v1 closes §0162 gap (1); Decision A.1 (signature-aware) cravada
+
+- **Status:** accepted.
+- **Date:** 2026-05-24.
+- **Context:** [`§0162`](#0162--tcp_fingerprint_clustering_v1-integration-test-surfaces-two-0144e-phenomenon-vs-record-gaps-for-cic-ids-path-0161-reachability-claim-corrected) recorded TWO §0144(e) phenomenon-vs-record gaps preventing CIC-IDS adversarial path from reaching the F3 layer for `tcp_fingerprint_clustering_v1`: gap (1) — no `actor_ref` on CIC-IDS NetworkObservation records (dataset is flow-level, not actor-attributed); gap (2) — no `p0f_signature` (CICFlowMeter does not preserve TCP options). This entry closes gap (1) by introducing the first identity-synthesizing Category II operational construct.
+
+  This is the FIRST advance under the strategic recommendation pivot: prioritize work enabling first non-trivial demotion within the Domain Pack v0.1 6-month window per §0143. Gap (1) closure unblocks per-actor F3 reasoning over previously-unattributed Cat I sources; gap (2) remains open and requires separate advance.
+
+  Pre-condition verified: §0167 was merged into main (HEAD prior to this entry's branch). Per CLAUDE.md §6.4 implementation gate (cleared at §0022): work proceeds under ordinary RFC discipline; no constitutional gate to re-clear.
+
+  This is also the FIRST Cat II construct beyond OperationalSession (§0015 Q1 canonical Cat II). Where OperationalSession **groups events** into operational session boundaries, DerivedActorAttribution **synthesizes identity** for events that lack declared attribution. Both share the §2.2 Cat II determinism + identity-composition discipline; their structural shapes differ (session groups N Cat I → 1 Cat II; attribution maps 1 Cat I → 1 Cat II).
+
+- **Decision — Constitutional framing cravado (per human directive in this session):**
+
+  Cat II actor-attribution is an operational definition that produces `actor_ref` deterministically from observations lacking declared identity. Per §2.2 Category II + entity-model.md §Category II:
+
+  1. **§2.2 Forbidden Anti-Pattern 4 (Reclassification) honored**: the construct does NOT mutate existing NetworkObservation records. A new Cat II record points to the Cat I source via `source_event_hash`. CIC-IDS adapter remains untouched (Cat I records continue to carry empty `actor_ref`; the observational truth that no attribution was declared at observation time is preserved).
+  2. **Determinism per Cat II Q1 (§0015)**: identity composes `(definition_version, definition_parameters, source_event_hash)`. Re-derivation over identical tuples is a no-op (substrate INSERT OR IGNORE rejects by content-hash collision per §0015).
+  3. **Versioned per OperationalDefinition pattern**: first draft uses convention `network-5tuple-actor-v1`. Future definitions follow standard versioning discipline.
+  4. **Identity-tier consistency per §0023**: single-tier `actor_ref` adopted; the derived reference is a string (`"host:port/protocol"` canonical form). Multi-tier formalization deferred to ordinary Ontology RFC discipline.
+
+- **Decision — A vs B (interpretation of `actor_ref` field post-Cat II):** **A.1 (signature-aware consumption) cravada.**
+
+  The user's framing surfaced TWO interpretations:
+  - **Interpretation A** (signature-aware): Cat I records WITHOUT declared identity have `actor_ref` empty permanently; F3 signatures must consult Cat II derivations explicitly via the source observation hash to obtain derived attribution. Refactor required at signature interface + per-signature implementations.
+  - **Interpretation B** (back-fill at projection): Cat II construct optionally "back-fills" the `actor_ref` slot via projection layer. F3 signatures consume the same field unchanged.
+
+  Pre-implementation analysis discharged the choice:
+
+  - §2.2 Forbidden Anti-Pattern 4 prohibits CIC-IDS adapter from populating `actor_ref` from `endpoint_ref` (would register derived attribution as if observed). CIC-IDS records MUST leave `actor_ref` empty (current state).
+  - §1 thesis requires "continued capacity to distinguish what was observed from what was inferred". Interpretation B (back-fill at consumption) collapses this distinction in the F3 layer even if substrate-wise the records are distinct.
+  - §2.2 BC1 (type-not-discriminator-field discipline) forbids two semantically distinct attributions (Cat I declared, Cat II derived) sharing the same field at the same read point.
+  - §2.3 Provenance Integrity requires chains via Cat II to be structurally reconstructible — the hypothesis emitted by an F3 signature consuming Cat II derived attribution must include the Cat II derivation hash in its `source_event_hashes` so the chain (Cat III hypothesis → Cat II derivation → Cat I observation) is structurally walkable.
+
+  **Verdict: A.1.** The interpretation preserves §2.2 epistemic separation at the consumption point + §2.3 provenance-chain reconstructibility + §1 thesis. Refactor cost is bounded (one signature, ~15 lines + tests).
+
+  Sub-decisions cravadas alongside A.1:
+
+  - **Declared-takes-precedence**: when Cat I `actor_ref` is non-empty AND Cat II derivation exists for the same source, the DECLARED actor wins. Cat II only fills the GAP; does NOT override. Override-semantics would be a separate constitutional move; deferred to future RFC if empirical pressure surfaces.
+  - **Scope of `AttributionLookup` parameter**: NetworkSignature only at inception. BrowserSignature is unaffected (Browser obs carry actor_ref from client SDK; no equivalent CIC-IDS-shaped gap on the browser modality). Future RFC may extend to cross-modality if a behavioral or attestation derivation case emerges.
+  - **Per-record derivation (vs flow-keyed)**: one DerivedActorAttribution record per Cat I source observation. Multiple sources sharing the same 5-tuple (e.g., src + dst ip_asn obs from the same CIC-IDS row) produce DISTINCT Cat II records pointing to distinct Cat I sources (same `derived_actor_ref` value; distinct `source_event_hash` field → distinct content hashes). Per-record provenance preserved; modest substrate cost.
+  - **Plain-string `derived_actor_ref`**: format `"host:port/protocol"` (operator-inspectable canonical string). NOT hashed. Short enough to display directly in operator output without lookup. v1 derives 3-tuple `(host, port, protocol)`; full 5-tuple requires cross-observation flow join (deferred per v1 docstring; future revision).
+
+- **Decision — Surface-pressure §0022 recorded (per human directive):**
+
+  Pre-§0168, F3 signatures consumed `actor_ref` directly from Cat I records. Post-§0168, there are two possible readings of the `actor_ref` field on Cat I records (Interpretations A and B). The choice between them was NOT to be taken by inadvertent implementation drift — it required explicit constitutional decision. **Resolution: A.1 cravada via §0168.** Future Cat II constructs on other Cat I sources (e.g., a hypothetical BehavioralObservation actor-attribution) inherit this discipline: signature-aware consumption via an explicit lookup parameter; declared-precedes-derived; per-record derivation; substrate-anchored Cat II records (not projection back-fill).
+
+- **Decision — PR scope:**
+
+  1. `schemas/events/v1/derived_actor_attribution.proto` — new Cat II construct proto with §2.6 paired-dimension fields (`confidence` + `evidential_independence` required at marshalling per §0140; §0134 Cat II structural-transmission `direct_influenced_by` + `closure_hashes` included).
+  2. `services/ingestion/internal/canonical/coverage_test.go` — `pairedDimensionSubjectSet` extended with `derived-actor-attribution`; `corpus_test.go` `messageFactory` extended; new corpus entry + regenerated goldens.
+  3. `services/ingestion/internal/attribution/` new package paralleling `derivation/`:
+     - `attribution.go` — `AttributionDefinition` interface + `DeriveAll` walker + `AttributionView` interface + `CollectAttributionView` substrate-walker + `EmptyAttributionView` no-op.
+     - `network_5tuple_actor_v1.go` — concrete definition.
+     - Tests: contract fields, derive shape for tcp_fingerprint + ip_asn modalities, skip cases (empty endpoint, unparseable, empty host), determinism, DeriveAll end-to-end + idempotency, CollectAttributionView lookup, EmptyAttributionView no-op.
+  4. `services/ingestion/internal/signatures/signatures.go` — new `AttributionLookup` interface (read-only); `NetworkSignature.EvaluateNetwork` gains `attribution AttributionLookup` parameter (nullable for backward-compat).
+  5. `services/ingestion/internal/signatures/tcp_fingerprint_clustering.go` — refactored to consult `AttributionLookup` when `obs.ActorRef == ""`; threads BOTH Cat I source hash AND Cat II derivation hash into candidate `SourceHashes` (preserves §2.3 chain).
+  6. Existing callers of `EvaluateNetwork` migrated to pass `nil` (no behavior change for non-attribution callers); 3 new tests for §0168 paths (attribution fills gap; declared precedes derived; nil/empty lookup falls back to skip).
+  7. `docs/ontology/entity-model.md` editorial amendment — DerivedActorAttribution added to Cat II examples with §0168 framing.
+  8. CIC-IDS adapter UNTOUCHED (per Anti-Pattern 4); §0162 integration tests stand as historical record per §0007.
+
+  Constitutional discipline:
+
+  - §2.2 Cat II determinism — `network_5tuple_actor_v1.Derive(source)` returns identical output for identical input; test `TestNetwork5TupleActorV1_Derive_Determinism` is the structural witness.
+  - §2.2 Forbidden Anti-Pattern 4 — adapter untouched; Cat I records unchanged.
+  - §0023 single-tier `actor_ref` — output is plain string per inception phase.
+  - §0136 + §0140 canonical-serialization-contract paired-dimension — DerivedActorAttribution carries both `confidence` + `evidential_independence`; `pairedDimensionSubjectSet` updated; structural-detection test would have failed if either field were absent.
+  - §0015 Q1 identity composition — `(definition_version, definition_parameters, source_event_hash)` are the content-hash inputs; re-derivation is no-op per substrate INSERT OR IGNORE.
+  - §0139 hash-list element-shape — `direct_influenced_by` + `closure_hashes` sorted ascending (typically empty for inception-phase deterministic definition).
+  - §2.3 provenance-chain reconstructibility — candidate `SourceHashes` includes Cat II derivation hash alongside Cat I observation hash (verified at `TestTCPFingerprintClusteringV1_AttributionFillsEmptyActor_v0168` via the `len(c.SourceHashes) == 6` assertion for 3 obs + 3 attribution hashes).
+
+  Scope discipline per §0168: **closes gap (1) only.** Gap (2) (no `p0f_signature` from CICFlowMeter) remains. Post-§0168, CIC-IDS-derived NetworkObservation records that flow through `tcp_fingerprint_clustering_v1` with an active AttributionView still produce 0 candidates — but the skip reason now shifts from `ObservationsSkippedNoActor` to `ObservationsSkippedWrongModality`. Closing gap (2) requires either (a) cic_ids adapter extension synthesizing partial p0f from `(window_size, flags_sequence, header_length)` with explicit `synth:` provenance marker per §3 N1, or (b) an alternative NetworkSignature that clusters by available fields directly. Either is a separate future advance.
+
+- **Constitutional review:** No Charter prose modified. No Charter invariant amended. No new Charter invariant. New non-Charter capability (Cat II construct + operational definition + signature consumption surface).
+
+  Entity-model amendment: editorial — adds DerivedActorAttribution to Cat II §Examples (illustrative) section, parallel to OperationalSession + rate-limit-bucket + daily-actor-projection. Does not modify §Category II Structural properties (those bind to all Cat II constructs; DerivedActorAttribution conforms by construction).
+
+  Falsifiability discipline: derivation deterministic (verified via repeat-test); idempotency under content-hash collision (verified via DeriveAll second-run AlreadyDerived count); signature-aware consumption (verified via stub AttributionLookup tests); declared-precedes-derived (verified via stub returning wrong actor → declared still wins); fallback-to-skip on nil/empty (verified via both code paths).
+
+- **Consequences:**
+  - New proto `schemas/events/v1/derived_actor_attribution.proto` (Cat II construct).
+  - New corpus entry `derived-actor-attribution-network-5tuple-v1.json` + regenerated goldens.
+  - New package `services/ingestion/internal/attribution/` (interface + walker + view + first definition + tests).
+  - Signature interface extension: `NetworkSignature.EvaluateNetwork` gains `AttributionLookup` parameter (backward-compat nil).
+  - `tcp_fingerprint_clustering_v1` refactored to consume `AttributionLookup`; threads Cat II hashes into candidate `SourceHashes`.
+  - 9 existing call sites of `EvaluateNetwork` migrated to pass `nil`; 3 new tests for §0168 paths.
+  - `docs/ontology/entity-model.md` editorial amendment.
+  - `pairedDimensionSubjectSet` in `coverage_test.go` extended; `messageFactory` in `corpus_test.go` extended.
+  - **First identity-synthesizing Cat II construct lands.** OperationalSession (§0015) is event-grouping; DerivedActorAttribution is identity-synthesizing. Structurally distinct Cat II shapes now have empirical precedent.
+  - **§0162 gap (1) structurally closed.** Future integration test (separate PR) would demonstrate `tcp_fingerprint_clustering_v1` reaching CIC-IDS observations via populated AttributionView from CIC-IDS-derived attributions. §0162 stands as historical pre-Cat-II witness per §0007.
+  - **§0162 gap (2) remains.** Estimated work post-§0168: CIC-IDS path through `tcp_fingerprint_clustering_v1` still produces 0 candidates due to empty `p0f_signature`. Closing gap (2) is the next bounded advance under this strategic frontier; preserves §0167 lifecycle-axis coverage as separate downstream.
+  - **Methodological observation 1 — Identity-synthesizing Cat II constructs need a separate package (parallel to `derivation/`), not generalization of the existing OperationalDefinition interface.** The existing `derivation.OperationalDefinition` is hardcoded to return `*OperationalSession`. Generalizing to produce arbitrary Cat II output types would require parametrized interfaces or untyped returns — premature complexity. **Pattern: each new Cat II construct shape (session-grouping, identity-synthesizing, future shapes) should land as a parallel package with its own typed interface. Cross-cutting infrastructure (writeMu serialization, content-hash idempotency) is shared via the substrate package; per-shape logic stays separated.**
+  - **Methodological observation 2 — Signature interface extensions for new constitutional layers should be additive + nullable for backward-compat.** §0168 extended `NetworkSignature.EvaluateNetwork` with a new `AttributionLookup` parameter rather than introducing a new interface variant. Backward-compat preserved by accepting `nil` (treated as "no Cat II layer"; pre-§0168 behavior). Migration cost was uniform across 9 call sites (mechanical `, nil` insertion). **Pattern: signature interface extensions for new constitutional layers should be additive parameters + nullable defaults; introducing a new interface variant per layer would fragment the F3 corpus along orthogonal axes. The §0161 multi-modality split (BrowserSignature vs NetworkSignature) was the right shape for the modality axis; the §0168 Cat II extension was the right shape for the cross-cutting attribution axis.**
+  - **Methodological observation 3 — Pre-implementation tier-3 deliberation (A vs B framing) prevented design-by-inadvertence.** The user's directive explicitly flagged that A vs B is direction-bearing and required explicit decision in §0168 rather than implementation-time discovery. The pre-implementation analysis surfaced sub-decisions (declared-precedes-derived; scope-to-NetworkSignature; per-record vs flow-keyed; plain-string vs hashed `derived_actor_ref`) that would have been silently committed by an implementation-first approach. **Pattern: when a structural decision admits multiple constitutionally-permissible interpretations, surface the interpretations + their pressure analysis BEFORE coding. The §0168 framing required ~30 minutes of analysis prior to implementation; the resulting design has explicit constitutional justification + future readers can trace why each sub-decision went the way it did. Premature implementation would have generated CODE without DOCUMENTED REASONS, requiring §0007 append-only correction entries later.**
+
+- **Supersession:** No prior decision-log entry superseded. §0162 stands as historical empirical witness pre-Cat-II; §0168 records the structural close of gap (1). Future entries documenting CIC-IDS path becoming F3-reachable for `tcp_fingerprint_clustering_v1` would require ALSO closing gap (2) — pending a separate advance.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

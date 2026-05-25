@@ -121,6 +121,9 @@ func TestHashListFieldNamesRegistry_NoSpuriousEntries(t *testing.T) {
 //     subtypes per §0010 Q2-A.2 × the formation lifecycle event).
 //   - Category II OperationalSession (per §0134 Cat II structural
 //     transmission + paired-dimension commitment).
+//   - Category II DerivedActorAttribution (per §0168 — first identity-
+//     synthesizing Cat II construct; per-observation actor_ref
+//     derivation for unattributed Cat I sources).
 //
 // This is the contract's enumeration. The structural detection
 // (validatePairedDimensionCommitment uses "declares both confidence
@@ -133,6 +136,7 @@ var pairedDimensionSubjectSet = map[string]struct{}{
 	"campaign-hypothesis-formation": {},
 	"coordination-ring-formation":   {},
 	"operational-session":           {},
+	"derived-actor-attribution":     {},
 }
 
 // TestPairedDimensionSubjectSet_StructuralDetection asserts that the

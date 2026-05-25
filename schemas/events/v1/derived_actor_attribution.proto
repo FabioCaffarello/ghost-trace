@@ -1,0 +1,111 @@
+// Category II operational construct per Charter §2.2 + entity-model.md
+// §Category II + decision-log §0168. DerivedActorAttribution synthesizes
+// an actor_ref deterministically from a Cat I observation that lacks
+// declared identity attribution (e.g., flow-level NetworkObservation
+// records from CIC-IDS adapter; gap (1) per decision-log §0162). The
+// derivation is per-observation: one Cat II record per Cat I source.
+//
+// Per §2.2 Forbidden Anti-Pattern 4 (Reclassification): the Cat I
+// source record is NOT mutated. The Cat I record's actor_ref field
+// remains empty (its observational truth); the Cat II construct
+// records the derived attribution as a separate record pointing to
+// the Cat I source via source_event_hash.
+//
+// Per §2.2 Cat II determinism: re-derivation under (definition_version,
+// definition_parameters, source_event_hash) IDENTICAL inputs produces
+// content-hash-identical output (substrate INSERT OR IGNORE per
+// §0015 makes repeated derivation a no-op).
+//
+// Per §0023 Q2 (Identity tiers): inception-phase single-tier
+// actor_ref is a string; multi-tier formalization deferred to
+// ordinary Ontology RFC discipline. The derived_actor_ref produced
+// here is the same single-tier string.
+//
+// Per §2.2 + §0168 Decision A.1 (signature-aware consumption):
+// F3 signatures consume Cat II derived attribution via an explicit
+// AttributionView parameter, NOT via silent back-fill of Cat I
+// records' actor_ref field. The epistemic separation between observed
+// and derived attribution is preserved at the consumption point.
+//
+// Encoded under the canonical-serialization-contract at
+// docs/architecture/canonical-serialization-contract.md.
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+import "common/v1/evidential_independence.proto";
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// DerivedActorAttribution is a Cat II operational construct that
+// derives an actor_ref for a Cat I observation that lacks declared
+// attribution. Mirrors OperationalSession (the canonical Cat II
+// construct per §0015) on the per-observation-attribution axis.
+message DerivedActorAttribution {
+  // definition_version is the stable identifier of the operational
+  // definition that produced this construct (e.g., "network-5tuple-
+  // actor-v1"). Versioning is explicit per entity-model.md line 46.
+  string definition_version = 1;
+
+  // definition_parameters is the canonical-form string representation
+  // of the parameters the operational definition was invoked under.
+  // Part of identity per entity-model.md line 44. Encoding contract:
+  // lowercase key=value pairs separated by semicolons, sorted by key.
+  // Empty when the definition has no operator-supplied parameters
+  // (e.g., network_5tuple_actor_v1 v1 takes inputs from the source
+  // observation only).
+  string definition_parameters = 2;
+
+  // source_event_hash is the BLAKE3-256 content hash of the source
+  // Cat I observation (typically a NetworkObservation; future
+  // definitions may target other Cat I types). Provenance reference
+  // per Charter §2.3. The reverse direction (Cat I → derivations
+  // FROM it) is recovered by index lookup at read time.
+  bytes source_event_hash = 3;
+
+  // derived_actor_ref is the single-tier actor identity reference
+  // produced by the operational definition per §0023. Form is
+  // operational-definition-specific. For network_5tuple_actor_v1:
+  // "src_ip:src_port->dst_ip:dst_port/proto" canonical string form
+  // (operator-inspectable; no hashing — short enough to display
+  // directly).
+  string derived_actor_ref = 4;
+
+  // confidence is the paired-dimension magnitude per Charter §2.6 +
+  // §0136. Scalar in [0.0, 1.0]. For inception-phase deterministic
+  // network_5tuple_actor_v1, confidence defaults to 1.0 (derivation
+  // is mechanically reproducible from inputs; no intrinsic
+  // uncertainty). Future operational definitions with intrinsic
+  // uncertainty may carry values below 1.0. The substrate enforces
+  // presence at canonical-marshalling per §0140.
+  float confidence = 5;
+
+  // evidential_independence is the paired dimension to confidence per
+  // Charter §2.6 + §0136. Computed per Q3-α (§0133). For inception-
+  // phase DerivedActorAttribution with no promoted-hypothesis
+  // influence in the source observation's chain, α = 1/1 (full
+  // evidential independence). Future definitions may compute lower
+  // values when the derivation depends on Cat III hypothesis context.
+  // Rational-pair encoding required per §0136 Anti-Patterns.
+  ghosttrace.common.v1.EvidentialIndependence evidential_independence = 6;
+
+  // direct_influenced_by is the list of Cat III hypothesis content-
+  // hashes the operational definition directly declares as
+  // influencing this Cat II derivation per Charter §2.4. Typically
+  // empty for inception-phase deterministic definitions like
+  // network_5tuple_actor_v1 that do not reference any promoted
+  // hypothesis. Sorted ASCENDING lexicographic order per §0139;
+  // elements are 32-byte BLAKE3 content-hashes.
+  repeated bytes direct_influenced_by = 7;
+
+  // closure_hashes is the transitive closure per Q5-τ (§0134) + §0136
+  // Influence Storage. Per the Cat II structural-transmission
+  // commitment, this field MUST equal the UNION of the source Cat I
+  // observation's closure_hashes (typically empty for Cat I) and any
+  // other input records' closure_hashes, merged with this record's
+  // own direct_influenced_by. Sorted ASCENDING per §0139. Empty when
+  // the input chain has no transitive promoted-hypothesis influences
+  // (the typical case at inception phase — Cat I source has no
+  // closure_hashes field).
+  repeated bytes closure_hashes = 8;
+}

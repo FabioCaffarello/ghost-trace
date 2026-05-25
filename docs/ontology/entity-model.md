@@ -39,6 +39,7 @@ Examples (illustrative):
 - **`OperationalSession`**: per the canonical definition above (e.g., operational definition "events from one actor within a 30-minute inactivity window").
 - A rate-limit bucket defined over a window and a key.
 - A daily-actor projection defined over a time slice and an identity reference.
+- **`DerivedActorAttribution`** (first identity-synthesizing Cat II construct per [`decision-log.md` §0168](../charter/decision-log.md)): per-observation derived `actor_ref` for Category I records that lack declared identity attribution (e.g., flow-level network records). The operational definition (e.g., `network-5tuple-actor-v1`) extracts identifying features from the source observation and emits a deterministic derived reference. Per §2.2 Forbidden Anti-Pattern 4 the Cat I source is NOT mutated; the Cat II construct points to the Cat I source via `source_event_hash` and carries the derived attribution separately. Per §0168 Decision A.1 (signature-aware consumption), F3 signatures consume derived attribution via an explicit lookup parameter — Cat I `actor_ref` semantics (observed attribution) remain distinct from Cat II `derived_actor_ref` semantics (derived attribution) at the consumption point per the §2.2 BC1 type-not-tag discipline.
 
 Structural properties (to be formalized):
 - Identity composes the definition reference, its parameters, and its time scope.
