@@ -8664,6 +8664,54 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0199` — httpapi Prometheus-style metrics + /metrics scrape endpoint; third observability advance; stdlib-only counter registry per-(path, status)
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0197 + §0198 landed structured request entries + request-id correlation. §0199 adds the third instrumentation piece: a Prometheus-style counter registry tracking per-(path, status) request counts + a `/metrics` scrape endpoint emitting the registry in Prometheus text exposition format.
+
+  Pre-§0199 httpapi state: operators have request-stream visibility (per §0197 structured entries) + cross-service correlation (per §0198 request-id) but no aggregate counter surface for dashboarding (Grafana, etc.). The standard `prometheus/client_golang` package would add a substantial transitive-dependency surface for what amounts to one counter + a text-format encoder.
+
+  §0199 deliberately implements a stdlib-only narrow surface: one counter (`ghosttrace_httpapi_requests_total`) with two labels (`path`, `status`); no histograms, no gauges, no per-tier label expansion. The format-output discipline (HELP + TYPE preamble, escaped label values, deterministic ordering) matches the `prometheus/client_golang` text encoder so standard scrapers consume the endpoint without distinguishing the source library.
+
+- **Decision:** Add Prometheus-style counter registry + `/metrics` endpoint to the httpapi Handler. Three changes:
+
+  1. **`services/ingestion/internal/httpapi/metrics.go`** (~150 lines) — `Metrics` struct (concurrent-safe sync.Mutex + map[counterKey]uint64) + `NewMetrics()` + `Inc(path, status)` + `Encode(io.Writer)` (deterministic Prometheus text-format output: HELP preamble, TYPE preamble, sorted samples, escaped label values per the exposition spec) + `escapeLabelValue` helper (backslash + double-quote + newline). `handleMetrics` Handler method serves GET /metrics; non-GET → 405; metrics-not-configured → 503.
+
+  2. **`services/ingestion/internal/httpapi/handler.go`** — `metrics *Metrics` field + `WithMetrics(*Metrics) Option` (nil-preserving ergonomic per §0197 + §0198 precedent) + ServeHTTP deferred Inc (nil-check skip when metrics not configured) + `/metrics` route.
+
+  3. **`services/ingestion/internal/httpapi/metrics_test.go`** (~225 lines, 11 tests) — `TestMetrics_IncAggregatesPerPathAndStatus` (per-tuple aggregation) + `TestMetrics_EncodeIncludesHelpAndType` (preamble compliance) + `TestMetrics_EncodeDeterministicOrdering` (sort discipline) + `TestMetrics_EncodeEmptyRegistry` (empty-registry preamble-only output) + `TestMetrics_EncodeEscapesLabelValues` (3 sub-cases: quote, backslash, newline) + `TestMetrics_ConcurrentIncIsSafe` (1000-increment-across-10-goroutines stress) + `TestMetricsHTTP_ServesPrometheusFormat` (end-to-end /healthz + scrape) + `TestMetricsHTTP_NotConfiguredSurfaces503` + `TestMetricsHTTP_MethodNotAllowed` + `TestMetricsHTTP_NilMetricsOptionPreservesDefault` + `TestMetricsHTTP_NoIncWhenMetricsNotConfigured` (nil-pointer-deref regression guard).
+
+- **Constitutional review:**
+
+  Subordinate to §0197 + §0198 (extends observability advance series). Subordinate to §0164 MO1 verification discipline. Stdlib-only — no new external dependencies (specifically no `github.com/prometheus/client_golang` which would pull ~20 transitive packages).
+
+  Per §0197 MO1 no-op-default discipline: WithMetrics-unset handlers do NOT increment a counter (nil-check skip in deferred Inc); /metrics returns 503 rather than serving an empty registry. Per §0198 MO1 pre-auth-echo discipline: counter Inc fires AFTER auth gate (auth-rejection 401 counted as path="/X", status="401" — operators dashboarding auth-failure spikes see them per-path).
+
+  Falsifiability: 11 unit tests cover the contract. The concurrent-Inc test (1000 increments across 10 goroutines, final count must equal 1000) mechanically witnesses sync.Mutex correctness; the deterministic-ordering test ensures successive scrapes against an unchanged registry produce byte-identical output (downstream diff-aware tooling depends on this); the label-escaping tests verify Prometheus-exposition-spec compliance per the de-facto wire contract.
+
+- **Consequences:**
+  - 1 new file (metrics.go ~150 lines) + 1 new test file (metrics_test.go ~225 lines).
+  - 1 modified file (handler.go: ~35 lines added — field + option + deferred Inc + /metrics route).
+  - 11 new unit tests.
+  - **Third observability advance lands.** Aggregate counter surface established; operators can dashboard request counts per-(path, status) without depending on the `client_golang` package. The narrow surface (one counter, two labels) covers the §0199 scope; future advances may extend with histograms (request duration buckets) or additional labels (tier) without requiring `client_golang`.
+  - **No new external dependencies.** Stdlib-only (sync + io + sort + strconv + strings + http). The text-encoder matches `client_golang`'s output format so Prometheus scrapers consume the endpoint transparently.
+  - **Counter Inc fires AFTER auth gate.** Auth-rejection 401s are counted; operators tracking auth-failure spikes see per-path 401 counts in addition to the §0197 structured entries + §0198 X-Request-Id correlation.
+
+  Per §0164 MO1: 11 tests pass; full `go test ./...` from `services/ingestion/` reports 0 failures.
+
+  Scope discipline per §0199: **single counter, two labels, /metrics endpoint** — no histograms (deferred; request duration is in the §0197 structured entry's duration_ms field — operators preferring p99 latencies via Grafana can extract from logs until histograms land), no gauges (no operator pressure today), no per-tier label expansion (deferred; tier is in the §0197 structured entry). Does NOT introduce:
+  - `prometheus/client_golang` dependency.
+  - Histogram or summary metric types.
+  - Per-tier label on the counter (tier present in structured entry; adding to counter labels would 4x the cardinality).
+  - Metric persistence across process restarts (counter resets to 0 on restart — operators consuming the scrape stream should treat as monotonically-increasing-since-process-start).
+
+  - **Methodological observation 1 — Stdlib-only narrow Prometheus-style instrumentation is acceptable when the per-instance surface is bounded (one counter, two labels). The `prometheus/client_golang` dependency pull is only justified when the surface expands beyond what an ad-hoc encoder can handle (histograms, summaries, exemplars, push gateway integration).** §0199's text-format encoder is ~30 lines + escapes 3 characters + sorts deterministically; the equivalent `client_golang` registration boilerplate is comparable in line count but pulls ~20 transitive packages. **Pattern: when adding instrumentation, prefer stdlib-only narrow implementations until the metric surface expands beyond bounded ad-hoc encoding; the rule-of-thumb threshold is: ≤2 distinct metric types AND ≤3 labels per metric AND no exemplar/exposition-format extension needs. Above the threshold, `client_golang` becomes the simpler choice; below it, the dependency-pull is unjustified. Future histogram advance (request-duration buckets) WILL likely cross this threshold + justify `client_golang` adoption.**
+
+- **Supersession:** No prior decision-log entry superseded. Completes the third observability advance after §0197 + §0198. Subsequent advances (request-duration histograms — likely `client_golang` adoption per MO1; OpenTelemetry trace-id propagation; `context.Value` propagation of request-id) can land as separate downstream advances.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
