@@ -8042,6 +8042,61 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0185` — endpoint_co_visit_v1 lands first interaction-centric F3 signature; closes F3 corpus to all 4 Cat III subtypes; CoordinationRing F3-emission gate discharged
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** F3 corpus through §0184 spanned 3 of 4 Cat III subtypes at the emission layer: AutomationGroup (3 signatures: §0152, §0161, §0169) + BehavioralCluster (1 signature: §0174) + CampaignHypothesis (1 signature: §0182). CoordinationRing remained F3-emission-blocked per §0184 closing-note: "a future F3 signature emitting CoordinationRing candidates would re-open a parallel arc (per §0184 MO2: SHOULD adopt the 2-PR bundling shape)."
+
+  Per `CoordinationRingFormation` proto's §0070 modeling choice + entity-model.md §Category III: CoordinationRing is the structurally distinct INTERACTION-CENTRIC subtype — the inference is over UNDIRECTED edges between actors, not over a flat actor set (AutomationGroup + BehavioralCluster) and not over an event set (CampaignHypothesis). Per the proto: "Where BehavioralCluster (§0045) and AutomationGroup (§0056) carry `actor_refs` as a set, and CampaignHypothesis (§0063) carries `source_event_hashes` as the event-centric membership shape, CoordinationRing carries `interactions` as an explicit edge list. The relational structure is what distinguishes a coordination ring from the three other subtypes — flattening edges into a vertex set would lose the property the subtype was carved out to preserve."
+
+  §0185 lands the first interaction-centric F3 signature emitting CoordinationRing candidates + closes the F3 corpus to 4-of-4 Cat III subtype coverage at the emission layer.
+
+- **Decision:** Land `endpoint_co_visit_v1` as a NetworkSignature emitting CoordinationRing FormationCandidates. Bundled with a minimal structural extension to `FormationCandidate`:
+
+  1. **`services/ingestion/internal/signatures/signatures.go`** — `FormationCandidate` extended with `Interactions [][2]string` field. Populated ONLY by CoordinationRing-emitting signatures; empty for all other subtypes per the interaction-centric ontology distinction. Per-§0070 canonicalization rules documented in struct comment: within-edge lex order (edge[0] < edge[1]); ascending sort across edges by (edge[0], edge[1]); no edge appears twice. Orchestrators committing CoordinationRingFormation convert each [2]string into a CoordinationRingInteraction proto with actor_a=edge[0] + actor_b=edge[1]. Subtype enum comment updated to reflect §0185 completion ("F3 corpus through §0185 spans all four subtypes").
+
+  2. **`services/ingestion/internal/signatures/endpoint_co_visit.go`** (~265 lines) — `EndpointCoVisitV1` NetworkSignature. Detection axis: per-(endpoint_ref, time_bucket) actor cohorts ≥ threshold emit one CoordinationRing candidate whose interactions field is the complete pairwise edge set (lex-canonical per §0070). MVP per-bucket simplification: cross-bucket connected-component aggregation deferred. Threshold default 3 distinct actors (mirrors §0182 conservative-default). Empty actor_ref IS a skip reason (interaction-centric: edges require named actors — structurally distinct from §0182 event-centric ontology).
+
+  3. **`services/ingestion/internal/signatures/endpoint_co_visit_test.go`** (~360 lines, 16 tests) — covers contract (Name + Subtype + interface satisfaction), threshold semantics (below/at), edge canonicalization (lex-within-pair, ascending-across, no-duplicates), cluster discrimination (different endpoints + different buckets do NOT cluster), skip semantics (empty endpoint, zero observed_at, empty actor_ref — interaction-centric witness), empty input, §0168 AttributionLookup enrichment (Cat II fills actor gap), deterministic order, custom bucket override.
+
+- **Constitutional review:**
+
+  Subordinate to entity-model.md §Category III + `CoordinationRingFormation` proto §0070 (interaction-centric modeling choice — edge list shape). Subordinate to §0143 instrumentation discipline (EvaluationStats populated; PerCollector breakdown). Subordinate to §0144 discriminated-union framing (NetworkSignature consumes typed NetworkObservation envelope). Subordinate to §0168 Decision A.1 (AttributionLookup consumption). Subordinate to §0182 + §0063 ontology disambiguation pattern (each new F3 signature for an ontologically distinct subtype clarifies its skip semantics + commit semantics).
+
+  Per §0070 canonicalization preservation: candidate.Interactions emitted with within-edge lex order (edge[0] < edge[1]) + ascending-sort across edges + no duplicates. The structural witness is that observation order (reverse-lex, interleaved, repeated) produces byte-identical Interactions slices — covered by 3 explicit tests (`LexOrderWithinPair`, `InteractionsAscendingOrder`, `InteractionsNoDuplicates`).
+
+  Falsifiability discipline: signature behavior structurally observable + tested. The 16 unit tests cover contract + interface + threshold + edge canonicalization (3 axes) + clustering separation (endpoint + bucket) + interaction-centric skip semantics (empty actor IS a skip — distinguishes from §0182 event-centric) + envelope-only skip cases + AttributionLookup enrichment + deterministic order + custom bucket. The interaction-centric-skip test (`EmptyActorRef_Skipped`) is the structural witness for the §0070 framing — failure would surface as either `ObservationsSkippedNoActor == 0` (signature wrongly tolerates unnamed actors) or `Candidates != 0` (signature wrongly emits ring with unnamed vertices).
+
+- **Consequences:**
+  - New signature file (~265 lines).
+  - 16 unit tests.
+  - `FormationCandidate` struct extended with one optional field (`Interactions [][2]string`); all existing signatures continue to work (field left empty). Backwards-compatible at the candidate-consumer layer.
+  - No proto changes. No package additions. No Makefile changes.
+  - **Fourth F3 subtype emission lands.** F3 corpus now spans 4 of 4 Cat III subtypes (AutomationGroup + BehavioralCluster + CampaignHypothesis + CoordinationRing). Per-subtype emission coverage is complete; no Cat III subtype remains F3-emission-blocked.
+  - **First interaction-centric F3 signature.** Structurally novel pattern in the corpus; precedent for future interaction-centric signatures (across modalities). Joins event-centric (§0182) as the second non-actor-centric pattern shape in the corpus.
+  - **First F3 signature populating the new `FormationCandidate.Interactions` field.** The candidate-struct extension is structurally novel — prior signatures emitted only ActorRefs + SourceHashes. CoordinationRing-emitting signatures populate Interactions; orchestrators committing CoordinationRingFormation read Interactions and emit CoordinationRingInteraction protos with actor_a/actor_b per §0070.
+  - **§0184 closing-note discharged at the signature layer for CoordinationRing.** Lifecycle integration tests for CoordinationRing can land parallel to §0157-§0167 + §0176-§0181 + §0183-§0184 arcs (separate downstream advance per §0184 MO2: 2-PR bundling shape).
+
+  Per §0164 MO1 verification discipline: empirical state inline. `grep -c "^func Test" services/ingestion/internal/signatures/endpoint_co_visit_test.go` returns 16. F3 corpus signature count post-§0185 = 6 (cdp_marker_density_v1 + tcp_fingerprint_clustering_v1 + tcp_flow_features_clustering_v1 + keystroke_timing_clustering_v1 + temporal_endpoint_cohort_v1 + endpoint_co_visit_v1).
+
+  Scope discipline per §0185: **first concrete CoordinationRing F3 signature**. Does NOT introduce:
+  - F3-loop CLI for CoordinationRing — separate downstream advance (parallel to §0183 PR #1 of the 2-PR §0184 MO2 bundling shape).
+  - Lifecycle integration tests for CoordinationRing — separate downstream multi-PR arc (per §0184 MO2 2-PR bundling shape).
+  - Cross-bucket connected-component aggregation — deferred to a future signature variant; per-bucket shape is the MVP.
+
+  Falsifiability discipline: signature behavior structurally observable + tested per the 16-test suite. The Interactions canonicalization (within-edge lex + ascending sort + no duplicates) is the structural witness for §0070 preservation — three explicit tests mechanize the discipline.
+
+  - **Methodological observation 1 — Interaction-centric ontology requires a NEW FormationCandidate field; the §0182 MO1 claim that "FormationCandidate struct does NOT need new shape" is shape-class-bounded.** §0182 MO1 codified that event-centric vs actor-centric is carried by skip semantics + orchestrator commit logic, NOT struct shape. §0185 surfaces the limit: interaction-centric requires EDGE DATA at candidate emission time, which cannot be derived from ActorRefs + SourceHashes alone (edges are richer than vertex sets). The extension is minimal (one optional field with documented canonicalization rules) + backwards-compatible (existing signatures leave it empty), preserving §0182 MO1's broader intent. **Pattern: when a new Cat III subtype's ontology shape introduces structural information ABOVE what ActorRefs + SourceHashes can carry (e.g., edges, directed-graph, hyper-edges), the FormationCandidate struct SHOULD be extended with an optional typed field that other subtypes leave empty. The extension SHOULD document its per-subtype canonicalization rules in the struct comment so orchestrators can preserve them at commit time.**
+
+  - **Methodological observation 2 — Interaction-centric SKIP semantics for empty actor_ref are STRICTER than actor-centric (AutomationGroup/BehavioralCluster) and STRICTER than event-centric (§0182 CampaignHypothesis).** Actor-centric: empty actor IS a skip (cannot anchor a hypothesis to an unnamed actor). Event-centric: empty actor is NOT a skip (events anchor by themselves; actors are enrichment). Interaction-centric: empty actor IS a skip (edges require TWO named actors; one unnamed endpoint breaks the edge). The skip semantics distinguish the three ontology classes empirically at the signature layer. **Pattern: a Cat III subtype's empty-actor-ref skip semantics SHOULD be derived from the proto's required-fields shape — actor-centric protos require actor_refs (skip); event-centric protos do not (no skip); interaction-centric protos require actor pairs (skip). The skip semantics is part of the signature's structural contract; the test suite SHOULD include a per-signature skip-semantics witness test naming the governing ontology class.**
+
+  - **Methodological observation 3 — Per-bucket MVP shape is the conservative-default for new interaction-centric signatures.** §0185's `endpoint_co_visit_v1` emits one candidate per (endpoint, time_bucket) cluster — pairwise enumeration within a single bucket. Connected-component aggregation across buckets (where the same edge persists across multiple buckets to grow a ring) is deferred. The per-bucket shape mirrors §0182's per-bucket structure on the interaction-centric side + introduces only ONE new structural surface (edge enumeration within a bucket). **Pattern: when introducing the first signature for a structurally novel ontology shape, prefer the simplest single-pass aggregation shape that demonstrates the new structural surface; defer cross-bucket / cross-pass aggregation to a follow-on signature variant. The progression mirrors the §0152 → §0161 → §0169 AutomationGroup signature density growth pattern + preserves the "first interaction-centric signature is structurally meaningful + small" axiom.**
+
+- **Supersession:** No prior decision-log entry superseded. Discharges §0184 closing-note CoordinationRing F3-emission gate. Future CoordinationRing lifecycle integration arc (CLI + foundation helper + 6 lifecycle axes) can land parallel to §0183-§0184 arc per §0184 MO2 2-PR bundling shape. F3 corpus is now structurally complete at the per-subtype emission layer; future F3 work is corpus-density expansion (additional signatures within existing subtypes) + CoordinationRing lifecycle integration arc.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
