@@ -456,10 +456,16 @@ func routeTier(r *http.Request) Tier {
 // freshly generated via crypto/rand) + echoed in the response
 // X-Request-Id header. The id is added to the structured entry for
 // cross-service correlation.
+//
+// Per decision-log §0202 fifth observability advance: the request_id
+// is propagated into the request context via WithRequestIDContext;
+// downstream consumers extract it via RequestIDFromContext for
+// in-handler structured-output threading.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	requestID := resolveRequestID(r)
 	w.Header().Set(requestIDHeader, requestID)
+	r = r.WithContext(WithRequestIDContext(r.Context(), requestID))
 	lw := &loggingResponseWriter{ResponseWriter: w}
 	defer func() {
 		tier := routeTier(r)

@@ -1,10 +1,47 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
 )
+
+// requestIDContextKey is the unexported type used as the context-key
+// for the per-request id per decision-log §0202 third observability
+// advance. Unexported type prevents collisions with other packages'
+// context values (per the stdlib convention: each package defines its
+// own unexported key type for context.Value storage).
+type requestIDContextKey struct{}
+
+// RequestIDFromContext returns the per-request id stored in ctx via
+// WithRequestIDContext, or empty string when absent. Exported for
+// downstream consumers (e.g., handlers calling into substrate / ingest
+// packages) that want to thread the id into their own structured
+// outputs.
+//
+// Per §0202 wire contract: empty-string return is the documented
+// "no id" signal; downstream consumers SHOULD treat it as
+// uncorrelated (rather than panicking or generating their own id).
+func RequestIDFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	v, _ := ctx.Value(requestIDContextKey{}).(string)
+	return v
+}
+
+// WithRequestIDContext returns a copy of ctx carrying the request id
+// under the package's unexported context-key. Used internally by
+// ServeHTTP to thread the id into the request context before
+// dispatching to the per-route handler; exported for test consumers
+// that want to inject a known id into a synthetic context.
+func WithRequestIDContext(ctx context.Context, id string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, requestIDContextKey{}, id)
+}
 
 // requestIDHeader is the canonical wire-name for the request-correlation
 // identifier per decision-log §0198 second observability advance.

@@ -8809,6 +8809,49 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0202` — httpapi request-id context propagation; 5th observability advance; downstream-consumer-facing context.Value channel
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0198 established the X-Request-Id correlation surface (header echo + structured-entry propagation). §0202 adds the third surface: in-handler context propagation so downstream consumers (handlers calling into substrate/ingest/projection packages) can extract the id from `r.Context()` and thread it into their own structured outputs.
+
+  Pre-§0202 state: the id lives only in the response header + the §0197 structured entry. In-handler code paths that perform substrate operations have no programmatic access to the id; cross-package correlation requires re-resolving from the request header (awkward + couples sub-handlers to the request type).
+
+- **Decision:** Add request-id context propagation to the httpapi handler. Three changes:
+
+  1. **`services/ingestion/internal/httpapi/request_id.go`** — adds unexported `requestIDContextKey` type (collision-safe stdlib idiom: each package defines its own unexported key type for context.Value storage) + `RequestIDFromContext(ctx) string` (exported) returning empty string when absent + `WithRequestIDContext(ctx, id) context.Context` (exported) wrapping the value under the package key. Both helpers include nil-context safety guards.
+
+  2. **`services/ingestion/internal/httpapi/handler.go`** — ServeHTTP wraps `r.Context()` via `r = r.WithContext(WithRequestIDContext(r.Context(), requestID))` BEFORE dispatching to the per-route handler.
+
+  3. **`services/ingestion/internal/httpapi/request_id_test.go`** (+6 tests) — round-trip + absent-empty + nil-safety triplet + end-to-end propagation via captureHandler + response-header echo as structural witness.
+
+- **Constitutional review:**
+
+  Subordinate to §0198 (X-Request-Id wire contract — context propagation extends the correlation surface from header+entry to header+entry+context). Subordinate to §0164 MO1. Stdlib-only — no new external dependencies (context is stdlib).
+
+  Per §0197 MO1 no-op-default: when no request comes through ServeHTTP, no context is wrapped — package consumers calling RequestIDFromContext on bare contexts receive empty string per the documented "no id" signal.
+
+  Falsifiability: 6 new unit tests cover the contract.
+
+- **Consequences:**
+  - 1 modified file (request_id.go: ~40 lines added).
+  - 1 modified file (handler.go: 1 line added + doc).
+  - 1 modified file (request_id_test.go: ~95 lines added — 6 new tests).
+  - **Fifth observability advance lands.** Three correlation channels covered: client-side (response header), structured-stream-consumer-side (§0197 entry field), in-handler-consumer-side (context.Value).
+  - **No new external dependencies.**
+
+  Per §0164 MO1: 6 new tests pass; full `go test ./...` from `services/ingestion/` reports 0 failures.
+
+  Scope discipline per §0202: **context propagation only — no downstream consumer adoption** — does NOT introduce:
+  - Updates to substrate / ingest / projection packages to consume the context-id (deferred until those packages have observability surfaces that benefit from in-handler correlation).
+  - OpenTelemetry trace-id context propagation (separate correlation primitive; deferred).
+
+  - **Methodological observation 1 — Context-key propagation SHOULD use the stdlib unexported-type idiom + accompany the propagator setter with a getter on the SAME exported surface; nil-context safety guards belong on BOTH helpers.** §0202's `WithRequestIDContext` + `RequestIDFromContext` pair is symmetric: both exported, both nil-safe. **Pattern: when adding context-value propagation for a request-scoped attribute, ALWAYS provide an exported With-pair + From-pair. Both members of the pair SHOULD include nil-context safety guards.**
+
+- **Supersession:** No prior decision-log entry superseded. Fifth observability advance after §0197-§0200 + §0201 production wiring.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
