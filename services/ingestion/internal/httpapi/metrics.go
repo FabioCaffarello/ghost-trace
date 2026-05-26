@@ -39,9 +39,42 @@ type Metrics struct {
 	counters map[counterKey]uint64
 
 	// histograms: key = path; value = per-bucket cumulative counts
-	// matching latencyBucketsMs index-by-index PLUS one slot for the
-	// implicit +Inf bucket (totalCount + sumMs maintained separately).
+	// matching the per-instance buckets index-by-index PLUS one slot
+	// for the implicit +Inf bucket (totalCount + sumMs maintained
+	// separately).
 	histograms map[string]*histogramState
+
+	// buckets is the per-instance histogram bucket upper-bound
+	// boundary list per §0203 (operator-supplied override of the
+	// §0200 default). Strictly ascending; +Inf is implicit.
+	// Defaults to latencyBucketsMs when WithHistogramBuckets is
+	// not supplied to NewMetrics.
+	buckets []float64
+}
+
+// MetricsOption configures a Metrics registry at construction. Options
+// apply in supplied order; later options override earlier ones.
+type MetricsOption func(*Metrics)
+
+// WithHistogramBuckets overrides the default §0200 histogram bucket
+// upper-bound boundaries per decision-log §0203. Boundaries MUST be
+// strictly ascending non-negative floats; nil or empty input falls
+// through to the §0200 default (no panic, no error — matches the
+// WithLogger(nil) / WithMetrics(nil) nil-preserving ergonomic).
+//
+// Validation deferred to NewMetrics so misconfiguration surfaces at
+// construction time rather than at first Observe call.
+func WithHistogramBuckets(buckets []float64) MetricsOption {
+	return func(m *Metrics) {
+		if len(buckets) == 0 {
+			return
+		}
+		// Defensive copy so caller mutations after NewMetrics don't
+		// affect the registry.
+		cp := make([]float64, len(buckets))
+		copy(cp, buckets)
+		m.buckets = cp
+	}
 }
 
 // latencyBucketsMs are the histogram bucket upper-bound boundaries in
@@ -73,20 +106,27 @@ type histogramState struct {
 	sumMs        float64
 }
 
-func newHistogramState() *histogramState {
+func newHistogramState(bucketsLen int) *histogramState {
 	return &histogramState{
-		bucketCounts: make([]uint64, len(latencyBucketsMs)),
+		bucketCounts: make([]uint64, bucketsLen),
 	}
 }
 
-// NewMetrics constructs a fresh, empty Metrics registry. Production
-// main wires one Metrics per Handler via WithMetrics; tests construct
-// fresh ones per-test to avoid cross-test pollution.
-func NewMetrics() *Metrics {
-	return &Metrics{
+// NewMetrics constructs a fresh, empty Metrics registry. Accepts
+// variadic MetricsOption for per-instance customization (per §0203:
+// WithHistogramBuckets overrides the default §0200 bucket boundaries).
+// Production main wires one Metrics per Handler via WithMetrics; tests
+// construct fresh ones per-test to avoid cross-test pollution.
+func NewMetrics(opts ...MetricsOption) *Metrics {
+	m := &Metrics{
 		counters:   make(map[counterKey]uint64),
 		histograms: make(map[string]*histogramState),
+		buckets:    latencyBucketsMs,
 	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
 }
 
 // Inc increments the per-(path, status) counter by 1.
@@ -101,6 +141,7 @@ func (m *Metrics) Inc(path string, status int) {
 // milliseconds (matching the §0197 structured entry's duration_ms
 // field). Negative observations are treated as 0 (defensive — caller
 // SHOULD pass non-negative; the clamp prevents bucket misclassification).
+// Per §0203: uses per-instance buckets (override via WithHistogramBuckets).
 func (m *Metrics) Observe(path string, durationMs float64) {
 	if durationMs < 0 {
 		durationMs = 0
@@ -109,10 +150,10 @@ func (m *Metrics) Observe(path string, durationMs float64) {
 	defer m.mu.Unlock()
 	h, ok := m.histograms[path]
 	if !ok {
-		h = newHistogramState()
+		h = newHistogramState(len(m.buckets))
 		m.histograms[path] = h
 	}
-	for i, upper := range latencyBucketsMs {
+	for i, upper := range m.buckets {
 		if durationMs <= upper {
 			h.bucketCounts[i]++
 		}
@@ -132,7 +173,7 @@ func (m *Metrics) snapshot() (map[counterKey]uint64, map[string]*histogramState)
 	}
 	histograms := make(map[string]*histogramState, len(m.histograms))
 	for path, h := range m.histograms {
-		hc := newHistogramState()
+		hc := newHistogramState(len(m.buckets))
 		copy(hc.bucketCounts, h.bucketCounts)
 		hc.totalCount = h.totalCount
 		hc.sumMs = h.sumMs
@@ -203,10 +244,10 @@ func (m *Metrics) Encode(w io.Writer) error {
 		// by upper bound. Each bucket line carries the count of
 		// observations <= that upper bound.
 		var cumulative uint64
-		for i, upper := range latencyBucketsMs {
+		for i, upper := range m.buckets {
 			cumulative = h.bucketCounts[i] // bucket-counts already <= upper-bound, but the index-wise count is exclusive vs lower.
 			// Note: our Observe loop increments h.bucketCounts[i] for every
-			// observation <= latencyBucketsMs[i] — so bucketCounts[i] is
+			// observation <= m.buckets[i] — so bucketCounts[i] is
 			// ALREADY the cumulative count <= upper. No further cumulation
 			// needed.
 			_ = cumulative
