@@ -8829,7 +8829,7 @@ The four methodological observations are the pilot's contribution to procedure b
 
   Subordinate to §0198 (X-Request-Id wire contract — context propagation extends the correlation surface from header+entry to header+entry+context). Subordinate to §0164 MO1. Stdlib-only — no new external dependencies (context is stdlib).
 
-  Per §0197 MO1 no-op-default: when no request comes through ServeHTTP, no context is wrapped — package consumers calling RequestIDFromContext on bare contexts receive empty string per the documented "no id" signal.
+  Per §0197 MO1 no-op-default: when no request comes through ServeHTTP, no context is wrapped — package consumers calling RequestIDFromContext on bare contexts receive empty string per the documented "no id" sentinel.
 
   Falsifiability: 6 new unit tests cover the contract.
 
