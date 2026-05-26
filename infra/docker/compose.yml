@@ -1,0 +1,126 @@
+# Ghost Trace Sub-benchmark 1 deployment scaffold per decision-log
+# §0205. Single-node, single-writer-serialized substrate (per
+# concurrency-pattern.md + §0027); pipeline steps run sequentially via
+# `docker compose run --rm cli ...` against a shared named volume.
+#
+# Three named volumes (preserved across `compose run` invocations):
+#
+#   substrate-data   primary event log + content-addressed blob store
+#   cic-ids-input    operator-supplied CIC-IDS sample (init-populated)
+#   run-artifacts    per-RUN_ID manifest + per-step stdout/stderr logs
+#
+# HTTP observability surface is opt-in via `--profile observability`;
+# pipeline does NOT depend on it (CLI-only by design per §0205). When
+# enabled the surface binds 127.0.0.1:8080 only.
+
+name: ghost-trace-sub-benchmark-1
+
+services:
+
+  # --------------------------------------------------------------
+  # cic-ids-init — populates cic-ids-input volume from the operator's
+  # bind-mounted seed directory. Idempotent; safe to re-run.
+  #
+  # The operator supplies the CIC-IDS-2017 CSV on the host filesystem
+  # (download out-of-band; see README) and points CIC_IDS_SEED_DIR at
+  # its containing directory. The init container copies the file named
+  # by CIC_IDS_SAMPLE_NAME into the cic-ids-input named volume so
+  # subsequent steps read from a stable path inside the runtime.
+  #
+  # BLAKE3 verification is operator-side (out-of-band via b3sum); the
+  # manifest captures CIC_IDS_SAMPLE_BLAKE3 as operator-declared. Re-
+  # verification at every run would require bundling b3sum and adding
+  # a separate per-step; deferred until empirical pressure requires it.
+  # --------------------------------------------------------------
+  cic-ids-init:
+    image: ghost-trace:${IMAGE_TAG:-latest}
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile
+      args:
+        GOLANG_IMAGE: ${GOLANG_IMAGE:-golang:1.23-alpine}
+        DEBIAN_IMAGE: ${DEBIAN_IMAGE:-debian:bookworm-slim}
+    volumes:
+      - ${CIC_IDS_SEED_DIR:-./seed}:/seed:ro
+      - cic-ids-input:/var/lib/ghost-trace/cic-ids
+    entrypoint: ["/usr/bin/tini", "--"]
+    command:
+      - /bin/bash
+      - -c
+      - |
+        set -euo pipefail
+        if [ ! -f "/seed/${CIC_IDS_SAMPLE_NAME:?CIC_IDS_SAMPLE_NAME unset}" ]; then
+          echo "cic-ids-init: seed file /seed/${CIC_IDS_SAMPLE_NAME} not found" >&2
+          exit 2
+        fi
+        cp -f "/seed/${CIC_IDS_SAMPLE_NAME}" /var/lib/ghost-trace/cic-ids/sample.csv
+        stat -c 'cic-ids-init: copied %n size=%s bytes' /var/lib/ghost-trace/cic-ids/sample.csv
+    restart: "no"
+
+  # --------------------------------------------------------------
+  # cli — operator-invoked CLI step. Not a daemon; invoked via
+  # `docker compose run --rm cli <bin> <args>` for each pipeline step.
+  # The default command drops into a bash shell so `docker compose run
+  # --rm cli` (no args) is an interactive inspection session.
+  # --------------------------------------------------------------
+  cli:
+    image: ghost-trace:${IMAGE_TAG:-latest}
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile
+      args:
+        GOLANG_IMAGE: ${GOLANG_IMAGE:-golang:1.23-alpine}
+        DEBIAN_IMAGE: ${DEBIAN_IMAGE:-debian:bookworm-slim}
+    volumes:
+      - substrate-data:/var/lib/ghost-trace/substrate
+      - cic-ids-input:/var/lib/ghost-trace/cic-ids:ro
+      - run-artifacts:/var/lib/ghost-trace/runs
+    depends_on:
+      cic-ids-init:
+        condition: service_completed_successfully
+    environment:
+      GHOST_TRACE_SUBSTRATE_DB: /var/lib/ghost-trace/substrate/ghost-trace.db
+      GHOST_TRACE_BLOB_DIR: /var/lib/ghost-trace/substrate/blobs
+      GHOST_TRACE_CIC_IDS_SAMPLE: /var/lib/ghost-trace/cic-ids/sample.csv
+      GHOST_TRACE_RUNS_DIR: /var/lib/ghost-trace/runs
+      CIC_IDS_SAMPLE_BLAKE3: ${CIC_IDS_SAMPLE_BLAKE3:-}
+      CIC_IDS_SAMPLE_NAME: ${CIC_IDS_SAMPLE_NAME:-}
+      FORMATION_TOP_N: ${FORMATION_TOP_N:-10}
+      LAYER_B_T_B_NUMERATOR: ${LAYER_B_T_B_NUMERATOR:-1}
+      LAYER_B_T_B_DENOMINATOR: ${LAYER_B_T_B_DENOMINATOR:-2}
+      LAYER_B_K_C_NUMERATOR: ${LAYER_B_K_C_NUMERATOR:-1}
+      LAYER_B_K_C_DENOMINATOR: ${LAYER_B_K_C_DENOMINATOR:-2}
+    restart: "no"
+
+  # --------------------------------------------------------------
+  # ingestion-api — HTTP observability surface. Opt-in via `--profile
+  # observability`; pipeline does NOT consume this surface. Bound to
+  # 127.0.0.1 only — single-node reproducibility deployment, not a
+  # service exposed externally.
+  # --------------------------------------------------------------
+  ingestion-api:
+    image: ghost-trace:${IMAGE_TAG:-latest}
+    profiles: ["observability"]
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile
+      args:
+        GOLANG_IMAGE: ${GOLANG_IMAGE:-golang:1.23-alpine}
+        DEBIAN_IMAGE: ${DEBIAN_IMAGE:-debian:bookworm-slim}
+    ports:
+      - "127.0.0.1:${INGESTION_API_PORT:-8080}:8080"
+    volumes:
+      - substrate-data:/var/lib/ghost-trace/substrate
+    command:
+      - /usr/local/bin/ingestion
+      - --http-addr=:8080
+      - --db=/var/lib/ghost-trace/substrate/ghost-trace.db
+      - --blobs=/var/lib/ghost-trace/substrate/blobs
+      - --http-metrics-enabled
+      - --http-slog-format=json
+    restart: "unless-stopped"
+
+volumes:
+  substrate-data:
+  cic-ids-input:
+  run-artifacts:
