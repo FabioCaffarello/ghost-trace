@@ -99,11 +99,45 @@ Two OMQs surface empirically through CIC-IDS integration:
 - **Counter discipline.** `Report` carries `RowsParsed`, `RowsRejected`, `ObservationsCommitted`, `IpAsnEmitted`, `TcpFingerprintEmitted`, `FlowStatisticsDropped`. The `FlowStatisticsDropped` counter is the **empirical pressure surface** for the `flow_record_summary` OMQ: it increments per row, surfacing the volume of unmapped features.
 - **Operator opt-in for labels.** The adapter ignores the `Label` column; operators that wish to retain labels for evaluation must preserve them out-of-band per the §3 N1 discipline.
 
+## CLI usage
+
+The operator-facing CLI lift `cmd/ingest-cic-ids` (per [`decision-log §0204`](../charter/decision-log.md)) is a thin wrapper around `cic_ids.Ingest`. The eight operator workflow choices §0145 Consequences deferred are documented and tested at §0204; this section is the operator-facing summary.
+
+```
+ingest-cic-ids [flags] [csv-path]
+
+Reads from csv-path when provided; from stdin otherwise.
+
+Flags:
+  -db        path to SQLite substrate              (default "./ghost-trace.db")
+  -blobs     path to blob-store directory          (default "./blobs")
+  -channel   ingestion channel identifier          (default: "cic-ids-file" with path arg, "stdin" without)
+  -collector collector_ref on emitted observations (default "cic-ids-2017-adapter:v1")
+  -progress  stderr progress line every N lines    (default 10000; 0 disables)
+  -strict    exit non-zero if RowsRejected > 0     (default false)
+
+Output:
+  stdout — cic_ids.Report JSON (RowsParsed, RowsRejected, ObservationsCommitted, IpAsnEmitted, TcpFingerprintEmitted, FlowStatisticsDropped)
+  stderr — progress lines + final one-line summary
+
+Exit codes (mirror replay-all-* precedent per §0173):
+  0  success
+  2  tool/config error (bad flag, cannot open input or substrate)
+  3  substrate error mid-run OR -strict && RowsRejected > 0
+```
+
+**Distinction from §0163 F3-envelope shape.** The Report JSON emitted by `ingest-cic-ids` is the ingest-tier output contract; it is **structurally distinct** from the signature-tier `{signature_name, candidate_count, candidates[], stats{...}}` envelope §0163 cravou for F3 CLIs. Both are stable wire-contracts for their respective CLI categories; a downstream consumer aggregating both (e.g., the §0205 deployment scaffold manifest) embeds them side-by-side under separate pipeline-step entries — no coercion of one shape into the other.
+
+**Re-ingest is silent.** Substrate commits are content-addressed via BLAKE3; a second invocation against the same CSV produces identical hashes and `INSERT OR IGNORE` returns no-op rows. The Report still reflects RowsParsed > 0 for the second run (it counts library Append CALL counts, not net new rows); operators detecting re-ingest should observe substrate row counts directly rather than rely on Report variance.
+
+**Timestamp fallback (audit-grade caveat).** When a CIC-IDS row's Timestamp column is missing or unparseable, the library falls back to row-index nanoseconds for substrate hash-stability. This fallback is **not currently surfaced** in Report counters; §0204 names the explicit trigger for adding a `TimestampsRecovered` counter — when §0205 manifest needs audit-row visibility into the substitute count, a separate library-tier PR adds the field.
+
 ## References
 
 - [`decision-log §0143`](../charter/decision-log.md) — Domain Pack v0.1 anti-bot atlas framing PR; D2 three-source-parallel ingestion strategy.
 - [`decision-log §0144`](../charter/decision-log.md) — F1.NetworkObservation discriminated-union typing; first proto-definition landing.
 - [`decision-log §0145`](../charter/decision-log.md) — CIC-IDS adapter landing; this mapping document; first public adversarial source integrated.
+- [`decision-log §0204`](../charter/decision-log.md) — `cmd/ingest-cic-ids` CLI lift; eight operator workflow choices cravadas.
 - [Charter §2.1 Observational Integrity](../charter/constitutional-charter.md#21-observational-integrity)
 - [Charter §3 N1 — no truth at substrate](../charter/constitutional-charter.md#3-non-goals)
 - [`services/ingestion/internal/adapters/cic_ids/`](../../services/ingestion/internal/adapters/cic_ids/) — adapter implementation.
