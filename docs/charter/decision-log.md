@@ -8852,6 +8852,44 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0203` — httpapi per-instance histogram bucket override; 6th observability advance; WithHistogramBuckets MetricsOption + defensive-copy contract
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0200 shipped the request-duration histogram with a fixed `latencyBucketsMs` boundary array. The §0200 closing-note deferred per-handler bucket-override as "no operator pressure today." §0203 lands the override surface now as part of the autonomous observability advance series, anticipating operator customization (different deployments care about different latency bands: edge proxies want sub-ms, batch ingestion wants seconds-to-minutes).
+
+- **Decision:** Add `WithHistogramBuckets([]float64) MetricsOption` + extend `NewMetrics` signature to accept variadic `MetricsOption`. Three changes:
+
+  1. **`services/ingestion/internal/httpapi/metrics.go`** — adds `MetricsOption` func type + `WithHistogramBuckets` option + `buckets []float64` instance field; extends `NewMetrics()` → `NewMetrics(opts ...MetricsOption)`; updates `Observe` + `snapshot` + `Encode` to use per-instance `m.buckets` rather than the package-level `latencyBucketsMs`. The default-buckets path (no `MetricsOption` supplied) retains §0200's `latencyBucketsMs`. Defensive-copy: the option copies the operator-supplied slice so post-construction caller mutations don't affect the registry.
+
+  2. **`services/ingestion/internal/httpapi/metrics_test.go`** (+4 tests) — `TestMetrics_WithHistogramBucketsOverride` (custom 3-boundary override + verifies default buckets do NOT leak) + `TestMetrics_WithHistogramBucketsEmptyPreservesDefault` (nil + empty-slice both fall through to default; matches WithLogger(nil) ergonomic) + `TestMetrics_WithHistogramBucketsDefensiveCopy` (post-construction caller mutation does not leak) + `TestMetrics_DefaultBucketsWhenNoOption` (zero-option path).
+
+- **Constitutional review:**
+
+  Subordinate to §0200 (extends histogram surface with per-instance override). Subordinate to §0197 MO1 nil-preserving ergonomic (nil/empty buckets fall through to default). Subordinate to §0164 MO1 verification discipline. Backward-compatible: existing `NewMetrics()` callers (the §0199 + §0200 + §0201 surfaces) continue working unchanged because Go's variadic parameter list accepts zero arguments.
+
+  Falsifiability: 4 new unit tests cover the contract. The defensive-copy test mechanically witnesses that post-`NewMetrics` caller mutations of the buckets slice do NOT affect the registry — a regression that switched to a reference-share would surface as a bucket-boundary mismatch in the Encode output.
+
+- **Consequences:**
+  - 1 modified file (metrics.go: ~50 lines added — MetricsOption + WithHistogramBuckets + per-instance `buckets` field + extended NewMetrics signature).
+  - 1 modified file (metrics_test.go: ~80 lines added — 4 new tests).
+  - **Sixth observability advance lands.** Operators can now customize histogram boundaries per Metrics instance (e.g., `NewMetrics(WithHistogramBuckets([]float64{0.5, 1, 2, 5, 10}))` for sub-second latency dashboards).
+  - **Backward-compatible.** Existing `NewMetrics()` callers continue working; production wiring at `services/ingestion/main.go` (per §0201) still uses default buckets via the zero-option path.
+  - **MetricsOption pattern established.** Future per-instance metrics customization (e.g., `WithCounterMetadata`, `WithLabelExclusions`) can adopt the same `MetricsOption` shape without further surface changes.
+
+  Per §0164 MO1: 4 new tests pass; full `go test ./...` from `services/ingestion/` reports 0 failures.
+
+  Scope discipline per §0203: **bucket-override only — no operator-facing CLI parameter, no per-handler boundary surface** — does NOT introduce:
+  - CLI parameter at `services/ingestion/main.go` for bucket-override (deferred; current operators wanting non-default buckets construct `NewMetrics(WithHistogramBuckets(...))` programmatically + supply via `WithMetrics`).
+  - Bucket-boundary validation (deferred; the per-instance boundaries are operator-trusted — invalid input like non-ascending bounds would surface as incorrect cumulative counts but not panic).
+  - Per-path bucket-override (deferred; current scope is per-instance — all paths share the same buckets).
+
+  - **Methodological observation 1 — Variadic Options extending a zero-parameter constructor is the backward-compatible idiom for per-instance customization in Go.** `NewMetrics()` → `NewMetrics(opts ...MetricsOption)` is a non-breaking change because Go's variadic call convention accepts zero arguments. Future package customization (additional helpers like `WithCounterMetadata`, etc.) can adopt the same shape without further refactoring. **Pattern: when adding per-instance customization to an existing constructor, prefer variadic Options over additional positional parameters; the variadic surface preserves backward-compat across all current call sites + composes cleanly with additional Options.**
+
+- **Supersession:** No prior decision-log entry superseded. Sixth observability advance after §0197-§0202. Subsequent advances (OpenTelemetry trace-id context propagation; CLI parameter for bucket-override at main.go; downstream-consumer adoption of RequestIDFromContext in substrate/ingest/projection packages) can land as separate downstream advances.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

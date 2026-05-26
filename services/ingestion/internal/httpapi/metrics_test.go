@@ -434,6 +434,99 @@ func TestMetricsHTTP_AuthExempt(t *testing.T) {
 	}
 }
 
+// ----------------------------------------------------------------------
+// §0203 per-instance bucket-override tests
+// ----------------------------------------------------------------------
+
+// TestMetrics_WithHistogramBucketsOverride verifies that
+// WithHistogramBuckets supplies the per-instance bucket boundaries +
+// the encoded output reflects the operator-supplied boundaries (not
+// the §0200 default).
+func TestMetrics_WithHistogramBucketsOverride(t *testing.T) {
+	custom := []float64{2, 8, 32}
+	m := NewMetrics(WithHistogramBuckets(custom))
+	m.Observe("/custom", 1)  // → le=2
+	m.Observe("/custom", 5)  // → le=8 (cumulative includes le=2)
+	m.Observe("/custom", 20) // → le=32 (cumulative includes le=8)
+	m.Observe("/custom", 50) // → +Inf only
+
+	var buf bytes.Buffer
+	if err := m.Encode(&buf); err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		`ghosttrace_httpapi_request_duration_ms_bucket{path="/custom",le="2"} 1`,
+		`ghosttrace_httpapi_request_duration_ms_bucket{path="/custom",le="8"} 2`,
+		`ghosttrace_httpapi_request_duration_ms_bucket{path="/custom",le="32"} 3`,
+		`ghosttrace_httpapi_request_duration_ms_bucket{path="/custom",le="+Inf"} 4`,
+		`ghosttrace_httpapi_request_duration_ms_count{path="/custom"} 4`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q\nfull output:\n%s", want, out)
+		}
+	}
+	// Default §0200 buckets must NOT appear in the output (operator
+	// override fully replaces the default; not a merge).
+	for _, notWant := range []string{
+		`le="1"`, `le="5"`, `le="10"`, `le="25"`, `le="50"`,
+	} {
+		if strings.Contains(out, notWant) {
+			t.Errorf("default §0200 bucket %q leaked into output despite override:\n%s", notWant, out)
+		}
+	}
+}
+
+// TestMetrics_WithHistogramBucketsEmptyPreservesDefault verifies the
+// nil/empty-buckets ergonomic — passing nil or [] does NOT override;
+// the §0200 default applies. Matches the WithLogger(nil) /
+// WithMetrics(nil) nil-preserving precedent.
+func TestMetrics_WithHistogramBucketsEmptyPreservesDefault(t *testing.T) {
+	cases := [][]float64{nil, {}}
+	for i, c := range cases {
+		m := NewMetrics(WithHistogramBuckets(c))
+		m.Observe("/preserve", 0.5)
+		var buf bytes.Buffer
+		_ = m.Encode(&buf)
+		out := buf.String()
+		// Must contain the §0200 default first bucket (le=1).
+		if !strings.Contains(out, `ghosttrace_httpapi_request_duration_ms_bucket{path="/preserve",le="1"} 1`) {
+			t.Errorf("case %d (nil/empty): default §0200 buckets missing:\n%s", i, out)
+		}
+	}
+}
+
+// TestMetrics_WithHistogramBucketsDefensiveCopy verifies that mutating
+// the operator-supplied slice AFTER NewMetrics does NOT affect the
+// registry's bucket boundaries. Defensive-copy contract.
+func TestMetrics_WithHistogramBucketsDefensiveCopy(t *testing.T) {
+	custom := []float64{1, 10, 100}
+	m := NewMetrics(WithHistogramBuckets(custom))
+	// Mutate the caller's slice.
+	custom[0] = 999
+	m.Observe("/defensive", 0.5)
+	var buf bytes.Buffer
+	_ = m.Encode(&buf)
+	out := buf.String()
+	if !strings.Contains(out, `ghosttrace_httpapi_request_duration_ms_bucket{path="/defensive",le="1"} 1`) {
+		t.Errorf("post-NewMetrics caller mutation leaked into registry buckets; defensive-copy contract broken:\n%s", out)
+	}
+}
+
+// TestMetrics_DefaultBucketsWhenNoOption verifies the no-option path:
+// NewMetrics() with zero MetricsOption args produces the §0200 default
+// buckets.
+func TestMetrics_DefaultBucketsWhenNoOption(t *testing.T) {
+	m := NewMetrics()
+	m.Observe("/default", 0.5)
+	var buf bytes.Buffer
+	_ = m.Encode(&buf)
+	out := buf.String()
+	if !strings.Contains(out, `ghosttrace_httpapi_request_duration_ms_bucket{path="/default",le="1"} 1`) {
+		t.Errorf("default-buckets path broken (no MetricsOption supplied):\n%s", out)
+	}
+}
+
 // TestMetricsHTTP_HistogramObservedOnServeHTTP exercises end-to-end:
 // requests against the /healthz endpoint populate the histogram
 // observable via /metrics scrape.
