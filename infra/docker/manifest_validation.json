@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/FabioCaffarello/ghost-trace/infra/docker/manifest_validation.json",
+  "title": "Ghost Trace Sub-benchmark 1 run manifest",
+  "description": "Per-RUN_ID artifact emitted by infra/docker/run-sub-benchmark-1.sh. Captures inputs, parameters, per-step status, and the verdict surface. manifest_version 'f6-operational-v0.1' is an operational placeholder per decision-log §0205: the F6 substrate-read contract (§0143 month 4-5 architecture artifact) is not yet drafted; this structure materializes F6 operationally pending formalization. The F6 RFC, when it lands, may adopt this format, adapt it, or supersede it — the operational tier does not pre-bind the contractual tier.",
+  "type": "object",
+  "required": [
+    "manifest_version",
+    "run_id",
+    "timestamp_utc",
+    "ghost_trace",
+    "inputs",
+    "parameters",
+    "pipeline_scope",
+    "signatures",
+    "verdict"
+  ],
+  "properties": {
+    "manifest_version": {
+      "type": "string",
+      "const": "f6-operational-v0.1",
+      "description": "F6 operational placeholder; pending the F6 contract per §0143."
+    },
+    "run_id": {
+      "type": "string",
+      "description": "Operator-or-auto RUN_ID; defaults to UTC timestamp YYYYMMDDTHHMMSSZ."
+    },
+    "timestamp_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ghost_trace": {
+      "type": "object",
+      "required": ["git_commit", "image_digest"],
+      "properties": {
+        "git_commit": {
+          "type": "string",
+          "description": "Repository HEAD sha at the moment of `make run`; 'unknown' when git unavailable in the host shell."
+        },
+        "image_digest": {
+          "type": "string",
+          "description": "sha256 digest of the runtime image used for this run; 'unknown' until populated by an operator-side post-process."
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "required": ["by_source"],
+      "properties": {
+        "by_source": {
+          "type": "object",
+          "description": "Multi-source preparedness per §0205 refinement (b): cic_ids slot is populated this scope; synthetic + honeypot slots are present as null today and expected to populate in §0205+ frontes 2 and 3. Schema migration on those landings is avoided by reserving the slots now.",
+          "required": ["cic_ids", "synthetic", "honeypot"],
+          "properties": {
+            "cic_ids": {
+              "oneOf": [
+                {"type": "null"},
+                {
+                  "type": "object",
+                  "required": ["sample_path", "sample_name", "blake3_declared", "size_bytes"],
+                  "properties": {
+                    "sample_path": {"type": "string"},
+                    "sample_name": {"type": "string"},
+                    "blake3_declared": {
+                      "type": "string",
+                      "description": "Operator-declared BLAKE3 hex; empty string when not declared."
+                    },
+                    "size_bytes": {"type": "integer", "minimum": 0}
+                  }
+                }
+              ]
+            },
+            "synthetic": {
+              "oneOf": [
+                {"type": "null"},
+                {"type": "object"}
+              ],
+              "description": "Reserved for §0205+ Frente 2; null this scope."
+            },
+            "honeypot": {
+              "oneOf": [
+                {"type": "null"},
+                {"type": "object"}
+              ],
+              "description": "Reserved for §0205+ Frente 3; null this scope."
+            }
+          }
+        }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "required": ["formation_top_n", "layer_b"],
+      "properties": {
+        "formation_top_n": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Top-N cut for formation step; recorded even though formation is deferred to §0206 (so §0206 manifests inherit the same parameter shape)."
+        },
+        "layer_b": {
+          "type": "object",
+          "required": ["t_b", "k_c"],
+          "properties": {
+            "t_b": {
+              "type": "object",
+              "required": ["numerator", "denominator"],
+              "properties": {
+                "numerator":   {"type": "integer"},
+                "denominator": {"type": "integer", "minimum": 1}
+              },
+              "description": "T_B Layer B parameter as rational pair per §0138 + §0140."
+            },
+            "k_c": {
+              "type": "object",
+              "required": ["numerator", "denominator"],
+              "properties": {
+                "numerator":   {"type": "integer"},
+                "denominator": {"type": "integer", "minimum": 1}
+              }
+            }
+          }
+        }
+      }
+    },
+    "pipeline_scope": {
+      "type": "object",
+      "required": ["included_steps", "deferred_steps", "deferral_reason"],
+      "properties": {
+        "included_steps": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Pipeline steps executed by this scaffold revision."
+        },
+        "deferred_steps": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Pipeline steps named but not executed; tracked so manifests across scaffold revisions remain comparable."
+        },
+        "deferral_reason": {"type": "string"}
+      }
+    },
+    "signatures": {
+      "type": "object",
+      "description": "Per-signature §0163 envelopes verbatim from each find-* CLI's stdout. Keys: automation_group_browser, automation_group_network, behavioral_cluster, campaign_hypothesis, coordination_ring. Each value is either the full envelope object {signature_name, candidate_count, candidates[], stats{...}} or null when the upstream CLI produced no parseable output.",
+      "additionalProperties": {
+        "oneOf": [
+          {"type": "null"},
+          {"type": "object"}
+        ]
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "required": ["total_candidates", "instrumented_non_firing", "demotion_fired", "non_firing_diagnosis_axis"],
+      "properties": {
+        "total_candidates": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sum of candidate_count across all signatures."
+        },
+        "instrumented_non_firing": {
+          "type": "boolean",
+          "description": "True when total_candidates == 0; per §0162 reachability-claim discipline this is a valid epistemic outcome with per-signature EvaluationStats remaining inspectable in the signatures.* sub-objects."
+        },
+        "demotion_fired": {
+          "type": ["null", "boolean"],
+          "description": "Always null in this scaffold scope; populated by §0206 once form+promote+morphology+demotion-eval lifecycle steps execute."
+        },
+        "non_firing_diagnosis_axis": {
+          "type": "object",
+          "description": "Pointers to the data already captured elsewhere in this manifest that constitute the §0143 mandatory instrumentation axis (subtype x source x chain-morphology). Chain-morphology dimension is null until §0206.",
+          "properties": {
+            "by_subtype":          {"type": "string"},
+            "by_source":           {"type": "string"},
+            "by_chain_morphology": {"type": ["null", "string"]}
+          }
+        }
+      }
+    }
+  }
+}

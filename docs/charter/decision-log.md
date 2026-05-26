@@ -8962,6 +8962,91 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0205` — Sub-benchmark 1 deployment scaffold; first operational-tier artifact materializing F6 operationally; `infra/docker/` greenfield
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0143 Sub-benchmark 1 (first non-trivial demotion substrate-emergent, public + synthetic sources, month 3-4) defined the comprovation target for the constitutional thesis. The pivot from plumbing to operational-artifact framing recognized that all evidence-of-thesis to date is integration-tested, never deployment-real. §0205 begins the inflection: a single-node reproducibility-primary deployment scaffold that runs the pipeline end-to-end against the operator-supplied CIC-IDS-2017 sample and emits an audit-grade per-run manifest. The §0204 pre-req CLI lift (preceding entry, §0145 follow-on closed) supplies the pipeline's entry-point command surface. `infra/docker/` was greenfield (zero files prior to this entry); the scaffold occupies it now.
+
+- **Decision:** land a thin, operator-inspectable deployment scaffold under `infra/docker/` covering the **infrastructure tier + a three-step diagnostic pipeline**:
+
+  **Scope this entry — three pipeline steps executed end-to-end:**
+  1. `ingest-cic-ids` against the operator-supplied CIC-IDS-2017 CSV (per §0204 CLI lift)
+  2. `replay-all-derived-actor-attributions` (Cat II attribution per §0168, closing §0162 gap (1))
+  3. five `find-*-candidates` invocations spanning the F3 corpus: browser, network (with `-signature flow-features` per §0169 closing §0162 gap (2)), behavioral, campaign, coordination
+
+  **Plus**: a per-RUN_ID `manifest.json` emission aggregating §0163 envelopes verbatim per signature plus run inputs + parameters + verdict.
+
+  **Lifecycle steps DEFERRED to §0206 follow-on**: `form-<subtype>`, `promote-<subtype>`, `measure-chain-morphology`, `demote-<subtype>` evaluation. Deferral rationale per [Charter §4](constitutional-charter.md#4-constitutional-design-rule) falsifiability: their bash orchestration shape depends on observing the empirical structure of signature JSON output on CIC-IDS substrate, evidence §0205's first run produces. Speculation about the bash shape of subsequent steps without that evidence is rejected. **Honest scope discipline**: the user's original pipeline cravamento (8 steps) is preserved as the §0206 target; §0205 lands steps 1-3 + manifest emit, with the deferred steps named in the manifest's `pipeline_scope.deferred_steps` list so manifests across scaffold revisions remain comparable.
+
+  **Infrastructure tier (cravado verbatim from the §0205 pre-execution plan):**
+
+  - **Single multi-stage image** (`infra/docker/Dockerfile`). Builder stage `golang:1.23-alpine`, runtime stage `debian:bookworm-slim` (NOT scratch — operator must be able to drop into a shell, inspect substrate via sqlite3, and parse signature envelopes via jq). All ~46 CLIs installed via `go install ./cmd/...` plus the main `ingestion` daemon. One image, one digest, one audit reference.
+  - **Three named volumes** (`compose.yml`): `substrate-data` persistent across runs; `cic-ids-input` populated by init container from operator-bind-mounted seed directory; `run-artifacts` accumulates per-RUN_ID artifacts indefinitely (cleanup is operator responsibility per refinement below).
+  - **Network exposure** bound to `127.0.0.1` only. `ingestion-api` daemon is `--profile observability` opt-in; pipeline does NOT consume this surface.
+  - **Bash + Make orchestration**, NOT a Go orchestrator service. `infra/docker/run-sub-benchmark-1.sh` is the pipeline (~140 lines, linear), invoked via `make run` which wraps `docker compose run --rm cli /usr/local/bin/run-sub-benchmark-1.sh`. Tier-3 auditability commitment: an auditor reads the orchestrator line by line.
+
+  **Four refinements (a)–(d) absorbed verbatim from the §0205 plan-approval cycle:**
+
+  1. **Refinement (a) — F6 structural debt named explicitly here, not solely via the `manifest_version` marker.** The per-run manifest carries `manifest_version: "f6-operational-v0.1"` as an **operational placeholder** pending the F6 substrate-read contract called for at §0143 Consequences (month 4-5 architecture artifact). When the F6 RFC lands, it has three options with respect to this manifest's structure: **adopt** it verbatim, **adapt** it (preserving some surface, revising other), or **supersede** it (introducing a contractual structure that the operational tier then conforms to). §0205 deliberately does NOT pre-bind the F6 contract; the operational tier materializes F6 operationally and treats the contractual tier as the higher authority when it lands. This is the same hierarchy as Charter → Ontology → Architecture: subordinate documents are revised when conflict with their authoritative ancestor surfaces.
+
+  2. **Refinement (b) — Multi-source preparedness from the first manifest emission.** `inputs.by_source` is a typed object with three reserved keys: `cic_ids` (populated this scope), `synthetic` (null today, expected populated by §0205+ Frente 2), `honeypot` (null today, expected populated by §0205+ Frente 3). The `null` slots cost zero today and prevent migration of the manifest structure when Frentes 2 + 3 land. The `manifest_validation.json` validation document enforces all three keys as required-but-nullable.
+
+  3. **Refinement (c) — Base image digest pinning in the Dockerfile, not floating reference.** Dockerfile `FROM` lines read `golang:1.23-alpine@sha256:…` and `debian:bookworm-slim@sha256:…` via build-arg indirection (`ARG GOLANG_IMAGE` + `ARG DEBIAN_IMAGE`). The default values in the Dockerfile are intentionally invalid placeholder digests (sha256 of all zeros) so a forgotten pin step fails fast at `docker build`. Operator runs `make pin-base-images` once before the first build; the script (`pin-base-images.sh`) pulls the floating references and writes the resolved sha256 digests into `.env`, which `make build` then consumes. Reproducibility-honesta has a temporal dimension: reference drift breaks rebuild months later; content-addressed pinning bounds reproducibility by **registry retention**, not by **upstream-rename whim**.
+
+  4. **Refinement (d) — Reproducibility window honestly documented.** `infra/docker/README.md` §Reproducibility window — honest disclosure lists the two external dependencies that bound the scaffold's reproducibility temporally: (i) registry retention of the pinned base images, (ii) Go module proxy availability. The scaffold does NOT claim byte-identical output across machines, deterministic substrate-row ordering across runs, or protection against upstream library bugs reproduced inside the digest-pinned image. Tier-3 honesty: name what the scaffold does NOT guarantee so operators know which dimensions to mirror to durable storage if multi-year reproducibility matters.
+
+  **Three plan-approval decisions absorbed (carried over from the §0205 cravamento):**
+
+  - **(I.b) pre-req PR shape**: §0204 (CLI lift, PR #224 open) preceded §0205 (this entry) as separate landings per `§0184` / `§0186` MO2 one-PR-per-advance discipline. §0205 is stacked against the §0204 branch; per the `feedback_stacked_pr_auto_close` precedent (two prior incidents 2026-05-23), the §0205 PR will auto-close if the §0204 base branch is squash-merged + deleted — the recovery path is rebase onto main + create new PR rather than reopen.
+  - **Run-artifacts retention**: preserved per RUN_ID indefinitely. `make clean-old-runs N=10` is opt-in operator-invoked (default keeps 10 most recent); no automatic time-based, size-based, or success-based deletion. Audit-friendly accumulation is the default; disk-growth control is named operator responsibility in the README.
+  - **HTTP observability surface**: opt-in via `--profile observability`. Pipeline is CLI-only by design; the manifest captures the full epistemic output without the HTTP surface running.
+
+- **Constitutional review:**
+
+  **Tier 1 (Charter)** — zero impact. §2.1 immutability inherited via the existing substrate write path (`ingest-cic-ids` + `replay-all-derived-actor-attributions` produce content-addressed records; no new write surfaces introduced). §2.3 provenance: existing IngestionEvent paired-write (§0038) inherited; collector_ref + channel populated per §0204 cravamento. §3 N1: pipeline does not introduce truth into the substrate; signature CLIs are read-only over the substrate per §3 N3.
+
+  **Tier 2 (Ontology/Architecture)** — zero new types, zero new protos. F6 substrate-read contract remains a pending architecture artifact (§0143 month 4-5); §0205 materializes F6 operationally as the per-run manifest while explicitly NOT pre-binding the contract — refinement (a) is the constitutional gesture.
+
+  **Tier 3 (services/`schemas`)** — zero changes under `schemas/`. Zero changes to `services/ingestion/internal/*`. Net surface lives entirely under `infra/docker/`: 8 files greenfield. The scaffold consumes existing CLI binaries verbatim; no CLI surface modifications.
+
+  **Anchor verification per §0142 deliberate-inventory pattern:**
+  - §0143 — Sub-benchmark 1 definition + F6 architecture artifact call-forward. Status: F6 forward-reference materialized operationally; F6 contract still pending.
+  - §0162 — reachability-claim discipline + EvaluationStats per-signature non-firing diagnosis. Status: manifest captures the per-signature envelope verbatim so `instrumented_non_firing` outcomes remain operator-diagnosable.
+  - §0163 — F3 envelope JSON stable wire-contract. Status: manifest embeds envelopes verbatim under `signatures.*` keys; refinement (a) of §0204 (Report-vs-envelope distinction) honored — the manifest does not coerce the §0204 Report shape and the §0163 envelope shape into a single shared structure.
+  - §0168 — DerivedActorAttribution Cat II construct closing §0162 gap (1). Status: pipeline step 2 invokes `replay-all-derived-actor-attributions`.
+  - §0169 — `tcp_flow_features_clustering_v1` alternative signature closing §0162 gap (2). Status: pipeline step 3 invokes the network finder with `-signature flow-features -with-attribution`.
+  - §0138 + §0140 — Layer B parameters as rational pairs per paired-dimension serialization contract. Status: parameters captured in manifest `parameters.layer_b.{t_b,k_c}.{numerator,denominator}`.
+  - §0027 — single-writer-serialized substrate. Status: enforced by sequential `docker compose run --rm cli` invocations + `--profile observability` opt-in for the daemon to prevent concurrent writeMu contention during a run.
+  - §0204 — `ingest-cic-ids` CLI lift. Status: §0205 is the immediate downstream consumer (pre-req closure).
+  - §0184 / §0186 MO2 — one-PR-per-advance bundled-shape discipline. Status: applied (§0204 + §0205 = two PRs).
+  - §0142 MO3 — deliberate-inventory sweep at pre-RFC framing. Status: applied; this list is the sweep.
+
+  Falsifiability: the scaffold's behavior is mechanically verifiable in three ways. (1) `bash -n infra/docker/run-sub-benchmark-1.sh` validates the orchestrator's syntax. (2) `jq . infra/docker/manifest_validation.json` parses the validation document. (3) The manifest produced by `make run` against any CIC-IDS-2017-format CSV must (a) parse against `manifest_validation.json`, (b) contain `total_candidates` equal to the sum of per-signature `candidate_count` values, (c) report `instrumented_non_firing == true` iff `total_candidates == 0`. A regression that violated any of these would surface as a downstream validation-document failure on the manifest, not as a silent drift.
+
+- **Consequences:**
+  - 8 new files under `infra/docker/`: Dockerfile, compose.yml, run-sub-benchmark-1.sh, Makefile, pin-base-images.sh, manifest_validation.json, .env.example, README.md.
+  - 0 changes under `services/`, `schemas/`, or `docs/architecture/`.
+  - 1 decision-log append (this entry).
+  - **Sub-benchmark 1 pipeline becomes operator-runnable** for the first time: `make pin-base-images && make build && make run` against an operator-supplied CIC-IDS sample produces a manifest under the `run-artifacts` named volume.
+  - **F6 RFC drafting trigger named**: the F6 substrate-read contract (architecture artifact §0143 month 4-5) is now formally open. The operational placeholder `f6-operational-v0.1` provides empirical material the F6 RFC can adopt / adapt / supersede.
+
+  **Carry-forwards:**
+  - **§0206 follow-on** — pipeline lifecycle steps (form + promote + measure-chain-morphology + demote evaluation). Trigger: §0205's first run produces empirical signature JSON output structure; §0206 writes the orchestrator extension consuming that structure with concrete examples in hand. Cravamento: §0206 does NOT speculate about candidate JSON layout — it waits for evidence.
+  - **F6 RFC drafting** — pending architecture artifact per §0143. Now structurally unblocked by the operational placeholder; the F6 RFC author can read `f6-operational-v0.1` against the contract they are drafting and decide adoption posture explicitly.
+  - **`cmd/ingest-cic-ids` Report `TimestampsRecovered` counter** (named at §0204 carry-forwards) — §0205 manifest does not yet capture this dimension. If §0206 lifecycle measurements depend on knowing how many observations used the timestamp substitute, the library counter lands as a small follow-on PR per §0204's named trigger.
+  - **CIC-IDS BLAKE3 re-verification** — bundled b3sum or a small Go-based file-hash CLI. §0205 captures `blake3_declared` (operator-asserted from `.env`), not `blake3_recomputed`. If §0206+ audit pressure requires the recompute path, a separate PR adds the dimension; not speculated now.
+
+  **Methodological observation 1 — Operational placeholder ahead of contract drafting is the structurally-honest gesture when implementation must produce an artifact before the contract has been redacted.** When implementation cannot wait for the architecture artifact (F6 here) but must produce that artifact's operational analogue, the honest move is (a) name the placeholder explicitly with a version marker (`f6-operational-v0.1` — the `operational` prefix is constitutive, not decorative), (b) document in the surrounding text that the contractual tier remains pending, and (c) enumerate the three options the contractual tier retains (adopt / adapt / supersede). The alternative — silently treating the operational artifact's structure as if it were the contract — would be a tier-2 violation: the operational tier silently binding the contractual tier without amendment process. **Pattern: when implementation must produce X before X's contract is drafted, mark the artifact as `<x>-operational-v0.1` + name the three contract-tier options explicitly + ensure the surrounding documentation treats the contractual tier as the higher authority.**
+
+  **Methodological observation 2 — Scope-honest deferral of pipeline lifecycle.** The user's original §0205 pipeline cravamento listed 8 steps; this entry lands steps 1-3 + manifest emit (4 effective steps when counting the manifest). The deferred 4 steps (form + promote + morphology + demote-evaluation) are named in the manifest's `pipeline_scope.deferred_steps` list so manifests across scaffold revisions remain structurally comparable, AND named in §0206 carry-forward so the discipline of running §0205 first to gather signature-output evidence is preserved against speculation. **Pattern: when a multi-step plan exceeds a single PR's structural budget, land the infrastructure + the steps whose shape is empirically grounded in this PR, and name the deferred steps + their deferral rationale in BOTH the artifact (manifest field) AND the decision-log (this MO). Future PRs in the same arc then inherit both the budget discipline and the empirical-evidence-precedes-orchestration discipline.**
+
+  **Methodological observation 3 — Stacked-PR risk under main-branch squash-merge.** §0205 branches from the §0204 branch (`claude/0204-ingest-cic-ids-cli`). Per `feedback_stacked_pr_auto_close` (two prior incidents 2026-05-23), when §0204 squash-merges and its branch is deleted, the §0205 PR will auto-close because its base branch ceased to exist; closed PRs cannot be reopened against a deleted base. The recovery path is to rebase claude/0205-deployment-scaffold onto main + open a new PR. This risk is structural, not avoidable; the §0205 PR description names it explicitly so the merge sequence (§0204 first, then §0205 rebase + new PR) is communicated to the reviewer. **Pattern: stacked PRs against branches that will squash-merge MUST have the recovery sequence named in the PR description; the auto-close is silent + leaves no in-band indicator.**
+
+- **Supersession:** No prior entry superseded. F6 architecture artifact (§0143 month 4-5) remains pending; this entry materializes it operationally without superseding the architecture call-forward.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
