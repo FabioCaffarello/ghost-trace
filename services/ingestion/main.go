@@ -25,6 +25,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -80,6 +81,8 @@ func run() error {
 	httpTLSCert := flag.String("http-tls-cert", "", "path to PEM-encoded TLS certificate (server cert + optional intermediate chain). Required with --http-tls-key.")
 	httpTLSKey := flag.String("http-tls-key", "", "path to PEM-encoded TLS private key. Required with --http-tls-cert.")
 	httpTLSClientCA := flag.String("http-tls-client-ca", "", "path to PEM-encoded CA bundle used to verify client certificates (enables mTLS). Empty disables client-cert verification. Requires --http-tls-cert + --http-tls-key.")
+	httpSlogFormat := flag.String("http-slog-format", "none", "structured-output format for httpapi requests per decision-log §0197: 'none' (default; silent), 'text' (slog.NewTextHandler to stderr), or 'json' (slog.NewJSONHandler to stderr).")
+	httpMetricsEnabled := flag.Bool("http-metrics-enabled", false, "enable Prometheus-style /metrics scrape endpoint per decision-log §0199 + §0200 (counter + per-path duration histogram). Default false (endpoint returns 503).")
 	flag.Parse()
 
 	// Root context cancellable on SIGINT / SIGTERM per concurrency-pattern §Context Propagation.
@@ -146,6 +149,21 @@ func run() error {
 		// (GET /v1/hypotheses/state and follow-ons). Same substrate
 		// backs the write side.
 		handlerOpts = append(handlerOpts, httpapi.WithSubstrate(sub))
+		// Per decision-log §0201 production observability wiring:
+		// configure structured-request logger + Prometheus-style
+		// metrics registry from flag inputs. Defaults preserve the
+		// pre-§0201 no-op-default discipline per §0197 MO1 +
+		// §0199 MO1.
+		logger, err := resolveLogger(*httpSlogFormat, os.Stderr)
+		if err != nil {
+			return fmt.Errorf("resolve HTTP slog format: %w", err)
+		}
+		if logger != nil {
+			handlerOpts = append(handlerOpts, httpapi.WithLogger(logger))
+		}
+		if *httpMetricsEnabled {
+			handlerOpts = append(handlerOpts, httpapi.WithMetrics(httpapi.NewMetrics()))
+		}
 		handler, err := httpapi.New(in.Append, reporter, handlerOpts...)
 		if err != nil {
 			return fmt.Errorf("construct HTTP handler: %w", err)
@@ -257,6 +275,30 @@ func resolveHTTPTLS(certFile, keyFile, clientCAFile string) (httpTLS, error) {
 		out.clientCAPool = pool
 	}
 	return out, nil
+}
+
+// resolveLogger constructs the structured-output logger from the
+// --http-slog-format value per decision-log §0201 production wiring.
+// Returns nil when format == "none" (preserves the §0197 MO1 no-op-
+// default discipline at the production wiring layer); errors on
+// unknown format values so misconfiguration fails fast at startup
+// rather than surfacing silently at first request.
+//
+// Recognized formats:
+//   - "none"  → no logger (caller skips WithLogger).
+//   - "text"  → slog.New(slog.NewTextHandler(w, nil))   — human-readable.
+//   - "json"  → slog.New(slog.NewJSONHandler(w, nil))   — machine-readable.
+func resolveLogger(format string, w io.Writer) (*slog.Logger, error) {
+	switch format {
+	case "", "none":
+		return nil, nil
+	case "text":
+		return slog.New(slog.NewTextHandler(w, nil)), nil
+	case "json":
+		return slog.New(slog.NewJSONHandler(w, nil)), nil
+	default:
+		return nil, fmt.Errorf("unknown --http-slog-format %q (valid: none, text, json)", format)
+	}
 }
 
 // resolveAuthToken returns the effective bearer token for the HTTP

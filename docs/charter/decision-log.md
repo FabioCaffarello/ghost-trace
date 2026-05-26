@@ -8761,6 +8761,54 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0201` — production main observability wiring; --http-slog-format + --http-metrics-enabled parameters + /metrics auth-exemption
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0197-§0200 established the observability surface at the httpapi package layer with the no-op-default discipline per §0197 MO1. The production main entrypoint (`services/ingestion/main.go`) constructed `httpapi.Handler` WITHOUT `WithLogger` or `WithMetrics` — the four advances were structurally present but operationally silent in production.
+
+  §0201 wires the production main: adds CLI parameters for sslog format + metrics enablement, constructs the logger + metrics registry from parameter inputs, passes via the Handler options. Preserves the §0197 MO1 no-op-default discipline at the production wiring layer — both parameters default to disabled (no slog logger / no metrics), matching the pre-§0201 silent operation.
+
+- **Decision:** Wire the production main with observability options. Four changes:
+
+  1. **`services/ingestion/main.go`** — adds stdlib `slog` import + two new parameters:
+     - `--http-slog-format=none|text|json` (default `none` — preserves §0197 MO1 no-op-default).
+     - `--http-metrics-enabled` (boolean, default false).
+     Adds `resolveLogger(format, w)` helper returning `*slog.Logger` (nil when format == "none"). In the HTTP server bootstrap, constructs the logger via the helper + appends `WithLogger`/`WithMetrics` to handlerOpts when configured.
+
+  2. **`services/ingestion/internal/httpapi/handler.go`** — extends `requiresAuth` to exempt `/metrics` (like `/healthz`) per Prometheus convention. Operator-side gating is via network policy on the scrape network, not per-request bearer-token auth.
+
+  3. **`services/ingestion/internal/httpapi/metrics_test.go`** (+1 test: `TestMetricsHTTP_AuthExempt`) — mechanically verifies /metrics returns 200 (not 401) even when single-token auth is configured. The structural witness against a regression where the /metrics handler is moved under the auth gate.
+
+  4. **`services/ingestion/main_test.go`** (+1 test: `TestResolveLogger` with 5 sub-cases) — none/empty return nil; text returns a text-handler logger; json returns a json-handler logger; unknown format errors with the valid-values hint.
+
+- **Constitutional review:**
+
+  Subordinate to §0197 MO1 (no-op-default at production wiring layer preserved via `none`-default + nil-skip in handlerOpts append). Subordinate to §0199 + §0200 metrics surface (production wiring exposes both counter + histogram via /metrics). Subordinate to §0035 + §0098 auth model (extends `/healthz` T0 exemption to `/metrics` per Prometheus convention).
+
+  Falsifiability: 6 new unit tests cover the contract. `TestResolveLogger` with 5 sub-cases exhausts the format enum + the unknown-format error path; `TestMetricsHTTP_AuthExempt` mechanically witnesses the auth-exemption claim (a regression that moved /metrics under the auth gate would surface as a 401 from the test).
+
+- **Consequences:**
+  - 2 modified main-layer files (main.go: ~30 lines added — parameters + resolveLogger + handlerOpts append; main_test.go: ~70 lines added — TestResolveLogger).
+  - 2 modified httpapi-layer files (handler.go: 8 lines added — /metrics in requiresAuth; metrics_test.go: ~20 lines added — TestMetricsHTTP_AuthExempt).
+  - 6 new unit tests (5 sub-cases in TestResolveLogger + 1 TestMetricsHTTP_AuthExempt).
+  - **§0197-§0200 observability surface now operationally wired in production.** Operators starting the service with `--http-slog-format=json --http-metrics-enabled` get structured request entries on stderr + Prometheus scrape endpoint at /metrics. Defaults preserve pre-§0201 silent operation; operators must opt in.
+  - **/metrics is auth-exempt at the package layer.** Operators with single-token or per-tier auth configured can scrape /metrics without supplying a bearer token. The convention matches Prometheus deployments where /metrics is on an internal scrape network gated by network policy. Operators wanting per-request auth on /metrics can deploy behind a reverse proxy that enforces it; the package-level exemption is the operationally-friendlier default.
+
+  Per §0164 MO1 verification discipline: full `go test ./...` from `services/ingestion/` reports 0 failures.
+
+  Scope discipline per §0201: **production wiring only — no observability surface changes** — does NOT introduce:
+  - New observability primitives (no OTel trace context; no new metric types; no new structured-entry fields).
+  - Per-tier auth on /metrics (deferred; current model is global exemption matching Prometheus convention).
+  - Auto-enable defaults (operator must explicitly opt in via parameters — preserves backward-compat for existing deployments that don't expect the additional emissions).
+  - main.go logger derivation (slog.SetDefault, context.Value propagation, etc. — deferred).
+
+  - **Methodological observation 1 — Production wiring SHOULD preserve the package-layer no-op-default at the parameter layer; parameter defaults match the package-layer default behavior.** §0201's `--http-slog-format=none` default + `--http-metrics-enabled=false` default mean a fresh `services/ingestion` deployment behaves identically pre-§0201 vs post-§0201 — no structured emissions appear unexpectedly + no /metrics scrape endpoint surfaces accidentally. Operators wanting the §0197-§0200 surfaces opt in explicitly. **Pattern: when wiring package-layer observability surfaces at the production main layer, parameter defaults SHOULD match the package-layer no-op-default behavior. Backward-compat across the production-wiring boundary preserves the §0197 MO1 discipline at the operator-facing parameter surface; opt-in is the operator's explicit decision, not a silent migration.**
+
+- **Supersession:** No prior decision-log entry superseded. §0197-§0200 observability surface now operationally wired in production. Subsequent advances within this direction can adopt the §0201 MO1 no-op-default-at-parameter-layer discipline; future operational-tier surfaces beyond observability (e.g., feature parameters, deployment-mode switches) SHOULD also follow this pattern.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

@@ -592,6 +592,16 @@ func (h *Handler) requiresAuth(r *http.Request) bool {
 	if r.URL.Path == "/healthz" {
 		return false
 	}
+	// Per decision-log §0201 production wiring + Prometheus convention:
+	// /metrics is auth-exempt (T0 like /healthz). Operator-side gating
+	// is via network policy (internal scrape network) rather than per-
+	// request bearer-token auth. The endpoint content is operational
+	// statistics — operationally non-sensitive — and the per-request
+	// auth overhead would surface in the histogram p99 across every
+	// scrape.
+	if r.URL.Path == "/metrics" {
+		return false
+	}
 	if h.authToken == "" && len(h.tierTokens) == 0 {
 		return false
 	}
