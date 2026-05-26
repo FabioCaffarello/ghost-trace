@@ -319,6 +319,76 @@ func TestEmitFatalStructure(t *testing.T) {
 	}
 }
 
+// TestResolveLogger covers the §0201 production-wiring helper that
+// constructs the structured-request logger from the --http-log-format
+// value.
+func TestResolveLogger(t *testing.T) {
+	t.Run("none returns nil logger (no-op-default discipline)", func(t *testing.T) {
+		got, err := resolveLogger("none", os.Stderr)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != nil {
+			t.Errorf("got non-nil logger, want nil (none should preserve §0197 MO1 no-op-default)")
+		}
+	})
+
+	t.Run("empty string equivalent to none", func(t *testing.T) {
+		got, err := resolveLogger("", os.Stderr)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != nil {
+			t.Errorf("got non-nil logger for empty format, want nil")
+		}
+	})
+
+	t.Run("text format returns text-handler logger", func(t *testing.T) {
+		var buf bytes.Buffer
+		got, err := resolveLogger("text", &buf)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got == nil {
+			t.Fatal("got nil logger, want non-nil text-handler logger")
+		}
+		got.Info("witness", "key", "value")
+		out := buf.String()
+		if !strings.Contains(out, "witness") || !strings.Contains(out, "key=value") {
+			t.Errorf("text-handler output missing expected content: %q", out)
+		}
+	})
+
+	t.Run("json format returns json-handler logger", func(t *testing.T) {
+		var buf bytes.Buffer
+		got, err := resolveLogger("json", &buf)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got == nil {
+			t.Fatal("got nil logger, want non-nil json-handler logger")
+		}
+		got.Info("witness", "key", "value")
+		out := buf.String()
+		if !strings.Contains(out, `"msg":"witness"`) || !strings.Contains(out, `"key":"value"`) {
+			t.Errorf("json-handler output missing expected content: %q", out)
+		}
+	})
+
+	t.Run("unknown format errors", func(t *testing.T) {
+		got, err := resolveLogger("nonsense", os.Stderr)
+		if err == nil {
+			t.Fatal("expected error for unknown format, got nil")
+		}
+		if got != nil {
+			t.Errorf("expected nil logger on error, got non-nil")
+		}
+		if !strings.Contains(err.Error(), "valid: none, text, json") {
+			t.Errorf("error message should list valid values: %v", err)
+		}
+	})
+}
+
 func TestResolveAuthToken(t *testing.T) {
 	t.Run("both empty returns empty (auth disabled)", func(t *testing.T) {
 		got, err := resolveAuthToken("", "")

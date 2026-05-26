@@ -412,6 +412,28 @@ func TestMetricsHistogram_EncodeEmptyHistogramRegistry(t *testing.T) {
 	}
 }
 
+// TestMetricsHTTP_AuthExempt verifies /metrics is reachable WITHOUT
+// auth even when single-token auth is configured (per §0201 production
+// wiring + Prometheus convention — operator-side gating is via network
+// policy on the scrape network, not per-request bearer-token auth).
+func TestMetricsHTTP_AuthExempt(t *testing.T) {
+	doAppend, _ := stubAppendFunc(nil)
+	metrics := NewMetrics()
+	h := MustNew(doAppend, nil, WithMetrics(metrics), WithAuthToken("secret"))
+
+	// No Authorization header — would 401 on /v1/events; must succeed on /metrics.
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code == http.StatusUnauthorized {
+		t.Errorf("/metrics returned 401 with auth configured; should be auth-exempt (T0 like /healthz)")
+	}
+	if rr.Code != http.StatusOK {
+		t.Errorf("status: got %d, want 200 (auth-exempt success path); body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 // TestMetricsHTTP_HistogramObservedOnServeHTTP exercises end-to-end:
 // requests against the /healthz endpoint populate the histogram
 // observable via /metrics scrape.
