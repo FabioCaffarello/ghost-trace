@@ -12,6 +12,7 @@ help:
 	@echo "  tools          install protoc-gen-go locally per tools.go pin"
 	@echo "  generate       run protoc to produce $(GEN_OUT)/**/*.pb.go"
 	@echo "  build          go build -trimpath -o $(BIN_DIR)/ingestion ."
+	@echo "  ingest-cic-ids-build  go build -trimpath -o $(BIN_DIR)/ingest-cic-ids ./cmd/ingest-cic-ids"
 	@echo "  verify-build   go build -trimpath -o $(BIN_DIR)/verify ./cmd/verify"
 	@echo "  orphan-cleanup-build  go build -trimpath -o $(BIN_DIR)/orphan-cleanup ./cmd/orphan-cleanup"
 	@echo "  derive-build   go build -trimpath -o $(BIN_DIR)/derive-operational-session ./cmd/derive-operational-session"
@@ -140,6 +141,11 @@ $(PROTOC_GEN_GO):
 build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/ingestion .
+
+.PHONY: ingest-cic-ids-build
+ingest-cic-ids-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/ingest-cic-ids ./cmd/ingest-cic-ids
 
 .PHONY: verify-build
 verify-build:

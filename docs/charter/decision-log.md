@@ -8890,6 +8890,78 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0204` — `cmd/ingest-cic-ids` CLI lift; CIC-IDS adapter operator surface; pre-req for §0205 deployment scaffold
+
+- **Status:** accepted
+- **Date:** 2026-05-25
+- **Context:** §0145 landed the CIC-IDS adapter as a Go package (library surface only) with the explicit deferral note: *"CLI wiring deferred. This PR provides the library surface only. CLI command (e.g. `cmd/ingest-cic-ids/`) is a follow-on PR. Rationale: keeping the adapter PR scoped to library + tests + mapping; CLI wiring depends on operator workflow decisions that are best deliberated as separate ticket."* The §0205 deployment scaffold (Sub-benchmark 1 — first non-trivial demotion substrate-emergent per §0143) requires the CLI as pipeline entry point: the scaffold's first step is `compose run --rm cli ingest-cic-ids` against a CIC-IDS sample, and that step has no command surface today. §0204 lands the CLI as an isolated entry per `§0184` / `§0186` MO2 one-PR-per-advance discipline, so the eight operator workflow decisions §0145 Consequences deferred are captured here in their own entry rather than buried inside §0205.
+
+- **Decision:** thin-wrapper CLI `services/ingestion/cmd/ingest-cic-ids/main.go` exposing `cic_ids.Ingest` verbatim with the eight operator workflow choices below. Zero library changes; zero new schemas; zero internal/ packages touched. Eight choices cravadas:
+
+  1. **Input source — positional file arg, stdin fallback.** Invocation shape: `ingest-cic-ids [flags] [csv-path]`. With path arg → `os.Open(path)`; without → reads `os.Stdin`. Justification: container deployment expects `docker compose run --rm cli ingest-cic-ids /seed/sample.csv` against a bind-mounted seed; stdin fallback preserves Unix-pipe ergonomics for ad-hoc operator use.
+
+  2. **Per-event substrate.Append — NO CLI-side batching.** Library precedent (cic_ids.go:340-382 calls `ingester.Append` per observation). Tier-3 fundamentação (primary first per §0142 honesty discipline): per `docs/architecture/concurrency-pattern.md` §Substrate-Writer Serialization + §0027 single-writer-serialized, SQLite WAL serializes writes through `writeMu`; **batch insertion under WAL does not gain throughput** — the lock is per-writer-process, not per-statement, so N statements in 1 transaction vs N transactions of 1 statement each both hold the lock for ~N statement-durations. §2.1 immutability is the **secondary** alignment — per-event commit avoids any CLI-introduced batch-rollback semantics that would complicate what content-hash idempotency already guarantees. Carry-forward §0022: if §0205 deployment surfaces measurable throughput pressure on 1GB CIC-IDS sample, a CLI-side batching entry opens with empirical evidence — not speculated now.
+
+  3. **Error recovery — library semantics verbatim.** Parse error (`ParseError` on a required ENDPOINT column) → `RowsRejected` counter incremented, ingest continues. Substrate error → abort + emit partial Report. Exit codes mirror §0173 `replay-all-*` precedent:
+     - `0` success (RowsRejected acceptable unless `-strict`)
+     - `2` tool/config error (bad command-line option, cannot open input, cannot open substrate)
+     - `3` ingest failure (substrate-error mid-run) OR (`-strict` AND RowsRejected > 0)
+     - `1` not used (drift-detected semantic does not apply to ingest direction)
+
+  4. **Progress visibility — `-progress N` stderr line every N lines read.** Default `10000` (≈0.1% granularity on a 1M-row dataset). `0` disables. Implementation: newline-counting `io.Reader` wrapper around the source — deterministic + library-free + acceptable approximation of CSV row boundaries for operator UX. Mild overcount on multi-line quoted fields acceptable for progress (not for auditing; audit-grade numbers come from Report counters at end).
+
+  5. **Timestamp fallback determinism — documented, library counter deferred.** When CIC-IDS Timestamp column is missing or unparseable, library (`cic_ids.go:366`) falls back to row-index nanoseconds for substrate hash-stability across re-ingest runs. This fallback is invisible in the current `Report` struct. Carry-forward §0022 — explicit trigger named: **when §0205 manifest needs audit-grade visibility into how many observations used the timestamp-substitute, library gains `TimestampsRecovered` counter via separate PR**. §0204 deliberately keeps the lift thin; the trigger is the manifest structure's `verdict.instrumentation.by_source.cic_ids.*` audit row needing that count.
+
+  6. **CSV encoding — Go `csv.Reader` default.** No additional validation. Non-UTF-8 surfaces as parse error → `RowsRejected` counter. Mapping doc (`docs/adapters/cic-ids-mapping.md`) is updated to name this as the operator contract.
+
+  7. **Channel identity — `-channel` option with contextual default.** `"cic-ids-file"` when invoked with path arg, `"stdin"` when reading stdin. Operator override via explicit option (e.g. `-channel "cic-ids-honeypot-v1"` anticipated for §0205+ honeypot frente). Channel is threaded into every IngestionEvent paired-record per §0038, materializing provenance discipline for audit.
+
+  8. **Idempotency UX — silent exit 0 on re-ingest.** Library's `ingester.Append` is content-hash-addressed via `substrate.AppendPair` `INSERT OR IGNORE`; identical CSV → identical hashes → re-ingest is a no-op at the substrate level. The Report counters reflect Append CALL counts (RowsParsed unchanged across runs), not net new rows committed — operator detects re-ingest by observing the substrate row count did not grow, not by Report variance. Documented in mapping doc; no warn/error emitted.
+
+  **Output contract — refinement (a) — Report vs §0163 envelope.** The Report JSON emitted to stdout derives from `cic_ids.Report` struct verbatim and is a distinct output contract from the §0163 F3-envelope shape `{signature_name, candidate_count, candidates[], stats{...}}`. These are output contracts for **distinct CLI categories** (ingest vs signature evaluation); §0204 does not attempt unification. §0205 manifest format will embed both shapes side-by-side under their respective pipeline-step entries — without coercing one into the other.
+
+- **Constitutional review:**
+
+  **Tier 1 (Charter)** — zero impact. §2.1 immutability inherited unchanged (per-event Append; no batch-rollback semantics introduced). §2.3 provenance: IngestionEvent paired-write per §0038 inherited unchanged; collector_ref + channel populated per envelope. §3 N1 (no truth at substrate): label column already excluded by library per `columns.go` ColLabel comment; CLI does not re-introduce.
+
+  **Tier 2 (Ontology/Architecture)** — zero new types. `flow_record_summary` OMQ candidate per §0145 remains open; §0204 does not touch.
+
+  **Tier 3 (services/schemas)** — zero changes under `schemas/`, zero new protos, zero `internal/*` packages modified. Net surface: 2 new files under `services/ingestion/cmd/ingest-cic-ids/` (main.go + main_test.go), 1 Makefile edit (1 help line + 1 PHONY target), 1 mapping doc append. Build verified via `make ingest-cic-ids-build`; help block enumeration verified via `make help | grep -c ingest-cic-ids = 1`.
+
+  **Anchor verification per §0142 deliberate-inventory pattern:**
+  - §0145 — library deferral entry. Status: this entry closes the deferred CLI follow-on.
+  - §0162 — EvaluationStats reachability-claim shape. Status: not touched (CLI is ingest-tier, not signature-tier); cited only for shape kinship of the operator-visibility discipline.
+  - §0163 — F3-envelope JSON contract. Status: explicitly distinguished from Report shape per refinement (a).
+  - §0168 — DerivedActorAttribution closes gap (1) downstream. Status: holds.
+  - §0169 — `tcp_flow_features_clustering_v1` closes gap (2) via alternative signature. Status: holds.
+  - §0038 — IngestionEvent paired-write atomicity. Status: inherited unchanged; CLI threads channel + collector through envelope.
+  - §0027 — single-writer-serialized forbidden multi-process. Status: respected (CLI is single-process).
+  - §0173 — `replay-all-*` exit code precedent (0/1/2/3 with 1=drift-detected). Status: applied with `1` deliberately unused (drift semantic inapplicable to ingest).
+  - §0184 / §0186 MO2 — one-PR-per-advance bundled-shape discipline. Status: applied (§0204 isolated entry; §0205 scaffold follows).
+  - §0142 MO3 — deliberate-inventory sweep at pre-RFC framing. Status: applied (this anchor list is the sweep).
+
+  Falsifiability: 10 unit tests in `main_test.go` mechanize each decision. `TestRun_StdinPath` + `TestRun_FilePath` cover decision #1; `TestRun_Idempotent` covers #8; `TestRun_StrictFlagExits3OnRowsRejected` + `TestRun_StrictNoEffectWhenZeroRejected` cover #3 exit-code semantics; `TestRun_ProgressEmission` + `TestRun_ProgressDisabledZero` cover #4; `TestRun_ChannelOverride` covers #7. A regression that altered any of these would mechanically surface as a test failure.
+
+- **Consequences:**
+  - 2 new files under `services/ingestion/cmd/ingest-cic-ids/` (main.go ~160 LOC; main_test.go ~190 LOC; 10 tests).
+  - 1 Makefile edit (help line + PHONY target inserted after `build`, preserving functional-grouping convention with peer ingest entry points).
+  - 1 docs edit (`docs/adapters/cic-ids-mapping.md` appends a "CLI usage" section).
+  - **§0145 deferred CLI follow-on closes** — operators can now invoke `ingest-cic-ids` directly against any CIC-IDS-2017 CSV without writing a wrapper.
+  - **§0205 unblocked** — deployment scaffold pipeline now has its first step's command surface.
+
+  **Carry-forwards (§0022 candidates if §0205 surfaces empirical pressure):**
+  - **CLI-side batching with throughput evidence** — opens only when 1GB sample empirically shows substrate ingest is the throughput bottleneck under WAL. Speculation is rejected per §4 falsifiability discipline.
+  - **`TimestampsRecovered` counter added to library `Report` struct** — explicit trigger named: §0205 manifest needs audit-row visibility into the timestamp-substitute count. PR shape: small library change + Report-field addition; CLI consumes the new counter mechanically.
+  - **`flow_record_summary` OMQ candidate** — still open from §0145; not touched by §0204; surfaced at every ingest run via the existing `FlowStatisticsDropped` counter in Report.
+
+  **Methodological observation 1 — Thin-wrapper CLI lift after deferred library + explicit operator-workflow-choice cravamento.** When a previous PR landed a library with explicit "CLI wiring deferred" framing, the subsequent CLI lift's value is NOT new code (the library does the work) but explicit cravamento of operator workflow choices that the library could not decide. §0204's body is dominated by decision-justification, not implementation — the implementation (`main.go`) is ~160 LOC of command-line-option plumbing + I/O wiring. **Pattern: deferred-library-followed-by-CLI-lift PRs should foreground the decisions in the decision-log, not the code; the code is mechanical, the decisions are the constitutional artifact.**
+
+  **Methodological observation 2 — Tier-3 honesty on rationale ordering.** Pre-pressure framing of decision #2 cited §2.1 immutability as primary; tier-3 sweep on the pressure reordered to §0027 single-writer-via-WAL primary, §2.1 secondary, because **batch insertion under WAL does not actually gain throughput** (the writeMu lock holds regardless of statement count per transaction). Primary fundamentação should be the load-bearing structural ground; secondary fundamentação is the corroborating-but-not-decisive alignment. **Pattern: when ordering multi-clause rationale, place the structural-ground-that-defeats-the-counterargument FIRST; corroborating-but-not-decisive claims SECOND.** §0142 deliberate-inventory discipline should sweep multi-clause rationale for ordering coherence at the same depth it sweeps anchor citations.
+
+- **Supersession:** Closes §0145 deferred CLI follow-on. No other entries superseded.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
