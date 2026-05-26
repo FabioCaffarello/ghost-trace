@@ -8771,7 +8771,7 @@ The four methodological observations are the pilot's contribution to procedure b
 
 - **Decision:** Wire the production main with observability options. Four changes:
 
-  1. **`services/ingestion/main.go`** — adds `log/slog` import + two new parameters:
+  1. **`services/ingestion/main.go`** — adds stdlib `slog` import + two new parameters:
      - `--http-slog-format=none|text|json` (default `none` — preserves §0197 MO1 no-op-default).
      - `--http-metrics-enabled` (boolean, default false).
      Adds `resolveLogger(format, w)` helper returning `*slog.Logger` (nil when format == "none"). In the HTTP server bootstrap, constructs the logger via the helper + appends `WithLogger`/`WithMetrics` to handlerOpts when configured.
