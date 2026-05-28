@@ -9210,6 +9210,78 @@ The §0143 mandatory instrumentation per `EvaluationStats` (ObservationsScanned 
 
 ---
 
+## `0209` — `cmd/derive-actor-attribution` CLI lift + scaffold orchestrator wire; operational closure of §0162 Gap (1)
+
+- **Status:** accepted
+- **Date:** 2026-05-28
+- **Context:** §0208 cravou Path A.1 as the remediation direction for Gap A (the (ii) design gap where the §0205 scaffold's `derive-all` step invoked `replay-all-derived-actor-attributions` — a REPLAY-semantic function — instead of any DERIVATION function, leaving the substrate with zero `DerivedActorAttribution` records post-ingest). §0209 materializes Path A.1: a thin-wrapper CLI `cmd/derive-actor-attribution` mirroring the precedent `cmd/derive-operational-session` (§0043) plus an orchestrator-step insertion in `infra/docker/run-sub-benchmark-1.sh` that runs the derivation BEFORE the replay step and BEFORE the F3 signatures step. This entry is the operational closure of §0162 Gap (1); the structural closure was declared at §0162 and instrumented at §0168 + §0169, but the operator-workflow gap surfaced empirically at §0208 only when the §0205 scaffold ran against a real-world sample.
+
+- **Decision:** land six changes as a single PR:
+
+  1. **`services/ingestion/cmd/derive-actor-attribution/main.go`** (~100 LOC) — thin wrapper around `attribution.DeriveAll` (`internal/attribution/attribution.go:111-178`). Command-line surface mirrors `cmd/derive-operational-session/main.go` verbatim:
+     - `-db` + `-blobs` substrate path options (same defaults as every other operator CLI)
+     - `-definition-version` (default `network-5tuple-actor-v1` per §0168; only one definition implemented today; `resolveDefinition` switch-statement registers future definitions per the precedent)
+     - JSON stdout `{definition_version, definition_parameters, examined, skipped, newly_derived, already_derived}` (matches `attribution.Report` shape verbatim)
+     - stderr single-line summary
+     - exit codes `0` (success including zero newly_derived) / `2` (tool or config error including unknown definition-version, substrate open failure)
+
+  2. **`services/ingestion/cmd/derive-actor-attribution/main_test.go`** (4 tests) — `TestRun_DerivesAttributions` (3 derivable observations → `NewlyDerived=3, Skipped=0`); `TestRun_SkipsNonDerivableObservations` (derivable + non-derivable mix → `Skipped >= 1, NewlyDerived >= 1`); `TestRun_Idempotent` (second pass on same substrate → `NewlyDerived=0, AlreadyDerived=2`); `TestRun_UnknownDefinitionVersion` (`-definition-version bogus-v0` → exit `2`, no JSON emitted to stdout, substrate NOT opened).
+
+  3. **`services/ingestion/Makefile`** — `derive-actor-attribution-build` PHONY target + help entry inserted alphabetically adjacent to `derive-build`.
+
+  4. **`infra/docker/run-sub-benchmark-1.sh`** — pipeline orchestrator changes:
+     - INSERT new Step 2 `derive-attributions` invoking `derive-actor-attribution` BEFORE the existing replay step. This is the operational step that populates `DerivedActorAttribution` records in the substrate.
+     - RENAME existing Step 2 label from `derive-all` to `replay-attributions`. The previous label was the §0208-surfaced misnomer; the renamed label aligns with the function's actual REPLAY semantic. Subsequent step numbering shifts: signatures becomes Step 4.
+     - REVISE `pipeline_scope.included_steps` in the manifest assembly from `["ingest", "derive-all", "signatures"]` to `["ingest", "derive-attributions", "replay-attributions", "signatures"]`.
+
+  5. **`docs/adapters/cic-ids-mapping.md`** — new "Operator workflow after ingest" section documenting the 4-step pipeline (ingest → derive-attributions → replay-attributions → signatures) per §0209. References list extended with §0208 + §0209.
+
+  6. **`docs/charter/decision-log.md`** — this entry.
+
+  **Path-rejection rationale recorded for the future**: Path A.2 (wire `attribution.DeriveAll` directly inside `cmd/ingest-cic-ids`) was rejected as over-engineering: it would convolve two distinct operations (ingest + derivation) into a single binary that lands in §0204, increasing blast-radius of that PR retroactively and breaking the operator-mental-model symmetry with `cmd/derive-operational-session`. Path A.3 (operator-side shell-exec into a Go program) was rejected as hostile to operators + violating the §0205 tier-3 audibility commitment that every pipeline step is a CLI an auditor reads line by line. Path A.1 is the only path consistent with the precedent + the §0205 tier-3 discipline.
+
+- **Constitutional review:**
+
+  **Tier 1 (Charter)** — zero impact. `attribution.DeriveAll` is the existing write path landed at §0168; the CLI exposes it operationally without altering substrate write semantics. §2.1 immutability, §2.3 provenance, §3 N1 unchanged.
+
+  **Tier 2 (Ontology / Architecture)** — zero new types. The `network-5tuple-actor-v1` operational definition (§0168) operates as before; the CLI invokes the existing implementation. No proto changes.
+
+  **Tier 3 (services / `schemas`)** — zero changes under `schemas/`. Net surface: 1 new CLI directory (main + test), 1 Makefile addition, 1 orchestrator edit, 1 mapping-doc section, 1 decision-log entry. The multi-stage Dockerfile at `infra/docker/Dockerfile` picks up the new CLI automatically via `go install ./cmd/...` (no Dockerfile change required).
+
+  **Anchor verification per §0142 deliberate-inventory:**
+  - §0043 — first Cat II derivation CLI precedent (`cmd/derive-operational-session`). Status: §0209 mirrors verbatim; same option surface, same exit-code semantic, same JSON output shape.
+  - §0142 MO3 — deliberate-inventory sweep. Status: applied; this anchor list is the sweep.
+  - §0162 — gaps (1) and (2) declared structurally closed. Status: §0209 closes Gap (1) **operationally**; the diagnostic-vs-structural-vs-operational distinction the §0208 entry surfaced is now applied as remediation. Gap (2) operational closure is independent (closed at §0169 via `tcp_flow_features_clustering_v1` signature plus the §0205 orchestrator's `-signature flow-features` invocation).
+  - §0168 — `DerivedActorAttribution` Cat II construct + `network_5tuple_actor_v1` operational definition. Status: §0209 is the operator-facing materialization of §0168's operational definition.
+  - §0169 — `tcp_flow_features_clustering_v1` signature consuming `AttributionView`. Status: signature was applicable but blocked by Gap A's operator-workflow surface; §0209 unblocks.
+  - §0184 / §0186 MO2 — one-PR-per-advance bundled-shape discipline. Status: applied (§0208 diagnostic-only; §0209 fix-only as separate PR).
+  - §0205 — deployment scaffold. Status: orchestrator inherits the §0209 step; `pipeline_scope.included_steps` reflects the new order.
+  - §0205 MO2 — evidence-precedes-orchestration. Status: §0208 produced the empirical evidence that §0209 now consumes for orchestration design.
+  - §0208 — diagnostic of zero-candidate gaps. Status: §0209 executes the Path A.1 carry-forward.
+  - §0208 MO1 — integration-tests-mask-operator-workflow-gaps; future Cat II / operational closures land scaffold-orchestrator step in the SAME PR as the integration test. Status: **§0209 is the first PR to apply this MO prospectively** — the CLI lift and the orchestrator step land together in this PR rather than as sequential PRs.
+  - §0210 — event-centric `temporal_endpoint_cohort_v1` parameter calibration (named-but-non-binding carry-forward from §0208). Status: unchanged; opens only if post-§0209 first re-run still produces `candidate_count = 0` for that signature.
+
+  Falsifiability: 4 unit tests mechanize the CLI's contract. A regression in `attribution.DeriveAll`'s contract surface would surface at `TestRun_DerivesAttributions` or `TestRun_Idempotent`; a regression in the `resolveDefinition` switch would surface at `TestRun_UnknownDefinitionVersion`; a regression in the skip-path would surface at `TestRun_SkipsNonDerivableObservations`. The orchestrator's bash syntax is verified by `bash -n`; the manifest field revision is encoded in the bash literal alongside the step labels.
+
+- **Consequences:**
+  - 6 files modified (1 new CLI dir, 1 Makefile, 1 orchestrator, 1 mapping doc, 1 decision-log).
+  - **Gap A operationally closed.** Operator running `make pin-base-images && make build && make run` against a CIC-IDS sample now executes derive-attributions before signatures; signatures with `-with-attribution=true` receive a non-empty `AttributionView` mechanically.
+  - **Sub-benchmark 1 baseline re-armed.** The first non-trivial demotion of the §0143 comprovation window is now structurally reachable via the Network applicable path post-§0209 (per §0208 modality-applicability finding). Whether it fires is empirical; this entry only unblocks the path.
+
+  **Carry-forwards:**
+
+  - **§0210 (named-but-non-binding, unchanged from §0208)** — event-centric `temporal_endpoint_cohort_v1` parameter calibration. Investigated ONLY if §0209's first re-run still produces `candidate_count = 0` for this signature after substrate carries `DerivedActorAttribution` records.
+
+  - **Per-signature full-substrate-walk performance characteristic (named-but-non-binding)** — the §0205 orchestrator now executes `O(signatures × observations)` substrate walks per run (1 derive + 1 replay + 5 signatures = 7 walks at minimum, ~21s aggregate against the §0208 first-real-run sample of 644,310 NetworkObservations per the 47-48s/signature timing observed empirically). Acceptable at current volume + signature count. Candidate for shared-scan optimization (single walk producing per-signature outputs) when either dimension grows. **Premature optimization explicitly rejected per §7 minimalism until empirical pressure surfaces.** Named here so future operators / authors confronting either dimension's growth recognize the carry-forward without re-discovering the characteristic; the §0208 first-real-run timings exposed this implicitly, §0209 names it explicitly.
+
+  - **Future attribution definitions** — `resolveDefinition` switch is the single registration point. When a second attribution definition lands under `internal/attribution/` (mirroring `padded-v1` + `inactivity-window-v1` for the OperationalSession derivation surface), the switch gains one case; CLI option surface remains stable per the precedent.
+
+  **Methodological observation 1 — Application of §0208 MO1 in real time: CLI lift + orchestrator step land in the SAME PR.** §0208 MO1 named the forward-looking pattern that future Cat II / operational closures bundle the operator-facing CLI with the scaffold-orchestrator step in a single PR (rather than landing the CLI as one PR and the orchestrator wire as a follow-on). §0209 is the **first PR to apply this discipline prospectively**: the new `cmd/derive-actor-attribution` and the `run-sub-benchmark-1.sh` step insertion + label rename live in this commit together. Waiting for a separate orchestrator PR would have re-created the exact operator-workflow gap §0208 surfaced (CLI exists; scaffold does not invoke it). **Pattern crystallized: future Cat II / operational closures (F2 synthetic Cat II constructs, F3 honeypot Cat II constructs, additional attribution definitions) MUST bundle their operator-facing CLI with the scaffold-orchestrator step in a single PR. The discipline is now precedented at §0209; F2 + F3 adapter authors inherit it.**
+
+- **Supersession:** none. §0162's structural-closure declaration stands; §0209 adds operational-closure on top per the §0208 distinction. The two-layer closure model (structural + operational) is now precedented for subsequent Cat II / operational gaps.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--

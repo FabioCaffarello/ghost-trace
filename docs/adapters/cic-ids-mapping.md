@@ -105,6 +105,17 @@ The CIC-IDS-2017 GeneratedLabelledFlows distribution (Sharafaldin et al. ICISSP 
 
 Per [`decision-log §0207`](../charter/decision-log.md), the adapter normalizes column names via `strings.TrimSpace` at `indexHeader` time, accepting both the CICFlowMeter convention and the canonical no-whitespace form. The normalization is silent — no operator-facing surface, no `Report` counter — because the resulting index keys are identical across both inputs. This was the first substrate-emergent §0022 pressure surfaced within the Domain Pack v0.1 program: the §0205 deployment scaffold's first real run against GeneratedLabelledFlows failed with `MissingColumnError: Source IP`, and the discrepancy between handcrafted canonical fixture and real-world distribution surfaced mechanically through the existing error path.
 
+## Operator workflow after ingest
+
+Per [`decision-log §0209`](../charter/decision-log.md), the operator workflow for CIC-IDS substrate populated via `ingest-cic-ids` is:
+
+1. `ingest-cic-ids <path>` — commits NetworkObservation Cat I records.
+2. **`derive-actor-attribution`** — commits DerivedActorAttribution Cat II records under the `network-5tuple-actor-v1` operational definition (§0168). Required before F3 signatures that consume `AttributionView` produce non-empty actor cohorts. This step closes the operator-workflow side of [`decision-log §0162`](../charter/decision-log.md) Gap (1), which was previously closed structurally (Cat II construct landed at §0168 + integration-tested) but not operationally (no CLI invoked the derivation between ingest and signatures until §0209).
+3. `replay-all-derived-actor-attributions` — re-validates the records committed at step 2 under the same operational definition; surfaces drift between committed records and re-derivation outcome. Operationally meaningful only after step 2.
+4. F3 signature CLIs (`find-*-candidates`) — emit candidates per their respective signatures. Signatures consuming `AttributionView` pass `-with-attribution=true`; the view reads back the Cat II records committed at step 2.
+
+The `infra/docker/run-sub-benchmark-1.sh` orchestrator executes steps 1–4 in this order against an operator-supplied seed file.
+
 ## CLI usage
 
 The operator-facing CLI lift `cmd/ingest-cic-ids` (per [`decision-log §0204`](../charter/decision-log.md)) is a thin wrapper around `cic_ids.Ingest`. The eight operator workflow choices §0145 Consequences deferred are documented and tested at §0204; this section is the operator-facing summary.
@@ -145,6 +156,8 @@ Exit codes (mirror replay-all-* precedent per §0173):
 - [`decision-log §0145`](../charter/decision-log.md) — CIC-IDS adapter landing; this mapping document; first public adversarial source integrated.
 - [`decision-log §0204`](../charter/decision-log.md) — `cmd/ingest-cic-ids` CLI lift; eight operator workflow choices cravadas.
 - [`decision-log §0207`](../charter/decision-log.md) — CICFlowMeter header-whitespace normalization; first substrate-emergent §0022 of Domain Pack v0.1.
+- [`decision-log §0208`](../charter/decision-log.md) — Sub-benchmark 1 first real run zero-candidate diagnosis; Gap A (ii) design + Gap B (iii) expected downstream + modality calibration.
+- [`decision-log §0209`](../charter/decision-log.md) — `cmd/derive-actor-attribution` CLI lift + orchestrator step insertion; operational closure of §0162 Gap (1).
 - [Charter §2.1 Observational Integrity](../charter/constitutional-charter.md#21-observational-integrity)
 - [Charter §3 N1 — no truth at substrate](../charter/constitutional-charter.md#3-non-goals)
 - [`services/ingestion/internal/adapters/cic_ids/`](../../services/ingestion/internal/adapters/cic_ids/) — adapter implementation.
