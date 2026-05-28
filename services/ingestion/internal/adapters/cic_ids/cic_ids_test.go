@@ -44,6 +44,76 @@ func TestIndexHeader_MissingRequiredColumn(t *testing.T) {
 	}
 }
 
+// TestIndexHeader_NormalizesWhitespacePrefix witnesses §0207: the CIC-
+// IDS-2017 GeneratedLabelledFlows real-world distribution emits CSV
+// headers with leading whitespace following each comma separator
+// (" Source IP" rather than "Source IP"). The library must tolerate
+// both canonical (no-whitespace) and CICFlowMeter (leading-whitespace)
+// header conventions. Both forms produce equivalent index maps for
+// every required ENDPOINT column.
+func TestIndexHeader_NormalizesWhitespacePrefix(t *testing.T) {
+	canonical := []string{
+		"Flow ID", "Source IP", "Source Port", "Destination IP",
+		"Destination Port", "Protocol", "Timestamp",
+	}
+	realWorld := []string{
+		"Flow ID", " Source IP", " Source Port", " Destination IP",
+		" Destination Port", " Protocol", " Timestamp",
+	}
+	idxA, err := indexHeader(canonical)
+	if err != nil {
+		t.Fatalf("indexHeader(canonical): %v", err)
+	}
+	idxB, err := indexHeader(realWorld)
+	if err != nil {
+		t.Fatalf("indexHeader(realWorld): %v", err)
+	}
+	for _, col := range []string{ColSrcIP, ColSrcPort, ColDstIP, ColDstPort, ColProtocol, ColTimestamp} {
+		gotA, okA := idxA[col]
+		gotB, okB := idxB[col]
+		if !okA {
+			t.Errorf("canonical: missing %q", col)
+		}
+		if !okB {
+			t.Errorf("realWorld: missing %q", col)
+		}
+		if gotA != gotB {
+			t.Errorf("index mismatch for %q: canonical=%d realWorld=%d", col, gotA, gotB)
+		}
+	}
+}
+
+// TestIndexHeader_NormalizesCRLFTrailing covers the related defensive
+// case: Windows-exported CICFlowMeter CSVs carry a trailing "\r" on
+// the final header column under CRLF line endings. strings.TrimSpace
+// removes "\r" alongside leading whitespace, so the last column still
+// resolves to its canonical name. Per §0207 this is bundled with the
+// primary leading-whitespace case rather than treated as a separate
+// concern: both surfaces have the same underlying remediation.
+func TestIndexHeader_NormalizesCRLFTrailing(t *testing.T) {
+	header := []string{
+		"Flow ID", "Source IP", "Source Port", "Destination IP",
+		"Destination Port", "Protocol", "Timestamp\r",
+	}
+	idx, err := indexHeader(header)
+	if err != nil {
+		t.Fatalf("indexHeader: %v", err)
+	}
+	if _, ok := idx[ColTimestamp]; !ok {
+		t.Errorf("expected %q present after CRLF trimming; idx keys: %v", ColTimestamp, keysOf(idx))
+	}
+}
+
+// keysOf returns the keys of m sorted, for stable diagnostic output.
+func keysOf(m map[string]int) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func TestParseRow_TCPFlow(t *testing.T) {
 	header := []string{
 		"Source IP", "Source Port", "Destination IP", "Destination Port",
@@ -241,6 +311,63 @@ func TestIngest_EndToEnd_SampleCSV(t *testing.T) {
 	// candidate per §0145.
 	if report.FlowStatisticsDropped != wantParsed {
 		t.Errorf("FlowStatisticsDropped: got %d want %d", report.FlowStatisticsDropped, wantParsed)
+	}
+}
+
+// TestIngest_EndToEnd_WhitespacePrefixHeader is the §0207 integration-
+// level witness: the existing sample.csv fixture's header row is
+// transformed in-test to the CICFlowMeter real-world convention
+// (leading whitespace following each comma separator), then ingested
+// end-to-end. The resulting Report counters must equal those of
+// TestIngest_EndToEnd_SampleCSV — proof that the header-whitespace
+// normalization in indexHeader does not perturb any downstream
+// counter.
+//
+// Header transformation is in-test (not a new testdata fixture)
+// because: (a) data rows are unchanged, so duplicating sample.csv
+// would introduce drift risk if sample.csv evolves; (b) the
+// transformation itself ("add a space after every comma in the
+// header row") is the operative empirical observation per §0207 and
+// is more self-documenting inline than encoded in a separate file.
+func TestIngest_EndToEnd_WhitespacePrefixHeader(t *testing.T) {
+	in, _ := newIngester(t)
+	ctx := context.Background()
+
+	bs, err := os.ReadFile("testdata/sample.csv")
+	if err != nil {
+		t.Fatalf("read sample.csv: %v", err)
+	}
+	nl := bytes.IndexByte(bs, '\n')
+	if nl < 0 {
+		t.Fatalf("sample.csv: no newline found in header row")
+	}
+	realWorldHeader := bytes.ReplaceAll(bs[:nl], []byte(","), []byte(", "))
+	transformed := append(realWorldHeader, bs[nl:]...)
+
+	env := ingest.Envelope{Channel: "cic-ids-test"}
+	report, err := Ingest(ctx, in, bytes.NewReader(transformed), collectorRef, env)
+	if err != nil {
+		t.Fatalf("Ingest: %v", err)
+	}
+	// Expectations identical to TestIngest_EndToEnd_SampleCSV — the
+	// §0207 normalization preserves all downstream invariants.
+	wantParsed := 4
+	wantRejected := 1
+	wantCommitted := 3 + 3 + 2 + 3
+	if report.RowsParsed != wantParsed {
+		t.Errorf("RowsParsed: got %d want %d", report.RowsParsed, wantParsed)
+	}
+	if report.RowsRejected != wantRejected {
+		t.Errorf("RowsRejected: got %d want %d", report.RowsRejected, wantRejected)
+	}
+	if report.ObservationsCommitted != wantCommitted {
+		t.Errorf("ObservationsCommitted: got %d want %d", report.ObservationsCommitted, wantCommitted)
+	}
+	if report.IpAsnEmitted != 8 {
+		t.Errorf("IpAsnEmitted: got %d want 8", report.IpAsnEmitted)
+	}
+	if report.TcpFingerprintEmitted != 3 {
+		t.Errorf("TcpFingerprintEmitted: got %d want 3", report.TcpFingerprintEmitted)
 	}
 }
 

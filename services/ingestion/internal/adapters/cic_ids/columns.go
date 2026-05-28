@@ -5,6 +5,8 @@
 // per Sharafaldin et al. ICISSP 2018.
 package cic_ids
 
+import "strings"
+
 // CIC-IDS-2017 column names per the publicly-documented CICFlowMeter
 // output format. Names preserved with original spacing/casing as
 // emitted by CICFlowMeter so that header-row lookup matches the
@@ -75,10 +77,19 @@ const (
 // useful ip_asn observation; TCP-FLAGS columns are optional —
 // tcp_fingerprint observation is emitted only when Protocol = TCP and
 // the TCP-FLAGS columns are present).
+//
+// Per decision-log §0207, column names are normalized via
+// strings.TrimSpace before insertion. The CIC-IDS-2017
+// GeneratedLabelledFlows distribution emits CSV headers with leading
+// whitespace following each comma separator (" Source IP" rather than
+// "Source IP"); CRLF line endings additionally leave a trailing "\r"
+// on the last column. Both variants normalize to the canonical column
+// names defined above, so lookup by Col* constant succeeds regardless
+// of which header convention the input file carries.
 func indexHeader(header []string) (map[string]int, error) {
 	idx := make(map[string]int, len(header))
 	for i, name := range header {
-		idx[name] = i
+		idx[strings.TrimSpace(name)] = i
 	}
 	for _, required := range []string{ColSrcIP, ColDstIP, ColSrcPort, ColDstPort, ColProtocol, ColTimestamp} {
 		if _, ok := idx[required]; !ok {

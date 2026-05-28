@@ -46,3 +46,10 @@ tmp/
 
 # Generated docs
 /site/
+
+# Sub-benchmark 1 deployment scaffold — operator-supplied seed data
+# (CIC-IDS-2017 distribution + future synthetic + honeypot frentes)
+# is bind-mounted at runtime per infra/docker/.env CIC_IDS_SEED_DIR;
+# never committed to the repository.
+infra/docker/seed/
+infra/docker/runs/
