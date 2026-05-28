@@ -9098,6 +9098,118 @@ The four methodological observations are the pilot's contribution to procedure b
 
 ---
 
+## `0208` — Diagnostic of zero-candidate Sub-benchmark 1 first real run; (ii) design gap + (iii) expected downstream + modality applicability calibration; diagnostic-only
+
+- **Status:** accepted
+- **Date:** 2026-05-28
+- **Context:** First real-world execution of the §0205 deployment scaffold to completion (RUN_ID `20260528T030751Z`, post-§0207 `TrimSpace` fix, Friday DDoS afternoon corpus from CIC-IDS-2017 `GeneratedLabelledFlows.zip`). Three pipeline-step outcomes:
+
+  - **`ingest`** — OK: 225,745 rows parsed, 0 rejected, ~644,310 NetworkObservation records committed (2.85× ratio consistent with `ip_asn src + ip_asn dst + tcp_fingerprint` emission pattern per `cic_ids.go:175-231`). §0207 normalization confirmed working against real-world distribution.
+  - **`replay-all-derived-actor-attributions`** — completed in ~3 seconds over 644,310 NetworkObservations; reported zero DerivedActorAttribution records examined.
+  - **5 F3 signature CLIs** — all reported `candidate_count = 0`. Manifest `verdict.total_candidates = 0`, `instrumented_non_firing = true`.
+
+  Per §0143 mandatory instrumentation, the zero-candidate verdict desambiguated mechanically into two distinct gaps + one modality-applicability calibration + one event-centric sub-observation, without manual substrate inspection. This is the **second substrate-emergent §0022 pressure of the Domain Pack v0.1 program** (after §0207's cosmetic header-whitespace surface) and **the first deep one**: §0207 touched parse-time format conventions; §0208 touches the structural-vs-operational closure distinction between declared-closed gaps and operator-deployment reality. This entry is diagnostic-only per §0205 MO2 scope-honest-deferral; remediation defers to §0209 (Gap A) as a separate entry; §0210 named-but-non-binding for post-§0209 event-centric parameter tuning.
+
+- **Decision:** record the diagnosis of two operational gaps and one modality-applicability calibration as the constitutional artifact of this entry. The fix paths (§0209 et seq.) are explicitly separated to preserve one-PR-per-advance discipline (§0184 / §0186 MO2) and the diagnostic-before-remediation discipline §0205 MO2 established.
+
+### Finding 1 — Gap A: zero DerivedActorAttribution records — (ii) design gap
+
+`cmd/replay-all-derived-actor-attributions/main.go:60` invokes `replay.ReplayAllDerivedActorAttributions(ctx, sub)`. Per the function's docstring at `services/ingestion/internal/replay/replay_all_attributions.go:25-27`:
+
+> "ReplayAllDerivedActorAttributions walks every DerivedActorAttribution in the substrate, re-derives each from its declared source Cat I NetworkObservation under the same attribution definition recorded on the original, and reports aggregate match/drift/error counts."
+
+The main loop at `replay_all_attributions.go:50-67` filters by `MessageType == derivedActorAttributionMessageType`. This is **REPLAY semantic** (verify-not-derive), not **DERIVATION semantic**. The function exists to detect drift between previously-committed Cat II records and their re-derivations under the recorded operational definition — it does not produce new records.
+
+The actual derivation function lives at `services/ingestion/internal/attribution/attribution.go:111-178` as `DeriveAll(ctx, sub, def, clock)`:
+
+> "DeriveAll walks every NetworkObservation in the substrate, applies def to each, and commits the resulting DerivedActorAttribution via substrate.Append."
+
+`DeriveAll` is called from **exactly one site** in the repository: `cmd/find-automation-group-candidates-network/cic_ids_full_loop_integration_test.go:116`, the integration test that manually wires the derivation step. **No operator-facing CLI invokes `DeriveAll`**: `cmd/derive-operational-session/` exists (for `OperationalSession` Cat II), but no parallel `cmd/derive-actor-attribution/` exists (for `DerivedActorAttribution` Cat II). `cmd/ingest-cic-ids/main.go:132` commits NetworkObservation records via `cic_ids.Ingest` and returns — it does NOT chain into derivation.
+
+The 3-second runtime of `replay-all-derived-actor-attributions` over 644,310 records is consistent with a **walk-zero-records-found** semantic: scanning event message-types to filter by `derivedActorAttributionMessageType`, finding zero, reporting `Total=0, Matched=0, Drifted=0, Errored=0`. The function operates correctly per its specification; the substrate simply has no records of the target type to replay.
+
+**Classification: (ii) design gap.** Not a bug — every component operates per spec. The gap is in the operator-deployment workflow: ingest emits NetworkObservations → derivation function exists and is implemented → integration test wires the step manually → **but no operator-facing CLI step exists between ingest and signature evaluation that invokes `DeriveAll`**, and the §0205 deployment scaffold's `run-sub-benchmark-1.sh` orchestrator inherits this missing step. The integration test at `cic_ids_full_loop_integration_test.go:116` traversed the gap by side-channel; the structural closure declared at §0162 + §0168 was test-author-mediated, not operator-mediated.
+
+### Finding 2 — Gap B: `temporal_endpoint_cohort_v1` reports `actors_aggregated = 0` — (iii) expected behavior, downstream of Gap A
+
+Per `services/ingestion/internal/signatures/temporal_endpoint_cohort.go:151-218` (the `EvaluateNetwork` main loop) + the docstring at `temporal_endpoint_cohort.go:108-116`:
+
+> "empty actor_ref is NOT a skip reason. Events without actor still count in the event-set; per §0063 CampaignHypothesis is event-centric, not actor-centric."
+
+The signature does NOT skip observations whose `ActorRef` is empty — they pass envelope checks (`EndpointRef != ""` + `ObservedAt != 0`, both populated by `cic_ids.go:185-210`) and enter clustering. Attribution lookup at lines 178-186 is conditional: when `attribution == nil`, no Cat II enrichment occurs; `effectiveActor` stays empty.
+
+`find-campaign-hypothesis-candidates/main.go:60` defaults `-with-attribution false`; the §0205 orchestrator does not pass the parameter, so `attributionView = nil` reaches the signature. With every CIC-IDS NetworkObservation carrying `ActorRef = ""` (per `cic_ids.go` adapter design — flow-level dataset, no per-record actor) and no Cat II lookup attempted, line 200's `if effectiveActor != ""` evaluates false for all 644,310 observations. `distinctActors` map stays empty; `stats.ActorsAggregated = uint32(len(distinctActors)) = 0` at line 218.
+
+This is the **signature's correct behavior given its inputs**. It is not a bug, and it is not a design gap in the signature itself — the signature is event-centric per §0182 + §0063, deliberately tolerant of empty actors. The zero report reflects the upstream state: no actor attribution exists in the substrate to enrich the observations.
+
+**Classification: (iii) expected behavior.** Gap B is **downstream of Gap A**: resolving Gap A populates DerivedActorAttribution records; the operator then re-invokes `find-campaign-hypothesis-candidates -with-attribution=true` and the signature's actor-enrichment path activates. Even with the parameter passed today, `attribution.CollectAttributionView` would return an empty view (no records present), yielding the same zero outcome. Gap B has no independent remediation surface; it unblocks mechanically when Gap A's design gap closes.
+
+### Finding 3 — Modality applicability: only 3 of 5 invoked signatures are structurally applicable to a CIC-IDS-only substrate — first-class calibration
+
+Of the 5 F3 signature CLIs the §0205 scaffold invokes, only 3 consume NetworkObservation records. The other 2 require modalities CIC-IDS does not emit:
+
+| Signature CLI | Operative signature | Required modality | Applicable to CIC-IDS NetworkObservation-only substrate? |
+|---|---|---|---|
+| `find-automation-group-candidates` | `cdp_marker_density_v1` | BrowserObservation | ✗ NOT applicable |
+| `find-automation-group-candidates-network` | `tcp_flow_features_clustering_v1` | NetworkObservation + Cat II attribution | ✓ applicable; blocked by Gap A |
+| `find-behavioral-cluster-candidates` | `keystroke_timing_clustering_v1` | BehavioralObservation | ✗ NOT applicable |
+| `find-campaign-hypothesis-candidates` | `temporal_endpoint_cohort_v1` | NetworkObservation envelope; Cat II attribution optional | ✓ applicable; actors_aggregated blocked by Gap A; candidates structurally possible without attribution |
+| `find-coordination-ring-candidates` | `endpoint_co_visit_v1` | Interaction-centric + Cat II attribution | ✓ applicable; blocked by Gap A |
+
+The two non-applicable signatures (Browser + Behavioral) emit zero candidates **by construction** against a CIC-IDS-only substrate. This is not a gap — it is the geometry of the F1 modality coverage relative to Domain Pack v0.1's three-source-parallel ingestion strategy (§0143 D2 / D3 / D4). CIC-IDS is one of three planned sources; Browser observations land via Frente 2 (synthetic) and / or Frente 3 (honeypot); Behavioral observations similarly. The §0205 scaffold deliberately invokes all 5 signatures for diagnostic coverage per §0162 instrumented-non-firing discipline, but the baseline against CIC-IDS-only must explicitly recognize that 2 of 5 entering as zero are confirmation of corpus coverage geometry, not pressure surfaces.
+
+**Strategic implication recorded here as first-class finding per §0208 author cravamento**: the **first non-trivial demotion of the §0143 Sub-benchmark 1 comprovation window will surface from the Network applicable path post-Gap-A**, not from the full 5-signature corpus. The Browser + Behavioral signatures await Frente 2 + Frente 3 adapters; the Sub-benchmark 1 baseline against CIC-IDS-only operates on the 3-applicable-signature subset, of which 1 (`temporal_endpoint_cohort_v1`) can produce event-centric candidates without attribution and 2 (`tcp_flow_features_clustering_v1`, `endpoint_co_visit_v1`) require attribution. Gap A closure (§0209) is the structural prerequisite for any non-trivial Sub-benchmark 1 outcome.
+
+### Constitutional review
+
+**Tier 1 (Charter)** — zero impact. §2.1 immutability unchanged. §2.3 provenance unchanged. §3 N1 unchanged. §0208 is a diagnostic entry; no substrate write semantics, no changes under `schemas/`, no operational-definition changes.
+
+**Tier 2 (Ontology / Architecture)** — zero new types. F6 substrate-read contract (still pending per §0143) untouched. `manifest_validation.json` (landed at §0205) untouched. The diagnostic surfaces a re-reading of existing artifacts (`replay-all-derived-actor-attributions` semantic is REPLAY, not DERIVATION) without amending any of them.
+
+**Tier 3 (services / `schemas`)** — zero code changes in this entry. The remediation (§0209) lives in its own PR; §0208 itself is decision-log-only. This is the discipline §0205 MO2 + §0207 MO1 prescribed: diagnosis as constitutional artifact, remediation separated.
+
+**Anchor verification per §0142 deliberate-inventory:**
+
+- §0022 — empirical-pressure methodology. Status: second substrate-emergent application of Domain Pack v0.1.
+- §0063 — CampaignHypothesis event-centric framing. Status: confirms `temporal_endpoint_cohort_v1` no-skip-on-empty-actor is per design.
+- §0143 D2 — datasets públicos têm viés diagnosticável + mandatory instrumentation. Status: **second empirical confirmation** of D2 anticipation; **first empirical confirmation** at the deployment tier that the mandatory instrumentation discipline desambiguates aggregate verdicts into per-gap diagnoses without manual substrate inspection.
+- §0162 — gaps (1) and (2) declared structurally closed. Status: §0208 is the **first deployment-tier evidence that structural closure ≠ operational closure** for gap (1) under the current operator workflow.
+- §0168 — DerivedActorAttribution Cat II construct + `network_5tuple_actor_v1` operational definition. Status: structurally implemented; integration-tested; **not yet wired into operator workflow**. The §0209 follow-on (Path A.1) closes this remaining gap.
+- §0169 — `tcp_flow_features_clustering_v1` signature. Status: applicable, blocked by Gap A.
+- §0182 — first event-centric F3 signature. Status: confirms `temporal_endpoint_cohort_v1` Gap B classification (iii) expected.
+- §0184 / §0186 MO2 — one-PR-per-advance bundled-shape discipline. Status: applied — §0208 stands alone; §0209 is its own PR.
+- §0204 — `cmd/ingest-cic-ids` CLI lift. Status: works as specified; ingest commits NetworkObservations.
+- §0205 — deployment scaffold. Status: produced the empirical surface; the scaffold worked as designed and surfaced the gaps with diagnostic granularity per §0143.
+- §0205 MO2 — scope-honest-deferral; evidence-precedes-orchestration. Status: §0208 applies the discipline to the diagnostic-vs-remediation split.
+- §0207 — first substrate-emergent §0022; CICFlowMeter header normalization. Status: predecessor; §0208 is the second.
+- §0142 MO3 — deliberate-inventory sweep. Status: applied; this anchor list is the sweep.
+- §4 falsifiability. Status: respected by diagnostic-only scope; no claim about §0209's effectiveness made here.
+
+### Consequences
+
+- 0 code changes. 0 changes under `schemas/`. 0 protos. 0 tests modified.
+- 1 decision-log append (this entry).
+- **§0205 first real run epistemic yield recorded**: zero candidates from 5 signatures decomposed into 1 design gap + 1 expected-downstream + 2 modality-inapplicable + 1 event-centric sub-observation.
+
+**Carry-forwards:**
+
+- **§0209 — Gap A remediation via Path A.1**: lift `cmd/derive-actor-attribution` mirroring `cmd/derive-operational-session`, then insert a pipeline step in `infra/docker/run-sub-benchmark-1.sh` between the existing `derive-all` (replay-verify step, rename for clarity) and the signatures step. The lift wires `attribution.DeriveAll` into the operator workflow without convolving derivation into the ingest CLI (Path A.2 rejected as over-engineering convolving distinct operations) and without delegating to operator-side shell exec (Path A.3 rejected as hostile to operators + violating §0205 tier-3 audibility commitment). Plan presentation precedes execution per the §0205 cadence; this carry-forward names Path A.1 as the cravado direction.
+- **§0210 — event-centric `temporal_endpoint_cohort_v1` parameter calibration (named-but-non-binding)**: the empirical observation that `temporal_endpoint_cohort_v1` reported `candidate_count = 0` over 644,310 NetworkObservations without skips suggests possible parameter mismatch (default threshold 3 events per bucket; default `bucket_seconds` not yet inspected against Friday DDoS afternoon time-density). This is **not investigated now** per §4 falsifiability: post-§0209 the substrate carries DerivedActorAttribution records, the signature with attribution may produce candidates without parameter tuning, and the candidate_count question may resolve mechanically. Speculation pre-§0209 would commit to a hypothesis whose empirical surface is about to change. §0210 opens only if §0209's first re-run still produces `candidate_count = 0` for this signature.
+
+### Methodological observations
+
+**MO1 — Integration tests written by the operational-step author mask operator-workflow gaps. Forward-looking pattern: future Cat II / operational closures land the scaffold-orchestrator step in the SAME PR as the integration test, not as a separate follow-on.**
+
+The `cic_ids_full_loop_integration_test.go` integration test at §0169 covered the full CIC-IDS → DerivedActorAttribution → tcp_flow_features → candidates loop end-to-end and passed. The test author was simultaneously the operator of a synthetic version of the system — the test setup at line 116 calls `attribution.DeriveAll` because the test author knew the step was required. The §0205 scaffold orchestrator inherits no such knowledge: it was written from the §0145-onwards CLI inventory + the §0163 envelope contract, and the integration test's manual step did not propagate into the scaffold's bash. The outcome is a structural closure (test passes; gap declared closed at §0162) that is operationally incomplete (scaffold pipeline lacks the derivation step). **Pattern: when a Cat II construct or operational-definition closure lands, the same PR that lands the integration test must either (a) land the operator-facing CLI that materializes the step, OR (b) explicitly name the operator-workflow-gap as a carry-forward bound to a specific subsequent PR. Integration tests authored by the same engineer who designs the construct test only the engineer's mental model of the workflow, not the workflow itself.** Apply this discipline prospectively when F2 + F3 adapters land their Cat II constructs.
+
+**MO2 — §0143 mandatory instrumentation rendering yield at deployment tier: empirically confirmed.**
+
+The §0143 mandatory instrumentation per `EvaluationStats` (ObservationsScanned + ObservationsSkippedNoActor + ObservationsSkippedWrongModality) + per-signature `candidate_count` resolved a single aggregate verdict of `total_candidates = 0` into: Gap A (skipped_no_actor = 644,310 across attribution-dependent signatures), Gap B (`temporal_endpoint_cohort_v1` actors_aggregated = 0 with skipped = 0 in event-centric signature), modality-applicability (2 of 5 signatures expected zero by construction), and §0210 sub-observation (event-centric candidate_count = 0 over 644K processed without skip). The operator did not inspect substrate records by hand to produce this decomposition; every distinction was readable from the per-signature JSON envelopes the §0163 stable-wire-contract emits. **Pattern: the instrumentation discipline pays off at the deployment tier in proportion to the granularity it commits to at the design tier; future operational constructs should emit instrumentation envelopes covering at minimum (a) what was scanned, (b) what was skipped and why, (c) what was aggregated and why. The cost of the envelope is one-time at construction; the yield compounds across every subsequent diagnostic event.** This MO is the **first empirical confirmation** at deployment tier of the discipline §0162 codified; the §0143 anticipation is now twice-grounded (§0207 D2 first-confirmation + §0208 instrumentation-yield first-confirmation).
+
+- **Supersession:** none.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
