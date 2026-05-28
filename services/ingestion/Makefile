@@ -16,6 +16,7 @@ help:
 	@echo "  verify-build   go build -trimpath -o $(BIN_DIR)/verify ./cmd/verify"
 	@echo "  orphan-cleanup-build  go build -trimpath -o $(BIN_DIR)/orphan-cleanup ./cmd/orphan-cleanup"
 	@echo "  derive-build   go build -trimpath -o $(BIN_DIR)/derive-operational-session ./cmd/derive-operational-session"
+	@echo "  derive-actor-attribution-build  go build -trimpath -o $(BIN_DIR)/derive-actor-attribution ./cmd/derive-actor-attribution"
 	@echo "  form-hypothesis-build  go build -trimpath -o $(BIN_DIR)/form-hypothesis ./cmd/form-hypothesis"
 	@echo "  promote-hypothesis-build  go build -trimpath -o $(BIN_DIR)/promote-hypothesis ./cmd/promote-hypothesis"
 	@echo "  demote-hypothesis-build  go build -trimpath -o $(BIN_DIR)/demote-hypothesis ./cmd/demote-hypothesis"
@@ -161,6 +162,11 @@ orphan-cleanup-build:
 derive-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/derive-operational-session ./cmd/derive-operational-session
+
+.PHONY: derive-actor-attribution-build
+derive-actor-attribution-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/derive-actor-attribution ./cmd/derive-actor-attribution
 
 .PHONY: form-hypothesis-build
 form-hypothesis-build:

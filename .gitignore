@@ -13,6 +13,15 @@
 /vendor/
 /bin/
 
+# Accidental binaries from `go build ./cmd/X/` (no `-o` flag) at
+# services/ingestion/. Always use `make X-build` per the
+# services/ingestion/Makefile — it writes to services/ingestion/bin/.
+# Specific entries are added reactively as accidents occur per the
+# defensive-.gitignore feedback memory pattern (the binary name
+# matches the cmd subdir name; new entries inherit this convention).
+/services/ingestion/ingest-cic-ids
+/services/ingestion/derive-actor-attribution
+
 # Node (anticipated for simulator/frontend)
 node_modules/
 npm-debug.log

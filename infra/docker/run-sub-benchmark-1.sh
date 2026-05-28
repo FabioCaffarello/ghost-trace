@@ -78,12 +78,35 @@ invoke ingest \
     -progress 10000 \
     "${GHOST_TRACE_CIC_IDS_SAMPLE}"
 
-# --- Step 2: derive-all ---------------------------------------------
+# --- Step 2: derive-attributions ------------------------------------
+#
+# Per §0209: invokes attribution.DeriveAll via cmd/derive-actor-
+# attribution, producing DerivedActorAttribution Cat II records from
+# the NetworkObservation substrate under the network_5tuple_actor_v1
+# operational definition (§0168). This is the operator-workflow
+# closure of §0162 Gap (1) — the integration test at
+# cic_ids_full_loop_integration_test.go:116 traversed this step
+# manually; §0205's first real run surfaced the missing step at
+# §0208; §0209 wires it.
 
-invoke derive-all \
+invoke derive-attributions \
+    derive-actor-attribution "${DB_FLAGS[@]}"
+
+# --- Step 3: replay-attributions ------------------------------------
+#
+# Per §0208 diagnosis: this step is REPLAY semantic (verify-not-
+# derive). It walks the DerivedActorAttribution records committed at
+# Step 2 and re-validates each by re-deriving under the recorded
+# operational definition, surfacing any drift between committed
+# records and re-derivation outcome. Operationally meaningful only
+# AFTER derive-attributions has populated the substrate; before §0209
+# this step was misnamed "derive-all" in the orchestrator label and
+# operationally a no-op against an empty Cat II surface.
+
+invoke replay-attributions \
     replay-all-derived-actor-attributions "${DB_FLAGS[@]}"
 
-# --- Step 3: signatures ---------------------------------------------
+# --- Step 4: signatures ---------------------------------------------
 #
 # F3 corpus: invoke each candidate-finder. CIC-IDS-only substrate has
 # known reachability gaps (§0162) closed structurally at §0168 (Cat II
@@ -205,7 +228,7 @@ jq -n \
             }
         },
         pipeline_scope: {
-            included_steps: ["ingest", "derive-all", "signatures"],
+            included_steps: ["ingest", "derive-attributions", "replay-attributions", "signatures"],
             deferred_steps: ["form", "promote", "measure-chain-morphology", "demotion-evaluation"],
             deferral_reason: "depends on empirical signature-output shape per §4 falsifiability; lands at §0206 follow-on"
         },
