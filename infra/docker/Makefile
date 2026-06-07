@@ -57,9 +57,9 @@ list-runs:
 
 .PHONY: copy-runs
 copy-runs:
-	@mkdir -p $(RUNS_HOST)
+	@mkdir -p "$(RUNS_HOST)"
 	$(COMPOSE) --env-file $(ENV_FILE) run --rm \
-		-v $(abspath $(RUNS_HOST)):/host-runs \
+		-v "$(abspath $(RUNS_HOST))":/host-runs \
 		cli /bin/bash -c 'cp -r /var/lib/ghost-trace/runs/. /host-runs/'
 
 # clean-old-runs: opt-in retention policy per §0205 refinement (preserve

@@ -141,9 +141,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 
 	fmt.Fprintf(stderr,
-		"ingest-cic-ids: rows_parsed=%d rows_rejected=%d observations_committed=%d ip_asn=%d tcp_fingerprint=%d flow_statistics_dropped=%d channel=%q\n",
+		"ingest-cic-ids: rows_parsed=%d rows_rejected=%d observations_committed=%d ip_asn=%d tcp_fingerprint=%d flow_statistics_dropped=%d coerced_to_zero=%d elapsed_ns=%d channel=%q\n",
 		report.RowsParsed, report.RowsRejected, report.ObservationsCommitted,
-		report.IpAsnEmitted, report.TcpFingerprintEmitted, report.FlowStatisticsDropped, channel)
+		report.IpAsnEmitted, report.TcpFingerprintEmitted, report.FlowStatisticsDropped,
+		report.OptionalFieldsCoercedToZero, report.ElapsedNanos, channel)
 
 	if ingestErr != nil {
 		fmt.Fprintf(stderr, "ingest-cic-ids: %v\n", ingestErr)

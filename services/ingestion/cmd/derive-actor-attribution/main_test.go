@@ -182,6 +182,37 @@ func TestRun_Idempotent(t *testing.T) {
 	}
 }
 
+// TestRun_TimingFieldsPopulated witnesses the §0211 timing
+// instrumentation surface on the success path: derive_started_at <
+// derive_completed_at, elapsed_ns equals the difference, and all three
+// are positive.
+func TestRun_TimingFieldsPopulated(t *testing.T) {
+	dir := t.TempDir()
+	dbPath, blobDir := seedNetworkObservations(t, dir, []*eventsv1.NetworkObservation{
+		derivableObs("192.0.2.10", 49152),
+	})
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"-db", dbPath, "-blobs", blobDir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit code: got %d want 0 (stderr=%q)", code, stderr.String())
+	}
+	p := decodePayload(t, stdout.String())
+
+	if p.DeriveStartedAt <= 0 {
+		t.Errorf("DeriveStartedAt: got %d want > 0", p.DeriveStartedAt)
+	}
+	if p.DeriveCompletedAt < p.DeriveStartedAt {
+		t.Errorf("DeriveCompletedAt %d < DeriveStartedAt %d (clock ran backwards?)", p.DeriveCompletedAt, p.DeriveStartedAt)
+	}
+	if p.ElapsedNanos != p.DeriveCompletedAt-p.DeriveStartedAt {
+		t.Errorf("ElapsedNanos %d != completed %d - started %d", p.ElapsedNanos, p.DeriveCompletedAt, p.DeriveStartedAt)
+	}
+	if !strings.Contains(stderr.String(), "elapsed_ns=") {
+		t.Errorf("stderr summary should include elapsed_ns=; got %q", stderr.String())
+	}
+}
+
 func TestRun_UnknownDefinitionVersion(t *testing.T) {
 	dir := t.TempDir()
 	dbPath, blobDir := seedNetworkObservations(t, dir, []*eventsv1.NetworkObservation{

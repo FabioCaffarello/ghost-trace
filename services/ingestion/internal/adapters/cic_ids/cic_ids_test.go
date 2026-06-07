@@ -129,9 +129,16 @@ func TestParseRow_TCPFlow(t *testing.T) {
 		"6", "03/07/2017 09:15",
 		"1", "8", "65535",
 	}
-	flow, err := ParseRow(row, idx)
+	flow, coerced, err := ParseRow(row, idx)
 	if err != nil {
 		t.Fatalf("ParseRow: %v", err)
+	}
+	// Clean row — all optional cells either parse cleanly or are empty;
+	// no silent coercion expected. Per §0211 the counter discriminates
+	// "non-empty cell that failed ParseUint" from "empty cell" (absent
+	// feature) — zero here witnesses both classes are zero.
+	if coerced != 0 {
+		t.Errorf("ParseRow coerced count: got %d want 0 on clean row", coerced)
 	}
 	if flow.SrcIP != "192.0.2.10" || flow.SrcPort != 49152 {
 		t.Errorf("src: got %q:%d want 192.0.2.10:49152", flow.SrcIP, flow.SrcPort)
@@ -154,7 +161,7 @@ func TestParseRow_MissingRequired(t *testing.T) {
 	}
 	idx, _ := indexHeader(header)
 	row := []string{"192.0.2.10", "", "198.51.100.5", "443", "6", "03/07/2017 09:15"}
-	_, err := ParseRow(row, idx)
+	_, _, err := ParseRow(row, idx)
 	var pErr *ParseError
 	if !errors.As(err, &pErr) {
 		t.Fatalf("expected *ParseError, got %T: %v", err, err)
@@ -391,6 +398,88 @@ func TestTcpFlagSequenceFromCounts_CanonicalOrder(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("flag sequence: got %v want %v", got, want)
+	}
+}
+
+// TestParseRow_CoercesNonNumericOptionalCell witnesses the §0211
+// silent-coercion audit surface: a non-empty optional cell that fails
+// ParseUint (e.g. "NaN" or "Infinity" — values the §0208 latent
+// suspicion named as possible CICFlowMeter outputs for divide-by-zero
+// statistics) increments the coerced counter. Empty optional cells
+// (absent feature, legitimate convention) DO NOT increment the
+// counter. The two classes are distinct epistemic conditions:
+// "feature absent" vs "feature present but uninterpretable".
+func TestParseRow_CoercesNonNumericOptionalCell(t *testing.T) {
+	header := []string{
+		"Source IP", "Source Port", "Destination IP", "Destination Port",
+		"Protocol", "Timestamp",
+		"SYN Flag Count", "ACK Flag Count",
+	}
+	idx, err := indexHeader(header)
+	if err != nil {
+		t.Fatalf("indexHeader: %v", err)
+	}
+	// SYN cell carries "NaN" (non-empty, unparseable); ACK cell is
+	// empty (absent feature, legitimate). Counter must report exactly 1.
+	row := []string{
+		"192.0.2.10", "49152", "198.51.100.5", "443",
+		"6", "03/07/2017 09:15",
+		"NaN", "",
+	}
+	flow, coerced, err := ParseRow(row, idx)
+	if err != nil {
+		t.Fatalf("ParseRow: %v", err)
+	}
+	if coerced != 1 {
+		t.Errorf("ParseRow coerced count: got %d want 1 (1 non-empty unparseable; 1 empty absent)", coerced)
+	}
+	if flow.SYNCount != 0 || flow.ACKCount != 0 {
+		t.Errorf("flag counts: got SYN=%d ACK=%d; both should be 0 after coercion", flow.SYNCount, flow.ACKCount)
+	}
+}
+
+// TestIngest_TimingFieldsPopulated witnesses the §0211 timing
+// instrumentation: every success-path Ingest populates IngestStartedAt
+// + IngestCompletedAt + ElapsedNanos with self-consistent values.
+func TestIngest_TimingFieldsPopulated(t *testing.T) {
+	in, _ := newIngester(t)
+	ctx := context.Background()
+	bs, err := os.ReadFile("testdata/sample.csv")
+	if err != nil {
+		t.Fatalf("read sample.csv: %v", err)
+	}
+	report, err := Ingest(ctx, in, bytes.NewReader(bs), collectorRef, ingest.Envelope{Channel: "cic-ids-test"})
+	if err != nil {
+		t.Fatalf("Ingest: %v", err)
+	}
+	if report.IngestStartedAt <= 0 {
+		t.Errorf("IngestStartedAt: got %d want > 0", report.IngestStartedAt)
+	}
+	if report.IngestCompletedAt < report.IngestStartedAt {
+		t.Errorf("IngestCompletedAt %d < IngestStartedAt %d (clock ran backwards?)", report.IngestCompletedAt, report.IngestStartedAt)
+	}
+	if report.ElapsedNanos != report.IngestCompletedAt-report.IngestStartedAt {
+		t.Errorf("ElapsedNanos %d != completed %d - started %d", report.ElapsedNanos, report.IngestCompletedAt, report.IngestStartedAt)
+	}
+}
+
+// TestIngest_TimingFieldsPopulatedOnHeaderError witnesses that a
+// pre-data-rows abort path (missing required column) still populates
+// timing fields — per §0211 every Report carries timing identical in
+// shape, regardless of which return path produced it.
+func TestIngest_TimingFieldsPopulatedOnHeaderError(t *testing.T) {
+	in, _ := newIngester(t)
+	ctx := context.Background()
+	csv := "Flow ID,Destination IP,Protocol\nabc,198.51.100.5,6\n"
+	report, err := Ingest(ctx, in, bytes.NewReader([]byte(csv)), collectorRef, ingest.Envelope{})
+	if err == nil {
+		t.Fatalf("expected MissingColumnError; got nil")
+	}
+	if report.IngestStartedAt <= 0 {
+		t.Errorf("IngestStartedAt on header-error path: got %d want > 0", report.IngestStartedAt)
+	}
+	if report.ElapsedNanos < 0 {
+		t.Errorf("ElapsedNanos on header-error path: got %d want >= 0", report.ElapsedNanos)
 	}
 }
 
