@@ -9392,6 +9392,133 @@ The §0143 mandatory instrumentation per `EvaluationStats` (ObservationsScanned 
 
 ---
 
+## `0212` — Sub-benchmark 1 first-real-run diagnostic; six findings registered + five-layer closure model + multi-branch ortogonal MO; remediation separated per §0184 / §0186 MO2
+
+- **Status:** accepted
+- **Date:** 2026-06-07
+- **Context:** RUN_ID `20260607T205836Z` is the first shakedown post-§0211 with an auto-diagnostic manifest mechanically assembleable end-to-end. The pipeline completed in ~4 min (ingest 70.55s + derive 174.43s + replay 1.9s + 5 signatures ~2.5s aggregate + manifest assembly). The manifest carries SIX independent findings, none of which are mutually-exclusive with the others — the §0211 four-branch sequência operacional pos-merge framing implicitly assumed mutually-exclusive cenários (single classification per run); the real first-run produced multi-branch ortogonal fire. §0212 mirrors §0208 discipline: diagnosis as constitutional artifact; remediation separated to subsequent §-entries (§0213-§0218). This entry is documentation-only; zero code changes.
+
+- **Decision:** classify the six findings, record each with verbatim numbers from the manifest (so any auditor can re-validate mechanically against `infra/docker/runs/20260607T205836Z/manifest.json`), and route each to a dedicated successor §-entry with explicit empirical pre-conditions.
+
+  ### Finding 1 — Cenário 1 fired: Network signature emits 252 candidates
+
+  - **Manifest path:** `signatures.automation_group_network`
+  - **Stats verbatim:** `signature_name = tcp_flow_features_clustering_v1`, `candidate_count = 252`, `observations_scanned = 50807`, `observations_skipped_no_actor = 0`, `observations_skipped_wrong_modality = 40000` (= `ingest_report.IpAsnEmitted`; expected modality filter), `actors_aggregated = 6125`, `actors_above_threshold = 8553`, `candidates_emitted = 252`.
+  - **Reading:** `observations_skipped_no_actor = 0` empirically confirms the §0209 Cat II AttributionView wire is working end-to-end — every `tcp_fingerprint` observation has a derived_actor_ref. The three-layer closure model from §0211 (§0162 structural → §0209 operational → §0211 observability) is now validated empirically: the 252 candidates ARE the operational outcome that the three-layer chain produces.
+  - **Destino:** **§0213 binding** — comprovation lift (form top-N=10 candidates → promote → Layer B candidacy → measure-chain-morphology → demotion-evaluation). First non-trivial demotion path of the §0143 comprovation window structurally reachable.
+
+  ### Finding 2 — Cenário 2 fired: `temporal_endpoint_cohort_v1` zero candidates post-attribution
+
+  - **Manifest path:** `signatures.campaign_hypothesis`
+  - **Stats verbatim:** `signature_name = temporal_endpoint_cohort_v1`, `candidate_count = 0`, `observations_scanned = 50807`, `observations_skipped_no_actor = 0`, `observations_skipped_wrong_modality = 0`, `actors_aggregated = 0`, `candidates_emitted = 0`.
+  - **Reading:** The signature processed the full 50807-observation substrate without skipping any record (event-centric signature per §0183/§0184; no actor-attribution dependency on this path). Zero candidates emitted AND zero actors aggregated. The pre-condition that §0210 (named-but-non-binding from §0208 + §0211 inheritance) was waiting on is met: post-§0209 substrate carries DerivedActorAttribution records, the signature ran clean, the candidate count is still 0. Likely cause: `bucket_seconds` parameter mismatch against the Friday DDoS 20K subsample's actual time-density. Calibration needed.
+  - **Destino:** **§0216 binding** — `bucket_seconds` calibration against Friday DDoS 20K time-density. §0210 status promoted from named-but-non-binding (pré-condição empírica unmet) to binding (pré-condição empírica met; §0216 enacts).
+
+  ### Finding 3 — Cenário 3 fired (parcial): DeriveAll super-linear timing
+
+  - **Manifest path:** `step_durations.ingest`, `step_durations.derive_attributions`, `ingest_report.ElapsedNanos`, `derive_attributions_report.elapsed_ns`, `ingest_report.ObservationsCommitted`, `derive_attributions_report.examined`.
+  - **Numbers verbatim:** ingest `step_durations` = `70552448365` ns (≈70.55s); ingest CLI-internal `ElapsedNanos` = `70526978782` ns; orchestrator overhead = ~25ms. Derive `step_durations` = `174432125206` ns (≈174.4s); derive CLI-internal `elapsed_ns` = `174369467164` ns; orchestrator overhead = ~63ms. `ObservationsCommitted = 50807`; `examined = 50807`, `newly_derived = 50807`, `skipped = 0`.
+  - **Reading:** Per-observation cost: ingest 1.39 ms/obs (70.55s / 50807); derive 3.43 ms/obs (174.4s / 50807) = 2.47× ingest. Linear projection 644K observations → derive ~37 min; §0208 empirical at 644K = "aborted in hours" → growth is super-linear, consistent with the substrate-walk-with-append shape diagnosed at §0211 Context. The §0211 MO2 (both-axes preservation; CLI-internal `elapsed_ns` AND orchestrator-observed `step_durations.*` measure different surfaces) is empirically confirmed: divergences are sub-100ms (below measurement noise), meaning process-launch + teardown is negligible and CLI-internal cost dominates. 20K shakedown completes in ~4 min total; comprovation NOT blocked.
+  - **Destino:** **§0217 (renumbered from §0211's §0212)** — DeriveAll O(n²) substrate-walk-with-append mitigation. **Status: named-but-non-binding maintained.** Pre-condition empírica: §0213 lifecycle execution at 20K reveals scale escalation before the architectural refactor is justified. §7 minimalism rejects premature optimization until the comprovation lift itself demands it.
+
+  ### Finding 4 — Cenário 4 manifesto: `endpoint_co_visit_v1` attribution heterogeneity
+
+  - **Manifest path:** `signatures.coordination_ring`
+  - **Stats verbatim:** `signature_name = endpoint_co_visit_v1`, `candidate_count = 0`, `observations_scanned = 50807`, `observations_skipped_no_actor = 50807` (ALL), `observations_skipped_wrong_modality = 0`, `actors_aggregated = 0`, `candidates_emitted = 0`.
+  - **Reading:** Every observation skipped for missing actor. Compare with Finding 1's `tcp_flow_features_clustering_v1` — same substrate, but Finding 1's signature consumed Cat II AttributionView (skipped_no_actor=0) and this one did not. Structural cause identifiable pre-source-inspection: the orchestrator passes `-with-attribution` only to `find-automation-group-candidates-network` (`infra/docker/run-sub-benchmark-1.sh:124-126`); `find-coordination-ring-candidates` receives no such option. Two mutually-exclusive hypotheses:
+    - **(a)** CLI `find-coordination-ring-candidates` accepts `-with-attribution`; the orchestrator omits the option → orchestrator-step gap (parallel to §0208 Gap A); fix is trivial (one line added to the `find-coordination-ring-candidates` invocation, mirroring the Network signature's).
+    - **(b)** CLI does NOT accept `-with-attribution`; `endpoint_co_visit_v1` is interaction-centric per §0185 and does not consume AttributionView by design → expected behavior, not a bug; the manifest captures the design intent as auditable.
+  - Distinguishing requires reading the `find-coordination-ring-candidates` source.
+  - **Destino:** **§0215 binding** — investigation + (if hypothesis (a)) orchestrator-step fix + (if hypothesis (b)) documentation-only entry recording design intent.
+
+  ### Finding 5 — `OptionalFieldsCoercedToZero` significant: §0211's per-column trigger met
+
+  - **Manifest path:** `ingest_report.OptionalFieldsCoercedToZero`, `ingest_report.RowsParsed`
+  - **Numbers verbatim:** `OptionalFieldsCoercedToZero = 21152`, `RowsParsed = 20000`. Ratio: 1.06 coercions per row average. Across ~12 optional columns per FlowRecord (FIN/SYN/RST/PSH/ACK/URG/CWE/ECE control-bit counts + FwdHeaderLength + BwdHeaderLength + InitWinFwd + InitWinBwd), that's 21152 / (20000 × 12) = ~8.8% of optional cells coerced.
+  - **Reading:** The §0211 pre-condition "if shakedown reveals significant coercion (`> 1%` of rows on any sample)" is met with margin. The §0211 aggregated counter cannot localize which columns are coerging; per-column resolution required so the operator can distinguish "Init_Win_bytes_forward had NaN" from "FIN Flag Count had Infinity". Localization is the structural complement to the §0211 first-order audit surface.
+  - **Destino:** **§0214 (renumbered from §0211's §0213) binding** — per-column resolution via `OptionalFieldsCoercedToZeroByColumn map[string]int` on `cic_ids.Report` + per-column emission in the CLI Report JSON + manifest validation document field extension.
+
+  ### Finding 6 — Sub-stat semantic ambiguity: `actors_above_threshold > actors_aggregated`
+
+  - **Manifest path:** `signatures.automation_group_network.stats.actors_aggregated`, `signatures.automation_group_network.stats.actors_above_threshold`
+  - **Numbers verbatim:** `actors_aggregated = 6125`, `actors_above_threshold = 8553`.
+  - **Reading:** Structurally curious — under the assumed inclusion semantic (above_threshold ⊆ aggregated), `above_threshold` should never exceed `aggregated`. That it does indicates the inclusion semantic is wrong, and the two sub-stats lack an explicit operational definition in the §0143 mandatory instrumentation axis. **Two plausible hypotheses about `actors_above_threshold` (8553) > `actors_aggregated` (6125):**
+    - **(a)** `aggregated` = distinct actors; `above_threshold` = membership count in clusters (an actor can belong to multiple clusters, so the membership sum can exceed the distinct-actor count).
+    - **(b)** `above_threshold` is a structural misnomer measuring clusters above the size threshold (not actors at all).
+  - Distinguishing requires inspection of the signature's source. Neither hypothesis is verifiable from the manifest alone; both are honestly plausible.
+  - **Destino:** **§0218+ named-but-non-binding**. Pré-condição empírica: next signature to ratify which hypothesis (by emitting the same pair with semantic divergent from the assumed one), OR first §0213 execution exposes ambiguity at the formation step that consumes these stats to select top-N. Premature definition rejected per §7 minimalism — naming a definition pre-evidence would commit to one hypothesis without falsifiable basis.
+
+- **Constitutional review:**
+
+  **Tier 1 (Charter)** — zero impact. No invariant touched; the six findings are operational pressures; none constitutes a Charter amendment trigger. §2.1 / §2.3 / §2.4 / §2.5 / §3 N1 / §4 unchanged.
+
+  **Tier 2 (Ontology / schemas / canonical)** — zero impact. No proto modified; no canonical-form revision; no operational-definition change. Finding 6's sub-stat semantic ambiguity is a §0143 instrumentation-axis pressure (architecture-tier), not an Ontology pressure; §0218+ when it lands may touch architecture prose but §0212 only names the pressure.
+
+  **Tier 3 (services / infra)** — zero impact. §0212 is decision-log-only; no source modified.
+
+  **Anchor verification per §0142 deliberate-inventory** (the inventory IS the constitutional artifact per §0142 MO3 + §0212 MO1 below):
+
+  - **§0142 MO3** — deliberate-inventory sweep. Status: applied; this anchor list is the sweep.
+  - **§0143** — mandatory instrumentation discipline (subtype × source × chain-morphology). Status: **all six findings readable mechanically from the per-signature envelope + ingest/derive Report JSON + step_durations + verdict block, without inspection of substrate by hand.** Second deployment-tier first-confirmation that the §0143 instrumentation discipline pays off (after §0208 first-confirmation). The yield compounds.
+  - **§0144** — F1 NetworkObservation modality coverage. Status: Cenário 1 + Cenário 4 + Cenário 2 all manifest via F1 substrate; F2 (synthetic) + F3 (honeypot) frentes still absent. The five-layer closure model (per §0212 MO2) generalizes prospectively to F2/F3.
+  - **§0162** — gaps (1) and (2) declared structurally closed. Status: §0212 Finding 1 is the FIRST deployment-tier empirical evidence that the §0209 operational closure of Gap (1) reaches its structural target (252 candidates emitted from the path Gap (1) closed). Three-layer closure model now empirically validated, not just precedented.
+  - **§0184 / §0186 MO2** — bundle-by-shape one-PR-per-advance. Status: applied — §0212 is documentation-only standalone; §0213-§0218 each their own PR.
+  - **§0207** — first substrate-emergent §0022. Status: predecessor; §0212 itself is **deployment-tier-diagnostic-emergent**, fourth instance of the §0022-emergence pattern across the Domain Pack v0.1 program (§0207 parse-time substrate emergence → §0208 deployment-tier diagnostic emergence → §0211 orchestrator-runtime emergence → §0212 multi-branch-diagnostic emergence).
+  - **§0208** — diagnostic-only precedent. Status: mirrored; §0212 extends the form to 6 findings + 2 MOs (vs §0208's 2 gaps + 1 sub-observation + 1 MO). The diagnostic-vs-remediation split discipline carries over verbatim.
+  - **§0208 MO1** — integration-test masking. Status: not applicable to §0212 — this entry has no code change that integration tests could mask.
+  - **§0209** — operational closure of Gap A. Status: consumed by §0212 Finding 1 — the operational closure attains its structural target empirically (252 candidates demonstrate the AttributionView wire produces the outcome the architecture predicted).
+  - **§0210** — `temporal_endpoint_cohort_v1` parameter calibration (named-but-non-binding carry-forward from §0208 + inherited by §0211). Status: **pré-condição empírica atendida** per §0212 Finding 2 — observations_scanned=50807 with skipped_no_actor=0 and candidates_emitted=0 is precisely the pre-condition shape §0210 named. **§0210 promoted from named-but-non-binding to §0216 binding.** This is the second documented promotion of a named-but-non-binding carry-forward (precedent: §0210 itself was inherited across §0208→§0211 without firing; §0212 fires it).
+  - **§0211** — meta-closure of §0209; three-layer closure model; MO1 (first deliberate application of §0208 MO1 to orchestrator-runtime tier); MO2 (both-axes preservation for cross-process timing). Status: ALL CONSUMED + EMPIRICALLY VALIDATED.
+    - Three-layer closure → empirically validated (Finding 1: 252 candidates ARE the outcome the three layers produce).
+    - MO1 → empirically extended; §0212 itself is the next-tier application (orchestrator-runtime → multi-branch-diagnostic-reading).
+    - MO2 → empirically validated (Finding 3: divergence between CLI-internal `elapsed_ns` and orchestrator `step_durations.*` is sub-100ms, consistent with the MO2 hypothesis that the two axes measure different surfaces but at this scale + process-shape the orchestrator overhead is negligible).
+  - **§0211 four-branch sequência operacional pos-merge** — status: **framing parcialmente correto, MO1-corrected.** The 4 enumerated cenários are valid as ORTOGONAIS (independent eixos that can each fire or not), not as mutually-exclusive classes. §0212 Finding 1+2+3+4 fire simultaneously, plus Findings 5+6 add independent eixos beyond the original 4. §0212 MO1 below crystallizes the correction.
+  - **§0211 carry-forwards renumbering** — §0211's `§0212 (DeriveAll O(n²))` → §0212-sequence's §0217; §0211's `§0213 (per-column coercion)` → §0212-sequence's §0214; §0211's `§0214+ (`date +%s%N` GNU dependency)` — unchanged (still named-but-non-binding, independent eixo from §0212's enumeration). The renumbering reflects §0212 itself taking the §0212 slot for diagnostic registration (parallel to §0208 taking the §0208 slot for diagnostic before §0209 took the §0209 slot for remediation). The named-but-non-binding shape of the original §0211 §0212/§0213 carry-forwards is preserved structurally; only the §-numbers shift.
+  - **§0213 (new, binding)** — Sub-benchmark 1 comprovation lift (form + promote + measure-chain-morphology + demote on §0212 Finding 1's 252 candidates).
+  - **§0214 (new, binding; renumbered from §0211's §0213)** — `OptionalFieldsCoercedToZero` per-column resolution.
+  - **§0215 (new, binding)** — `endpoint_co_visit_v1` AttributionView consumption investigation + (if hypothesis (a)) orchestrator-step wire.
+  - **§0216 (new, binding; supersedes §0210 status)** — `temporal_endpoint_cohort_v1` `bucket_seconds` calibration.
+  - **§0217 (renumbered from §0211's §0212; named-but-non-binding maintained)** — DeriveAll O(n²) substrate-walk-with-append mitigation.
+  - **§0218+ (new, named-but-non-binding)** — `actors_above_threshold` vs `actors_aggregated` §0143 axis semantic cravamento; two honest hypotheses recorded; distinguishing deferred to next signature OR §0213 first-formation step.
+
+  **Falsifiability:** every number cited in this entry is verifiable mechanically against `infra/docker/runs/20260607T205836Z/manifest.json` via `jq`. Any auditor reading the entry can re-validate the six findings without inspecting the substrate by hand. The hypothesis pairs at Finding 4 (a/b) and Finding 6 (a/b) are mutually-exclusive AND verifiable empirically (Finding 4 by reading `find-coordination-ring-candidates` source; Finding 6 by reading the Network signature source); the entry deliberately does NOT pre-crystallize either, per §0205 MO2 + §0207 MO1 evidence-precedes-naming discipline.
+
+- **Consequences:**
+
+  - 1 file modified (`docs/charter/decision-log.md`). Zero code change.
+  - **First empirical confirmation that the three-to-five-layer closure model produces operationally real outcomes** — 252 candidates from 6125 actors in ~4 min of pipeline against a 20K-row real-world adversarial sample. §0143 Sub-benchmark 1 comprovation window has its first non-trivial demotion path operationally accessible.
+  - **Six successor §-entries named with explicit empirical pre-conditions** — §0213 (binding, comprovation lift) + §0214 (binding, per-column coercion) + §0215 (binding, attribution wire investigation) + §0216 (binding, bucket calibration; §0210 superseded) + §0217 (named-but-non-binding maintained, DeriveAll mitigation) + §0218+ (named-but-non-binding, sub-stat semantic).
+  - **§0211 four-branch sequência operacional framing corrected to ortogonal** per §0212 MO1; framing carries forward to subsequent multi-branch operations.
+  - **Five-layer closure model crystallized** per §0212 MO2; F2 + F3 frente authors inherit prospectively.
+
+  **Carry-forwards (consolidated):**
+
+  - **§0213** — binding; pré-condição empírica: §0212 Finding 1 (252 candidates available). Scope: `formation_top_n=10` selects top 10 candidates; `form-automation-group` × 10 → `promote-automation-group` × 10 → Layer B candidacy gating → `measure-chain-morphology` over operational window → `demote-automation-group` evaluation per §0011 cadence. **First non-trivial demotion attempt of the §0143 comprovation window.**
+  - **§0214** — binding; pré-condição empírica: §0212 Finding 5 (`OptionalFieldsCoercedToZero = 21152` in 20000 rows = 8.8% optional cells). Scope: `cic_ids.Report` extension `OptionalFieldsCoercedToZeroByColumn map[string]int`; `getUint` closure increments per-column; CLI Report JSON + manifest validation document extended.
+  - **§0215** — binding; pré-condição empírica: §0212 Finding 4 (`endpoint_co_visit_v1` `observations_skipped_no_actor = 50807`). Scope: read `find-coordination-ring-candidates` source to distinguish hypothesis (a) vs (b); if (a), orchestrator-step `-with-attribution` wire; if (b), documentation-only entry recording design intent.
+  - **§0216** — binding; pré-condição empírica: §0212 Finding 2 (`temporal_endpoint_cohort_v1` `candidates_emitted = 0` with `observations_scanned = 50807`). Scope: inspect default `bucket_seconds`; calibrate against Friday DDoS 20K time-density (timestamp distribution from `runs/20260607T205836Z/ingest.stdout` or substrate query); re-run; verify candidates emerge. **§0210 status formally promoted via §0216 enactment.**
+  - **§0217** — named-but-non-binding maintained (renumbered from §0211's §0212). Pré-condição empírica: §0213 lifecycle execution at 20K reveals scale escalation before architectural refactor justified. §7 minimalism rejects premature optimization.
+  - **§0218+** — named-but-non-binding (sub-stat semantic). Pré-condição empírica: next signature emitting the `aggregated`/`above_threshold` pair with semantic divergent from one of the two hypotheses, OR §0213 first-formation step exposes the ambiguity operationally (e.g., top-N selection produces a count incompatible with one hypothesis).
+
+  **Methodological observation 1 — Multi-branch ortogonal fire; §-entry cenário framings must be marked ORTOGONAIS or MUTUALLY-EXCLUSIVE.**
+
+  §0211 four-branch sequência operacional implicitly assumed mutually-exclusive cenários (single classification per run). RUN_ID `20260607T205836Z` invalidated: six findings independent, four of the §0211 cenários firing simultaneously, two more findings beyond the original four. The four cenários are ORTOGONAIS dimensions (each independent), not mutually-exclusive classes.
+
+  **Pattern crystallized: §-entries declaring forward-looking cenário framings MUST explicitly mark each cenário as ORTOGONAL (independent eixo, can fire alongside others) or MUTUALLY-EXCLUSIVE (disjoint classes; only one fires per run). Default assumption when unmarked is ORTOGONAL — single-classification is the degenerate case, not the generic case.** Applicable retroactively to §0205 MO2 framings of signature outcomes (those are ortogonais — multiple signatures can produce non-zero outcomes simultaneously). Applicable prospectively to F2 / F3 frente deployment-tier diagnoses (each frente will introduce new eixos, never replace existing ones; multi-branch ortogonal is the steady-state shape).
+
+  **Methodological observation 2 — Five-layer closure model crystallized (extends §0211 three-layer).**
+
+  §0211 MO1 crystallized three-layer closure (structural → operational → observability). The post-§0211 first-real-run revealed TWO additional layers necessary for the closure chain to produce operational outcomes:
+
+  - **Layer 4 — diagnostic** — "the operator can READ the observation correctly: classify the findings, distinguish independent eixos, identify which subsequent §-entries the observation triggers". §0212 IS this layer applied: six findings classified, each routed to a successor §-entry with explicit pre-conditions, MO1 corrects the framing assumption that made the reading non-trivial.
+  - **Layer 5 — remediation** — "the operator executes the downstream operation (lifecycle, calibration, gap-fix) based on the diagnostic". §0213-§0216 ARE this layer (§0217+§0218 remain conditional under §7 minimalism).
+
+  **Five-layer closure model:** structural → operational → observability → diagnostic → remediation. Each layer necessary; none alone sufficient; failure at any layer renders the preceding layers operationally inert. **Generalizes to Frente 2 (synthetic) + Frente 3 (honeypot) prospectively** — each frente will need all five closures. The pattern catalogued at §0212 avoids re-discovering the sequence by re-experience. **Validates §0211's three-layer formalization as a SUB-PATTERN of the five-layer, not as a terminal pattern.**
+
+- **Supersession:** none in the structural sense. §0210 status promoted from "named-but-non-binding (pré-condição empírica unmet)" to "binding via §0216 enactment". §0211 four-branch sequência operacional framing extended (not superseded) via §0212 MO1 ortogonal correction. §0211 three-layer closure model extended (not superseded) via §0212 MO2 five-layer crystallization. §0211 carry-forwards renumbered (§0212→§0217 for DeriveAll; §0213→§0214 for per-column coercion); the named-but-non-binding shape preserved structurally.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
