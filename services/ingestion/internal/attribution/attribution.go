@@ -88,11 +88,32 @@ type AttributionDefinition interface {
 }
 
 // Report is the per-DeriveAll outcome.
+//
+// Timing fields (DeriveStartedAt, DeriveCompletedAt, ElapsedNanos)
+// added per §0211: the §0208 first-real-run could not discriminate
+// the derive step's cost from the ingest step's cost; the §0211
+// shakedown-20K diagnosis (derive 57K = 2min59s vs ingest 57K =
+// 1min03s; derive at 644K aborted on WAL degradation in hours) named
+// derive's substrate-walk-with-append shape as the §0212 named-but-
+// non-binding optimization target. Timing is the audit surface that
+// §0212 will consume.
 type Report struct {
 	Examined       int64
 	Skipped        int64
 	NewlyDerived   int64
 	AlreadyDerived int64
+	// DeriveStartedAt is the Unix-nanosecond timestamp at which
+	// DeriveAll began (before substrate.WalkEvents was invoked). Per
+	// §0211 timing instrumentation.
+	DeriveStartedAt int64
+	// DeriveCompletedAt is the Unix-nanosecond timestamp at which
+	// DeriveAll returned (success or substrate-walk-error path); in
+	// either case the field is populated. Per §0211.
+	DeriveCompletedAt int64
+	// ElapsedNanos is DeriveCompletedAt - DeriveStartedAt; emitted as
+	// a separate field for operator convenience (no subtraction at the
+	// jq layer). Per §0211.
+	ElapsedNanos int64
 }
 
 // DeriveAll walks every NetworkObservation in the substrate, applies
@@ -108,15 +129,25 @@ type Report struct {
 // Concurrency: same discipline as derivation.DeriveAll — read via
 // WalkEvents (no writeMu) + write via substrate.Append (acquires
 // writeMu). Safe to run alongside the ingestion service's write path.
-func DeriveAll(ctx context.Context, sub *substrate.Substrate, def AttributionDefinition, now func() time.Time) (Report, error) {
+func DeriveAll(ctx context.Context, sub *substrate.Substrate, def AttributionDefinition, now func() time.Time) (rep Report, err error) {
 	if def == nil {
-		return Report{}, errors.New("attribution.DeriveAll: definition must not be nil")
+		return rep, errors.New("attribution.DeriveAll: definition must not be nil")
 	}
 	if now == nil {
 		now = time.Now
 	}
 
-	var rep Report
+	rep.DeriveStartedAt = time.Now().UnixNano()
+	// Named return values let the deferred timestamp population mutate
+	// the value the caller actually receives. With an unnamed Report
+	// return + `return rep, ...`, the struct is copied at the return
+	// statement BEFORE the defer fires, so the caller would see zeroed
+	// timing fields. Per §0211: every Report (success or substrate-
+	// walk-error abort) carries timing identical in shape.
+	defer func() {
+		rep.DeriveCompletedAt = time.Now().UnixNano()
+		rep.ElapsedNanos = rep.DeriveCompletedAt - rep.DeriveStartedAt
+	}()
 	walkErr := sub.WalkEvents(ctx, func(row substrate.EventRow) error {
 		if row.MessageType != networkObservationMessageType {
 			return nil

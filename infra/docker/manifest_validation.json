@@ -13,6 +13,9 @@
     "parameters",
     "pipeline_scope",
     "signatures",
+    "ingest_report",
+    "derive_attributions_report",
+    "step_durations",
     "verdict"
   ],
   "properties": {
@@ -147,6 +150,47 @@
           {"type": "null"},
           {"type": "object"}
         ]
+      }
+    },
+    "ingest_report": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "object"}
+      ],
+      "description": "Verbatim cic_ids.Report JSON emitted by the ingest step (cmd/ingest-cic-ids) to its stdout. Per §0211 timing instrumentation: carries rows_parsed, rows_rejected, observations_committed, ip_asn_emitted, tcp_fingerprint_emitted, flow_statistics_dropped, optional_fields_coerced_to_zero, ingest_started_at, ingest_completed_at, elapsed_ns. null when the ingest step did not run or emitted no parseable JSON."
+    },
+    "derive_attributions_report": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "object"}
+      ],
+      "description": "Verbatim payload JSON emitted by the derive-attributions step (cmd/derive-actor-attribution) to its stdout. Per §0211 timing instrumentation: carries definition_version, definition_parameters, examined, skipped, newly_derived, already_derived, derive_started_at, derive_completed_at, elapsed_ns. null when the derive step did not run or emitted no parseable JSON."
+    },
+    "step_durations": {
+      "type": "object",
+      "description": "Per-step wall-clock duration in nanoseconds as observed by the orchestrator's invoke() wrapper. Per §0211: distinct from the CLI-internal elapsed_ns inside ingest_report / derive_attributions_report — step_durations measures process-launch + CLI-internal + process-teardown total (the operationally-relevant cost), while elapsed_ns measures the CLI function body alone. Both axes are preserved because they answer different questions (orchestrator overhead vs. library cost).",
+      "required": ["ingest", "derive_attributions", "replay_attributions", "signatures"],
+      "properties": {
+        "ingest":              {"type": "integer", "minimum": 0},
+        "derive_attributions": {"type": "integer", "minimum": 0},
+        "replay_attributions": {"type": "integer", "minimum": 0},
+        "signatures": {
+          "type": "object",
+          "required": [
+            "automation_group_browser",
+            "automation_group_network",
+            "behavioral_cluster",
+            "campaign_hypothesis",
+            "coordination_ring"
+          ],
+          "properties": {
+            "automation_group_browser": {"type": "integer", "minimum": 0},
+            "automation_group_network": {"type": "integer", "minimum": 0},
+            "behavioral_cluster":       {"type": "integer", "minimum": 0},
+            "campaign_hypothesis":      {"type": "integer", "minimum": 0},
+            "coordination_ring":        {"type": "integer", "minimum": 0}
+          }
+        }
       }
     },
     "verdict": {

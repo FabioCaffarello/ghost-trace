@@ -90,14 +90,17 @@ func run(args []string, stdout, stderr io.Writer) int {
 		Skipped:              report.Skipped,
 		NewlyDerived:         report.NewlyDerived,
 		AlreadyDerived:       report.AlreadyDerived,
+		DeriveStartedAt:      report.DeriveStartedAt,
+		DeriveCompletedAt:    report.DeriveCompletedAt,
+		ElapsedNanos:         report.ElapsedNanos,
 	}); err != nil {
 		fmt.Fprintf(stderr, "derive-actor-attribution: encode json: %v\n", err)
 		return exitToolError
 	}
 
 	fmt.Fprintf(stderr,
-		"derive-actor-attribution: definition=%s params=%q examined=%d skipped=%d newly_derived=%d already_derived=%d\n",
-		def.Version(), def.Parameters(), report.Examined, report.Skipped, report.NewlyDerived, report.AlreadyDerived)
+		"derive-actor-attribution: definition=%s params=%q examined=%d skipped=%d newly_derived=%d already_derived=%d elapsed_ns=%d\n",
+		def.Version(), def.Parameters(), report.Examined, report.Skipped, report.NewlyDerived, report.AlreadyDerived, report.ElapsedNanos)
 	return 0
 }
 
@@ -124,4 +127,10 @@ type payload struct {
 	Skipped              int64  `json:"skipped"`
 	NewlyDerived         int64  `json:"newly_derived"`
 	AlreadyDerived       int64  `json:"already_derived"`
+	// Timing fields per §0211. Distinct from the structural counters
+	// above: timing is observability instrumentation, not part of the
+	// idempotency or derivation contract.
+	DeriveStartedAt   int64 `json:"derive_started_at"`
+	DeriveCompletedAt int64 `json:"derive_completed_at"`
+	ElapsedNanos      int64 `json:"elapsed_ns"`
 }

@@ -46,19 +46,32 @@ log() {
 }
 
 # Invoke a CLI step. Captures stdout to ${step_path}.stdout, stderr
-# to .stderr, and exit code. Aborts the run on non-zero exit.
+# to .stderr, wall-clock nanoseconds to .duration_ns, and exit code.
+# Aborts the run on non-zero exit.
+#
+# Per §0211: wall-clock per step captured so the §0212 +/- §0213
+# diagnoses (DeriveAll O(n²); per-column coercion) have an audit
+# surface at the orchestrator tier. The .duration_ns file is the
+# operational complement to the per-CLI elapsed_ns fields in the
+# ingest + derive Report JSON — both axes are emitted because they
+# answer different questions (CLI-internal cost vs. CLI-launch +
+# CLI-internal + CLI-teardown total).
 invoke() {
     local label="$1"; shift
     local step_path="${RUN_DIR}/${label}"
     mkdir -p "$(dirname "${step_path}")"
     log "step=${label} cmd=$*"
     local rc=0
+    local start_ns end_ns
+    start_ns=$(date +%s%N)
     "$@" > "${step_path}.stdout" 2> "${step_path}.stderr" || rc=$?
+    end_ns=$(date +%s%N)
+    printf '%s\n' "$(( end_ns - start_ns ))" > "${step_path}.duration_ns"
     if [ "${rc}" -ne 0 ]; then
-        log "step=${label} FAILED exit=${rc} (see ${step_path}.stderr)"
+        log "step=${label} FAILED exit=${rc} duration_ns=$(( end_ns - start_ns )) (see ${step_path}.stderr)"
         return "${rc}"
     fi
-    log "step=${label} ok"
+    log "step=${label} ok duration_ns=$(( end_ns - start_ns ))"
 }
 
 # Common substrate flags reused at every CLI invocation.
@@ -149,39 +162,101 @@ log "step=manifest assembling"
 
 sample_size=$(stat -c '%s' "${GHOST_TRACE_CIC_IDS_SAMPLE}" 2>/dev/null || echo 0)
 
-# Aggregate per-signature envelopes. Each find-* CLI emits JSON to
-# stdout per §0163 envelope shape: {signature_name, candidate_count,
-# candidates[], stats{...}}. We slurp each into a named subobject so
-# the manifest preserves the full diagnostic surface per signature.
-sig_aggregate=$(
-    jq -n \
-        --slurpfile a "${SIG_DIR}/find-automation-group-candidates.stdout" \
-        --slurpfile b "${SIG_DIR}/find-automation-group-candidates-network.stdout" \
-        --slurpfile c "${SIG_DIR}/find-behavioral-cluster-candidates.stdout" \
-        --slurpfile d "${SIG_DIR}/find-campaign-hypothesis-candidates.stdout" \
-        --slurpfile e "${SIG_DIR}/find-coordination-ring-candidates.stdout" \
-        '{
-            "automation_group_browser":   ($a[0] // null),
-            "automation_group_network":   ($b[0] // null),
-            "behavioral_cluster":         ($c[0] // null),
-            "campaign_hypothesis":        ($d[0] // null),
-            "coordination_ring":          ($e[0] // null)
-         }'
-)
+# Per §0211 Bug A fix: write the per-signature aggregate JSON to a file
+# instead of carrying it in a bash variable that subsequently flows
+# through `--argjson` (argv-bound; ARG_MAX-bounded). The pre-§0211
+# orchestrator failed at this exact site under the §0208 RUN_ID
+# 20260528T030751Z real-world sample size (signature candidate lists
+# at 644K-observation scale exceeded the kernel ARG_MAX limit on the
+# manifest jq invocation, dropping the manifest entirely).
+#
+# --slurpfile wraps the file content in a JSON array, even when the
+# file contains a single object. The .signatures[0] in the jq
+# expression below is the unwrap. Per §0211 Bug A fix — DO NOT
+# remove [0] without also removing --slurpfile.
+sig_aggregate_path="${RUN_DIR}/.sig_aggregate.json"
+jq -n \
+    --slurpfile a "${SIG_DIR}/find-automation-group-candidates.stdout" \
+    --slurpfile b "${SIG_DIR}/find-automation-group-candidates-network.stdout" \
+    --slurpfile c "${SIG_DIR}/find-behavioral-cluster-candidates.stdout" \
+    --slurpfile d "${SIG_DIR}/find-campaign-hypothesis-candidates.stdout" \
+    --slurpfile e "${SIG_DIR}/find-coordination-ring-candidates.stdout" \
+    '{
+        "automation_group_browser":   ($a[0] // null),
+        "automation_group_network":   ($b[0] // null),
+        "behavioral_cluster":         ($c[0] // null),
+        "campaign_hypothesis":        ($d[0] // null),
+        "coordination_ring":          ($e[0] // null)
+     }' > "${sig_aggregate_path}"
 
 # Total candidate count across all signatures. Drives the verdict
 # field: if zero candidates emerged from any signature, the manifest
-# records instrumented_non_firing = true per §0162 discipline.
+# records instrumented_non_firing = true per §0162 discipline. Reads
+# from the file (not the bash variable) per the §0211 Bug A pattern.
 total_candidates=$(
-    echo "${sig_aggregate}" | jq '[.[] | .candidate_count // 0] | add // 0'
+    jq '[.[] | .candidate_count // 0] | add // 0' "${sig_aggregate_path}"
 )
 instrumented_non_firing=$( [ "${total_candidates}" -eq 0 ] && echo "true" || echo "false" )
+
+# Read a per-step .duration_ns file (written by invoke()). Returns 0
+# when the file does not exist (step did not run / step failed before
+# .duration_ns was written — defensive). Uses bash $(<file) which
+# strips the trailing newline command substitution adds.
+read_duration_ns() {
+    local f="$1"
+    if [ -f "$f" ]; then
+        local v
+        v=$(<"$f")
+        printf '%s' "$v"
+    else
+        printf '0'
+    fi
+}
+
+# Aggregate per-step wall-clock durations (nanoseconds). Small JSON;
+# --argjson is safe. The CLI-internal elapsed_ns fields inside
+# ingest_report + derive_attributions_report (see below) measure
+# different surfaces: ingest_report.elapsed_ns is the cic_ids.Ingest
+# function's own elapsed (header read + parse + commit loop);
+# step_durations.ingest is the orchestrator-observed wall-clock
+# (process launch + CLI-internal + process teardown). The two axes
+# answer different questions per §0211 Methodological observation 2.
+step_durations_json=$(
+    jq -n \
+        --argjson ingest               "$(read_duration_ns "${RUN_DIR}/ingest.duration_ns")" \
+        --argjson derive_attributions  "$(read_duration_ns "${RUN_DIR}/derive-attributions.duration_ns")" \
+        --argjson replay_attributions  "$(read_duration_ns "${RUN_DIR}/replay-attributions.duration_ns")" \
+        --argjson sig_ag_browser       "$(read_duration_ns "${SIG_DIR}/find-automation-group-candidates.duration_ns")" \
+        --argjson sig_ag_network       "$(read_duration_ns "${SIG_DIR}/find-automation-group-candidates-network.duration_ns")" \
+        --argjson sig_bc               "$(read_duration_ns "${SIG_DIR}/find-behavioral-cluster-candidates.duration_ns")" \
+        --argjson sig_ch               "$(read_duration_ns "${SIG_DIR}/find-campaign-hypothesis-candidates.duration_ns")" \
+        --argjson sig_cr               "$(read_duration_ns "${SIG_DIR}/find-coordination-ring-candidates.duration_ns")" \
+        '{
+            ingest:               $ingest,
+            derive_attributions:  $derive_attributions,
+            replay_attributions:  $replay_attributions,
+            signatures: {
+                automation_group_browser: $sig_ag_browser,
+                automation_group_network: $sig_ag_network,
+                behavioral_cluster:       $sig_bc,
+                campaign_hypothesis:      $sig_ch,
+                coordination_ring:        $sig_cr
+            }
+         }'
+)
 
 # Per §0143 mandatory instrumentation axis (subtype x source x
 # chain-morphology). Chain-morphology is absent in this scope because
 # no formations are committed by this script (deferred to §0206); the
 # manifest field is present as a typed null so the schema doesn't
 # silently drop the axis.
+#
+# Per §0211: ingest_report + derive_attributions_report read from the
+# respective step's .stdout via --slurpfile (same pattern as $a-$e
+# above for sig_aggregate; .[0] unwrap below for the same reason). The
+# ingest.stdout file is the cic_ids.Report JSON; derive-attributions.
+# stdout is the derive payload JSON. Both flow through file-based jq
+# input to remain ARG_MAX-safe regardless of dataset size.
 manifest_path="${RUN_DIR}/manifest.json"
 jq -n \
     --arg run_id              "${RUN_ID}" \
@@ -193,7 +268,10 @@ jq -n \
     --arg sample_blake3       "${CIC_IDS_SAMPLE_BLAKE3:-}" \
     --argjson sample_size     "${sample_size}" \
     --argjson formation_top_n "${FORMATION_TOP_N:-10}" \
-    --argjson signatures      "${sig_aggregate}" \
+    --slurpfile sig_agg       "${sig_aggregate_path}" \
+    --slurpfile ingest_rep    "${RUN_DIR}/ingest.stdout" \
+    --slurpfile derive_rep    "${RUN_DIR}/derive-attributions.stdout" \
+    --argjson step_durations  "${step_durations_json}" \
     --argjson total_cands     "${total_candidates}" \
     --argjson non_firing      "${instrumented_non_firing}" \
     --arg layer_b_t_b_num     "${LAYER_B_T_B_NUMERATOR:-1}" \
@@ -232,7 +310,10 @@ jq -n \
             deferred_steps: ["form", "promote", "measure-chain-morphology", "demotion-evaluation"],
             deferral_reason: "depends on empirical signature-output shape per §4 falsifiability; lands at §0206 follow-on"
         },
-        signatures: $signatures,
+        signatures: $sig_agg[0],
+        ingest_report: ($ingest_rep[0] // null),
+        derive_attributions_report: ($derive_rep[0] // null),
+        step_durations: $step_durations,
         verdict: {
             total_candidates: $total_cands,
             instrumented_non_firing: $non_firing,

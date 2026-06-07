@@ -72,7 +72,14 @@ const tcpProtocolNumber uint32 = 6
 // CICFlowMeter's convention of emitting empty cells for absent
 // features). Numeric parse errors on REQUIRED fields (SrcPort,
 // DstPort, Protocol) surface as ParseError.
-func ParseRow(row []string, idx map[string]int) (*FlowRecord, error) {
+//
+// Per §0211 the int returned alongside FlowRecord counts optional
+// columns whose raw cell was non-empty but failed ParseUint — distinct
+// from "column absent" (empty cell). The counter is the audit surface
+// for the §0208 silent-coercion suspicion (NaN / Infinity / negatives
+// in optional columns); aggregated by the caller into
+// Report.OptionalFieldsCoercedToZero.
+func ParseRow(row []string, idx map[string]int) (*FlowRecord, int, error) {
 	get := func(col string) string {
 		i, ok := idx[col]
 		if !ok || i >= len(row) {
@@ -80,8 +87,13 @@ func ParseRow(row []string, idx map[string]int) (*FlowRecord, error) {
 		}
 		return row[i]
 	}
+	coerced := 0
 	getUint := func(col string) uint32 {
-		v, _ := strconv.ParseUint(get(col), 10, 32)
+		raw := get(col)
+		v, err := strconv.ParseUint(raw, 10, 32)
+		if err != nil && raw != "" {
+			coerced++
+		}
 		return uint32(v)
 	}
 	getUintRequired := func(col string) (uint32, error) {
@@ -98,15 +110,15 @@ func ParseRow(row []string, idx map[string]int) (*FlowRecord, error) {
 
 	srcPort, err := getUintRequired(ColSrcPort)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	dstPort, err := getUintRequired(ColDstPort)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	protocol, err := getUintRequired(ColProtocol)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	return &FlowRecord{
 		SrcIP:           get(ColSrcIP),
@@ -127,7 +139,7 @@ func ParseRow(row []string, idx map[string]int) (*FlowRecord, error) {
 		BwdHeaderLength: getUint(ColBwdHeaderLength),
 		InitWinFwd:      getUint(ColInitWinFwd),
 		InitWinBwd:      getUint(ColInitWinBwd),
-	}, nil
+	}, coerced, nil
 }
 
 // ParseError carries the column + raw value that failed parsing on a
@@ -293,6 +305,14 @@ func ParseTimestamp(raw string) (int64, error) {
 // that this adapter is empirically reporting. Counters surfaced for
 // operator visibility + diagnostic-leverage during the comprovation
 // window per §0143 Sub-benchmark 1 instrumentation requirement.
+//
+// Timing fields (IngestStartedAt, IngestCompletedAt, ElapsedNanos) +
+// OptionalFieldsCoercedToZero added per §0211: the §0208 first-real-run
+// captured no per-step timing and could not discriminate ingest cost
+// from derive cost; the §0208 latent silent-coercion suspicion (NaN /
+// Infinity / negatives in optional columns) carried no audit surface.
+// Both gaps now have first-class observability without altering any
+// existing counter's semantic.
 type Report struct {
 	// RowsParsed is the count of CSV rows successfully parsed.
 	RowsParsed int
@@ -313,6 +333,25 @@ type Report struct {
 	// Counted per-row (not per-feature). Empirical pressure surface
 	// for the flow_record_summary OMQ per §0145.
 	FlowStatisticsDropped int
+	// OptionalFieldsCoercedToZero counts optional columns where the
+	// raw cell was non-empty but ParseUint failed — distinct from
+	// "column absent" (empty cell), which is legitimate CICFlowMeter
+	// convention for unset features. Per §0211: aggregated counter
+	// (not per-column); §0213 named-but-non-binding for per-column
+	// resolution if shakedown reveals coercion >1% of rows.
+	OptionalFieldsCoercedToZero int
+	// IngestStartedAt is the Unix-nanosecond timestamp at which Ingest
+	// began (captured before the header read). Per §0211 timing
+	// instrumentation.
+	IngestStartedAt int64
+	// IngestCompletedAt is the Unix-nanosecond timestamp at which
+	// Ingest returned (success path) or aborted (substrate-error path);
+	// in either case the field is populated. Per §0211.
+	IngestCompletedAt int64
+	// ElapsedNanos is IngestCompletedAt - IngestStartedAt; emitted as
+	// a separate field for operator convenience (no subtraction at the
+	// jq layer). Per §0211.
+	ElapsedNanos int64
 }
 
 // Ingest streams the CIC-IDS CSV reader through parse → map → commit.
@@ -324,19 +363,30 @@ type Report struct {
 // Per-row failures (ParseError) increment RowsRejected and continue;
 // per-observation commit failures surface immediately with the partial
 // Report (substrate commit error is unrecoverable at this layer).
-func Ingest(ctx context.Context, ingester *ingest.Ingester, reader io.Reader, collectorRef string, env ingest.Envelope) (Report, error) {
+func Ingest(ctx context.Context, ingester *ingest.Ingester, reader io.Reader, collectorRef string, env ingest.Envelope) (report Report, err error) {
+	report.IngestStartedAt = time.Now().UnixNano()
+	// Named return values let the deferred timestamp population mutate
+	// the value the caller actually receives. With an unnamed Report
+	// return + `return report, ...`, the struct is copied at the return
+	// statement BEFORE the defer fires, so the caller would see zeroed
+	// timing fields. Per §0211: every Report (success or substrate-
+	// error abort per §0204 dec. #3) carries timing identical in shape.
+	defer func() {
+		report.IngestCompletedAt = time.Now().UnixNano()
+		report.ElapsedNanos = report.IngestCompletedAt - report.IngestStartedAt
+	}()
+
 	r := csv.NewReader(reader)
 	r.FieldsPerRecord = -1 // CIC-IDS CSV may have variable column counts across releases
 	header, err := r.Read()
 	if err != nil {
-		return Report{}, fmt.Errorf("cic_ids.Ingest: read header: %w", err)
+		return report, fmt.Errorf("cic_ids.Ingest: read header: %w", err)
 	}
 	idx, err := indexHeader(header)
 	if err != nil {
-		return Report{}, fmt.Errorf("cic_ids.Ingest: %w", err)
+		return report, fmt.Errorf("cic_ids.Ingest: %w", err)
 	}
 
-	var report Report
 	for {
 		if err := ctx.Err(); err != nil {
 			return report, err
@@ -348,12 +398,13 @@ func Ingest(ctx context.Context, ingester *ingest.Ingester, reader io.Reader, co
 		if err != nil {
 			return report, fmt.Errorf("cic_ids.Ingest: read row: %w", err)
 		}
-		flow, err := ParseRow(row, idx)
+		flow, coerced, err := ParseRow(row, idx)
 		if err != nil {
 			report.RowsRejected++
 			continue
 		}
 		report.RowsParsed++
+		report.OptionalFieldsCoercedToZero += coerced
 		// Flow-statistics columns present in input but not consumed;
 		// counted at row granularity (not per-feature).
 		report.FlowStatisticsDropped++
