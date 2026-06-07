@@ -21,6 +21,7 @@
 # matches the cmd subdir name; new entries inherit this convention).
 /services/ingestion/ingest-cic-ids
 /services/ingestion/derive-actor-attribution
+/services/ingestion/form-automation-group-from-candidate
 
 # Node (anticipated for simulator/frontend)
 node_modules/

@@ -15,6 +15,8 @@
     "signatures",
     "ingest_report",
     "derive_attributions_report",
+    "formations_report",
+    "promotions_report",
     "step_durations",
     "verdict"
   ],
@@ -166,10 +168,22 @@
       ],
       "description": "Verbatim payload JSON emitted by the derive-attributions step (cmd/derive-actor-attribution) to its stdout. Per §0211 timing instrumentation: carries definition_version, definition_parameters, examined, skipped, newly_derived, already_derived, derive_started_at, derive_completed_at, elapsed_ns. null when the derive step did not run or emitted no parseable JSON."
     },
+    "formations_report": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "object"}
+      ],
+      "description": "Per §0213: verbatim outputPayload JSON emitted by the form-from-candidates step (cmd/form-automation-group-from-candidate) to its stdout. Carries ranking_algorithm, top_n, candidates_ingested, candidates_automation_group_eligible, cross_subtype_skipped, formations_committed[], already_present_count. null when the form-from-candidates step did not run or emitted no parseable JSON. The formations_committed array is the §0213 candidacy-materialization audit surface."
+    },
+    "promotions_report": {
+      "type": "array",
+      "description": "Per §0213: array of verbatim payload JSONs from each promote-automation-group invocation. One entry per formation hash emitted by formations_report.formations_committed. Each entry carries formation_event_hash + promotion_event_hash + cadence_seconds + already_promoted + layer_b_enabled. Empty array when no formations were committed (e.g., zero AG candidates in the input envelope).",
+      "items": {"type": "object"}
+    },
     "step_durations": {
       "type": "object",
-      "description": "Per-step wall-clock duration in nanoseconds as observed by the orchestrator's invoke() wrapper. Per §0211: distinct from the CLI-internal elapsed_ns inside ingest_report / derive_attributions_report — step_durations measures process-launch + CLI-internal + process-teardown total (the operationally-relevant cost), while elapsed_ns measures the CLI function body alone. Both axes are preserved because they answer different questions (orchestrator overhead vs. library cost).",
-      "required": ["ingest", "derive_attributions", "replay_attributions", "signatures"],
+      "description": "Per-step wall-clock duration in nanoseconds as observed by the orchestrator's invoke() wrapper. Per §0211: distinct from the CLI-internal elapsed_ns inside ingest_report / derive_attributions_report — step_durations measures process-launch + CLI-internal + process-teardown total (the operationally-relevant cost), while elapsed_ns measures the CLI function body alone. Both axes are preserved because they answer different questions (orchestrator overhead vs. library cost). Per §0213: form_from_candidates + promote_formations array entries added for the candidacy-materialization steps.",
+      "required": ["ingest", "derive_attributions", "replay_attributions", "signatures", "form_from_candidates", "promote_formations"],
       "properties": {
         "ingest":              {"type": "integer", "minimum": 0},
         "derive_attributions": {"type": "integer", "minimum": 0},
@@ -190,6 +204,12 @@
             "campaign_hypothesis":      {"type": "integer", "minimum": 0},
             "coordination_ring":        {"type": "integer", "minimum": 0}
           }
+        },
+        "form_from_candidates": {"type": "integer", "minimum": 0},
+        "promote_formations": {
+          "type": "array",
+          "description": "Per §0213: one entry per promote-automation-group invocation; nanoseconds wall-clock per promotion. Index parallels promotions_report. Empty array when no formations were committed.",
+          "items": {"type": "integer", "minimum": 0}
         }
       }
     },

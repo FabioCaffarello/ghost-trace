@@ -10,7 +10,9 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/canonical"
+	commonv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
 
@@ -73,6 +75,144 @@ type automationGroupWalkerContext struct {
 
 func (w *automationGroupWalkerContext) DeclaredSessions() []SourceDeclaredSession {
 	return w.sessions
+}
+
+// AutomationGroupFormationFromCandidateOptions carries the operator-
+// elected commit parameters for AutomationGroupFormationFromCandidate.
+// Per §0213: the bridge between F3 candidate envelope (signatures.
+// FormationCandidate) and committed AutomationGroupFormation event.
+// Defaults reflect §0011 inception-phase discipline (Confidence=0.0;
+// EI=1/1); operator override via these options.
+type AutomationGroupFormationFromCandidateOptions struct {
+	// PatternParameters is the formation event's pattern_parameters
+	// field. Defaults to empty string when zero-value; operator can
+	// override via CLI flag for non-default signature parameter
+	// captures.
+	PatternParameters string
+
+	// FormationAt is the formation event's formation_at field (Unix
+	// nanoseconds). When zero, AutomationGroupFormationFromCandidate
+	// substitutes now().UnixNano() — same pattern as
+	// FormAutomationGroupAll's now() use.
+	FormationAt int64
+
+	// Confidence is the formation event's confidence field. Default
+	// 0.0 per §0213 inception discipline (operator-overridable via
+	// CLI). Departs from §0157 helper which used candidate.
+	// ConfidenceHint; §0213 cravou 0.0 explicitly to preserve §0011
+	// inception phase + register the §0214 Layer B gating empirical
+	// prediction.
+	Confidence float32
+
+	// EvidentialIndependence is the formation event's
+	// evidential_independence field. Required at marshalling
+	// boundary per §0140 canonical-package paired-dimension
+	// commitment check. Default {1, 1} per §0157 helper precedent
+	// (full operator-asserted independence at inception).
+	EvidentialIndependence *commonv1.EvidentialIndependence
+}
+
+// AutomationGroupFormationFromCandidate commits a single
+// AutomationGroupFormation event derived from an F3 signature
+// candidate (signatures.FormationCandidate). Returns the formation's
+// content-hash + a flag indicating whether the formation already
+// existed in the substrate (idempotency via content-addressed
+// immutability per §0027 AP6).
+//
+// Per decision-log §0213: this function is the operator-tier lift
+// of the §0157 test helper (commitFormationFromCandidate). The
+// pre-§0213 pattern was: F3 signatures emit candidates;
+// integration tests committed formations from candidates via test-
+// only helpers; operator workflow had no path from emission to
+// commit. §0213 closes the operational gap by lifting the helper
+// shape to a package-public function consumable by an operator-
+// facing CLI (cmd/form-automation-group-from-candidate).
+//
+// The function intentionally does NOT walk the substrate (unlike
+// FormAutomationGroupAll which collects DeclaredSessions). The
+// candidate carries everything required for the formation event;
+// the substrate write is direct.
+//
+// Per §2.4 + §2.6 + §0140 marshalling boundary:
+//   - source_event_hashes = candidate.SourceHashes verbatim
+//     (per §2.3 chain; the candidate already threaded Cat I + Cat II
+//     hashes per the §0169 + §0157 patterns).
+//   - direct_influenced_by = nil (inception-phase; no prior
+//     hypothesis influencing this formation).
+//   - closure_hashes = nil (per §0157 precedent; not applicable
+//     at formation stage).
+//   - confidence = opts.Confidence (default 0.0 per §0213).
+//   - evidential_independence = opts.EvidentialIndependence
+//     (default {1, 1} per §0157 precedent; REQUIRED at
+//     marshalling boundary per §0140 paired-dimension check).
+//
+// Cross-subtype guard: returns an error if
+// candidate.HypothesisSubtype != HypothesisSubtypeAutomationGroup.
+// Future bridge CLIs for other subtypes (BehavioralCluster,
+// CampaignHypothesis, CoordinationRing) will have their own
+// FromCandidate functions per the §0045 typed-subtype-specific
+// commitment.
+func AutomationGroupFormationFromCandidate(
+	ctx context.Context,
+	sub *substrate.Substrate,
+	candidate *signatures.FormationCandidate,
+	opts AutomationGroupFormationFromCandidateOptions,
+	now func() time.Time,
+) (hash [32]byte, alreadyPresent bool, err error) {
+	if candidate == nil {
+		return [32]byte{}, false, errors.New("hypothesis.AutomationGroupFormationFromCandidate: candidate must not be nil")
+	}
+	if candidate.HypothesisSubtype != signatures.HypothesisSubtypeAutomationGroup {
+		return [32]byte{}, false, fmt.Errorf("hypothesis.AutomationGroupFormationFromCandidate: candidate.HypothesisSubtype = %v; want AutomationGroup", candidate.HypothesisSubtype)
+	}
+	if now == nil {
+		now = time.Now
+	}
+
+	formationAt := opts.FormationAt
+	if formationAt == 0 {
+		formationAt = now().UnixNano()
+	}
+
+	ei := opts.EvidentialIndependence
+	if ei == nil {
+		ei = &commonv1.EvidentialIndependence{Numerator: 1, Denominator: 1}
+	}
+
+	formation := &eventsv1.AutomationGroupFormation{
+		PatternSignature:       candidate.SignatureName,
+		PatternParameters:      opts.PatternParameters,
+		ActorRefs:              candidate.ActorRefs,
+		FormationAt:            formationAt,
+		Confidence:             opts.Confidence,
+		SourceEventHashes:      candidate.SourceHashes,
+		EvidentialIndependence: ei,
+	}
+
+	payload, formationHash, err := canonical.MarshalAndHash(formation)
+	if err != nil {
+		return [32]byte{}, false, fmt.Errorf("marshal formation: %w", err)
+	}
+	hex := canonical.HashHex(formationHash)
+
+	_, lookupErr := sub.LookupRow(ctx, formationHash)
+	alreadyPresent = lookupErr == nil
+	if lookupErr != nil && !errors.Is(lookupErr, sql.ErrNoRows) {
+		return [32]byte{}, false, fmt.Errorf("lookup formation %s: %w", hex, lookupErr)
+	}
+
+	row := substrate.EventRow{
+		EventHash:   formationHash,
+		EventTime:   formationAt,
+		MessageType: string(formation.ProtoReflect().Descriptor().FullName()),
+		PayloadRef:  hex[:2] + "/" + hex[2:],
+		CommittedAt: now().UnixNano(),
+	}
+	if err := sub.Append(ctx, row, payload); err != nil {
+		return [32]byte{}, false, fmt.Errorf("append formation %s: %w", hex, err)
+	}
+
+	return formationHash, alreadyPresent, nil
 }
 
 // FormAutomationGroupAll walks every DeclaredSession in the
