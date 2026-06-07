@@ -8,8 +8,10 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	commonv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/common/v1"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/signatures"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
 
@@ -370,4 +372,207 @@ func TestUniformCadenceV1CoexistsWithBehavioralCluster(t *testing.T) {
 		t.Errorf("BehavioralClusterFormation count: got %d, want 1",
 			typeCounts["ghosttrace.events.v1.BehavioralClusterFormation"])
 	}
+}
+
+// TestAutomationGroupFormationFromCandidate_HappyPath witnesses §0213:
+// the bridge from F3 signature candidate to committed
+// AutomationGroupFormation event. Mirrors the §0157 test helper
+// pattern lifted to package-public API.
+func TestAutomationGroupFormationFromCandidate_HappyPath(t *testing.T) {
+	dir := t.TempDir()
+	ctx := context.Background()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Close() })
+
+	candidate := &signatures.FormationCandidate{
+		SignatureName:     "tcp_flow_features_clustering_v1",
+		HypothesisSubtype: signatures.HypothesisSubtypeAutomationGroup,
+		ActorRefs:         []string{"a:1/tcp", "b:2/tcp", "c:3/tcp"},
+		SourceHashes:      [][]byte{bytes32("aaa"), bytes32("bbb"), bytes32("ccc")},
+		EvidenceCount:     3,
+		ConfidenceHint:    0.75,
+	}
+
+	formationAt := int64(1716120100000000000)
+	hash, alreadyPresent, err := AutomationGroupFormationFromCandidate(
+		ctx, sub, candidate,
+		AutomationGroupFormationFromCandidateOptions{FormationAt: formationAt},
+		func() time.Time { return time.Unix(0, formationAt) },
+	)
+	if err != nil {
+		t.Fatalf("AutomationGroupFormationFromCandidate: %v", err)
+	}
+	if alreadyPresent {
+		t.Errorf("alreadyPresent: got true want false on first commit")
+	}
+	if hash == ([32]byte{}) {
+		t.Errorf("hash: got zero value")
+	}
+
+	formations := walkAutomationGroupFormations(t, sub)
+	if len(formations) != 1 {
+		t.Fatalf("formations count: got %d want 1", len(formations))
+	}
+	got := formations[0]
+	if got.PatternSignature != "tcp_flow_features_clustering_v1" {
+		t.Errorf("PatternSignature: got %q want tcp_flow_features_clustering_v1", got.PatternSignature)
+	}
+	if len(got.ActorRefs) != 3 {
+		t.Errorf("ActorRefs count: got %d want 3", len(got.ActorRefs))
+	}
+	if got.FormationAt != formationAt {
+		t.Errorf("FormationAt: got %d want %d", got.FormationAt, formationAt)
+	}
+	// §0213 cravoes Confidence=0.0 default (departs from §0157 helper which
+	// used ConfidenceHint); registers the §0214 Layer B gating empirical
+	// prediction explicitly in the entry.
+	if got.Confidence != 0.0 {
+		t.Errorf("Confidence default: got %f want 0.0 per §0213 inception discipline", got.Confidence)
+	}
+	// §0213 cravoes EI={1,1} default per §0157 helper precedent; required
+	// at marshalling boundary per §0140 paired-dimension check.
+	if got.EvidentialIndependence == nil {
+		t.Fatal("EvidentialIndependence: got nil; required at marshalling boundary per §0140")
+	}
+	if got.EvidentialIndependence.Numerator != 1 || got.EvidentialIndependence.Denominator != 1 {
+		t.Errorf("EvidentialIndependence: got %d/%d want 1/1 per §0213 default",
+			got.EvidentialIndependence.Numerator, got.EvidentialIndependence.Denominator)
+	}
+	if len(got.SourceEventHashes) != 3 {
+		t.Errorf("SourceEventHashes count: got %d want 3 (verbatim from candidate.SourceHashes)", len(got.SourceEventHashes))
+	}
+}
+
+// TestAutomationGroupFormationFromCandidate_Idempotent witnesses
+// content-addressed immutability per §0027 AP6: re-committing the
+// SAME candidate + SAME options produces SAME content-hash; second
+// commit returns alreadyPresent=true.
+func TestAutomationGroupFormationFromCandidate_Idempotent(t *testing.T) {
+	dir := t.TempDir()
+	ctx := context.Background()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Close() })
+
+	candidate := &signatures.FormationCandidate{
+		SignatureName:     "tcp_flow_features_clustering_v1",
+		HypothesisSubtype: signatures.HypothesisSubtypeAutomationGroup,
+		ActorRefs:         []string{"x:1/tcp"},
+		SourceHashes:      [][]byte{bytes32("xxx")},
+	}
+	formationAt := int64(1716120100000000000)
+	opts := AutomationGroupFormationFromCandidateOptions{FormationAt: formationAt}
+	clock := func() time.Time { return time.Unix(0, formationAt) }
+
+	hash1, alreadyPresent1, err := AutomationGroupFormationFromCandidate(ctx, sub, candidate, opts, clock)
+	if err != nil {
+		t.Fatalf("first commit: %v", err)
+	}
+	if alreadyPresent1 {
+		t.Errorf("first commit alreadyPresent: got true want false")
+	}
+
+	hash2, alreadyPresent2, err := AutomationGroupFormationFromCandidate(ctx, sub, candidate, opts, clock)
+	if err != nil {
+		t.Fatalf("second commit: %v", err)
+	}
+	if !alreadyPresent2 {
+		t.Errorf("second commit alreadyPresent: got false want true (idempotency violated)")
+	}
+	if hash1 != hash2 {
+		t.Errorf("hash mismatch: first=%x second=%x (content-hash should be identical)", hash1, hash2)
+	}
+}
+
+// TestAutomationGroupFormationFromCandidate_RejectsCrossSubtype witnesses
+// the cross-subtype guard: a candidate carrying HypothesisSubtype !=
+// AutomationGroup MUST error. Future bridge functions for BC / CH / CR
+// will mirror this guard.
+func TestAutomationGroupFormationFromCandidate_RejectsCrossSubtype(t *testing.T) {
+	dir := t.TempDir()
+	ctx := context.Background()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Close() })
+
+	candidate := &signatures.FormationCandidate{
+		SignatureName:     "keystroke_timing_clustering_v1",
+		HypothesisSubtype: signatures.HypothesisSubtypeBehavioralCluster,
+		ActorRefs:         []string{"a:1"},
+		SourceHashes:      [][]byte{bytes32("aaa")},
+	}
+	_, _, err = AutomationGroupFormationFromCandidate(
+		ctx, sub, candidate,
+		AutomationGroupFormationFromCandidateOptions{},
+		nil,
+	)
+	if err == nil {
+		t.Fatal("expected error for cross-subtype candidate; got nil")
+	}
+}
+
+// TestAutomationGroupFormationFromCandidate_OperatorOverrides witnesses
+// the operator-override path for Confidence + EvidentialIndependence
+// defaults. §0213 named operator-overridable for §0214 Layer B
+// experimentation tier-3 if needed.
+func TestAutomationGroupFormationFromCandidate_OperatorOverrides(t *testing.T) {
+	dir := t.TempDir()
+	ctx := context.Background()
+	sub, err := substrate.Open(ctx, filepath.Join(dir, "test.db"), filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatalf("substrate.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Close() })
+
+	candidate := &signatures.FormationCandidate{
+		SignatureName:     "tcp_flow_features_clustering_v1",
+		HypothesisSubtype: signatures.HypothesisSubtypeAutomationGroup,
+		ActorRefs:         []string{"a:1/tcp"},
+		SourceHashes:      [][]byte{bytes32("aaa")},
+	}
+	formationAt := int64(1716120100000000000)
+	opts := AutomationGroupFormationFromCandidateOptions{
+		FormationAt:            formationAt,
+		PatternParameters:      "min-cluster=3;feature=window-size",
+		Confidence:             0.85,
+		EvidentialIndependence: &commonv1.EvidentialIndependence{Numerator: 3, Denominator: 4},
+	}
+	_, _, err = AutomationGroupFormationFromCandidate(
+		ctx, sub, candidate, opts,
+		func() time.Time { return time.Unix(0, formationAt) },
+	)
+	if err != nil {
+		t.Fatalf("AutomationGroupFormationFromCandidate: %v", err)
+	}
+
+	formations := walkAutomationGroupFormations(t, sub)
+	if len(formations) != 1 {
+		t.Fatalf("formations count: got %d want 1", len(formations))
+	}
+	got := formations[0]
+	if got.PatternParameters != "min-cluster=3;feature=window-size" {
+		t.Errorf("PatternParameters: got %q want override", got.PatternParameters)
+	}
+	if got.Confidence != 0.85 {
+		t.Errorf("Confidence override: got %f want 0.85", got.Confidence)
+	}
+	if got.EvidentialIndependence.Numerator != 3 || got.EvidentialIndependence.Denominator != 4 {
+		t.Errorf("EI override: got %d/%d want 3/4",
+			got.EvidentialIndependence.Numerator, got.EvidentialIndependence.Denominator)
+	}
+}
+
+// bytes32 produces a 32-byte test hash from a short label (right-padded).
+// Mirrors the §0157 helper pattern for deterministic test hashes.
+func bytes32(label string) []byte {
+	out := make([]byte, 32)
+	copy(out, label)
+	return out
 }
