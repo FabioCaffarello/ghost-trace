@@ -268,15 +268,26 @@ instrumented_non_firing=$( [ "${total_candidates}" -eq 0 ] && echo "true" || ech
 # Read a per-step .duration_ns file (written by invoke()). Returns 0
 # when the file does not exist (step did not run / step failed before
 # .duration_ns was written — defensive). Uses bash $(<file) which
-# strips the trailing newline command substitution adds.
+# strips the trailing newline command substitution adds; printf re-
+# appends a newline so the promote-formations array assembly via
+# `jq -s '.'` over a stdout stream of multiple read_duration_ns
+# invocations slurps each value as an independent integer.
+#
+# Per §0215 + §0214 Finding 2 / Surface B: pre-§0215 printf used
+# `'%s'` (no newline); the for-loop output concatenated 10 integers
+# without separator (e.g. `19091375` + `17055083` + ... =
+# `190913751705508318...`); `jq -s '.'` slurped the concatenation
+# as a single number `~1.9e+79` corrupting the
+# `step_durations.promote_formations` array in the manifest. The
+# newline separator restores per-promotion timing observability.
 read_duration_ns() {
     local f="$1"
     if [ -f "$f" ]; then
         local v
         v=$(<"$f")
-        printf '%s' "$v"
+        printf '%s\n' "$v"
     else
-        printf '0'
+        printf '0\n'
     fi
 }
 

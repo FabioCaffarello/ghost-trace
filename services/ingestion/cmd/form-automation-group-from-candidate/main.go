@@ -206,19 +206,31 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 }
 
 // envelopeCandidate is the §0163 envelope's per-candidate shape as
-// emitted by find-*-candidates CLIs. Field names match the JSON tags
-// used in the production signatures package's candidate emission.
+// emitted by find-*-candidates CLIs. Field names match the JSON
+// field names used in the production signatures package's candidate
+// emission verbatim.
 //
 // The struct is local to this CLI (decode boundary) because the
 // production type signatures.FormationCandidate uses [][]byte for
-// SourceHashes (raw bytes) which JSON encodes as base64; the
-// signature CLIs emit hex-encoded strings. The conversion is in
+// SourceHashes (raw bytes); the signature CLIs emit hex-encoded
+// strings under the wire field name `source_event_hashes_hex` (all
+// 5 find-* CLIs share this convention; verified at decision-log
+// §0214 Finding 1 cross-CLI cravamento). The conversion is in
 // envelopeToCandidates below.
+//
+// Per §0215 + §0214 MO1 (wire-contract integration testing
+// pattern): the JSON field name MUST match the upstream CLI's emit
+// form verbatim. Pre-§0215 this struct used `json:"source_hashes"`
+// which silently mis-decoded the upstream `source_event_hashes_hex`
+// field as null → 10 broken-chain formations committed at §0213
+// first-real-run (RUN_ID 20260608T045037Z). §0215 corrects the
+// field name; the §0214 MO1 real-wire fixture testing discipline
+// prevents recurrence at the test-coverage tier.
 type envelopeCandidate struct {
 	SignatureName     string     `json:"signature_name"`
 	HypothesisSubtype string     `json:"hypothesis_subtype"`
 	ActorRefs         []string   `json:"actor_refs"`
-	SourceHashes      []string   `json:"source_hashes"`
+	SourceHashes      []string   `json:"source_event_hashes_hex"`
 	EvidenceCount     uint32     `json:"evidence_count"`
 	ConfidenceHint    float64    `json:"confidence_hint"`
 	Interactions      [][]string `json:"interactions"`
