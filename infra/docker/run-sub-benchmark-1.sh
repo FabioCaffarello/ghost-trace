@@ -147,7 +147,74 @@ invoke signatures/find-campaign-hypothesis-candidates \
 invoke signatures/find-coordination-ring-candidates \
     find-coordination-ring-candidates "${DB_FLAGS[@]}"
 
-# --- Step 4: manifest emission --------------------------------------
+# --- Step 5: form-from-candidates -----------------------------------
+#
+# Per §0213: bridge from F3 candidate envelope to committed
+# AutomationGroupFormation events. Reads the Network signature's
+# stdout (the §0163 envelope JSON) and commits the top-N=10
+# AutomationGroup formations selected by --rank-by=actor-count (the
+# §0213 default; deterministic with content-hash tiebreak).
+#
+# This step is the operator-tier lift of the §0157 test helper
+# pattern. Pre-§0213 the F3-candidate → formation path existed only
+# in integration tests via test-only helpers; the §0212 first-real-
+# run surfaced this gap empirically (252 candidates emitted with no
+# operator path to materialize them).
+#
+# Other signatures' envelopes are NOT bridged in this scope. Only
+# the Network applicable signature (per §0208 modality-applicability
+# finding) emits non-zero candidates today; bridges for other
+# subtypes lift via subsequent §-entries when those signatures
+# produce non-trivial output.
+
+invoke form-from-candidates \
+    form-automation-group-from-candidate "${DB_FLAGS[@]}" \
+        -top-n "${FORMATION_TOP_N:-10}" \
+        -rank-by actor-count \
+        "${SIG_DIR}/find-automation-group-candidates-network.stdout"
+
+# --- Step 6: promote-formations -------------------------------------
+#
+# Per §0213: loop over the formation hashes emitted at Step 5; invoke
+# promote-automation-group for each. Layer B parameters are NOT
+# populated at promotion time in this scope (§0213 is candidacy
+# materialization; Layer B candidacy gating + chain morphology +
+# demote evaluation are §0214 candidacy-evaluation scope per the user-
+# cravado split).
+#
+# The orchestrator loop preserves §0204 single-responsibility CLI
+# discipline (each promotion is its own audit-grade invocation; no
+# --auto-promote flag was added to the form-from-candidates CLI per
+# §0213 path-rejection rationale).
+#
+# Per-promotion .stdout/.stderr/.duration_ns captured by invoke() into
+# ${RUN_DIR}/promote-formations/<index>.*. Manifest assembly slurps the
+# per-index .stdout files into the promotions_report array.
+
+PROMOTE_DIR="${RUN_DIR}/promote-formations"
+mkdir -p "${PROMOTE_DIR}"
+
+# Extract formation hashes from form-from-candidates stdout JSON. jq
+# emits one hash per line; bash mapfile reads into array.
+mapfile -t FORMATION_HASHES < <(
+    jq -r '.formations_committed[].formation_event_hash' \
+        "${RUN_DIR}/form-from-candidates.stdout"
+)
+
+log "promote-formations: ${#FORMATION_HASHES[@]} formation hash(es) to promote"
+
+PROMOTE_INDEX=0
+for formation_hash in "${FORMATION_HASHES[@]}"; do
+    invoke "promote-formations/${PROMOTE_INDEX}" \
+        promote-automation-group "${DB_FLAGS[@]}" \
+            -formation-event-hash "${formation_hash}" \
+            -cadence-seconds 86400
+    PROMOTE_INDEX=$(( PROMOTE_INDEX + 1 ))
+done
+
+log "promote-formations: ${PROMOTE_INDEX} promotion(s) committed"
+
+# --- Step 7: manifest emission --------------------------------------
 #
 # Manifest schema: see infra/docker/manifest.schema.json. Captures
 # inputs (git + image + sample), parameters, per-step status, and the
@@ -231,18 +298,44 @@ step_durations_json=$(
         --argjson sig_bc               "$(read_duration_ns "${SIG_DIR}/find-behavioral-cluster-candidates.duration_ns")" \
         --argjson sig_ch               "$(read_duration_ns "${SIG_DIR}/find-campaign-hypothesis-candidates.duration_ns")" \
         --argjson sig_cr               "$(read_duration_ns "${SIG_DIR}/find-coordination-ring-candidates.duration_ns")" \
+        --argjson form_from_cands      "$(read_duration_ns "${RUN_DIR}/form-from-candidates.duration_ns")" \
         '{
-            ingest:               $ingest,
-            derive_attributions:  $derive_attributions,
-            replay_attributions:  $replay_attributions,
+            ingest:                  $ingest,
+            derive_attributions:     $derive_attributions,
+            replay_attributions:     $replay_attributions,
             signatures: {
                 automation_group_browser: $sig_ag_browser,
                 automation_group_network: $sig_ag_network,
                 behavioral_cluster:       $sig_bc,
                 campaign_hypothesis:      $sig_ch,
                 coordination_ring:        $sig_cr
-            }
+            },
+            form_from_candidates:    $form_from_cands
          }'
+)
+
+# Per §0213: per-promotion durations into an array (one entry per
+# committed formation hash). Reads each PROMOTE_DIR/<i>.duration_ns
+# file in order, builds a JSON array. Empty array when no formations
+# committed (e.g., zero AG candidates in envelope).
+promote_durations_json=$(
+    if [ -d "${PROMOTE_DIR}" ] && compgen -G "${PROMOTE_DIR}"/*.duration_ns >/dev/null; then
+        for f in "${PROMOTE_DIR}"/*.duration_ns; do
+            read_duration_ns "$f"
+        done | jq -s '.'
+    else
+        echo "[]"
+    fi
+)
+
+# Per §0213: per-promotion stdout JSON aggregated into array (one
+# entry per committed formation; mirrors promote_durations_json shape).
+promotions_report_json=$(
+    if [ -d "${PROMOTE_DIR}" ] && compgen -G "${PROMOTE_DIR}"/*.stdout >/dev/null; then
+        jq -s '.' "${PROMOTE_DIR}"/*.stdout
+    else
+        echo "[]"
+    fi
 )
 
 # Per §0143 mandatory instrumentation axis (subtype x source x
@@ -271,6 +364,9 @@ jq -n \
     --slurpfile sig_agg       "${sig_aggregate_path}" \
     --slurpfile ingest_rep    "${RUN_DIR}/ingest.stdout" \
     --slurpfile derive_rep    "${RUN_DIR}/derive-attributions.stdout" \
+    --slurpfile form_rep      "${RUN_DIR}/form-from-candidates.stdout" \
+    --argjson promotions_rep  "${promotions_report_json}" \
+    --argjson promote_durs    "${promote_durations_json}" \
     --argjson step_durations  "${step_durations_json}" \
     --argjson total_cands     "${total_candidates}" \
     --argjson non_firing      "${instrumented_non_firing}" \
@@ -306,14 +402,16 @@ jq -n \
             }
         },
         pipeline_scope: {
-            included_steps: ["ingest", "derive-attributions", "replay-attributions", "signatures"],
-            deferred_steps: ["form", "promote", "measure-chain-morphology", "demotion-evaluation"],
-            deferral_reason: "depends on empirical signature-output shape per §4 falsifiability; lands at §0206 follow-on"
+            included_steps: ["ingest", "derive-attributions", "replay-attributions", "signatures", "form-from-candidates", "promote-formations"],
+            deferred_steps: ["measure-chain-morphology", "demotion-evaluation"],
+            deferral_reason: "Layer B candidacy evaluation + chain morphology + demote evaluation are §0214 candidacy-evaluation scope per §0213 user-cravado split (candidacy materialization vs candidacy evaluation as distinct lifecycle shapes)"
         },
         signatures: $sig_agg[0],
         ingest_report: ($ingest_rep[0] // null),
         derive_attributions_report: ($derive_rep[0] // null),
-        step_durations: $step_durations,
+        formations_report: ($form_rep[0] // null),
+        promotions_report: $promotions_rep,
+        step_durations: ($step_durations + {promote_formations: $promote_durs}),
         verdict: {
             total_candidates: $total_cands,
             instrumented_non_firing: $non_firing,
