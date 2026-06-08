@@ -84,10 +84,20 @@ Resolutions to the seven open questions from `PLAN.md` §5. Binding for all subs
 1. **Skill packaging.** Skills are directories containing `SKILL.md`. Material exceeding ~300 lines is split into `references/` subdirectories within the skill, referenced explicitly from `SKILL.md`.
 
 2. **Hook architecture is three-tier, single script.** The same script (`.claude/hooks/pre-commit-doc-check.sh`) runs in three contexts:
-   - Git pre-commit hook (enforcement, via `core.hooksPath`). Defense-of-record; protects against any committer regardless of tooling.
-   - Claude Code event hook (feedback, via `settings.json`). Surfaces issues during the session before commit.
+   - Git pre-commit hook (intended enforcement, via `core.hooksPath`). Defense-of-record; intended to protect against any committer regardless of tooling.
+   - Claude Code event hook (feedback, via `settings.json`). Intended to surface issues during the session before commit.
    - CI workflow (PR-level enforcement, Phase 7). Final gate before merge.
-   If these three diverge, the git pre-commit hook is the source of truth — it is the actual enforcement boundary. The Claude event hook is convenience; CI is redundancy.
+
+   **Intended source of truth when these three diverge: the git pre-commit hook.** The Claude event hook is convenience; CI is redundancy.
+
+   **Current empirical state (per [`decision-log.md` §0214](../docs/charter/decision-log.md) Finding 5 + audit outcome):**
+
+   - **Git tier: NOT INSTALLED.** `.git/hooks/pre-commit` is absent; `core.hooksPath` is unset. Local `git commit` does NOT execute the discipline check.
+   - **Claude Code Stop hook tier: FRAGILE.** `.claude/settings.json` line 79 carries a relative-path command (`.claude/hooks/pre-commit-doc-check.sh`); execution is cwd-dependent and fails when the Stop hook fires from a working directory other than the repo root.
+   - **CI workflow tier: WORKING.** `.github/workflows/constitutional-check.yml` correctly invokes the script (lines 46 + 57); the CI tier is the **operational** source of truth today.
+   - **Discipline preservation mechanism:** the Claude Code agent maintains discipline via manual invocation of `bash .claude/hooks/pre-commit-doc-check.sh` per PR. Retroactive audit at §0214 across §0207-§0213 (six commits, isolated worktree per commit, hook executed after `git reset --soft <parent>`) yielded **6/6 PASS** — empirical zero-leak window through manual invocation.
+
+   Re-installation of the git tier + Stop hook path resolution + amendment of this section to a post-install description scoped to **§0225+ when promoted from named-but-non-binding**. Pré-condição empírica for §0225+ binding promotion: (a) future audit reveals a drift leaked through; (b) Claude Code Stop hook confirmed fully broken in a subsequent session; OR (c) the project migrates to a different agent / operator without the manual-invocation convention. Until any of (a)/(b)/(c) triggers, the CI tier carries operational enforcement and the Claude Code agent carries pre-CI discipline.
 
 3. **Hook enforcement is graded by violation class.**
    - **Blocking** (exit non-zero): edits to lines within a FROZEN Charter section without accompanying amendment; vocabulary drift (use of forbidden synonym for a canonical term); marketing language (terms on the `anti-marketing` watchlist).
