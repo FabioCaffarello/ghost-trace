@@ -175,16 +175,40 @@ invoke form-from-candidates \
 
 # --- Step 6: promote-formations -------------------------------------
 #
-# Per §0213: loop over the formation hashes emitted at Step 5; invoke
-# promote-automation-group for each. Layer B parameters are NOT
-# populated at promotion time in this scope (§0213 is candidacy
-# materialization; Layer B candidacy gating + chain morphology +
-# demote evaluation are §0214 candidacy-evaluation scope per the user-
-# cravado split).
+# Per §0213 + §0216 + §0220: loop over the formation hashes emitted at
+# Step 5; invoke promote-automation-group for each WITH `-layer-b` so
+# the promotion event carries §0138 inception-phase Layer B parameters
+# (T_B=K_C=1/2; N_window=1000; N_A=cadence_seconds). The downstream
+# demote-formations Step 8 requires these parameters per `layerb.go:132`
+# `opts.Params == nil` early-return guard; without `-layer-b` at
+# promotion, Layer B at demotion produces `evaluated: false` per §0219
+# Finding 1.
+#
+# Pre-§0220 (per stale §0213 comment, now revised): Layer B parameters
+# were deliberately scoped out at §0213 candidacy-materialization scope
+# ("§0214 candidacy-evaluation scope per user-cravado split"). The §0216
+# scope expansion added demote-formations Step 8 (which depends on Layer
+# B parameters at promotion-time) but did NOT propagate the dependency
+# to the §0213 scope comment here. §0219 Finding 1 surfaced this stale-
+# scope-boundary subclass of §0022-emergence (seventh instance); §0220
+# revises the scope comment + wires `-layer-b`.
+#
+# The parameter-propagation contract (docs/adapters/parameter-
+# propagation-contract.md per §0220) documents this `-layer-b` wiring +
+# any other opt-in option that affects downstream evaluation as new
+# evidence surfaces (lazy-populated per §0220 MO: contract grows under
+# empirical pressure, not via preventive audit).
+#
+# Stale-scope-boundary maintenance discipline: when an orchestrator step
+# is added or modified, all `Per §NNNN:` scope comments within the
+# script must be re-validated against the current step set. A scope
+# comment that was correct at its original entry can become stale when
+# a subsequent entry expands the step set in a way that depends on
+# what the comment defers.
 #
 # The orchestrator loop preserves §0204 single-responsibility CLI
 # discipline (each promotion is its own audit-grade invocation; no
-# --auto-promote flag was added to the form-from-candidates CLI per
+# --auto-promote option was added to the form-from-candidates CLI per
 # §0213 path-rejection rationale).
 #
 # Per-promotion .stdout/.stderr/.duration_ns captured by invoke() into
@@ -208,7 +232,8 @@ for formation_hash in "${FORMATION_HASHES[@]}"; do
     invoke "promote-formations/${PROMOTE_INDEX}" \
         promote-automation-group "${DB_FLAGS[@]}" \
             -formation-event-hash "${formation_hash}" \
-            -cadence-seconds 86400
+            -cadence-seconds 86400 \
+            -layer-b
     PROMOTE_INDEX=$(( PROMOTE_INDEX + 1 ))
 done
 
