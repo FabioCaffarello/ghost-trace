@@ -10097,6 +10097,157 @@ The §0143 mandatory instrumentation per `EvaluationStats` (ObservationsScanned 
 
 ---
 
+## `0217` — §0216 first-real-run multi-surface emergence diagnostic; §0214 MO2 binding promotion ENACTED (six-layer closure model formal); §0228+ reframe; substrate-state reconciliation; MO on deliberation discipline requiring operational mechanism beyond prescription
+
+- **Status:** accepted
+- **Date:** 2026-06-08
+- **Context:** §0216 (PR #239, commit `d123d3f`) landed the candidacy-evaluation scope; operator re-ran the 20K shakedown (RUN_ID `20260608T154112Z`) post-merge. The run partially completed: ingest + derive + signatures + form-from-candidates + promote-formations + measure-chain-morphology all executed; **demote-formations executed 0/10 due to an orchestrator shell-pre-filter jq bug introduced at §0216**. Substrate state observation: morphology reports `total_formations: 10` (not the 20 §0214/§0215/§0216 entries' narrative predicted as preserved per §2.1); operator-confirmed substrate reset between §0215 run and §0216 run (assumed; reconciled inline per user-cravado decision 3 — if non-reset, mystery investigation §0217.5 follow-on opens). §0217 mirrors §0208 + §0212 + §0214 diagnostic-only discipline: register findings with verbatim numbers; remediation separated to §0218+; methodological observations enacted where structural evidence triggers (per user-cravado decision 2 §0214 MO2 binding promotion).
+
+  **§0214 MO2 (remediation completeness as candidate sixth layer) pré-condição empírica EMPIRICALLY MET:** §0213 first-real-run (RUN `20260608T045037Z`) = instance 1 (broken §2.3 chain on all 10 formations + malformed promote_formations array). §0216 first-real-run (RUN `20260608T154112Z`) = instance 2 (shell jq filter bug + chain-morphology prediction structurally wrong). Pattern materialized in TWO instances within the §0213-§0216 program → MO2 BINDING PROMOTION TRIGGERED per the user-cravado pré-condição refinement at §0214. **Six-layer closure model formal:** structural (§0162) → operational (§0209) → observability (§0211) → diagnostic (§0212) → remediation (§0213+§0215) → **remediation_completeness (§0214 MO2 binding via §0217)**. Reusable for Frente 2/3 prospectively per §0211 + §0212 + §0214 layer-discipline lineage.
+
+- **Decision:** classify the five findings + one substrate-state reconciliation note; route to dedicated successor §-entries with explicit empirical pre-conditions; enact §0214 MO2 binding promotion in this entry. Documentation-only PR; zero code changes.
+
+  ### Finding 1 — Surface A: shell pre-filter jq bug; 0 demotions executed
+
+  - **Orchestrator stdout evidence verbatim (10x lines):** `jq: error (at /var/lib/ghost-trace/runs/20260608T154112Z/promote-formations/N.stdout:7): Cannot index string with string "formation_event_hash"` for `N ∈ [0..9]`.
+  - **Cause empirically verified:** the §0216 orchestrator shell pre-filter in `infra/docker/run-sub-benchmark-1.sh` uses `jq -r --slurpfile f ... '.[] | select(.formation_event_hash ...)' "${PROMOTE_DIR}"/*.stdout`. Each `promote-formations/X.stdout` is a SINGLE OBJECT (not an array; verified via `jq 'keys' promote-formations/0.stdout` returning `["already_promoted", "cadence_seconds", "formation_event_hash", "layer_b_enabled", "promotion_event_hash"]`). The `.[]` iterates over the object's VALUES; the first value is a string (e.g., `formation_event_hash: "f702569e..."`); the subsequent `.formation_event_hash` access on a string fails with the observed error.
+  - **Impact:** 0 clean-chain promotions extracted from the pre-filter → 0 demotions invoked → demote-formations step ran but emitted zero output → `demotions_report: []` → `verdict.demotion_fired: false` (via the `any // false` aggregation over the empty array). **Layer B empirical verdict NOT TESTED**; §0216 hypothesis (b) all-NOT-fired neither confirmed nor falsified by this run.
+  - **Fix shape (one-line):** remove `.[] |` from the filter; jq processes each input file as a single object via default per-file iteration.
+  - **Destino:** **§0218 binding** — Surface A fix (standalone per user-cravado decision 5; do NOT bundle with substrate-state reconciliation which lives at §0217 narrative tier) + re-run shakedown to produce empirical Layer B verdicts.
+
+  ### Finding 2 — Surface B: §0216 chains-fortes prediction structurally wrong
+
+  - **Manifest path:** `morphology_report.stats.{chains_fracas_count, chains_fortes_count}` + `morphology_report.hypotheses[].{chain_depth_max, chain_breadth_at_root, source_event_count}`.
+  - **Empirical evidence verbatim:** `chains_fracas_count: 10`, `chains_fortes_count: 0`. ALL 10 clean-chain formations report `chain_depth_max: 0` AND `chain_breadth_at_root: 0` despite `source_event_count` distribution `[6186, 3834, 1524, 312, 310, 208, 192, 144, 138, 124]` (all > 0).
+  - **Cause structural verified via `services/ingestion/internal/morphology/morphology.go` inspection:**
+    - `chain_depth_max` = longest `influenced_by` path from this formation
+    - `chain_breadth_at_root` = count of `direct_influenced_by` entries
+    - Morphology walks **`direct_influenced_by`**, NOT `source_event_hashes`
+  - The §0213 bridge code sets `direct_influenced_by: nil` for all formations from F3 candidates (inception-phase per §0157 helper precedent); these formations are "root" in the influence chain. **chains-fortes is STRUCTURALLY UNREACHABLE in single-run shakedown** — the chains-fortes condition (`depth_max > 2 AND breadth > 3`) requires formations referencing prior formations via `direct_influenced_by`, which only multi-run substrate accumulation produces.
+  - **§0216 prediction "10 chains-fortes (clean-chain formations have breadth_at_root = thousands)" was wrong:** I assumed `breadth_at_root` counted `source_event_hashes`; the actual mechanism is `direct_influenced_by` count. Prediction registered without inspecting `morphology.go` (the same §0216 MO1 anti-pattern that §0216 entry itself crystallized; see Finding 4 + MO2 below).
+  - **Destino:** §0217 inline correction (no separate §-entry; documentation tier only) + §0228+ reframe per Finding 3 below.
+
+  ### Finding 3 — Surface C: §0228+ F3 calibration pré-condição mis-framed
+
+  - **Context:** §0216 named §0228+ NBN with pré-condição empírica `(a) 0-fired Layer B AND (b) chains-fracas DOMINATE clean-chain set (chains-fortes < 10 of 10)`. Both clauses were authored under the (Finding 2) wrong assumption that 10 chains-fortes was empirically achievable in single-run shakedown.
+  - **Reading:** chains-fracas DOMINATING in single-run is **structural inevitability**, not F3 calibration evidence. §0228+ as currently framed has an always-true pré-condição (b) for single-run substrate state → no empirical surface to gate the entry's opening. The framing is degenerate.
+  - **Reframe (per user-cravado decision 4):** §0228+ stays NBN but pré-condição empírica re-cravada with three clauses: **"F3 calibration entry opens IF (a) multi-run substrate accumulation per §0227+ executed AND (b) Layer B still fires 0/N AND (c) chains-fortes inadequate ratio post-multi-run."** The reframe moves §0228+ into the multi-run context (after §0227+ has produced influence-chain accumulation) where chains-fracas/fortes ratio becomes a meaningful F3 calibration trigger. **Drop entirely rejected** per user-cravado decision 4 — reframe preserves the option as contingent on multi-run evidence; the pattern (F3 calibration as remediation when multi-run still produces inadequate ratio) remains reusable prospectively.
+  - **Destino:** §0217 inline reframe (carry-forward narrative); §0228+ status carries the new three-clause pré-condição.
+
+  ### Finding 4 — Surface D: §0216 MO1 self-violation third instance within §0213-§0216 program
+
+  - **Context:** §0216 MO1 named "predictive framing in §-entries that involves code-mechanism reasoning REQUIRES source inspection pre-registration OR explicit marking as speculation-not-grounded." The §0216 entry itself violated the discipline **within the same registration** — predicted `chains-fortes ≥ 10` without inspecting `morphology.go` (Finding 2 above). This is the THIRD instance within the §0213-§0216 program:
+    - **Instance 1:** §0213 Confidence-baseline empirical prediction misframed at registration time. Layer B doesn't read Confidence; prediction's mechanism cravado was wrong.
+    - **Instance 2:** §0216 pre-investigation Layer A temporal-axis user-framed concern (CIC-IDS-2017 mismatch with Layer A gating). Was investigated PRE-registration during §0216 plan presentation and structurally resolved as absent — but the framing itself was an instance of "predictive concern without source-grounded mechanism." Caught before registration; not a written-entry violation but a same-pattern instance.
+    - **Instance 3:** §0216 chains-fortes prediction misframed at registration time (Finding 2 above). Morphology source not inspected; breadth_at_root mechanism (direct_influenced_by count, NOT source_event_hashes count) discovered only at §0216 post-merge analysis.
+  - **Pattern observation:** §0216 MO1 prescribed the discipline; the same entry violated it; the §0217 post-merge analysis surfaced the violation. **Three-instance recurrence within single program suggests written prescription is insufficient if author can register predictions in same entry crystallizing the discipline.**
+  - **Destino:** §0217 MO observation (see MO2 below for the formal framing per user-cravado surgical addition; operational mechanism candidates registered).
+
+  ### Finding 5 — §0214 MO2 (remediation completeness as candidate sixth layer) pré-condição empírica MET; BINDING PROMOTION ENACTED
+
+  - **Pré-condição empírica per §0214 user-cravado refinement:** "second instance of intended-vs-actual gap in §0216 candidacy evaluation OR F2/F3 lifecycle materialization. §0213 + either of two = pattern materialized in two instances = candidate to binding."
+  - **Empirical evidence:**
+    - Instance 1 (§0213 first-real-run RUN `20260608T045037Z`): intended outcome = 10 clean-chain formations + 10 promotions; actual outcome = 10 formations + 10 promotions WITH broken §2.3 chain on all 10 (Surface A at §0214) + malformed `promote_formations` array (Surface B at §0214). Intended-vs-actual gap at TWO sub-sites.
+    - Instance 2 (§0216 first-real-run RUN `20260608T154112Z`): intended outcome = 10 demotions + Layer B verdicts captured + chains-fortes morphology distribution; actual outcome = 0 demotions executed (Surface A; jq bug) + all chains-fracas (Surface B; structural inevitability that §0216 prediction missed). Intended-vs-actual gap at THREE sub-sites.
+  - **Pattern materialized in TWO instances within the §0213-§0216 program.** Pré-condição empírica MET.
+  - **§0214 MO2 BINDING PROMOTION ENACTED at §0217 per user-cravado decision 2:** the sixth-layer closure model is formalized as binding from §0217 onwards. Six-layer model:
+    1. **Structural** (per §0162) — "the construct exists; the test passes"
+    2. **Operational** (per §0209) — "the operator workflow materializes the construct"
+    3. **Observability** (per §0211) — "the operator can read the outcome without post-hoc reconstruction"
+    4. **Diagnostic** (per §0212) — "the operator can read the observation correctly; classify findings; route to successor §-entries"
+    5. **Remediation** (per §0213 + §0215) — "the operator executes the downstream operation based on the diagnostic"
+    6. **Remediation completeness** (per §0214 MO2 + §0217 enactment) — "validation that remediation achieved what diagnostic prescribed, not just that it executed without error; structural verification that intended outcomes materialized AND no unintended outcomes co-emerged"
+  - Each layer necessary; none alone sufficient; failure at any layer renders the preceding layers operationally inert OR produces silently-incorrect outcomes (the §0213→§0214 + §0216→§0217 cycles are the empirical evidence).
+  - **Generalizes to Frente 2 (synthetic) + Frente 3 (honeypot) prospectively** — each frente needs all six closures; bundling remediation_completeness validation in the same PR as remediation prevents the §0213→§0214 + §0216→§0217 type of intended-vs-actual gap from going undetected pre-merge.
+  - **Destino:** binding promotion ENACTED at §0217 (this entry). Six-layer model formal; reusable.
+
+  ### Reconciliation — Substrate state
+
+  - **Empirical observation:** morphology reports `total_formations: 10` in RUN `20260608T154112Z`. The §0214 + §0215 + §0216 entries' narrative carried "substrate carries 20 formations (10 broken-chain historical preserved per §2.1 + 10 clean-chain post-§0215)". The 10 formations in this run are a NEW set (different content-hashes from §0213's broken-chain set + §0215's clean-chain set; same source_event_count distribution because ingest is deterministic from sample + ranking is deterministic from actor-count).
+  - **Reading:** substrate was reset between §0215 run (RUN `20260608T145051Z`) and §0216 run (RUN `20260608T154112Z`) via operator-initiated `make clean` or `docker compose down -v` (per Makefile's `clean` target which removes the substrate-data named volume).
+  - **§2.1 immutability claim reconciliation:** §2.1 protects immutability **within a substrate epoch** — committed events cannot be modified or deleted within the live substrate. Operator-initiated substrate reset destroys the substrate epoch; the new substrate is a fresh epoch with no prior commits. **§2.1 was NOT violated by the reset**; the reset is a substrate-lifecycle operation outside §2.1's scope (parallel to file-system rm vs file-content-mutation distinction).
+  - **§0214 + §0215 + §0216 entries' narrative about "20 formations preserved" applies per-epoch, not across-epoch.** Reconciliation: those entries documented the within-epoch state at their respective run times; the cross-epoch substrate-lifecycle (operator reset) is registered here at §0217 as the post-hoc audit-trail clarification.
+  - **Operator confirmation pending:** §0217 framing assumes reset per user-cravado decision 3 + high prior (empirical evidence + Makefile target affordance). If operator confirms non-reset, §0217.5 mystery investigation follow-on opens per the §0214.5 decimal-suffix convention (editorial patch for reality-reflecting documentation correction).
+  - **Destino:** §0217 inline reconciliation (this section); no separate §-entry needed unless operator-confirmation produces non-reset answer.
+
+- **Constitutional review:**
+
+  **Tier 1 (Charter)** — zero impact. §2.1 substrate immutability NOT violated by operator-initiated substrate reset (reconciliation above); within-epoch immutability preserved. §0011 + §0135 + §0138 + §0140 + §2.3 + §2.4 + §2.5 + §2.6 + §3 + §4 all unchanged.
+
+  **Tier 2 (Ontology / schemas / canonical)** — zero impact. No proto / canonical-form / operational-definition change.
+
+  **Tier 3 (services / infra)** — zero impact. Documentation-only PR; no source modified.
+
+  **Anchor verification per §0142 deliberate-inventory:**
+
+  - **§0011** — Layer A cadence semantic. Status: unchanged.
+  - **§0135 + §0138** — Layer B formula + inception defaults. Status: unchanged; §0216 Layer B prediction NOT empirically tested due to Surface A; remains structural prediction.
+  - **§0142 MO3** — deliberate-inventory sweep. Status: applied; this anchor list is the sweep.
+  - **§0143 D2** — substrate-grounded comprovação criterion. Status: §0217 clarifies the §0216 audit-trail discipline applies WITHIN a substrate epoch; cross-epoch operator-reset is a substrate-lifecycle operation outside §2.1 + §0143 D2 scope.
+  - **§0162** — gaps structurally closed. Status: unchanged.
+  - **§0184 / §0186 MO2** — bundle-by-shape. Status: applied — §0217 is diagnostic-only standalone; §0218 binding remediation standalone (Surface A fix + re-run).
+  - **§0204 / §0205** — single-responsibility CLI + tier-3 audibility. Status: preserved; §0218 fix is one-line shell correction.
+  - **§0207-§0214** — §0022-emergence catalog (6 instances). Status: **§0217 NOT a new §0022 instance** — Surface A is an orchestrator shell bug introduced at §0216 implementation; Surface B is a §0216 MO1 self-violation (predictive framing without inspection); both are operational shortfalls of the §0216 entry's authorship, not architectural-convention vs operator-workflow gaps. Catalog remains at 6 instances.
+  - **§0213 + §0213 MO1/MO2/MO3** — bridge architecture + integration-test masking + bridge CLI lift. Status: preserved; §0217 builds on the operational tier the §0213 architecture established.
+  - **§0214 + §0214 MO1/MO2** — wire-contract testing + remediation completeness candidate. Status: **§0214 MO2 BINDING PROMOTION ENACTED at §0217 Finding 5**; six-layer closure model formal. §0214 MO1 unchanged (scope-bounded at §0216 per §0216 MO2; not amended by §0217).
+  - **§0214.5** — editorial patch + decimal-suffix convention. Status: convention extended at §0217 to substrate-state reconciliation fallback (if operator-confirmation produces non-reset answer, §0217.5 mystery investigation opens per the convention).
+  - **§0215** — Surface A + B remediation + first prospective §0214 MO1 application. Status: preserved.
+  - **§0216 + §0216 MO1/MO2** — candidacy evaluation enactment + pre-emption via source inspection + scope-bounding of MOs at consumption tier. Status: MO1 self-violated within same entry (Finding 4 + MO2 below); §0217 surfaces the third recurrence; binding promotion of operational-mechanism remediation deferred to MO2 binding pré-condição empírica below.
+  - **§0217 (this entry)** — diagnostic-only; six-layer closure model binding; §0228+ reframed; substrate-state reconciliation.
+  - **§0218 (NEW, binding; depends on §0217)** — Surface A jq filter fix (one-line; `.[] |` removed) + re-run shakedown. Pré-condição empírica: §0217 entry lands; operator agreement on Surface A fix scope.
+  - **§0219-§0227+** — renumbered per §0216 reflow; UNCHANGED by §0217 (Surface B is documentation-only; doesn't shift numbering).
+  - **§0228+ (renumbered per §0216; reframed per §0217)** — F3 calibration entry NBN with three-clause pré-condição: (a) multi-run substrate accumulation per §0227+ executed AND (b) Layer B still fires 0/N AND (c) chains-fortes inadequate ratio post-multi-run. Reframe preserves option contingent on multi-run evidence.
+
+  **Falsifiability:**
+  - Surface A reproducible: `jq -r --slurpfile f form-from-candidates.stdout '.[] | select(.formation_event_hash ...)' promote-formations/0.stdout` fails with cited error message. Fix verifiable: removing `.[] |` produces correct output.
+  - Surface B reproducible: `jq '.morphology_report.stats' manifest.json` returns `chains_fortes_count: 0`. Morphology source code (`services/ingestion/internal/morphology/morphology.go` lines 14-18 + 228) confirms `chain_breadth_at_root` = `len(directInfluencedBy)`, not source_event_hashes.
+  - §0214 MO2 pré-condição empírica met: instance 1 (§0213 Surface A+B) + instance 2 (§0216 Surface A+B+C) verifiable via decision-log entries §0214 + §0217 respectively.
+  - Six-layer closure model: structural correspondence verifiable — each layer cites its parent §-entry; failure-mode evidence at §0213→§0214 + §0216→§0217 cycles documented mechanically.
+
+- **Consequences:**
+
+  - 1 file modified (`docs/charter/decision-log.md`). Zero code change.
+  - **Six-layer closure model formalized as binding constitutional artifact** for the Domain Pack v0.1 program + F2/F3 frentes prospectively. Reusable pattern crystallized via three-cycle precedent (§0162→§0209→§0211 three-layer at §0211; +§0212→§0213 = five-layer at §0212; +§0214 MO2 binding promotion = six-layer at §0217).
+  - **§0228+ reframe preserves multi-run F3 calibration option** without forcing premature scope (Surface C resolved without scope loss).
+  - **Substrate-state reconciliation** documented; §2.1 within-epoch scope clarified vs operator-reset epoch boundary.
+
+  **Carry-forwards (consolidated):**
+
+  - **§0218 (NEW, binding; depends on §0217)** — Surface A jq filter fix + re-run shakedown. Pré-condição empírica: §0217 entry lands. Scope: one-line orchestrator fix (`.[] |` removed) + post-merge operator re-run producing empirical Layer B verdicts (currently untested per §0217 Finding 1).
+  - **§0219-§0227+** — renumbered §0216 carry-forwards UNCHANGED.
+  - **§0228+ (renumbered per §0216; reframed at §0217)** — F3 calibration entry NBN with three-clause pré-condição empírica per Finding 3 reframe.
+  - **§0217.5 (named-but-non-binding; conditional)** — substrate-state mystery investigation. Opens IF operator confirms non-reset between §0215 run and §0216 run (current §0217 framing assumes reset; if non-reset, the morphology total_formations=10 + distinct-content-hash observation needs alternative explanation requiring investigation).
+
+  **Methodological observation 1 — §0214 MO2 binding promotion ENACTED at §0217; six-layer closure model formal as constitutional artifact.**
+
+  Per user-cravado decision 2: material decision is the entry itself; ceremony of "later more comprehensive entry" inflates without gain. §0214 MO2 (remediation completeness as candidate sixth layer) was named-but-non-binding with pré-condição empírica "second instance of intended-vs-actual gap in §0216 candidacy evaluation OR F2/F3 lifecycle materialization." Pré-condição empírica MET at §0217 Finding 5 (§0213 + §0216 = two instances; pattern materialized in two instances within the §0213-§0216 program).
+
+  **Binding promotion ENACTED.** The six-layer closure model (structural → operational → observability → diagnostic → remediation → remediation_completeness) is now formal constitutional artifact for the Domain Pack v0.1 program. Future-bridge / future-remediation work inherits the discipline: validation that remediation achieved what diagnostic prescribed is a structural requirement, not optional. Frente 2 (synthetic) + Frente 3 (honeypot) frentes inherit prospectively; each new closure cycle needs all six layers.
+
+  **Pattern reusable for F2/F3:** bundling remediation_completeness validation in the same PR as remediation (or via fast follow-on entry per the §0213→§0214→§0215→§0217 cadence) prevents the intended-vs-actual gap class of failure from going undetected pre-merge. The discipline is now precedented at §0217; F2/F3 adapter authors inherit it.
+
+  **Methodological observation 2 — Deliberation discipline requires operational mechanism beyond prescription (per user-cravado surgical addition).**
+
+  §0216 MO1 named "predictive framing requires source inspection pre-registration" as discipline. The same §0216 entry violated this discipline THREE TIMES within the §0213-§0216 program: (1) Confidence baseline mechanism misframed at §0213 registration; (2) Layer A temporal-axis user-framed concern surfaced via §0216 pre-investigation (caught before registration but same anti-pattern shape); (3) chain breadth structural mechanism misframed at §0216 registration. **Three-instance recurrence within a single program suggests written discipline is insufficient if author can register predictions in same entry crystallizing the discipline.**
+
+  **Operational mechanism candidates for prospective remediation:**
+  - **(a)** Explicit Claude Code source inspection requested by deliberation agent BEFORE any predictive framing in §-entry. Discipline enforced at request-time, not at entry-author-time.
+  - **(b)** Explicit speculation marker on predictions not source-grounded (e.g., `PREDICTION-NOT-INSPECTED`). Discipline enforced via prose annotation; auditor can mechanically discriminate source-grounded vs speculative claims.
+  - **(c)** Automated check in entry submission (Claude Code grep §-entry for prediction language patterns + verify each prediction has cited source location). Discipline enforced via mechanical check at submission tier.
+
+  **Pré-condição empírica para sixth-layer methodology refinement (binding promotion of this MO):** the discipline is applied prospectively without recurrence over N=2 subsequent §-entries (§0218 + §0219, or any two binding §-entries with predictive content). If recurrence happens within N=2: the operational-mechanism remediation requires explicit binding scope (one of (a)/(b)/(c) selected and implemented). If no recurrence within N=2: the §0216 MO1 prescriptive form is empirically sufficient and §0217 MO2 stays as observation without operational-mechanism binding requirement.
+
+  **Recursive empirical evidence about deliberation-vs-execution discipline relationship:** three-instance recurrence reveals that prescriptive discipline (write-down-the-rule) does not auto-translate to operational discipline (mechanically-enforce-the-rule). The same gap shape (prescription ≠ enforcement) appeared in three forms within §0213-§0216:
+  - Constitutional invariant prescription (§0140 paired-dimension) ≠ enforcement at marshalling boundary (§0214 Finding 6 reframe; §0224+ NBN scope extension)
+  - Architectural convention prescription (F3 emits → lifecycle consumes) ≠ operator-workflow enforcement (§0213 MO1 + bridge CLI lift)
+  - Deliberation discipline prescription (source inspection pre-registration) ≠ deliberation execution discipline (§0217 MO2 + operational mechanism candidates)
+
+  **Pattern: when a discipline is prescribed without paired enforcement mechanism, recurrence is the empirical evidence that operational mechanism is necessary.** Reusable diagnostic for future §-entries: if a discipline is prescribed and subsequently violated, evaluate whether operational mechanism (not just prose strengthening) is the remediation path.
+
+- **Supersession:** none in the structural sense. §0213 + §0214 + §0215 + §0216 entries preserved as historical artifacts. The §0216 entry's chains-fortes prediction (Finding 2) is forward-corrected at §0217 inline; §0216 entry NOT amended retroactively per established reflow precedent. The §0228+ pré-condição empírica (Finding 3) is reframed at §0217 inline; §0216 carry-forward narrative for §0228+ NOT amended retroactively. §0214 MO2 promoted from named-but-non-binding to binding (status change recorded at §0217 Finding 5 + MO1); §0214 entry itself preserved as historical artifact carrying the candidate-status; §0217 carries the binding-status enactment. §0216 MO1 NOT amended (Finding 4 evidence + MO2 operational-mechanism candidates extend the discipline forward without retroactive modification per the consumption-tier scope-bounding precedent §0216 MO2 established).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
