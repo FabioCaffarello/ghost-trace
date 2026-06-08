@@ -17,6 +17,8 @@
     "derive_attributions_report",
     "formations_report",
     "promotions_report",
+    "morphology_report",
+    "demotions_report",
     "step_durations",
     "verdict"
   ],
@@ -180,10 +182,22 @@
       "description": "Per §0213: array of verbatim payload JSONs from each promote-automation-group invocation. One entry per formation hash emitted by formations_report.formations_committed. Each entry carries formation_event_hash + promotion_event_hash + cadence_seconds + already_promoted + layer_b_enabled. Empty array when no formations were committed (e.g., zero AG candidates in the input envelope).",
       "items": {"type": "object"}
     },
+    "morphology_report": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "object"}
+      ],
+      "description": "Per §0216: verbatim emissionEnvelope JSON emitted by the measure-chain-morphology step (cmd/measure-chain-morphology) to its stdout. Carries {hypotheses[], stats{}} where hypotheses[] has per-hypothesis (hypothesis_hash_hex, subtype_name, actor_refs, chain_depth_max, chain_breadth_at_root, closure_count, source_event_count, formation_at) and stats{} has aggregate (total_formations, per_subtype, depth_histogram, breadth_histogram, chains_fracas_count, chains_fortes_count) per §0143 Sub-benchmark 1 definition (chains-fracas = depth_max <= 2 OR breadth_at_root <= 3; chains-fortes = depth_max > 2 AND breadth_at_root > 3). null when the measure-chain-morphology step did not run or emitted no parseable JSON. Per §0216 + §0143 D2 audit-trail discipline: morphology_report contains ALL Cat III formations in substrate for audit completeness (including the 10 broken-chain historical preserved per §2.1); Sub-benchmark 1 comprovação claim applies to the clean-chain subset only (formations with source_event_count > 0)."
+    },
+    "demotions_report": {
+      "type": "array",
+      "description": "Per §0216: array of verbatim payload JSONs from each demote-automation-group invocation. One entry per clean-chain promotion (shell-filtered via formations_report.formations_committed[].source_hashes_count > 0 per §0216 + §0143 D2 audit-trail discipline; broken-chain promotions excluded from demotion candidacy evaluation). Each entry carries promotion_event_hash + demotion_event_hash + already_demoted + cadence_satisfied + cadence_elapsed_seconds + layer_b (inline Layer B verdict per cliutil.LayerBPayload). Empty array when no clean-chain promotions were available.",
+      "items": {"type": "object"}
+    },
     "step_durations": {
       "type": "object",
-      "description": "Per-step wall-clock duration in nanoseconds as observed by the orchestrator's invoke() wrapper. Per §0211: distinct from the CLI-internal elapsed_ns inside ingest_report / derive_attributions_report — step_durations measures process-launch + CLI-internal + process-teardown total (the operationally-relevant cost), while elapsed_ns measures the CLI function body alone. Both axes are preserved because they answer different questions (orchestrator overhead vs. library cost). Per §0213: form_from_candidates + promote_formations array entries added for the candidacy-materialization steps.",
-      "required": ["ingest", "derive_attributions", "replay_attributions", "signatures", "form_from_candidates", "promote_formations"],
+      "description": "Per-step wall-clock duration in nanoseconds as observed by the orchestrator's invoke() wrapper. Per §0211: distinct from the CLI-internal elapsed_ns inside ingest_report / derive_attributions_report — step_durations measures process-launch + CLI-internal + process-teardown total (the operationally-relevant cost), while elapsed_ns measures the CLI function body alone. Both axes are preserved because they answer different questions (orchestrator overhead vs. library cost). Per §0213: form_from_candidates + promote_formations array entries added for the candidacy-materialization steps. Per §0216: measure_chain_morphology + demote_formations array entries added for the candidacy-evaluation steps.",
+      "required": ["ingest", "derive_attributions", "replay_attributions", "signatures", "form_from_candidates", "promote_formations", "measure_chain_morphology", "demote_formations"],
       "properties": {
         "ingest":              {"type": "integer", "minimum": 0},
         "derive_attributions": {"type": "integer", "minimum": 0},
@@ -210,6 +224,12 @@
           "type": "array",
           "description": "Per §0213: one entry per promote-automation-group invocation; nanoseconds wall-clock per promotion. Index parallels promotions_report. Empty array when no formations were committed.",
           "items": {"type": "integer", "minimum": 0}
+        },
+        "measure_chain_morphology": {"type": "integer", "minimum": 0},
+        "demote_formations": {
+          "type": "array",
+          "description": "Per §0216: one entry per demote-automation-group invocation; nanoseconds wall-clock per demotion. Index parallels demotions_report. Empty array when no clean-chain promotions were available for demotion.",
+          "items": {"type": "integer", "minimum": 0}
         }
       }
     },
@@ -228,11 +248,11 @@
         },
         "demotion_fired": {
           "type": ["null", "boolean"],
-          "description": "Always null in this scaffold scope; populated by §0206 once form+promote+morphology+demotion-eval lifecycle steps execute."
+          "description": "Per §0216: boolean aggregate over demotions_report[].layer_b.fired. true if ANY clean-chain demotion's Layer B fired; false if all not-fired; null only when demotions_report is empty AND clean-chain promotions were not even attempted (degenerate path). Per §0216 + §0143 D2 audit-trail discipline: the aggregation considers ONLY clean-chain demotions (the demotions_report set, which is shell-filtered to source_event_count > 0 formations); broken-chain formations preserved per §2.1 but excluded from comprovação claim."
         },
         "non_firing_diagnosis_axis": {
           "type": "object",
-          "description": "Pointers to the data already captured elsewhere in this manifest that constitute the §0143 mandatory instrumentation axis (subtype x source x chain-morphology). Chain-morphology dimension is null until §0206.",
+          "description": "Pointers to the values already captured elsewhere in this manifest that constitute the §0143 mandatory instrumentation axis (subtype x source x chain-morphology). Per §0216: chain-morphology dimension now references morphology_report.stats for chains_fracas_count + chains_fortes_count per §0143 Sub-benchmark 1 definition.",
           "properties": {
             "by_subtype":          {"type": "string"},
             "by_source":           {"type": "string"},
