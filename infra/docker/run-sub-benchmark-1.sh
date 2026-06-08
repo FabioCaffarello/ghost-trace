@@ -214,7 +214,71 @@ done
 
 log "promote-formations: ${PROMOTE_INDEX} promotion(s) committed"
 
-# --- Step 7: manifest emission --------------------------------------
+# --- Step 7: measure-chain-morphology -------------------------------
+#
+# Per §0216 + §0143 D2 substrate-grounded comprovação criterion:
+# substrate walk reads ALL Cat III formations and emits per-hypothesis
+# chain morphology (chain_depth_max + chain_breadth_at_root) plus
+# aggregate stats (chains_fracas vs chains_fortes per §0143).
+#
+# No input filter — measure-chain-morphology has no CLI option to
+# restrict by hash. The substrate carries 20 formations after
+# §0215 re-run (10 broken-chain historical preserved per §2.1 +
+# 10 NEW clean-chain post-§0215 fix). Per §0216 + §0143 D2 audit-
+# trail discipline: morphology_report contains ALL 20 for audit
+# completeness; Sub-benchmark 1 comprovação claim applies to the
+# 10 clean-chain subset only (broken-chain set has
+# source_event_count=0 → fracas by construction; their morphology
+# is historical artifact, not comprovação evidence).
+
+invoke measure-chain-morphology \
+    measure-chain-morphology "${DB_FLAGS[@]}"
+
+# --- Step 8: demote-formations (shell-filtered to clean-chain) ------
+#
+# Per §0216 + user-cravado decision (c) — shell-based pre-filter
+# preserving §0205 tier-3 audibility (each step shell-readable, not
+# buried in Go). Selects promotion hashes whose formation has
+# source_hashes_count > 0 (clean-chain set per §0215); skips the
+# 10 broken-chain historical promotions (preserved in substrate per
+# §2.1 but excluded from §0216 candidacy evaluation per §2.3 + §0143
+# D2 chain-reconstructibility requirement).
+#
+# The filter joins formations_report (clean-chain identifier per
+# source_hashes_count) with promotions_report (formation-to-promotion
+# hash mapping). Only clean-chain promotion hashes flow into the
+# demote loop.
+
+DEMOTE_DIR="${RUN_DIR}/demote-formations"
+mkdir -p "${DEMOTE_DIR}"
+
+mapfile -t CLEAN_PROMOTION_HASHES < <(
+    jq -r --slurpfile f "${RUN_DIR}/form-from-candidates.stdout" '
+        .[] |
+        select(
+            .formation_event_hash as $fh |
+            ($f[0].formations_committed[] |
+             select(.formation_event_hash == $fh and .source_hashes_count > 0))
+            | any
+        ) |
+        .promotion_event_hash
+    ' "${PROMOTE_DIR}"/*.stdout
+)
+
+log "demote-formations: ${#CLEAN_PROMOTION_HASHES[@]} clean-chain promotion hash(es) to demote (broken-chain skipped per §0216 §2.3 + §0143 D2 audit-trail discipline)"
+
+DEMOTE_INDEX=0
+for promotion_hash in "${CLEAN_PROMOTION_HASHES[@]}"; do
+    invoke "demote-formations/${DEMOTE_INDEX}" \
+        demote-automation-group "${DB_FLAGS[@]}" \
+            -promotion-event-hash "${promotion_hash}" \
+            -reason "§0216 first candidacy evaluation; Layer B verdict inline; Layer A cadence ~0s (immediate demotion within shakedown per §0011 candidacy-not-barrier)"
+    DEMOTE_INDEX=$(( DEMOTE_INDEX + 1 ))
+done
+
+log "demote-formations: ${DEMOTE_INDEX} demotion(s) committed"
+
+# --- Step 9: manifest emission --------------------------------------
 #
 # Manifest schema: see infra/docker/manifest.schema.json. Captures
 # inputs (git + image + sample), parameters, per-step status, and the
@@ -310,6 +374,7 @@ step_durations_json=$(
         --argjson sig_ch               "$(read_duration_ns "${SIG_DIR}/find-campaign-hypothesis-candidates.duration_ns")" \
         --argjson sig_cr               "$(read_duration_ns "${SIG_DIR}/find-coordination-ring-candidates.duration_ns")" \
         --argjson form_from_cands      "$(read_duration_ns "${RUN_DIR}/form-from-candidates.duration_ns")" \
+        --argjson measure_morph        "$(read_duration_ns "${RUN_DIR}/measure-chain-morphology.duration_ns")" \
         '{
             ingest:                  $ingest,
             derive_attributions:     $derive_attributions,
@@ -321,7 +386,8 @@ step_durations_json=$(
                 campaign_hypothesis:      $sig_ch,
                 coordination_ring:        $sig_cr
             },
-            form_from_candidates:    $form_from_cands
+            form_from_candidates:    $form_from_cands,
+            measure_chain_morphology: $measure_morph
          }'
 )
 
@@ -347,6 +413,44 @@ promotions_report_json=$(
     else
         echo "[]"
     fi
+)
+
+# Per §0216: per-demotion stdout JSON aggregated into array (one entry
+# per clean-chain promotion that was demoted). Each entry carries the
+# demotion event hash + Layer B verdict inline (per cliutil.LayerBPayload).
+# Empty array when no demotions invoked (e.g., zero clean-chain
+# promotions from shell pre-filter).
+demotions_report_json=$(
+    if [ -d "${DEMOTE_DIR}" ] && compgen -G "${DEMOTE_DIR}"/*.stdout >/dev/null; then
+        jq -s '.' "${DEMOTE_DIR}"/*.stdout
+    else
+        echo "[]"
+    fi
+)
+
+# Per §0216: per-demotion durations into an array (one entry per
+# demote-automation-group invocation). Empty array when no demotions
+# invoked.
+demote_durations_json=$(
+    if [ -d "${DEMOTE_DIR}" ] && compgen -G "${DEMOTE_DIR}"/*.duration_ns >/dev/null; then
+        for f in "${DEMOTE_DIR}"/*.duration_ns; do
+            read_duration_ns "$f"
+        done | jq -s '.'
+    else
+        echo "[]"
+    fi
+)
+
+# Per §0216 + §0143 D2 audit-trail discipline: verdict.demotion_fired
+# aggregation considers Layer B fired status across demotions_report
+# entries. ANY demotion's Layer B fired → demotion_fired=true; ALL not-
+# fired → demotion_fired=false. Empty demotions_report (no clean-chain
+# promotions) → demotion_fired=false (null-safe). The aggregation
+# considers ONLY clean-chain demotions (per §0216 shell pre-filter);
+# broken-chain formations preserved per §2.1 but excluded per §0143 D2
+# substrate-grounded comprovação criterion.
+demotion_fired_aggregate=$(
+    echo "${demotions_report_json}" | jq '[.[] | .layer_b.fired // false] | any // false'
 )
 
 # Per §0143 mandatory instrumentation axis (subtype x source x
@@ -376,8 +480,12 @@ jq -n \
     --slurpfile ingest_rep    "${RUN_DIR}/ingest.stdout" \
     --slurpfile derive_rep    "${RUN_DIR}/derive-attributions.stdout" \
     --slurpfile form_rep      "${RUN_DIR}/form-from-candidates.stdout" \
+    --slurpfile morph_rep     "${RUN_DIR}/measure-chain-morphology.stdout" \
     --argjson promotions_rep  "${promotions_report_json}" \
     --argjson promote_durs    "${promote_durations_json}" \
+    --argjson demotions_rep   "${demotions_report_json}" \
+    --argjson demote_durs     "${demote_durations_json}" \
+    --argjson demotion_fired  "${demotion_fired_aggregate}" \
     --argjson step_durations  "${step_durations_json}" \
     --argjson total_cands     "${total_candidates}" \
     --argjson non_firing      "${instrumented_non_firing}" \
@@ -413,28 +521,30 @@ jq -n \
             }
         },
         pipeline_scope: {
-            included_steps: ["ingest", "derive-attributions", "replay-attributions", "signatures", "form-from-candidates", "promote-formations"],
-            deferred_steps: ["measure-chain-morphology", "demotion-evaluation"],
-            deferral_reason: "Layer B candidacy evaluation + chain morphology + demote evaluation are §0214 candidacy-evaluation scope per §0213 user-cravado split (candidacy materialization vs candidacy evaluation as distinct lifecycle shapes)"
+            included_steps: ["ingest", "derive-attributions", "replay-attributions", "signatures", "form-from-candidates", "promote-formations", "measure-chain-morphology", "demote-formations"],
+            deferred_steps: [],
+            deferral_reason: "§0216 closes the candidacy-evaluation scope (Layer B + chain morphology + demote); pipeline now end-to-end through demotion. Subsequent multi-run comprovação methodology scope is §0227+ named-but-non-binding (substrate accumulation over time produces influence chains that reference these formations; first non-trivial Layer B firing is the §0227+ pré-condição empírica)."
         },
         signatures: $sig_agg[0],
         ingest_report: ($ingest_rep[0] // null),
         derive_attributions_report: ($derive_rep[0] // null),
         formations_report: ($form_rep[0] // null),
         promotions_report: $promotions_rep,
-        step_durations: ($step_durations + {promote_formations: $promote_durs}),
+        morphology_report: ($morph_rep[0] // null),
+        demotions_report: $demotions_rep,
+        step_durations: ($step_durations + {promote_formations: $promote_durs, demote_formations: $demote_durs}),
         verdict: {
             total_candidates: $total_cands,
             instrumented_non_firing: $non_firing,
-            demotion_fired: null,
+            demotion_fired: $demotion_fired,
             non_firing_diagnosis_axis: {
                 by_subtype:          "see signatures.* for per-subtype EvaluationStats",
                 by_source:           "cic_ids only this scope",
-                by_chain_morphology: null
+                by_chain_morphology: "see morphology_report.stats for chains_fracas_count + chains_fortes_count per §0143 Sub-benchmark 1 definition; §0216 + §0143 D2 audit-trail discipline — clean-chain subset only for comprovação claim"
             }
         }
     }' > "${manifest_path}"
 
 log "step=manifest emitted at ${manifest_path}"
-log "verdict total_candidates=${total_candidates} instrumented_non_firing=${instrumented_non_firing}"
+log "verdict total_candidates=${total_candidates} instrumented_non_firing=${instrumented_non_firing} demotion_fired=${demotion_fired_aggregate}"
 log "RUN_ID=${RUN_ID} complete"

@@ -9968,6 +9968,135 @@ The §0143 mandatory instrumentation per `EvaluationStats` (ObservationsScanned 
 
 ---
 
+## `0216` — Candidacy evaluation: measure-chain-morphology + demote-formations (clean-chain shell pre-filter) + manifest verdict closure of Sub-benchmark 1 single-run scope; §0213 Confidence-baseline misframing corrected inline; Layer A temporal-axis user-framed concern structurally resolved; §0227+ multi-run comprovação methodology named-but-non-binding
+
+- **Status:** accepted
+- **Date:** 2026-06-08
+- **Context:** §0215 (PR #238, commit `6bfc178`) landed the bridge wire-contract remediation; the operator re-ran the 20K shakedown (RUN_ID `20260608T145051Z`) producing 10 NEW clean-chain AutomationGroupFormation events + 10 paired AutomationGroupPromotion events with verified non-empty `source_event_hashes` (counts: 6186, 3834, 1524, 310, 312, 208, 192, 138, 144, 124). Substrate now carries 20 formations + 20 promotions total (10 broken-chain historical from RUN `20260608T045037Z` preserved per §2.1 + 10 clean-chain post-§0215). §0216 enacts the candidacy-evaluation scope user-cravado at §0213 split (Layer B + chain morphology + demote evaluation); shell-based clean-chain pre-filter per user-cravado decision (c) at §0215; first non-trivial Layer B verdict materialization opportunity per §0143 Sub-benchmark 1 comprovação window. **No code changes** — all CLIs exist (`cmd/measure-chain-morphology`, `cmd/demote-automation-group`); orchestrator + manifest-validation + decision-log only.
+
+  **§0213 Confidence-baseline empirical prediction misframing corrected inline** (forward-only per §0212→§0213→§0214→§0215 reflow precedent; NOT retroactive amendment of §0213 entry per §0214.5 decimal-suffix convention scope-restriction to documentation-describing-wrong-reality not retroactive prediction correction):
+
+  > "**§0213 prediction empirically misframed at registration time.** Predicted: 'Layer B gating sob Confidence=0.0 baseline provavelmente surprising.' Reality (verified via source inspection at §0216 pre-scope): Layer B formula in `services/ingestion/internal/hypothesis/layerb/layerb.go:9-10 + 244-269` consume `closure_hashes` + `direct_influenced_by` + `evidential_independence`; **NOT Confidence**. The prediction's outcome shape (surprising likely) was right; the mechanism cause cravado was wrong. Forward-only correction; §0213 entry preserved as historical artifact per the established reflow discipline."
+
+  **User-framed concern about CIC-IDS-2017 temporal mismatch with Layer A gating semantic: investigated, structurally absent.** Layer A reads `promotion.promoted_at` + `demotion.demoted_at` (both 2026 wall-clock per `services/ingestion/internal/hypothesis/automation_group_demotion.go:118-124` + `demotion.go:148-154`); never reads `observation.observed_at`. CIC-IDS-2017 historical timestamps are irrelevant to Layer A gating semantic. Sub-benchmark 1 is structurally viable on Layer A regardless of the adversarial corpus's historical temporality. Layer B similarly walks substrate by commit-order (not observed_at); historical 2017 dates are not consulted at gating time.
+
+- **Decision:** land three orchestrator steps + manifest-validation extensions as a single PR per §0184 / §0186 MO2 bundle-by-shape discipline (shared shape: first candidacy-evaluation enactment closing Sub-benchmark 1 single-run scope). Bash + JSON only; no Go code changes.
+
+  ### 1. Step 7 — `measure-chain-morphology`
+
+  **File:** `infra/docker/run-sub-benchmark-1.sh`.
+
+  Single invocation walking substrate; `cmd/measure-chain-morphology` reads ALL Cat III formations + emits `{hypotheses[], stats{}}` envelope per `cmd/measure-chain-morphology/main.go:71-89`. Output saved to `${RUN_DIR}/measure-chain-morphology.stdout`. **No input filter** — the CLI has no hash-list option. Per §0216 + §0143 D2 audit-trail discipline, the morphology_report captures ALL 20 formations in substrate for audit completeness; the Sub-benchmark 1 comprovação claim applies to the clean-chain subset only (formations with source_event_count > 0). Per §0143 fracas/fortes distinction (chains-fracas = depth_max ≤ 2 OR breadth_at_root ≤ 3; chains-fortes = depth_max > 2 AND breadth_at_root > 3): the 10 broken-chain historical formations are chains-fracas by construction (source_event_count=0 → depth=0, breadth=0); the 10 clean-chain post-§0215 formations have non-empty source lists (counts ranging 124-6186) and their fracas/fortes classification is empirically determined by `morphology.Measure`.
+
+  ### 2. Step 8 — `demote-formations` (shell-filtered loop)
+
+  **File:** `infra/docker/run-sub-benchmark-1.sh`.
+
+  Per user-cravado decision (c) at §0215 — shell-based pre-filter preserving §0205 tier-3 audibility (each step shell-readable, not buried in Go code). The filter joins `formations_report` (clean-chain identifier per `source_hashes_count > 0`) with `promotions_report` (formation-to-promotion hash mapping). Only clean-chain promotion hashes flow into the demote loop; broken-chain promotions are preserved in substrate per §2.1 but excluded from §0216 candidacy evaluation per §2.3 + §0143 D2 chain-reconstructibility requirement. Inline bash comment documents the discipline (line-by-line audibility per §0205).
+
+  Each iteration invokes `demote-automation-group -promotion-event-hash <hash> -reason "§0216 first candidacy evaluation; Layer B verdict inline; Layer A cadence ~0s (immediate demotion within shakedown per §0011 candidacy-not-barrier)"`. Per `cmd/demote-automation-group/main.go:75-94`: each demotion's stdout JSON carries the demotion event hash + cadence_satisfied (false expected; elapsed ~0s) + Layer B verdict inline (per `cliutil.LayerBPayloadFromReport(report.LayerB)`).
+
+  ### 3. Manifest assembly extensions
+
+  **Files:** `infra/docker/run-sub-benchmark-1.sh` (jq pipeline) + `infra/docker/manifest_validation.json` (manifest validation document).
+
+  Four new manifest fields:
+
+  - `morphology_report` — verbatim `${RUN_DIR}/measure-chain-morphology.stdout` via `--slurpfile`; carries `{hypotheses[], stats{}}` per §0143 instrumentation envelope.
+  - `demotions_report` — array of per-demotion `${DEMOTE_DIR}/*.stdout` JSONs via `jq -s '.'`; each entry carries demotion event hash + cadence state + inline Layer B verdict.
+  - `step_durations.measure_chain_morphology` — integer nanoseconds.
+  - `step_durations.demote_formations` — array of nanoseconds (mirrors `promote_formations` shape per §0213 precedent).
+
+  `verdict.demotion_fired` now populated via `jq '[.[] | .layer_b.fired // false] | any // false'` over `demotions_report` (was always-null pre-§0216). **Per §0216 + §0143 D2 audit-trail discipline: the aggregation considers ONLY clean-chain demotions** (the demotions_report set, which is shell-filtered to source_event_count > 0 formations); broken-chain formations preserved per §2.1 but excluded from comprovação claim. `verdict.non_firing_diagnosis_axis.by_chain_morphology` now references `morphology_report.stats` for chains_fracas_count + chains_fortes_count (was null pre-§0216).
+
+  `pipeline_scope.included_steps` revised from `["ingest", "derive-attributions", "replay-attributions", "signatures", "form-from-candidates", "promote-formations"]` to `["ingest", "derive-attributions", "replay-attributions", "signatures", "form-from-candidates", "promote-formations", "measure-chain-morphology", "demote-formations"]`. `deferred_steps` becomes empty `[]`. `deferral_reason` revised to cite §0227+ multi-run comprovação methodology as the next-scope named-but-non-binding carry-forward.
+
+- **Constitutional review:**
+
+  **Tier 1 (Charter)** — zero impact. §0011 Layer A semantic preserved (candidacy-not-barrier; demotion commits regardless of cadence state, records cadence_satisfied + Layer B fired as informational). §2.1 substrate immutability preserved (broken-chain set NOT modified). §2.3 provenance unchanged. §2.5 lifecycle uniform. §3 N1 unchanged (Layer B verdict is operational measurement, not phenomenon-of-record).
+
+  **Tier 2 (Ontology / schemas / canonical)** — zero impact. No proto / canonical-form / operational-definition change. Layer B formula per §0135 + §0138 inception defaults preserved; T_B = K_C = 1/2; N_window = 1000 (from `LAYER_B_*_NUMERATOR/DENOMINATOR` env vars per orchestrator).
+
+  **Tier 3 (services / infra)** — orchestrator + manifest-validation document + decision-log only. No source code changes. All four CLIs (`measure-chain-morphology`, `demote-automation-group`, plus pre-existing `form-automation-group-from-candidate` + `promote-automation-group`) exist with established wire-contracts (verified at §0216 pre-scope investigation).
+
+  **§0214 MO1 (wire-contract integration testing pattern) retroactive coverage assessment:** the bridge tests for `measure-chain-morphology` (in-package `cmd/measure-chain-morphology/main_test.go`) and `demote-automation-group` (in-package + `internal/hypothesis/automation_group_demotion_test.go`) use in-memory substrate state, not real upstream CLI stdout. **§0214 MO1 does NOT apply here** because neither CLI consumes upstream-CLI input — `measure-chain-morphology` walks substrate directly; `demote-automation-group` consumes a single hex hash argument (not a structured envelope). The wire-contract integration testing discipline applies only at cross-package/process boundaries where structured payloads cross; substrate-walking + hex-argument CLIs are not subject to it. **First explicit scope-bounding of §0214 MO1**: the discipline targets structured-payload boundaries; substrate-direct or scalar-arg boundaries are NOT subject. Documented for future-bridge author clarity.
+
+  **Anchor verification per §0142 deliberate-inventory:**
+  - **§0011** — Layer A cadence semantic (candidacy-not-barrier). Status: applied verbatim. Demotion commits regardless of cadence state; cadenceSatisfied recorded informationally.
+  - **§0135 + §0138** — Layer B formula + inception defaults (T_B = K_C = 1/2; N_window = 1000). Status: consumed verbatim from orchestrator env vars passed through to demote-automation-group's internal Layer B Evaluate.
+  - **§0140** — paired-dimension marshalling-boundary check. Status: unchanged; demotion events satisfy the check by construction (canonical-package validation passes).
+  - **§0142 MO3** — deliberate-inventory sweep. Status: applied; this anchor list is the sweep.
+  - **§0143 D2** — substrate-grounded comprovação criterion. Status: §0216 + audit-trail discipline applies: morphology_report captures ALL 20 for audit; comprovação claim limited to clean-chain subset (source_event_count > 0). Empirical first materialization of §0143 chains-fracas vs chains-fortes axis.
+  - **§0143 Sub-benchmark 1** — first non-trivial demotion attempt of comprovação window. Status: enacted; predicted outcome 0-fired due to substrate-state-only-shallow-influence (mechanism cravado below); sets up §0227+ multi-run comprovação cycle.
+  - **§0157** — test helper precedent. Status: §0216 does NOT introduce new bridge tests; the existing helpers + canonical-corpus tests remain valid for substrate-write tier.
+  - **§0162** — F3-corpus structural closure declarations. Status: §0216 consumes; the clean-chain set is the substrate-grounded materialization of §0162's structural closure.
+  - **§0184 / §0186 MO2** — bundle-by-shape one-PR-per-advance. Status: applied — orchestrator + manifest-validation document + decision-log share single shape "first candidacy-evaluation enactment closing Sub-benchmark 1 single-run scope".
+  - **§0204** — single-responsibility CLI discipline. Status: preserved — orchestrator loop wraps `demote-automation-group` per promotion (no `--auto-demote` bundle).
+  - **§0205 + §0205 MO1 + §0205 MO2** — deployment scaffold; tier-3 audibility; scope-honest-deferral. Status: §0216 extends with two tier-3-audible steps; shell-based pre-filter cravado per user-cravado decision (c) at §0215 preserves audibility (filter is shell-readable, not Go-buried).
+  - **§0207 / §0208 / §0211 / §0212 / §0213 / §0214** — §0022-emergence catalog (6 instances). Status: §0216 is **structurally NOT a new §0022 instance** — the candidacy evaluation enacts on existing CLIs with verified wire-contracts; no architectural-convention vs operator-workflow gap surfaced. Catalog remains at 6 instances.
+  - **§0213 Confidence-baseline empirical prediction** — INLINE CORRECTION applied at §0216 Context (above) per user-cravado decision 2: forward-only; §0213 entry preserved as historical artifact; misframing acknowledgment crystallized in §0216 prose without retroactive amendment of §0213.
+  - **§0214 + §0214 MO1/MO2** — wire-contract testing pattern + remediation completeness candidate sixth layer. Status: MO1 scope-bounded at §0216 (first explicit scope-bounding: structured-payload boundaries only; substrate-direct + scalar-arg CLIs not subject). MO2 second-validation opportunity at §0216 (first validation was §0215 = remediation §0214 prescribed; §0216 is candidacy-evaluation enactment, not a remediation of §0215's outcome; the MO2 binding promotion pré-condição empírica still requires SECOND instance of intended-vs-actual gap, which §0216 has the empirical opportunity to surface or not surface).
+  - **§0214.5** — decimal-suffix convention. Status: §0216 does NOT use decimal suffix (this entry IS a binding scope change introducing candidacy evaluation; integer §0216 is the correct number). Convention scope-restriction validated empirically.
+  - **§0215** — Surface A + B remediation + first prospective §0214 MO1 application. Status: §0216 consumes the clean-chain output as input; the §0215 remediation closure enabled this entry to enact.
+  - **§0216 user-framed concern about CIC-IDS-2017 temporal mismatch with Layer A** — INLINE RESOLUTION applied at §0216 Context (above) per user-cravado decision 3: investigated, structurally absent; Layer A reads wall-clock now() and promotion.promoted_at, never observation.observed_at. Discipline crystallized at §0216 MO1 below.
+  - **§0217 / §0218 / §0219 / §0220 / §0221+ / §0222+ / §0223+ / §0224+ / §0225+ / §0226+** — renumbered §0213-§0215 carry-forwards. Status: ALL UNCHANGED by §0216 (no shift; §0216 is the binding scope enacted per its slot in §0214's existing reflow).
+  - **§0227+ (NEW, named-but-non-binding)** — multi-run comprovação methodology. Per user-cravado decision 4 with refined pré-condição: **(a) §0216 first run produces 0-fired Layer B AND (b) chain-morphology shows chains-fortes ≥ 10 (clean-chain F3 reach structurally adequate).** If (a) holds AND (b) holds: §0227+ opens for multi-run comprovação (substrate accumulation over time produces influence chains that reference these formations; first non-trivial Layer B firing is the §0227+ empirical trigger). If (a) holds but (b) fails (chains-fracas dominate clean-chain set): issue is **F3 calibration not substrate-state-shallow-influence**; remediation different — **§0228+ F3 calibration entry** rather than §0227+ multi-run methodology. The two carry-forwards are mutually exclusive paths; §0216 evidence selects which path applies. Both named-but-non-binding pending evidence.
+
+  **Falsifiability:** every prediction below is structurally testable against post-merge re-run manifest:
+
+  | Prediction | Mechanism | Falsification trigger |
+  |---|---|---|
+  | Layer B fires on **0/10** clean-chain formations | filter_match_count=0 across window walks (no subsequent events carry these formation hashes in closure_hashes); FreshnessUndefined=true; SaturationFired=false (0/N < 1/2); Fired=false | Any Layer B verdict with `fired: true` falsifies; specific mechanism violation (e.g., `FreshnessUndefined: false` with non-zero filter_match) falsifies mechanism understanding even if `fired` matches |
+  | cadenceSatisfied=false on all 10 demotions | elapsed ~0s < cadence_seconds=86400 (promoted_at + demoted_at both 2026-06-08 wall-clock) | Any `cadence_satisfied: true` |
+  | Demotions commit successfully on all 10 (per §0011 candidacy-not-barrier) | `hypothesis.Demote` accepts regardless of Layer A | Any `ErrTargetNotFound` or commit failure |
+  | `verdict.demotion_fired = false` (aggregate over clean-chain only) | All Layer B individual verdicts not-fired | Any `demotion_fired: true` in manifest |
+  | chain_morphology: 10 chains-fortes (clean-chain breadth_at_root = hundreds-thousands) + 10 chains-fracas (broken-chain source_event_count=0 → fracas by construction) | §0143 fracas/fortes definition (depth_max ≤ 2 OR breadth_at_root ≤ 3 = fracas; depth_max > 2 AND breadth_at_root > 3 = fortes); measured source_event_count | Different counts in `stats.chains_fortes_count` / `chains_fracas_count` falsifies the heuristic prediction; specific value distinguishes F3 calibration issue from substrate-shallow-influence issue |
+
+  **Three ortogonal hypotheses on Layer B outcome (per §4 falsifiability):**
+
+  | Hypothesis | Required substrate state | Predicted prior |
+  |---|---|---|
+  | **(a)** Layer B fires on ALL 10 | Would require freshness_B < T_B (avg(EI) < 1/2 across window events matching closure_hashes filter) OR saturation_C > K_C (more than half of N window events match closure with no direct_influenced_by); requires substantial subsequent event population referencing these formations | **very low** — substrate has no subsequent events referencing the formations; filter is empty |
+  | **(b)** Layer B fires on ZERO 10 | filter_match_count=0; FreshnessUndefined=true; SaturationFired=false (0/N=0 < 1/2); Fired=false. Pure structural consequence of substrate state post-§0215 | **high** — mechanism deterministic; not speculation |
+  | **(c)** Heterogeneous (some fire, some don't) | Some formations have subsequent events matching closure filter; others don't | **very low** — substrate state is symmetric across the 10 formations; no asymmetry in subsequent events |
+
+  Per user-cravado decision 1: hypothesis (b) registered as **structural consequence**, not speculation. Mechanism deterministic under substrate state post-§0215 (zero subsequent events referencing formations → freshness_B undefined; saturation_C = 0/N). Specific-mechanism falsification path: `FreshnessUndefined=false` (indicating filter_match > 0) OR `SaturationFired=true` (indicating saturationCount > N×K_C) would falsify the mechanism understanding even if `Fired=true` matches some other path.
+
+- **Consequences:**
+
+  - 3 files modified (`infra/docker/run-sub-benchmark-1.sh` + `infra/docker/manifest_validation.json` + `docs/charter/decision-log.md`). Zero code changes (all CLIs exist).
+  - **First non-trivial Layer B verdict materialization opportunity** per §0143 Sub-benchmark 1 comprovação window. Predicted outcome (b) all-NOT-fired registered with explicit mechanism; alternative hypotheses (a)/(c) recorded with prior reasoning per §4.
+  - **First explicit §0143 D2 audit-trail discipline crystallization**: clean-chain subset is the comprovação evidence; broken-chain set is historical audit artifact preserved per §2.1 but excluded from comprovação claim.
+  - **First explicit §0214 MO1 scope-bounding**: wire-contract testing pattern targets structured-payload boundaries; substrate-direct + scalar-arg CLIs are not subject. Documented for future-bridge authors.
+  - **Sub-benchmark 1 single-run scope CLOSED.** Pipeline now executes end-to-end through demote-formations; `pipeline_scope.deferred_steps` becomes empty `[]`. Multi-run comprovação methodology is §0227+ named-but-non-binding next-scope.
+
+  **Carry-forwards (consolidated):**
+
+  - **§0217 / §0218 / §0219** — renumbered binding paralelos (per-column coercion / endpoint_co_visit / bucket calibration); UNCHANGED from §0214 reflow.
+  - **§0220** — DeriveAll O(n²) named-but-non-binding maintained; UNCHANGED. Empirical timing post-§0216 still within acceptable window.
+  - **§0221+ / §0222+ / §0223+** — renumbered named-but-non-binding; UNCHANGED.
+  - **§0224+** — §0140 paired-dimension scope extension named-but-non-binding; UNCHANGED.
+  - **§0225+** — three-tier hook defense infrastructure remediation named-but-non-binding; UNCHANGED.
+  - **§0226+** — cross-CLI envelope struct DRY refactor named-but-non-binding; UNCHANGED.
+  - **§0227+ (NEW, named-but-non-binding)** — multi-run comprovação methodology. Pré-condição empírica: **(a) §0216 first run produces 0-fired Layer B AND (b) chain-morphology shows chains-fortes ≥ 10**. If both clauses hold: multi-run methodology lifts as the path to first non-trivial Layer B firing (substrate accumulation over time produces influence chains).
+  - **§0228+ (NEW, named-but-non-binding)** — F3 calibration entry. Pré-condição empírica: **(a) §0216 first run produces 0-fired Layer B AND (b) chains-fracas DOMINATE clean-chain set (chains-fortes < 10 of 10)**. If (a) AND not-(b): issue is F3 calibration, not substrate-state-shallow-influence; remediation different from §0227+ multi-run path. The two carry-forwards are mutually exclusive paths; §0216 evidence empirically selects.
+
+  **Methodological observation 1 — Pre-empting structural hypothetical concerns via source inspection; pattern reusable for §-entry predictive framing.**
+
+  Two empirical instances within §0213-§0216 program demonstrate the anti-pattern:
+  1. **§0213** registered Confidence=0.0 baseline empirical prediction without inspecting Layer B source; reality: Layer B doesn't read Confidence at all. Misframed at registration time.
+  2. **§0216 pre-investigation** user-framed CIC-IDS-2017 temporal mismatch concern with Layer A; investigation revealed Layer A reads wall-clock now() not observation.observed_at. Concern was structurally absent.
+
+  **Pattern crystallized: predictive framing in §-entries that involve code-mechanism reasoning REQUIRES source inspection pre-registration OR explicit marking as speculation-not-grounded.** Otherwise the §-entry carries an aspirational concern that may not match reality; auditor reading the entry conflates speculation with structural ground. **§0214 MO1 wire-contract testing pattern extends retroactively to predictive-deliberation tier**: the same masking-by-test-fixture pattern (§0213 MO1) and the same masking-by-test-helper pattern (§0213 MO1) and the same masking-by-aspirational-documentation pattern (§0214.5 MO1) all share a single shape — **internal model substituted for empirical investigation produces drift between documented reality and empirical reality**. The §0216 pre-scope investigation discipline (source-inspection-before-prediction) is the prospective remediation.
+
+  **Methodological observation 2 — Explicit §-entry scope-bounding of methodological observations when scope-restriction emerges from empirical application.**
+
+  §0216 first explicit scope-bounding of §0214 MO1: wire-contract integration testing pattern targets **structured-payload boundaries** only. Substrate-direct CLIs (like `measure-chain-morphology`) and scalar-argument CLIs (like `demote-automation-group` consuming `-promotion-event-hash`) are NOT subject — their wire-contract is either substrate state (immutable per §2.1; verified at substrate-write tier) or single scalar values (no structured-decode boundary). **Pattern: when applying a methodological observation, if empirical application reveals scope-restrictions, register the scope-bounding inline in the consuming §-entry rather than amending the MO's parent entry.** Forward-only correction per §0212→§0213→§0214→§0215→§0216 reflow precedent. §0214 MO1 entry preserved as historical artifact; §0216 carries the scope-bounding crystallization. Future MO applications inherit the same discipline (scope-bound at consumption tier, not retroactively at definition tier).
+
+- **Supersession:** none in the structural sense. §0213 + §0214 + §0215 entries preserved as historical artifacts. The 20 substrate formations + 20 promotions preserved per §2.1. §0214 MO1 NOT amended (scope-bounding crystallized at §0216 consumption tier per MO2 above). §0213's Confidence-baseline empirical prediction NOT amended retroactively (inline correction at §0216 Context per user-cravado decision 2). Layer A temporal-axis user concern NOT a §0022 surface (structurally absent; resolved inline per user-cravado decision 3 + §0216 MO1).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
