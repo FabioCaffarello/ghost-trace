@@ -9634,6 +9634,151 @@ The §0143 mandatory instrumentation per `EvaluationStats` (ObservationsScanned 
 
 ---
 
+## `0214` — §0213 first-real-run diagnostic; six findings registered + wire-contract integration testing MO + remediation completeness MO; hook infrastructure sub-finding with retroactive audit outcome
+
+- **Status:** accepted
+- **Date:** 2026-06-08
+- **Context:** §0213 (PR #233, commit `3be4efb`) landed the F3-candidate → AutomationGroupFormation bridge CLI + orchestrator form + promote loop. The first real shakedown post-§0213 (RUN_ID `20260608T045037Z`) executed end-to-end: 252 candidates emitted by `tcp_flow_features_clustering_v1` → top-10-by-actor-count selected → 10 AutomationGroupFormation events committed + 10 AutomationGroupPromotion events committed. The intended outcome of §0213's five-layer first remediation layer materialized. **However, the manifest evidence simultaneously revealed multi-surface §0022 emergence pos-bridge** — both intended outcome AND unintended outcomes co-emerged in a single run. §0214 mirrors §0208 + §0212 diagnostic-only discipline: register the six findings with verbatim numbers from `runs/20260608T045037Z/manifest.json`; remediation separated to §0215 (binding next; bundled by shape) + §0216 (renumbered candidacy evaluation) + §0224+/§0225+ named-but-non-binding carry-forwards. Documentation-only PR; zero code changes.
+
+- **Decision:** classify the six findings, record each with verbatim numbers, and route to dedicated successor §-entries with explicit empirical pre-conditions. Embed the hook-infrastructure retroactive audit outcome as sub-finding (audit ran before §0214 entry land; outcome determines §0225 severity binary).
+
+  ### Finding 1 — Surface A: JSON field-name mismatch breaking §2.3 chain reconstruction on all 10 formations
+
+  - **Manifest path:** `formations_report.formations_committed[*].source_hashes_count`
+  - **Empirical evidence verbatim:** all 10 entries carry `"source_hashes_count": 0`. The upstream signature CLI `find-automation-group-candidates-network` emits the field as `source_event_hashes_hex` (per `services/ingestion/cmd/find-automation-group-candidates-network/main.go:146`: `SourceHashesHex []string \`json:"source_event_hashes_hex"\``); the §0213 bridge CLI `form-automation-group-from-candidate` envelope struct expected `json:"source_hashes"` (per `services/ingestion/cmd/form-automation-group-from-candidate/main.go:208`). `json.Decode` silently received `null` for the unmatched field → `len(SourceHashes) == 0` → 10 AutomationGroupFormation events committed with `source_event_hashes: []`.
+  - **Cross-CLI verification (per user-cravado decision 4):** ALL five upstream find-* CLIs use the identical convention `SourceHashesHex []string \`json:"source_event_hashes_hex"\``:
+    - `find-automation-group-candidates/main.go:101`
+    - `find-behavioral-cluster-candidates/main.go:106`
+    - `find-campaign-hypothesis-candidates/main.go:123`
+    - `find-coordination-ring-candidates/main.go:129`
+    - `find-automation-group-candidates-network/main.go:146`
+  - **Constitutional reframe (per user-cravado decision 2):** the 10 broken-chain formations satisfy §0140 paired-dimension enforcement (EvidentialIndependence present; `validatePairedDimensionCommitment` passes) — but VIOLATE §0143 D2 substrate-grounded comprovação criterion (provenance chain reconstructible across category boundaries). The finding is therefore NOT a §0140 violation; it is evidence that **§0140's paired-dimension scope is necessary-but-not-sufficient relative to §0143 D2's substrate-grounded comprovação requirement**. Carry-forward §0224+ below.
+  - **§2.1 immutability consequence:** the 10 broken-chain formations + 10 broken-chain promotions are permanently committed (substrate-immutable post-commit per §2.1). Re-running with the §0215 fix produces formations with DIFFERENT content-hash (non-empty source_event_hashes → different canonical-form → different BLAKE3 hash). The substrate after §0215 will carry 20 formations total (10 broken-chain + 10 clean-chain), distinguishable via `len(source_event_hashes) > 0` filter.
+  - **Destino:** **§0215 binding** — JSON field-name fix (single line; cross-CLI universal) + bridge re-run shakedown to produce clean-chain formations. Future BC/CH/CR bridges (§0223+) inherit the same fix template.
+
+  ### Finding 2 — Surface B: `promote_formations` durations array malformed via concatenation
+
+  - **Manifest path:** `step_durations.promote_formations`
+  - **Evidence verbatim:** `[1.9091375170550833E+79]` — single absurd number, not an array of 10 nanosecond durations.
+  - **Cause empirically verified:** my `read_duration_ns()` helper in `infra/docker/run-sub-benchmark-1.sh` uses `printf '%s'` (no trailing newline); orchestrator loop concatenates 10 durations sequentially without separator (`19091375` + `17055083` + `18641792` + ... → `190913751705508318641792...`); `jq -s '.'` slurps the concatenation as a single number (`~1.9e+79`). Individual `.duration_ns` files inside `${PROMOTE_DIR}` carry correct values (verified via `for f in *.duration_ns; do printf '%s ' "$(<$f)"; done` yielding `19091375 17055083 18641792 18688125 19329625 18012750 28955791 18751708 16767458 19169292 `).
+  - **Severidade:** observability-only (no constitutional break); but data-loss in §0220 (renumbered DeriveAll) diagnostic surface — per-promotion timing distribution unobservable until fix.
+  - **Destino:** **§0215 binding (bundled with Finding 1 per §0184 / §0186 MO2 bundle-by-shape)** — shared shape: §0213 first-real-run §0022 emergence. Fix is one-line: `printf '%s\n' "$v"` in `read_duration_ns`.
+
+  ### Finding 3 — Surface C: ranking distribution skewed; mega-cluster dominance
+
+  - **Manifest path:** `formations_report.formations_committed[*].actor_refs_count`
+  - **Evidence verbatim:** top-10 sequence (descending by actor-count default per §0213): `3093, 1872, 756, ..., 61`. Total `signatures.automation_group_network.stats.actors_aggregated = 6125` across 252 candidates. Top-1 candidate aggregates 3093/6125 = 50.5% of all actors; top-2 aggregates ~81%; top-10 aggregates a non-uniform-but-bounded fraction. Mega-cluster dominance.
+  - **Reading:** the §0213 default ranking (actor-count descending; content-hash tiebreak) selects the LARGEST clusters first. With 50% of actors in the top-1 candidate, candidacy evaluation (§0216) operates over heterogeneously-sized clusters; Layer B gating behavior likely diverges sharply by candidate (large clusters trivially pass evidence-count thresholds; small clusters may all fail). The §0219+ (renumbered sub-stat semantic ambiguity) is potentially load-bearing here: if `actor_refs_count` proxies cluster MEMBERSHIPS (one actor in multiple clusters), the distribution may be even more skewed than the raw count suggests.
+  - **Destino:** §0216 carry-forward note (candidacy evaluation framing must anticipate heterogeneous cluster sizes); §0219+ named-but-non-binding (renumbered sub-stat semantic) unchanged in status — empirical pre-condition still un-met until §0216 first-formation step exposes the membership-vs-distinct-actor semantic.
+
+  ### Finding 4 — Surface D (positive verification): timing consistent with §0212 baseline
+
+  - **Manifest path:** `step_durations`, `ingest_report.ElapsedNanos`, `derive_attributions_report.elapsed_ns`
+  - **Evidence verbatim (current run):** ingest `59759052833` ns (≈59.76s); ingest CLI-internal `59733453292` ns; derive `171099085995` ns (≈171.10s); derive CLI-internal `171027680246` ns; form_from_candidates `1115342708` ns (≈1.12s); ~10 × 19ms promote-formations total ≈194ms (verbatim from individual `.duration_ns` files).
+  - **Comparison with §0212 RUN_ID `20260607T205836Z`:** ingest `70552448365` ns (-15% in current run; SQLite cache warm + idempotent re-ingestion); derive `174432125206` ns (-2%; consistent). Per-obs cost: ingest 1.18 ms/obs current run (was 1.39 ms in §0212); derive 3.37 ms/obs (was 3.43). Derive remains 2.86× ingest (was 2.47×; small drift, within noise).
+  - **§0211 MO2 (both-axes preservation) confirmed empirically again:** orchestrator-internal vs CLI-internal timing divergence sub-100ms (process-launch + teardown negligible).
+  - **§0220 (renumbered DeriveAll) status:** named-but-non-binding **maintained**. 20K substrate completes in ~4 min total post-§0213 (ingest + derive + signatures + form + promote + manifest); comprovation NOT blocked.
+  - **Destino:** §0220 status confirmation (renumbered from §0218 in §0213's reflow). No new entry; status preservation.
+
+  ### Finding 5 — Sub-finding: hook infrastructure three-tier defense degraded; retroactive audit outcome PASS 6/6
+
+  - **Evidence empirically verified:**
+    - `.git/hooks/pre-commit` does NOT exist (`os error 2`).
+    - `git config --get core.hooksPath` is UNSET.
+    - `.claude/hooks/pre-commit-doc-check.sh` script DOES exist (the script itself is intact).
+    - `.claude/settings.json` registers a Stop hook at line 79 with relative-path command `.claude/hooks/pre-commit-doc-check.sh`; relative path is cwd-dependent and fragile across hook invocation contexts.
+    - `.github/workflows/constitutional-check.yml` correctly references the script (lines 46 + 57); CI tier is functional.
+  - **Reading:** per CLAUDE.md §5.2 the three-tier hook architecture should be: (1) git pre-commit (enforcement-of-record); (2) Claude Code event hook (in-session feedback); (3) CI workflow (PR-level redundancy). The git tier is BROKEN today. The Claude Code Stop hook tier is FRAGILE (relative-path; cwd-dependent). CI tier is WORKING.
+  - **Tier-3 honesty: PRs §0207-§0213 maintained vocabulary discipline EMPIRICALLY**, not via the documented git-tier defense. The discipline was preserved because the Claude Code agent (me, across sessions) ran `bash .claude/hooks/pre-commit-doc-check.sh` manually before each commit. Without that manual invocation, drifts would have flowed to CI before catch.
+  - **Retroactive audit outcome (per user-cravado decision 1; audit ran before this entry land):** for each of the six §0207-§0213 merge commits, an isolated worktree was created at the commit, `git reset --soft <parent>` staged the commit's diff against its parent, and the hook script executed in the worktree. Outcome:
+
+    | Commit | § | Hook outcome | Description |
+    |---|---|---|---|
+    | `0823503` | §0207 | **PASS** (blocks=0) | CIC-IDS header-whitespace normalization (PR #227) |
+    | `a8680a9` | §0208 | **PASS** (blocks=0) | Diagnostic-only of zero-candidate Sub-benchmark 1 first real run (PR #228) |
+    | `2f5d766` | §0209 | **PASS** (blocks=0) | Operational closure of §0162 Gap (1); CLI + scaffold wire (PR #229) |
+    | `969f769` | §0211 | **PASS** (blocks=0) | Shakedown-block remediation + timing instrumentation (PR #230) |
+    | `0b4611e` | §0212 | **PASS** (blocks=0) | Sub-benchmark 1 first-real-run diagnostic; 6 findings + 5-layer closure model (PR #231) |
+    | `3be4efb` | §0213 | **PASS** (blocks=0) | Candidacy materialization — F3-candidate → AutomationGroupFormation bridge CLI (PR #233) |
+
+    **6/6 PASS empirically confirmed.** No vocabulary/frozen-section/marketing-tell drifts leaked through §0207-§0213 despite the broken git-tier defense. Manual hook invocation by the Claude Code agent during PR authoring preserved the discipline.
+  - **Severity classification (per user-cravado decision 1 binary):** ALL PASS → §0225+ remains **named-but-non-binding** (NOT promoted to binding in §0215). The infrastructure should be remediated, but the empirical leak window is zero; remediation timing is operator-prioritizable.
+  - **Destino:** §0225+ named-but-non-binding; pré-condição empírica for binding promotion: future audit reveals a drift leaked through (would invalidate the empirical-zero-leak claim) OR Claude Code Stop hook tier confirmed fully broken in next session (would remove the second-tier defense). §0225+ scope: re-install `core.hooksPath = .claude/hooks` per CLAUDE.md §5.2 prescription (or symlink `.git/hooks/pre-commit` → `.claude/hooks/pre-commit-doc-check.sh`) + fix Stop hook path resolution in `.claude/settings.json` + amend CLAUDE.md §2 enforcement-boundary claim to reflect the empirical reality (current claim "git pre-commit hook is the source of truth" is structurally aspirational; CI tier is the actual operational source of truth).
+
+  ### Finding 6 — Constitutional reframe: §0140 paired-dimension scope incomplete vs §0143 D2
+
+  - **Evidence:** the 10 broken-chain formations (Finding 1) committed cleanly through the full marshalling-boundary pipeline. `canonical.MarshalAndHash` accepted them; `validatePairedDimensionCommitment` per §0140 accepted them (EvidentialIndependence present = `{1, 1}`; check satisfied). They are STRUCTURALLY VALID per the canonical-form contract at §0136 + §0139 + §0140.
+  - **Reading:** §0140 enforces presence of `evidential_independence` on records subject to the paired-dimension commitment. It does NOT enforce non-empty `source_event_hashes`. The shape "AutomationGroupFormation with EI={1,1} + actor_refs=[...] + source_event_hashes=[]" passes §0140 but produces a Cat III hypothesis record whose provenance chain DOES NOT reconstruct back to Cat I observations — violating §0143 D2 substrate-grounded comprovação criterion ("the construct exists; provenance is reconstructible"). The structural validity (§0140 passes) is necessary-but-not-sufficient for the operational comprovação requirement (§0143 D2 expects non-degenerate chain).
+  - **Destino:** **§0224+ named-but-non-binding**. Pré-condição empírica: §0215 fix lands + §0216 candidacy evaluation reveals enforcement gap recurs in other lifecycle entries (e.g., a formation with valid EI but empty actor_refs, OR a promotion with valid EI but empty source_event_hashes, OR similar paired-dimension-satisfied but chain-degenerate shape). If recurs: §0224+ promotes to binding scope (extend `validatePairedDimensionCommitment` to include `source_event_hashes` non-empty check on formations + promotions). If does not recur: pattern remains diagnostic-only; the §0215 + §0216 fix loop is sufficient.
+
+- **Constitutional review:**
+
+  **Tier 1 (Charter)** — zero impact. §2.1/§2.3/§2.4/§2.5/§3 N1/§4 unchanged. Finding 6 is a constitutional reframe carry-forward (§0224+ named-but-non-binding); does not modify §0140 enforcement today.
+
+  **Tier 2 (Ontology / schemas / canonical)** — zero impact. Diagnostic-only entry; no proto modified; no canonical-form revision; no operational-definition change.
+
+  **Tier 3 (services / infra)** — zero impact. Documentation-only PR.
+
+  **Anchor verification per §0142 deliberate-inventory:**
+  - §0011 — Layer A cadence; consumed by §0216 (renumbered)
+  - §0140 — paired-dimension enforcement scope; reframed via Finding 6; §0224+ extension named-but-non-binding
+  - §0142 MO3 — deliberate-inventory sweep (applied; this anchor list is the sweep)
+  - §0143 D2 — substrate-grounded comprovação criterion; Finding 6 reframe pivot
+  - §0157 — test helper precedent; §0213 lifted to package-public; bypassed wire-contract that §0214 Finding 1 surfaces
+  - §0163 — F3 envelope contract; field names confirmed cross-CLI at §0214 Finding 1 cross-verification
+  - §0169 — `tcp_flow_features_clustering_v1`; produces the candidate envelope §0213 consumes; §0214 Finding 1 ratifies field-name convention
+  - §0184 / §0186 MO2 — bundle-by-shape; applied — §0214 diagnostic-only standalone; §0215 bundles Surface A + B + re-run
+  - §0207 — first substrate-emergent §0022 (predecessor); §0214 is **sixth instance** of §0022-emergence pattern (parse-time → deployment-tier diagnostic → orchestrator-runtime → multi-branch diagnostic → architectural-convention vs operator-workflow → **bridge wire-contract vs in-memory test fixture**).
+  - §0208 + §0208 MO1 — diagnostic precedent; integration-test masking at Cat II tier; §0214 MO1 extends the pattern to bridge wire-contract crossings.
+  - §0211 — three-layer closure + MO2 both-axes preservation; both axes empirically preserved in current run (orchestrator vs CLI-internal divergence sub-100ms).
+  - §0212 + §0212 MO1/MO2 — multi-branch ortogonal; five-layer closure; §0214 MO2 names sixth-layer candidate (remediation completeness; named-but-non-binding).
+  - §0213 + §0213 MO1/MO2/MO3 — bridge CLI lift; MO1 (integration-test masking at lifecycle materialization tier); MO2 (X discipline; Y refactor deferred); MO3 (bridge as third architectural layer). **§0213 MO1 self-application at §0214: §0213 itself introduced a new wire-contract masking within one PR cycle of MO1's crystallization** — the bridge tests used in-memory struct fixtures (`signatures.FormationCandidate.SourceHashes`) which matched the package field name but NOT the JSON field name emitted at the upstream CLI boundary. §0214 MO1 below crystallizes this lesson.
+  - **§-renumbering reflow (+1 shift post-§0214 diagnostic insertion):**
+    - **§0214** = diagnostic-only (NEW; this PR)
+    - **§0215** = remediation: Surface A fix (JSON field name) + Surface B fix (printf newline) + re-run shakedown to produce clean-chain formations (NEW; binding next)
+    - **§0216** = candidacy evaluation (Layer B + chain morphology + demote evaluation) — was §0214 in §0213's reflow. **MUST filter via `len(source_event_hashes) > 0`** per user-cravado decision 3; substrate carries 20 formations post-§0215 (10 broken-chain historical + 10 clean-chain); §0216 evaluation operates exclusively over clean-chain. Audit trail: §0214 + §0215 entries document why broken-chain excluded.
+    - §0217 = per-column `OptionalFieldsCoercedToZero` resolution (was §0215 in §0213)
+    - §0218 = `endpoint_co_visit_v1` AttributionView consumption (was §0216 in §0213)
+    - §0219 = `temporal_endpoint_cohort_v1` bucket calibration (was §0217 in §0213; §0210 enactment)
+    - §0220 = DeriveAll O(n²) substrate-walk-with-append mitigation (was §0218 in §0213; named-but-non-binding maintained)
+    - §0221+ = sub-stat semantic cravamento (was §0219+ in §0213; named-but-non-binding)
+    - §0222+ = Y architectural refactor (was §0220+ in §0213; named-but-non-binding)
+    - §0223+ = BC / CH / CR bridge parity (was §0221+ in §0213; named-but-non-binding). **Prospective phrasing per user-cravado refinement 3:** "Bridge parity applies template §0215 fix + §0214 MO1 wire-contract testing discipline. New envelope shapes from F2/F3 signatures pass through the same testing rigor; bundle wire-shape fixtures derived from upstream CLI stdout in the same PR as the bridge."
+    - **§0224+** = NEW; §0140 paired-dimension scope extension to include source_event_hashes presence (named-but-non-binding; pré-condição per Finding 6)
+    - **§0225+** = NEW; three-tier hook defense infrastructure remediation (named-but-non-binding; pré-condição per Finding 5; severity binary: 6/6 PASS retroactive audit → stays named-but-non-binding)
+  - **§0213 entry NOT amended** — historical artifact preserved per §0211 → §0212 → §0213 → §0214 reflow precedent. Each downstream-scope subdivision shifts numbering with explicit reflow note in subdividing entry.
+
+  **Falsifiability:** every cited number is verifiable via `jq` against `runs/20260608T045037Z/manifest.json` + per-candidate signature stdouts + per-promotion `.duration_ns` files. Cross-CLI field name finding verifiable via `grep -nE 'source_event_hashes_hex' services/ingestion/cmd/find-*/main.go`. Hook audit outcome reproducible via `git worktree add /tmp/audit <SHA> && cd /tmp/audit && git reset --soft <SHA>^ && bash .claude/hooks/pre-commit-doc-check.sh` for any of the six §-commits.
+
+- **Consequences:**
+
+  - 1 file modified (`docs/charter/decision-log.md`). Zero code change.
+  - **§0215 path cravado:** Surface A + B fix bundled by shape; cross-CLI universal template (`source_event_hashes_hex` JSON field name is convention for all 5 find-* CLIs); re-run shakedown produces clean-chain formations alongside the 10 broken-chain historical records preserved per §2.1.
+  - **§0216 candidacy evaluation gated** — operates ONLY over clean-chain formations via `len(source_event_hashes) > 0` filter; broken-chain preserved per §2.1 immutability but excluded per §2.3 + §0143 D2 substrate-grounded criterion.
+  - **Hook infrastructure remediation status confirmed via retroactive audit:** 6/6 PASS; §0225+ stays named-but-non-binding; CLAUDE.md §2 enforcement-boundary claim flagged as structurally aspirational (current empirical reality: CI tier is operational source of truth, not git tier).
+
+  **Carry-forwards (consolidated post-renumbering):**
+
+  - **§0215 (NEW, binding; depends on §0214)** — Surface A (JSON field name) + Surface B (printf newline) fix bundled by shape + re-run shakedown. Pré-condição empírica: §0214 entry lands.
+  - **§0216 (renumbered; binding; depends on §0215)** — candidacy evaluation under clean-chain filter; first non-trivial demotion attempt of §0143 comprovação window.
+  - **§0217 / §0218 / §0219** — renumbered binding paralelos.
+  - **§0220** — renumbered DeriveAll named-but-non-binding maintained (Finding 4 confirms).
+  - **§0221+ / §0222+ / §0223+** — renumbered named-but-non-binding; §0223+ prospective phrasing per refinement 3.
+  - **§0224+ (NEW, named-but-non-binding)** — §0140 paired-dimension scope extension. Pré-condição empírica: §0215 + §0216 reveal enforcement gap recurs in other lifecycle entries.
+  - **§0225+ (NEW, named-but-non-binding)** — three-tier hook defense infrastructure remediation. Pré-condição empírica: future audit reveals a drift leaked through OR Claude Code Stop hook tier confirmed fully broken next session.
+
+  **Methodological observation 1 — Wire-contract integration testing pattern: bridge tests MUST use fixtures derived from upstream CLI stdout (real wire shape), not from internal struct (in-memory shape).**
+
+  §0208 MO1 named "integration-test masking" at Cat II / operational-closure tier. §0213 MO1 extended to lifecycle materialization tier (30+ §-entries with helper-bypass). §0214 evidence shows the SAME masking surfaces AT EVERY WIRE-CONTRACT CROSSING — bridge tests used in-memory `signatures.FormationCandidate` struct (correct field name `SourceHashes`); upstream CLI envelope JSON-encodes the same bytes under a different field name (`source_event_hashes_hex`); silent decode-mismatch surfaces ONLY when bridge consumes real upstream stdout. **Pattern crystallized: bridge tests MUST use fixtures derived from upstream CLI stdout (real wire shape), not from internal struct (in-memory shape). Integration-test masking surfaces at every layer where wire-contract crosses package/process boundary.** Applies prospectively to F2 / F3 frente bridges per §0223+ inheritance; required testing rigor: bundle wire-shape fixtures derived from upstream CLI stdout in the same PR as the bridge. Self-application: **§0213 introduced this masking within ONE PR cycle of §0213 MO1's crystallization** — pattern is structurally inseparable from operator-tier work; the discipline is now precedented at §0214 for all future bridge lifts.
+
+  **Methodological observation 2 — Remediation completeness as candidate sixth layer (named-but-non-binding).**
+
+  §0211 three-layer (structural → operational → observability) + §0212 five-layer (extended with diagnostic + remediation) implicitly assumed each layer materialization is complete on first occurrence. §0214 evidence shows §0213 first remediation execution produced BOTH intended outcome (252 candidates → 10 formations + 10 promotions; comprovação-path operationally accessible) AND unintended outcomes (broken §2.3 chain on all 10 formations; promote_durations array malformed). **"Remediation completeness" emerges as candidate sixth layer**: validation that remediation achieved what diagnostic prescribed, not just that it executed without error. Pattern: structural → operational → observability → diagnostic → remediation → **remediation_completeness** (validation against diagnostic spec). Pré-condição empírica for binding promotion (per user-cravado refinement 2; opened): SECOND empirical instance of intended-vs-actual gap emerges, in §0216 candidacy evaluation OR F2/F3 lifecycle materialization. §0213 + EITHER of the two = pattern materialized in two instances = candidate to binding. The pre-condition is more open to evidence than F2/F3-exclusive framing; §0216 evidence can promote if gap recurs at the candidacy-evaluation tier.
+
+- **Supersession:** none in the structural sense. §0213 carry-forwards renumbered per the §-renumbering reflow above; named-but-non-binding shape preserved structurally; §0213 entry NOT amended (historical artifact preserved per §0211 → §0212 → §0213 → §0214 reflow precedent). The 10 broken-chain formations + 10 broken-chain promotions committed at §0213 first-real-run NOT superseded (§2.1 immutability); they remain in substrate as historical record of the §0213 first remediation execution. §0216 candidacy evaluation operates over the clean-chain formations produced post-§0215; the audit trail (§0214 + §0215 entries) documents why the broken-chain set is excluded from evaluation despite remaining committed.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
