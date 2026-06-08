@@ -10248,6 +10248,128 @@ The §0143 mandatory instrumentation per `EvaluationStats` (ObservationsScanned 
 
 ---
 
+## `0218` — §0217 Surface A operational closure: one-line jq filter fix (`.[] |` removed) in orchestrator demote-formations shell pre-filter; standalone surgical scope per §0217 user-cravado decision 5; first prospective application of §0217 MO2 operational-mechanism candidate (b) source-grounded predictions
+
+- **Status:** accepted
+- **Date:** 2026-06-08
+- **Context:** §0217 (PR #240, commit `b57d596`) registered Surface A as Finding 1 — orchestrator shell pre-filter `.[] |` applied to single-object inputs in `cmd/form-automation-group-from-candidate/X.stdout` files emitted by the `promote-formations` step caused jq to iterate the object's VALUES (first value being a string → subsequent `.formation_event_hash` access fails with `Cannot index string with string "formation_event_hash"`). The §0217 first-real-run (RUN `20260608T154112Z`) surfaced this empirically: 0 clean-chain promotions extracted by the pre-filter → 0 demotions invoked → Layer B prediction not empirically tested in that run. §0218 lands the one-line orchestrator shell fix per user-cravado decision 5 (standalone surgical scope; NOT bundled with substrate-state reconciliation which lives at §0217 narrative tier).
+
+  §0218 is the **first prospective application of the six-layer closure model formalized as binding at §0217** (§0214 MO2 binding promotion enacted). The remediation step lands here; the remediation_completeness validation arrives via the post-merge operator re-run that produces the empirical Layer B verdicts §0217's hypothesis (b) all-NOT-fired prediction was registered against but could not be tested. The §0219 NBN slot is reserved conditionally (per user-cravado decision 4) for a follow-on diagnostic if the post-merge re-run surfaces unintended outcomes.
+
+- **Decision:** land two file changes per §0217 user-cravado decision 5 (standalone surgical fix; one-line jq correction + inline forbid-regression comment + decision-log entry):
+
+  ### 1. Orchestrator shell pre-filter fix
+
+  **File:** `infra/docker/run-sub-benchmark-1.sh` (lines 255-272 post-fix; the `mapfile -t CLEAN_PROMOTION_HASHES` block in the demote-formations Step 8).
+
+  **Diff (1 line removed + ~11 lines inline comment added):**
+
+  - Pre-§0218: jq filter starts with `.[] |` which iterates the input object's VALUES.
+  - Post-§0218: `.[] |` removed; default jq per-file iteration processes each input as a single object directly.
+
+  **Inline forbid-regression comment** (per §0211/§0215 precedent + §0217 audit-trail discipline; documents the §0217 postmortem with explicit DO-NOT-REGRESS warning):
+
+  ```bash
+  # Per §0217 Surface A + §0218 fix: each promote-formations/X.stdout
+  # is a SINGLE OBJECT (not array). Pre-§0218 jq filter included
+  # `.[] |` at the start which iterated the object's VALUES — first
+  # value being a string caused the subsequent `.formation_event_hash`
+  # access to fail with `Cannot index string with string
+  # "formation_event_hash"`. Default jq per-file iteration processes
+  # each input as one object; the `.[] |` was incorrect. §0217 first-
+  # run RUN 20260608T154112Z surfaced this empirically: 0 clean-chain
+  # promotions extracted → 0 demotions invoked → Layer B prediction
+  # NOT empirically tested in that run.
+  # DO NOT re-introduce `.[] |` to this filter — see §0217 Finding 1 +
+  # §0218 fix entry for the postmortem.
+  ```
+
+  Comment length justified by §0205 tier-3 audibility commitment: the §0217 postmortem context lives at the orchestrator-line where regression would re-introduce the bug; auditor reading the line sees the §-entry references without context-switching to the decision-log.
+
+  ### 2. decision-log §0218 entry — this entry
+
+  **File:** `docs/charter/decision-log.md`. Documents the fix; cites §0217 Finding 1 origin; registers source-grounded empirical predictions per §0217 MO2 operational-mechanism candidate (b) (first prospective application); reserves §0219 NBN conditional slot for re-run follow-on diagnostic if unintended outcomes surface.
+
+- **Constitutional review:**
+
+  **Tier 1 (Charter)** — zero impact. No invariant touched. §2.1 / §2.3 / §2.4 / §2.5 / §3 N1 / §4 unchanged. The shell-fix is an orchestrator-layer correction; substrate semantics unaffected.
+
+  **Tier 2 (Ontology / schemas / canonical)** — zero impact. No proto / canonical-form / operational-definition change.
+
+  **Tier 3 (services / infra)** — orchestrator + decision-log only. No source code changes; no test additions (bash shell layer; no Go test framework applies; the §0214 MO1 wire-contract testing pattern is scope-bounded at §0216 MO2 to structured-payload boundaries, which the demote-formations shell pre-filter does not cross — it consumes stdout files as objects, not as structured envelopes via cross-process pipe).
+
+  **Anchor verification per §0142 deliberate-inventory:**
+
+  - **§0011** — Layer A cadence semantic. Status: unchanged.
+  - **§0135 + §0138** — Layer B formula + inception defaults. Status: unchanged.
+  - **§0142 MO3** — deliberate-inventory sweep. Status: applied; this anchor list is the sweep.
+  - **§0143 + §0143 D2** — Sub-benchmark 1 + audit-trail discipline. Status: §0218 unblocks the empirical Layer B verdict materialization that §0216 + §0217 set up; §0143 D2 clean-chain-only-for-comprovação claim unchanged.
+  - **§0184 / §0186 MO2** — bundle-by-shape. Status: applied — §0218 is surgical standalone per user-cravado decision 5 at §0217 (Surface A fix only; substrate-state reconciliation lives at §0217 narrative tier; not bundled here).
+  - **§0204 / §0205** — single-responsibility CLI + tier-3 audibility. Status: preserved; inline forbid-regression comment carries §0217 postmortem context at the orchestrator line per §0205 audibility commitment.
+  - **§0207-§0216** — historical §-entry anchors. Status: unchanged.
+  - **§0217 + §0217 MO1 + §0217 MO2** — multi-surface diagnostic + six-layer closure binding + deliberation discipline operational mechanism. Status: **§0218 IS the first prospective application of §0217's binding outcomes** — §0214 MO2 binding (six-layer closure) materializes here at the remediation step; §0217 MO2 operational-mechanism candidate (b) applies via source-grounded predictions below.
+  - **§0218 (this entry)** — Surface A one-line shell fix + standalone surgical scope.
+  - **§0219 (RESERVED NBN conditional per user-cravado decision 4)** — post-merge re-run follow-on diagnostic IF unintended outcomes surface. Slot pre-named at §0218 to avoid §-renumbering reflow if branch (b) or (c) outcomes emerge from the re-run; if branch (a) outcomes (clean validation), §0219 stays empty and the next binding scope uses the number.
+  - **§0220-§0226+** — renumbered §0216 carry-forwards UNCHANGED.
+  - **§0227+** — multi-run comprovação methodology NBN. Status: **inline carry-forward observation registered**: §0217 reframed §0228+ pré-condição empírica but did NOT reframe §0227+; both share the same `chains-fortes ≥ 10` structural-unreachability issue in single-run context per §0217 Finding 2. §0218 does NOT reframe §0227+ in this entry per user-cravado decision 5 (standalone surgical scope; reframing without empirical ground violates §0217 MO2 anti-pattern). The §0227+ reframe is deferred to post-merge §0218 re-run + potential §0219 follow-on entry with empirical evidence to ground the new pré-condição. Recorded here as carry-forward observation; not enacted.
+  - **§0228+** — F3 calibration entry NBN with three-clause pré-condição (per §0217 reframe). Status: unchanged.
+
+  **Empirical predictions registered with source-grounded markers** (per §0217 MO2 operational-mechanism candidate (b) **first prospective application**; each prediction cited with file:line source location verifying the mechanism was source-inspected pre-registration):
+
+  | Prediction | Mechanism (source-cited) | Falsification trigger |
+  |---|---|---|
+  | Layer B fires `0/10` clean-chain | `services/ingestion/internal/hypothesis/layerb/layerb.go:9-10 + 244-269`: filter_match_count=0 → FreshnessUndefined=true; SaturationFired=false (0/N < 1/2); Fired=false. Deterministic under current substrate state (no subsequent events reference these formations in closure_hashes). | Any `layer_b.fired: true` in `demotions_report[]` falsifies; specific mechanism violation (FreshnessUndefined=false OR SaturationFired=true) falsifies mechanism understanding |
+  | `chains_fortes_count: 0` + `chains_fracas_count: 10` | `services/ingestion/internal/morphology/morphology.go:14-18 + 228`: chain_breadth_at_root = `len(directInfluencedBy)`; bridge sets `direct_influenced_by: nil` per §0157 helper precedent + §0213 inception-phase pattern → breadth=0 → fracas by §0143 definition | Any non-zero `chains_fortes_count` in morphology_report.stats |
+  | `cadence_satisfied: false` on all 10 demotions | `services/ingestion/internal/hypothesis/automation_group_demotion.go:118-124`: elapsed_seconds = (DemotedAt - promotion.PromotedAt)/1e9 ≈ 0 (wall-clock immediate demote); cadence_satisfied = elapsed >= 86400 → false | Any `cadence_satisfied: true` in demotions_report[] |
+  | Demotions commit successfully (10/10; `already_demoted: false`) | `services/ingestion/internal/hypothesis/demotion.go:103-105` per §0011 Layer A candidacy-not-barrier: demotion commits regardless of Layer A; substrate INSERT OR IGNORE per §0027 AP6 for first-time commit | Any `ErrTargetNotFound` or `ErrTargetWrongType` exit code; any commit failure |
+  | `verdict.demotion_fired: false` (aggregate over clean-chain) | Per §0216 jq aggregate `[.[] | .layer_b.fired // false] | any // false`; with all 10 layer_b.fired = false → aggregate = false | Any `demotion_fired: true` in manifest verdict |
+
+  All five predictions ARE source-grounded (each cites file:line). No `PREDICTION-NOT-INSPECTED` markers per §0217 MO2 candidate (b) needed.
+
+  **Falsifiability (reproducible mechanism verification):**
+
+  ```bash
+  # Reproduce §0217 Surface A bug + §0218 fix mechanically:
+  echo '{"formation_event_hash":"abc","promotion_event_hash":"xyz","cadence_seconds":86400,"already_promoted":false,"layer_b_enabled":false}' > /tmp/promote.stdout
+  echo '{"formations_committed":[{"formation_event_hash":"abc","source_hashes_count":5}]}' > /tmp/form.stdout
+
+  # Pre-§0218 (with .[] |): fails with "Cannot index string with string 'formation_event_hash'"
+  jq -r --slurpfile f /tmp/form.stdout '.[] | select(.formation_event_hash as $fh | ($f[0].formations_committed[] | select(.formation_event_hash == $fh and .source_hashes_count > 0)) | any) | .promotion_event_hash' /tmp/promote.stdout
+  # → jq error
+
+  # Post-§0218 (without .[] |): emits the matched promotion_event_hash
+  jq -r --slurpfile f /tmp/form.stdout 'select(.formation_event_hash as $fh | ($f[0].formations_committed[] | select(.formation_event_hash == $fh and .source_hashes_count > 0)) | any) | .promotion_event_hash' /tmp/promote.stdout
+  # → xyz
+  ```
+
+  Verified mechanically pre-commit; auditor can copy-paste + reproduce.
+
+- **Consequences:**
+
+  - 2 files modified (`infra/docker/run-sub-benchmark-1.sh` one-line fix + ~11-line inline comment + `docs/charter/decision-log.md` §0218 entry). Zero code changes outside the orchestrator shell + decision-log.
+  - **§0217 Surface A operationally closed.** Post-merge operator re-run will produce empirical Layer B verdicts (5 predictions registered above; each falsifiable per §4 mechanism).
+  - **§0214 MO2 binding (six-layer closure model) first prospective application** — the remediation step lands at §0218; remediation_completeness validation arrives via post-merge re-run. If predictions confirmed + no new surfaces: §0218 closure validated; §0227+ reframe gains empirical ground for follow-on entry. If unintended outcomes emerge: §0219 NBN conditional slot opens as diagnostic entry.
+  - **§0217 MO2 operational-mechanism candidate (b) first prospective application** — five predictions registered with source-grounded file:line citations. **INLINE note (NOT formal MO promotion):** per §0217 MO2 pré-condição empírica, MO promotion to binding requires "applied prospectively without recurrence over N=2 subsequent §-entries". §0218 is N=1 (first prospective application). Promoting to formal MO at §0218 would violate the pré-condição. The discipline is recorded as inline application; formal MO promotion is deferred until N=2 no-recurrence threshold is reached per the §0217 MO2 binding rule.
+
+  **Carry-forwards (consolidated):**
+
+  - **§0219 (RESERVED NBN conditional per user-cravado decision 4)** — post-merge re-run follow-on diagnostic IF unintended outcomes surface. Pré-condição empírica: §0218 post-merge re-run produces empirical Layer B verdicts AND either (b) Layer B fires unexpectedly (falsifying the structural prediction; mechanism investigation required) OR (c) new §0022 surface emerges (e.g., demote-automation-group output shape differs from expected; step_durations malformed; substrate behavior surprises). Branch (a) clean validation = §0219 stays empty; next binding scope uses the number.
+  - **§0227+ (renumbered; reframe DEFERRED to post-merge evidence)** — multi-run comprovação methodology NBN. §0217 reframed §0228+ but did NOT reframe §0227+; both share the same `chains-fortes ≥ 10` structural-unreachability issue. §0218 does NOT reframe §0227+ in this entry (standalone surgical scope per user-cravado decision 5 + reframing-without-empirical-ground is §0217 MO2 anti-pattern). §0227+ reframe deferred to post-merge §0218 re-run + potential §0219 follow-on entry where empirical ground will be available.
+  - **§0220 / §0221+ / §0222+ / §0223+ / §0224+ / §0225+ / §0226+** — renumbered §0216 + §0217 carry-forwards UNCHANGED.
+  - **§0228+** — F3 calibration NBN with three-clause pré-condição per §0217 reframe. UNCHANGED.
+
+  **INLINE note — first prospective application of §0217 MO2 operational-mechanism candidate (b); MO formal promotion DEFERRED per §0217 MO2 own pré-condição empírica.**
+
+  §0217 MO2 introduced three operational-mechanism candidates (a)/(b)/(c) for the deliberation-discipline-requires-operational-mechanism observation. §0218 applies candidate (b) — explicit source-grounded marker on predictions with file:line citation — to the five empirical predictions registered in the Empirical Predictions section above. This is the **first prospective application** of the candidate.
+
+  Per §0217 MO2 own pré-condição empírica for binding promotion: "discipline applied prospectively without recurrence over N=2 subsequent §-entries". §0218 is N=1; promoting §0217 MO2 to formal binding MO at §0218 would violate the pré-condição §0217 MO2 itself established. **The application is recorded as inline note; formal MO promotion is deferred until the N=2 no-recurrence threshold is reached.** Discipline consistent with the rule §0217 established; the §0217 MO2's own pré-condição empírica governs §0218's treatment of it.
+
+  This is also the first material instance of **a methodological discipline regulating its own promotion timing via its own pré-condição empírica** — a recursive-discipline property worth registering. Future MOs that introduce operational-mechanism candidates with pré-condição empírica for binding promotion will follow this precedent: first prospective application stays inline; binding promotion only after pré-condição empírica is empirically met.
+
+- **Supersession:** none in the structural sense. §0217 Surface A Finding 1 operationally closed by §0218 (the surface itself remains documented at §0217 as historical artifact + diagnosis; §0218 is the remediation). §0214 MO2 (now binding via §0217) NOT amended by §0218 application; §0218 is the first prospective application enacting the binding scope. §0217 MO2 (operational-mechanism candidates) NOT amended; §0218 applies candidate (b) inline; formal MO promotion deferred per the MO's own pré-condição empírica (recursive-discipline property registered above).
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
