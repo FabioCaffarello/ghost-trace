@@ -10549,6 +10549,101 @@ The §0143 mandatory instrumentation per `EvaluationStats` (ObservationsScanned 
 
 ---
 
+## `0220` — Minimum-viable Layer B wiring + lazy-populated parameter-propagation contract; cadence cravado: §0228+ multi-run methodology is next priority, not exhaustive audit
+
+- **Status:** accepted
+- **Date:** 2026-06-08
+- **Context:** §0219 Finding 1 named §0220 binding scope as "pattern-level audit + `-layer-b` wiring + parameter-propagation contract artifact (durable)". User-cravado cadence decision restricts §0220 to **minimum-viable scope**: fix `-layer-b` at orchestrator Step 6 + revise the §0213 stale scope comment + establish a **lazy-populated** parameter-propagation contract artifact (not exhaustive audit). Rationale: §0143 D2 substrate-grounded comprovação criterion (first non-trivial demotion) is structurally unreachable until §0228+ multi-run methodology executes; we are ~6-7 weeks into the 26-week window; full audit of the ~10 unstudied CLIs is speculative optimization (predicts that every option matters before empirical evidence — anti-pattern §0143 D2 observation-precedes-refactor applied to audit-tier). Meta:substance ratio at §0219 (179 lines for 1 empirical surface) signaled the inflation. §0220 compressed accordingly.
+
+- **Decision:** land three file changes per §0184 / §0186 MO2 bundle-by-shape (shared shape: minimum-viable §0219 remediation enabling §0228+ multi-run methodology as next priority):
+
+  ### 1. Orchestrator `-layer-b` wiring + stale-scope-boundary revision
+
+  **File:** `infra/docker/run-sub-benchmark-1.sh` Step 6 (lines 176-219 post-§0220).
+
+  Two changes at the same orchestrator section:
+
+  - **Add `-layer-b` to `promote-automation-group` invocation.** Per §0219 Finding 1 root-cause source citation: `cmd/promote-automation-group/main.go:59` option declaration; populates `promotion.layer_b_parameters` with §0138 inception-phase defaults (T_B=K_C=1/2; N_window=1000; N_A=cadence_seconds); `cmd/demote-automation-group/main.go` reads source promotion → `hypothesis.DemoteAutomationGroup` → `layerb.Evaluate`; `layerb.go:132` `opts.Params == nil` guard now PASSES (params populated); Layer B Evaluate runs full body lines 127-271.
+  - **Revise §0213 stale scope comment (lines 178-183 pre-§0220).** The verbatim §0213 comment was: `"Per §0213: ... Layer B parameters are NOT populated at promotion time in this scope (§0213 is candidacy materialization; Layer B candidacy gating + chain morphology + demote evaluation are §0214 candidacy-evaluation scope per the user-cravado split)"`. Per §0219 Finding 1 stale-scope-boundary subclass: this comment was correct at §0213 scope but became stale when §0216 expanded the orchestrator step set to include demote-formations (which depends on the parameters §0213 deferred). §0220 replaces the stale comment with a §0213 + §0216 + §0220 trajectory narrative + cross-reference to the parameter-propagation contract.
+
+  Plus inline note documenting the **stale-scope-boundary maintenance discipline** (per user-cravado decision 5 inline-note-not-MO): when an orchestrator step is added or modified, all `Per §NNNN:` scope comments within the script must be re-validated against the current step set. Comment that was correct at original entry can become stale when subsequent entry expands the step set in a way that depends on what the comment defers. Recorded as inline note at the comment site, NOT as formal MO (maintenance discipline ≠ epistemic pattern).
+
+  ### 2. Parameter-propagation contract artifact (NEW; lazy-populated)
+
+  **File:** `docs/adapters/parameter-propagation-contract.md` (NEW; sibling to `cic-ids-mapping.md` per §0145 architecture-tier docs precedent).
+
+  Carries the parameter-propagation contract table. **Lazy-populated** per §0220 MO (below): rows added when an opt-in option is empirically surfaced as relevant to downstream evaluation; NOT exhaustive catalog of every option of every CLI.
+
+  Initial rows (empirically-known only):
+  - `promote-automation-group -layer-b` — **REMEDIATED** post-§0220 (was stale-scope-boundary per §0219 Finding 1)
+  - `find-coordination-ring-candidates -with-attribution` — **STALE-FROM-PRIOR-SCOPE** (per §0214 Finding 4 ratification of hypothesis (a); §0222+ binding scope pending; NOT remediated at §0220)
+  - `ingest-cic-ids -strict` — INTENTIONAL (N/A; no downstream dependency)
+  - `derive-actor-attribution -definition-version` — INTENTIONAL (default matches §0168)
+  - `find-automation-group-candidates-network -with-attribution` — INTENTIONAL (orchestrator wires per §0209 + §0169)
+  - `find-automation-group-candidates-network -signature` — INTENTIONAL (orchestrator wires `flow-features` per §0169)
+
+  ~10 other CLIs invoked in the orchestrator are NOT in the contract table; they enter only when empirical pressure surfaces a relevant option (per lazy-population MO below + §0143 D2 observation-precedes-refactor discipline).
+
+  ### 3. decision-log §0220 entry — this entry
+
+  **File:** `docs/charter/decision-log.md`. Documents the minimum-viable scope + cadence rationale + the one MO (lazy-population-over-exhaustive-audit). Compressed shape per user-cravado decision (meta:substance ratio control).
+
+- **Constitutional review:**
+
+  **Tier 1 (Charter)** — zero impact. §0011 / §0135 / §0138 / §0140 / §2.3 / §2.4 / §2.5 / §2.6 / §3 / §4 unchanged.
+
+  **Tier 2 (Ontology / schemas / canonical)** — zero impact. No proto / canonical-form / operational-definition change.
+
+  **Tier 3 (services / infra)** — orchestrator one-option-added + scope-comment-revised + NEW architecture-tier doc (`docs/adapters/parameter-propagation-contract.md`) + decision-log. No Go source changes.
+
+  **Anchor verification per §0142 deliberate-inventory:**
+
+  - §0011 / §0135 / §0138 — unchanged
+  - §0142 MO3 — deliberate-inventory sweep applied
+  - §0143 D2 — substrate-grounded comprovação criterion + observation-precedes-refactor discipline; §0220 applies the latter to audit-tier (lazy-population over exhaustive-audit)
+  - §0145 — adapters/cic-ids-mapping precedent at architecture-tier sibling docs; §0220 establishes `docs/adapters/parameter-propagation-contract.md` as new sibling
+  - §0157 — test helper precedent unchanged
+  - §0184 / §0186 MO2 — bundle-by-shape applied (3 file changes share minimum-viable shape)
+  - §0204 / §0205 — single-responsibility CLI + tier-3 audibility preserved; contract artifact extends audibility to cross-CLI parameter propagation
+  - §0207-§0218 — historical anchors unchanged
+  - §0213 — scope comment at orchestrator lines 178-183 REVISED per §0219 Finding 1 stale-scope-boundary classification; §0213 entry itself NOT amended (historical artifact preserved per established discipline)
+  - §0214 + §0214 Finding 4 — `find-coordination-ring-candidates -with-attribution` gap remains §0222+ pending (renumbered through §0214→§0217→§0219 reflows); §0220 contract marks as STALE-FROM-PRIOR-SCOPE WITHOUT bundling remediation per user-cravado cadence decision (lazy on remediation; coordination_ring may not even be exercised in §0228+ multi-run path immediately)
+  - §0217 + §0217 MO2 BINDING (a)+(b) — full evaluation-path source inspection applied to §0220 Layer B wiring (call-site → option → field-write → field-read → guard → evaluation; all 5 cited at Decision 1 + contract table)
+  - §0219 + Finding 1 stale-scope-boundary subclass + Finding 4 broader reframe + MO addendum (six-layer closure first empirical validation) — §0220 enacts the §0219 remediation prescription
+  - §0220 (this entry) — minimum-viable wiring + contract artifact
+  - §0221-§0227+ — renumbered §0219 carry-forwards UNCHANGED
+  - §0228+ — multi-run methodology NBN with three-component scope (i)+(ii)+(iii) per §0219 Finding 4 broader reframe; **NEXT PRIORITY per user-cravado cadence**. The §0220 minimum-viable scope is the structural enabler for §0228+ execution: with `-layer-b` wired + contract artifact established, the parameter-propagation discipline foundation for multi-run methodology is in place
+  - §0229+ / §0230+ — renumbered NBN UNCHANGED
+
+  **Falsifiability:** the `-layer-b` wiring is verifiable mechanically — post-merge re-run produces `layer_b.evaluated: true` × 10 in `demotions_report` (was `evaluated: false` × 10 at §0219 RUN_ID `20260608T200434Z`). Contract artifact reproducibility: every row's source citations (call-site, option declaration, field-read, guard) verifiable via grep + cat on cited file:line.
+
+- **Consequences:**
+
+  - 3 files modified: orchestrator (Step 6 revision) + NEW contract artifact + decision-log §0220 entry. Zero Go source changes.
+  - **§0219 Finding 1 operationally closed** (stale-scope-boundary subclass remediated; `-layer-b` wired; contract artifact established as forward-looking discipline).
+  - **§0228+ multi-run methodology UNBLOCKED** as next priority. With `-layer-b` wired and Layer B evaluable at demotion-time, the multi-run methodology can begin accumulating substrate state across runs producing influence chains that reference prior formations; first non-trivial Layer B firing within window is the §0228+ empirical trigger (per §0219 Finding 4 three-component scope).
+  - **Contract artifact established as durable audit-tier discipline** — lazy-populated; rows added under empirical pressure; sibling to other architecture-tier docs per §0145 precedent.
+  - **Intermediate carry-forwards (§0221 per-column coercion / §0222 endpoint_co_visit wire / §0223 bucket calibration) FROZEN as non-blocking paralelos per user-cravado cadence decision.** They open only if §0228+ multi-run methodology empirically requires their resolution. Per §0143 D2: observation precedes refactor; speculative remediation of intermediate binding §-entries is the same anti-pattern §0220 rejects at audit-tier.
+
+  **Carry-forwards (consolidated):**
+
+  - **§0221 to §0223** — binding paralelos FROZEN per user-cravado cadence; open only if §0228+ multi-run methodology empirically requires
+  - **§0224 to §0227+** — NBN UNCHANGED
+  - **§0228+** — multi-run methodology NBN; **NEXT PRIORITY per cadence**; pré-condição empírica per §0219 Finding 4 broader reframe (three-component scope (i)+(ii)+(iii)); §0220 satisfies component (i) parameter-propagation discipline for the `-layer-b` instance; multi-run execution per §0228+ plan exercises (ii) substrate accumulation + (iii) Layer B firing
+  - **§0229+ to §0230+** — NBN UNCHANGED
+
+  **Methodological observation — Lazy-population over exhaustive audit; contract grows under empirical pressure.**
+
+  Per user-cravado cadence decision: parameter-propagation contract table is **lazy-populated**, not exhaustive. Rationale: full audit of every CLI's every opt-in option at §0220 would predict that each option matters before empirical evidence — the same §0143 D2 anti-pattern (observation-precedes-refactor) applied to audit-tier. The §0219 Finding 1 + §0214 Finding 4 instances surfaced empirically (one through §0218 re-run; other through §0212 first-real-run); both are documented. Speculative cataloging of the remaining ~10 CLIs' options without empirical surface would inflate meta:substance ratio (already inverted at §0219: 179 entry lines for 1 empirical surface) without proportional epistemic yield.
+
+  **Pattern: contract artifacts that document discipline-relevant state grow under empirical pressure, not preventive enumeration.** When a §-entry surfaces an opt-in option whose wiring matters, the entry adds a row to the contract. When scope-expansion identifies a stale-scope-boundary, the entry adds a row. When multi-run methodology per §0228+ exercises CLIs not currently in the contract, the multi-run §-entries add rows under their own pressure. The contract is a forward-only record; rows preserve history (including REMEDIATED status) for audit-trail completeness.
+
+  **Generalizes prospectively:** Frente 2 (synthetic) + Frente 3 (honeypot) bridge entries per §0227+ each add their own rows when those bridges land. The contract serves as cross-CLI architectural documentation that grows incrementally per established §0145 adapters/ precedent shape.
+
+- **Supersession:** none in the structural sense. §0213 entry + §0213 scope comment at orchestrator NOT amended at §0213-entry-tier (historical artifact preserved per established discipline); the comment at the orchestrator source IS revised at §0220 per §0219 Finding 1 stale-scope-boundary remediation (forward-only correction at the orchestrator code-tier; §0213 narrative tier unchanged). §0219 + §0219 entries preserved as historical artifacts. §0214 Finding 4 (`find-coordination-ring-candidates -with-attribution` gap) NOT remediated at §0220 — registered as STALE-FROM-PRIOR-SCOPE in contract; §0222+ binding remediation pending per established carry-forward shape.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
