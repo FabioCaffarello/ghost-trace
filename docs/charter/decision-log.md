@@ -9779,6 +9779,85 @@ The §0143 mandatory instrumentation per `EvaluationStats` (ObservationsScanned 
 
 ---
 
+## `0214.5` — Editorial patch: CLAUDE.md §5 item 2 enforcement-boundary prose amended to reflect empirical reality flagged at §0214 Finding 5; decimal-suffix numbering convention established for editorial patches
+
+- **Status:** accepted
+- **Date:** 2026-06-08
+- **Type:** editorial patch (operational documentation; no scope change; no constitutional invariant amended)
+- **Context:** §0214 Finding 5 empirically established that the three-tier hook defense documented at CLAUDE.md §5 item 2 ("Hook architecture is three-tier, single script") has degraded: git pre-commit tier is NOT installed (`.git/hooks/pre-commit` absent; `core.hooksPath` unset); Claude Code Stop hook tier is FRAGILE (relative-path; cwd-dependent); CI tier is the operational source of truth today. The CLAUDE.md prose pre-§0214.5 described the intended state as if factual ("If these three diverge, the git pre-commit hook is the source of truth — it is the actual enforcement boundary"), which an auditor reading CLAUDE.md as of §0214 + §0214.5 would interpret as a current claim that empirical investigation contradicts. **Discipline of "documentation describes empirical reality, not aspiration" is tier-3 honesty core**: when documentation describes infrastructure that has degraded out of described state, the documentation is FALSE until corrected. §0214.5 patches the documentation in the same session that detected the drift; aspirational prose does not persist as if factual.
+
+  §0214.5 is the **first decimal-suffix decision-log entry** of the Ghost Trace project. Per the numbering convention established here (see Decision below): decimal suffixes indicate editorial patches between integer entries and do NOT trigger §-renumbering reflow of downstream carry-forwards. Full integer §-numbers remain reserved for binding scope changes that introduce new structural commitments.
+
+- **Decision:** patch CLAUDE.md `§5 item 2` ("Hook architecture is three-tier, single script") to reflect the empirical state of the three-tier hook defense as of §0214 retroactive audit (6/6 PASS). Establish decimal-suffix decision-log numbering convention.
+
+  ### Patch scope
+
+  **Single file modified:** `.claude/CLAUDE.md`, §5 item 2 (lines 86-90 pre-patch).
+
+  **Substantive prose changes:**
+
+  1. Per-tier descriptions amended: "Git pre-commit hook (enforcement, via `core.hooksPath`). Defense-of-record; protects against any committer regardless of tooling" → "Git pre-commit hook (intended enforcement, via `core.hooksPath`). Defense-of-record; intended to protect against any committer regardless of tooling". Parallel "intended to surface" softening on Claude Code event hook line. The CI workflow line unchanged (CI tier functional).
+
+  2. New "Intended source of truth when these three diverge: the git pre-commit hook" paragraph preserves the architectural commitment.
+
+  3. New "Current empirical state (per [`decision-log.md` §0214](../docs/charter/decision-log.md) Finding 5 + audit outcome):" block enumerates the three tiers' current state with empirical evidence: git tier NOT installed; Stop hook tier FRAGILE; CI tier WORKING. Discipline preservation mechanism named (manual invocation by Claude Code agent; 6/6 audit PASS).
+
+  4. New paragraph scoping re-installation to §0225+ when promoted, with the three-clause pré-condição empírica refined at §0214 + this entry: (a) future audit reveals a drift leaked through; (b) Stop hook confirmed fully broken in a subsequent session; (c) project migrates to a different agent / operator without the manual-invocation convention.
+
+  ### Decimal-suffix numbering convention crystallized
+
+  **Convention:** decision-log entries numbered as `§NNNN.M` (decimal suffix) are editorial patches between integer entries. They reflect empirical reality, correct prose drift, or apply patch-via-pressure remediation at the operational-documentation layer. They do NOT trigger §-renumbering reflow of downstream carry-forwards. The integer entries on either side (§0214 and §0215 here) remain unchanged; downstream carry-forwards in §0214 (§0215-§0225+) keep their numbers.
+
+  **Distinguishing criterion:** full integer §-numbers are reserved for **binding scope changes** that introduce new structural commitments (new constructs, new operational definitions, new lifecycle ops, new constitutional reframes). Decimal suffixes are for **editorial-only changes** that align documentation with already-established empirical or constitutional state without introducing new scope.
+
+  **Precedent context:** patch-via-pressure pattern (catalogued at §0018 → §0100 → §0101 → §0137 → §0139 → §0140 → §0142 → §0214.5) historically used full integer §-numbers AND occasionally landed as nameless PRs (PR #141, PR #148, PR #151-154 per feedback memory). §0214.5 introduces a third pattern: decimal-suffix entries that take a §-number for traceability without disturbing reflow numbering. Reusable for future operational-documentation patches.
+
+- **Constitutional review:**
+
+  **Tier 1 (Charter)** — zero impact. No invariant touched. CLAUDE.md is operational documentation (subordinate to Charter per §2 of CLAUDE.md itself); editing operational prose is not a Charter amendment.
+
+  **Tier 2 (Ontology / schemas / canonical)** — zero impact. No proto / canonical-form / operational-definition change.
+
+  **Tier 3 (services / infra)** — zero impact. CLAUDE.md is `.claude/` infrastructure operational documentation; no source modified.
+
+  **Anchor verification per §0142 deliberate-inventory:**
+  - §0142 MO3 — deliberate-inventory sweep (applied to a single site; this anchor list is the sweep)
+  - §0214 Finding 5 — empirical state of three-tier hook defense; consumed verbatim into patch prose; auditor can cross-reference reproducibly
+  - §0214 Finding 6 + §0224+ — §0140 paired-dimension scope reframe; unrelated to this patch but the broader §0214 carry-forward context is referenced
+  - §0215 (named in §0214 reflow) — unchanged by this editorial patch
+  - §0216-§0225+ (renumbered §0213 carry-forwards in §0214) — unchanged
+  - §0225+ pré-condição empírica refinement — clauses (a)/(b)/(c) now explicit in CLAUDE.md prose AND in §0214 carry-forward narrative; consistent across both sites
+  - Patch-via-pressure pattern: **eighth instance** (§0018 → §0100 → §0101 → §0137 → §0139 → §0140 → §0142 → §0214.5). **First instance at the operational-documentation layer** (prior seven were Charter / hook script / canonical-package / Charter-cross-reference); first instance with **decimal-suffix decision-log numbering** (prior seven used full integer §-numbers or landed as nameless PRs).
+  - CLAUDE.md §5 item 2 internal cross-reference: `.claude/settings.json` line 79 (Stop hook command), `.git/hooks/pre-commit` (absent), `core.hooksPath` (unset), `.github/workflows/constitutional-check.yml` lines 46+57 (CI tier source). All verifiable empirically.
+
+  **Falsifiability:** patch prose makes claims verifiable mechanically:
+  - `ls .git/hooks/pre-commit` → absent (verified at §0214 audit; reproducible)
+  - `git config --get core.hooksPath` → empty (verified)
+  - `grep -nE 'pre-commit-doc-check' .claude/settings.json` → line 79 carries relative-path command (verified)
+  - `grep -nE 'pre-commit-doc-check' .github/workflows/constitutional-check.yml` → lines 46+57 (verified)
+  - 6/6 PASS audit outcome: reproducible via `git worktree add /tmp/audit <SHA> && cd /tmp/audit && git reset --soft <SHA>^ && bash .claude/hooks/pre-commit-doc-check.sh` for any of §0207-§0213 commits per §0214 Finding 5 method documentation
+
+- **Consequences:**
+
+  - 1 file modified (`.claude/CLAUDE.md`, §5 item 2). 1 decision-log entry added. Zero code change.
+  - **Documentation drift remediated immediately.** Auditor reading CLAUDE.md as of §0214.5 onwards sees prose that matches empirical investigation findings. The structurally-aspirational claim ("git pre-commit hook is the source of truth") is corrected to "intended source of truth" + empirical-state block; the auditor is not misled.
+  - **Decimal-suffix numbering convention established** as reusable pattern for future editorial patches that align documentation with empirical / constitutional reality without introducing new scope.
+  - **§0225+ scope clarified in CLAUDE.md prose:** re-installation of git tier + Stop hook path resolution + amendment of §5 item 2 to a post-install description (will replace the empirical-state block with a definitive description once the git tier is installed and the Stop hook is reliable). Pré-condição empírica clauses (a)/(b)/(c) named explicitly in BOTH CLAUDE.md AND §0214 carry-forward narrative.
+
+  **Carry-forwards:** none beyond what §0214 already named. §0225+ pré-condição empírica unchanged from §0214; CLAUDE.md prose now states it explicitly for auditor clarity.
+
+  **Methodological observation 1 — Documentation describes empirical reality, not aspiration; patch documentation in the same session that detects the drift.**
+
+  When documentation describes infrastructure that has degraded out of described state, the documentation is FALSE until corrected. Tier-3 honesty discipline rejects aspirational prose persisting as if factual. §0214 Finding 5 detected the drift; §0214.5 patches the prose immediately rather than deferring to §0225+ remediation (which depends on empirical pre-conditions and may take indefinite time to fire). The pattern: **separate the documentation patch (immediate; editorial) from the infrastructure remediation (deferred; conditional)**. Both are needed; conflating them delays the documentation correction. Reusable for future infrastructure-degradation discoveries: when investigation reveals documented infrastructure has degraded, the same session that detects produces an editorial patch; the structural remediation can defer per its own pré-condição empírica.
+
+  **Methodological observation 2 — Decimal-suffix decision-log numbering convention established as reusable pattern.**
+
+  Decision-log numbering pre-§0214.5 used integer-only §-numbers. Editorial patches that did not warrant full reflow either took a full integer (per patch-via-pressure precedent §0018/§0100/§0101/§0137/§0139/§0140/§0142) and triggered downstream renumbering, OR landed as nameless PRs (PR #141 / #148 / #151-154 per feedback memory) without traceability in the decision-log itself. §0214.5 introduces a third pattern: decimal-suffix entries that take a §-number for cross-reference traceability without disturbing downstream reflow. **Convention crystallized: decimal suffix = editorial-only; full integer = binding scope change.** Reusable prospectively for future editorial sweeps (anchor verification corrections, prose alignments, vocabulary patches without scope change).
+
+- **Supersession:** none in the structural sense. §0214 Finding 5 NOT superseded — §0214.5 implements the documentation patch that §0214 implicitly required ("CLAUDE.md §2 enforcement-boundary claim flagged as structurally aspirational; amendment scoped to §0225+ when binding"). §0214.5 advances the editorial patch immediately (separating it from the §0225+ structural remediation), preserving §0214's analysis while correcting the prose. CLAUDE.md §5 item 2 pre-§0214.5 prose preserved in git history; the patch is forward-looking only.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
