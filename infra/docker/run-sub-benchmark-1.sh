@@ -253,8 +253,19 @@ DEMOTE_DIR="${RUN_DIR}/demote-formations"
 mkdir -p "${DEMOTE_DIR}"
 
 mapfile -t CLEAN_PROMOTION_HASHES < <(
+    # Per §0217 Surface A + §0218 fix: each promote-formations/X.stdout
+    # is a SINGLE OBJECT (not array). Pre-§0218 jq filter included
+    # `.[] |` at the start which iterated the object's VALUES — first
+    # value being a string caused the subsequent `.formation_event_hash`
+    # access to fail with `Cannot index string with string
+    # "formation_event_hash"`. Default jq per-file iteration processes
+    # each input as one object; the `.[] |` was incorrect. §0217 first-
+    # run RUN 20260608T154112Z surfaced this empirically: 0 clean-chain
+    # promotions extracted → 0 demotions invoked → Layer B prediction
+    # NOT empirically tested in that run.
+    # DO NOT re-introduce `.[] |` to this filter — see §0217 Finding 1 +
+    # §0218 fix entry for the postmortem.
     jq -r --slurpfile f "${RUN_DIR}/form-from-candidates.stdout" '
-        .[] |
         select(
             .formation_event_hash as $fh |
             ($f[0].formations_committed[] |
