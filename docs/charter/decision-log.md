@@ -10370,6 +10370,185 @@ The §0143 mandatory instrumentation per `EvaluationStats` (ObservationsScanned 
 
 ---
 
+## `0219` — §0218 re-run multi-surface emergence diagnostic; §0217 MO2 BINDING PROMOTION ENACTED with candidates (a)+(b); multi-run methodology BROADER REFRAME (item renumbered §0228+ post-§0219; was §0227+ pre-§0219); §0214 MO2 six-layer closure model FIRST EMPIRICAL VALIDATION (formal MO addendum to §0217 MO1)
+
+- **Status:** accepted
+- **Date:** 2026-06-08
+- **Context:** §0218 (PR #241, commit `7a2c14d`) landed the Surface A jq filter fix (orchestrator `demote-formations` shell pre-filter `.[] |` removed); operator re-ran the 20K shakedown (RUN_ID `20260608T200434Z`) post-merge. The §0218 fix worked operationally: **10 demotions executed** (was 0 pre-§0218); 5 of 6 source-grounded predictions empirically confirmed (cadence_satisfied false × 10; already_demoted false × 10; verdict.demotion_fired false; chains_fortes 0 + chains_fracas 10; step_durations.demote_formations proper 10-integer array). **However, Layer B verdict on all 10 demotions is `{ "evaluated": false }` — the verdict fields (fired, freshness_undefined, saturation_fired, filter_match_count) are ABSENT** because Layer B never ran. The mechanism prediction (filter_match_count=0 → FreshnessUndefined=true; SaturationFired=false; Fired=false) was misframed: not falsified in the outcome (Layer B did not fire on any demotion) but wrong in the mechanism (Layer B was not evaluated at all).
+
+  **Root cause:** the orchestrator's `promote-automation-group` invocation (`infra/docker/run-sub-benchmark-1.sh` Step 6) does NOT pass the `-layer-b` option. Per `cmd/promote-automation-group/main.go:59`, `-layer-b` is an OPTIONAL option that populates the promotion event's `layer_b_parameters` field with §0138 inception-phase defaults; without it, the promotion event carries no Layer B parameters. Per `layerb.go:132`, `layerb.Evaluate` returns an error if `opts.Params == nil` — the demotion-side Layer B evaluation is gated on the source promotion carrying parameters. Orchestrator omits the option → promotions lack parameters → demotion cannot evaluate Layer B.
+
+  **This is the seventh §0022-emergence instance**, same class as §0213 Surface A (Gap A: orchestrator omits `-with-attribution` on Network signature → Cat II attribution silently absent at signature evaluation) + §0214 Finding 4 (`endpoint_co_visit_v1` not receiving `-with-attribution` → all observations skipped no_actor). The class: **orchestrator omits opt-in CLI option affecting downstream evaluation → downstream emits null/no-op output → predictions about downstream outcomes are silently wrong because the operation never ran.**
+
+  §0219 mirrors §0212 / §0214 / §0217 diagnostic-only discipline: register six findings + the §0217 MO2 binding promotion enactment (per pré-condição empírica MET) + the multi-run methodology broader reframe (the item that was §0227+ pre-§0219 is renumbered §0228+ post-§0219 per the +1 shift below; Finding 4 applies the broader reframe to this item) + the §0214 MO2 six-layer closure model first empirical validation (formal MO addendum to §0217 MO1).
+
+  **§-numbering convention for this entry:** §0227+ refers to the pre-§0219 slot identity (used in §0218 carry-forwards); §0228+ refers to the post-§0219 slot identity (assigned by the +1 shift in §-renumbering reflow below). When Finding 4 quotes the broader reframe text, the quote retains the pre-§0219 identity (§0227+) because that is what the reframe ARGUMENT references; the renumbering table assigns the post-§0219 slot (§0228+) to the same multi-run methodology item. Both numbers refer to the SAME item across the §0219 transition.
+
+- **Decision:** classify the six findings; enact §0217 MO2 binding promotion with candidates (a)+(b) selection; reframe broader scope of the multi-run methodology item (§0228+ post-§0219; was §0227+ pre-§0219); register §0214 MO2 first empirical validation as formal MO addendum. Documentation-only PR; zero code changes (the §0220 binding next will land the orchestrator pattern-level audit + `-layer-b` wiring + parameter-propagation contract artifact).
+
+  ### Finding 1 — Surface §0218.1: orchestrator omits `-layer-b` option; Layer B unevaluable at demotion (seventh §0022-emergence instance)
+
+  - **Manifest path:** `demotions_report[*].layer_b` (10 entries; each carries `{ "evaluated": false }` only).
+  - **Verbatim evidence:** `jq '.demotions_report[0].layer_b' manifest.json` returns `{ "evaluated": false }`. All 10 demotion stdouts (`demote-formations/0.stdout` through `9.stdout`) carry identical shape. The verdict fields (fired, freshness_undefined, saturation_fired, filter_match_count, window_event_count, freshness_b_numerator/denominator, saturation_c_numerator/denominator) are ABSENT — not zero, not null, not false; structurally not present in the JSON.
+  - **Root cause source citation (per §0217 MO2 binding (a)+(b) below; full evaluation-path inspection):**
+    - **Call-site:** `infra/docker/run-sub-benchmark-1.sh` Step 6 invocation `promote-automation-group "${DB_FLAGS[@]}" -formation-event-hash "${formation_hash}" -cadence-seconds 86400` — **no `-layer-b` option**.
+    - **Option definition:** `cmd/promote-automation-group/main.go:59` — option `-layer-b` declared as boolean default-false; OPTIONAL per decision-log §0141 F3: when true, populates the promotion event's `layer_b_parameters` field with §0138 inception-phase resolved values (T_B=K_C=1/2; N=1000; N_A from --cadence-seconds). Default false preserves the legacy path. Opt-in semantic.
+    - **Parameter propagation:** when `-layer-b` false, `promote-automation-group` calls `hypothesis.PromoteAutomationGroup` with `LayerBParameters: nil` (per `cmd/promote-automation-group/main.go:82-93`); promotion event committed without layer_b_parameters field populated.
+    - **Demote-side Layer B guard:** `services/ingestion/internal/hypothesis/automation_group_demotion.go` reads the source promotion's `layer_b_parameters` field; passes to `layerb.Evaluate` via `EvaluateOptions.Params`.
+    - **Layer B early-return guard:** `services/ingestion/internal/hypothesis/layerb/layerb.go:132` — `if opts.Params == nil { return Verdict{}, fmt.Errorf("layerb.Evaluate: opts.Params is nil (LayerBParameters required per §0138)") }`. With nil params, Evaluate returns error early.
+    - **Demote-side fallback:** when Layer B Evaluate returns the "params nil" error, the demotion path catches it and produces a LayerBReport with `Evaluated: false` (the empty-Verdict structural sentinel) instead of failing the demotion. `cliutil.LayerBPayloadFromReport` then emits `{ "evaluated": false }` as the operator-facing payload.
+  - **Class:** orchestrator-step gap (parameter-propagation across CLI boundary). Same class as §0213 Surface A (missing `-with-attribution` on Network signature) + §0214 Finding 4 (missing `-with-attribution` on `find-coordination-ring-candidates`). **Seventh instance** of §0022-emergence pattern (the §0207 / §0208 / §0211 / §0212 / §0213 / §0214 catalog extends to 7).
+  - **Subclass: stale-scope-boundary.** The omission was not a generic "orchestrator omits option" — it was a **deliberate scope decision of §0213** that survived the §0216 scope expansion. Orchestrator lines 178-183 carry the §0213 stale comment verbatim: "Per §0213: loop over the formation hashes emitted at Step 5; invoke promote-automation-group for each. **Layer B parameters are NOT populated at promotion time in this scope (§0213 is candidacy materialization; Layer B candidacy gating + chain morphology + demote evaluation are §0214 candidacy-evaluation scope per the user-cravado split)**". When §0216 added the demote step (which depends on Layer B parameters being populated at promotion-time), the §0213 scope comment was NOT revisited. The comment correctly reflects §0213's scope decision; the comment INCORRECTLY persists after §0216 extended the scope to depend on what §0213 deferred. **The §0022 surface is the stale-scope-boundary, not the option omission per se** — the omission is correct under §0213 scope; the bug is that §0216 scope expansion did not propagate to the §0213 scope decision. Pattern: scope-decision comments survive scope-expansion edits when the expansion happens in a different orchestrator section than the original scope decision.
+  - **Implication for §0220:** the parameter-propagation contract artifact (per user-cravado decisão adicional below) MUST include a **"scope decision origin"** column — for each non-wired opt-in option, distinguish between intentional-still-valid (current scope deliberately defers) vs stale-from-prior-scope (prior scope deferred; current scope expanded but stale boundary not propagated). The audit looks not only for missing options but for scope comments that survived expansions. The §0220 binding scope must include audit-time inspection of orchestrator scope comments AND verification that each scope boundary is still valid against the current orchestrator step set.
+  - **Destino:** **§0220 binding** — pattern-level audit + `-layer-b` wiring + parameter-propagation contract artifact (per Finding 4 + decisão adicional below) WITH stale-scope-boundary subclass detection.
+
+  ### Finding 2 — Surface §0218.2: §0218 mechanism predictions misframed; source-grounded citations PARTIAL
+
+  - **Context:** §0218 was first prospective application of §0217 MO2 operational-mechanism candidate (b) ("source-grounded marker on predictions with file:line citation"). All 5 §0218 predictions cited file:line correctly (layerb.go:9-10+244-269 for Layer B formula; morphology.go:14-18+228 for chain morphology; automation_group_demotion.go:118-124 for Layer A cadence; demotion.go:103-105 for candidacy-not-barrier; §0216 jq aggregate for verdict.demotion_fired). The citations APPEARED comprehensive (function mechanism + line-cited).
+  - **Empirical evidence of insufficiency:** §0218 predicted Layer B would EVALUATE and find `filter_match_count=0` → `FreshnessUndefined=true; SaturationFired=false; Fired=false`. Reality (Finding 1): Layer B never evaluated; `evaluated: false`; verdict fields absent. The function-mechanism predictions were correct for IF Layer B ran, but Layer B never ran due to call-site guard at `layerb.go:132` that §0218 citations missed.
+  - **Failure mode identified:** **partial citations that appear comprehensive** — covering the function-mechanism (formula, computation, output) but missing call-site guards or early-return conditions that prevent the function from being called. The citation appears thorough (cites function lines correctly) but skips the gating path. §0218 cited `layerb.go:9-10+244-269` (Evaluate formula) but did not cite `layerb.go:132` (the early-return guard).
+  - **Class:** discipline failure at the §0217 MO2 candidate (b) operational mechanism. (b) alone permits partial citations; full evaluation-path inspection (candidate (a)) would have surfaced the guard.
+  - **Destino:** **§0217 MO2 BINDING PROMOTION ENACTED** at Finding 3 below; binding discipline operacionalizada per the empirical evidence.
+
+  ### Finding 3 — §0217 MO2 BINDING PROMOTION ENACTED: candidates (a)+(b) combined binding; (c) deferred to §0230+ NBN
+
+  - **Pré-condição empírica per §0217 MO2:** "discipline applied prospectively without recurrence over N=2 subsequent §-entries. If recurrence happens within N=2: the operational-mechanism remediation requires explicit binding scope (one of (a)/(b)/(c) selected and implemented)."
+  - **Empirical recurrence:** §0218 was N=1 application of candidate (b); the §0218 mechanism prediction misframing (Finding 2) is recurrence within the N=2 window. **Pré-condição MET.**
+  - **Binding promotion ENACTED with combined selection per user-cravado decision 2:**
+    - **Candidate (a) — Full evaluation-path source inspection — BINDING.** Predictive framing about code mechanism MUST trace the full evaluation path: call-site → guard → function → output. Not function-level only.
+    - **Candidate (b) — Source-grounded markers with file:line citation — MANDATORY COMPLEMENT (audit trail of inspection).** Each step of the full evaluation path cited; (b) documents what was inspected per (a), does not substitute for inspection itself.
+    - **Candidate (c) — Automated check at submission tier — REJECTED for now; §0230+ NEW NBN (per renumbering below).** Requires tooling investment (AST grep + verify cited file:line covers all call sites) that is §0022 surface own. Opens if (a)+(b) prove empirically insufficient (third instance of mechanism misframing recurrence post-§0219).
+  - **Binding discipline text (operacionalizada at §0219):**
+
+    > **"Predictive framing sobre mecanismo de código requires full evaluation-path source inspection — não function-level apenas. Inspection MUST trace each step: call-site → guard → function → output. Source citations per candidate (b) documentam o que foi inspecionado em cada step (audit trail), but do NOT substitute for inspection itself. Partial citations that appear comprehensive — covering function mechanism (formula, computation, output) but missing call-site guards or early-return conditions that prevent the function from being called — are the specific failure mode documented at §0218 Finding 2: §0218 cited `layerb.go:9-10+244-269` (Evaluate function) but missed `layerb.go:132` (the `opts.Params == nil` early-return guard that prevented Evaluate from running). Full-path inspection MUST include guards and early-return conditions, not just the core formula."**
+
+  - **Operational consequence prospectively:** future §-entries with predictive framing about code mechanism enforce (a)+(b) binding. Predictions without full-path inspection OR with partial citations are speculation-not-grounded and require `PREDICTION-NOT-INSPECTED` marker per candidate (b). The marker discriminates source-grounded from speculative claims mechanically.
+  - **Recursive-discipline property crystallized:** §0218 was first material instance of "methodological discipline regulating its own promotion timing via its own pré-condição empírica" (§0218 inline note); §0219 is the FIRST EMPIRICAL ENACTMENT of binding promotion triggered by the discipline's own pré-condição empírica firing. The discipline now self-bootstraps: empirical recurrence within N=2 → binding promotion per the rule itself.
+  - **Destino:** binding ENACTED at §0219 (this entry); §0230+ NBN registered for candidate (c) escalation if (a)+(b) prove insufficient.
+
+  ### Finding 4 — Multi-run methodology BROADER REFRAME (item: §0228+ post-§0219; was §0227+ pre-§0219); parameter-propagation discipline integrated (per user-cravado decisão 3)
+
+  **§-numbering note for this Finding:** the item being reframed is the **multi-run comprovação methodology**, which carried the slot identity §0227+ in §0218's reflow and is renumbered §0228+ in §0219's +1 reflow shift. The reframe text quoted below RETAINS the pre-§0219 identity (§0227+) because that is the identity the reframe ARGUMENT references — the reframe was authored before the §0219 +1 shift. The post-§0219 slot identity (§0228+) appears in the §-renumbering reflow table + carry-forwards consolidated below. Both numbers refer to the SAME multi-run methodology item across the §0219 transition.
+
+  - **Context:** §0217 reframed §0228+-pre-§0217 (F3 calibration; renumbered §0229+ post-§0219) with three-clause pré-condição empírica; §0227+-pre-§0219 (multi-run comprovação methodology; renumbered §0228+ post-§0219) was deferred at §0218 awaiting empirical evidence. §0219 Finding 1 provides the evidence: Layer B is structurally unmeasurable in single-run AT THE OPERATIONAL TIER (not just at the substrate-state tier) when orchestrator omits `-layer-b`. The §0218 single-run could not produce Layer B verdicts regardless of substrate state because the parameter wasn't propagated.
+  - **Broader reframe of multi-run methodology pré-condição empírica (quote retains pre-§0219 §0227+ identity; post-§0219 slot is §0228+):**
+
+    > "§0227+ multi-run comprovação methodology MUST explicitly include **parameter-propagation verification across CLI boundaries**. The Layer B gap (orchestrator omits `-layer-b` on `promote-automation-group` → demotion unable to evaluate Layer B) is a class instance: any opt-in CLI option that affects downstream evaluation requires orchestrator-side wiring + audit verification. Multi-run methodology scope expanded to three components:
+    > - **(i) Parameter-propagation discipline (pre-multi-run audit)** — verification that every CLI invoked in the orchestrator has its required opt-in options wired correctly. The §0220 binding entry establishes the audit pattern + the parameter-propagation contract artifact (per decisão adicional); §0227+ inherits the pattern as pre-flight checklist.
+    > - **(ii) Substrate accumulation across runs (original §0227+ intent)** — influence chains accumulate as subsequent formations reference prior formations via `direct_influenced_by`; multi-run produces the chain depth/breadth that single-run structurally cannot.
+    > - **(iii) Layer B firing as empirical evidence of structural reach** — once (i) and (ii) hold, Layer B firing within window indicates the substrate-grounded comprovação criterion is met per §0143 D2.
+    > 
+    > Without (i), multi-run produces zero-signal regardless of substrate state (the §0218 → §0219 cycle is the empirical evidence). §0227+ binding promotion pré-condição: (i) AND (ii) AND (iii) all empirically materialized."
+
+  - **Class generalization:** the parameter-propagation gap is NOT Layer B-specific. It's a class of orchestrator-omits-opt-in-option → downstream-silent-no-op that applies to ANY CLI with opt-in semantics. Multi-run methodology (which will exercise more CLIs and more parameter combinations) MUST treat parameter-propagation discipline as foundational.
+  - **Destino:** multi-run methodology pré-condição empírica reframed inline at this Finding 4 (applies to the item now at §0228+ post-§0219 slot); §0220 establishes parameter-propagation contract artifact; §0228+ post-§0219 (§0227+ pre-§0219 same item) inherits.
+
+  ### Finding 5 — §0218 Surface A fix POSITIVE VALIDATION (5/6 predictions confirmed)
+
+  - **Empirical evidence:** §0218 Surface A operationally validated. Six predictions enumerated at §0218 entry; five confirmed verbatim:
+    1. ✓ Layer B fires `0/10` clean-chain — OUTCOME confirmed (verdict.demotion_fired: false); mechanism MISFRAMED per Finding 2 (Layer B not evaluated; not "not fired due to filter_match=0")
+    2. ✓ `chains_fortes_count: 0` + `chains_fracas_count: 10` — confirmed verbatim (morphology_report.stats matches §0217 inline-correction prediction)
+    3. ✓ `cadence_satisfied: false` on all 10 demotions — confirmed verbatim (elapsed ~0s; cadence_seconds=86400)
+    4. ✓ Demotions commit successfully 10/10 (`already_demoted: false × 10`) — confirmed verbatim (§0011 candidacy-not-barrier preserved)
+    5. ✓ `verdict.demotion_fired: false` (aggregate over clean-chain) — confirmed verbatim (jq aggregate `[.[] | .layer_b.fired // false] | any // false` produces false when all `layer_b.fired` are absent / null)
+    6. ✓ `step_durations.demote_formations: [10 integers]` proper array — confirmed verbatim (was single `~1.9e+79` pre-§0215; now `[15945125, 3238333, 3166334, 3668667, 3272792, 3838959, 3216000, 3821292, 3762709, 3197459]`)
+  - **Surface A fix operationally closed.** The §0218 jq filter correction works as designed; demote-formations Step 8 executes; demotions commit per §0011.
+  - **Six-layer closure layer 5 (remediation) validated.** The §0218 prescription "Surface A jq filter fix produces 10 demotions" materialized empirically. What was NOT predicted (Layer B unevaluable due to upstream parameter-propagation gap) is what layer 6 (remediation_completeness via post-merge re-run) caught — see Finding 6 below for the formal MO addendum.
+  - **Destino:** §0218 closure validated inline at §0219; no further remediation needed for §0218 scope; §0220 addresses the new §0022 surface (Layer B parameter propagation) under its own scope.
+
+  ### Finding 6 — §0214 MO2 SIX-LAYER CLOSURE MODEL FIRST EMPIRICAL VALIDATION (formal MO addendum to §0217 MO1; per user-cravado decisão 5)
+
+  - **Context:** §0217 MO1 formalized the six-layer closure model as binding constitutional artifact (structural → operational → observability → diagnostic → remediation → remediation_completeness). §0218 was first prospective application of layer 5 (remediation); the post-merge re-run produced the layer 6 (remediation_completeness) validation that §0219 now consumes.
+  - **Empirical observation:** §0218 fix executed cleanly at layer 5 (10 demotions ran; was 0). The §0218 PRESCRIPTION (Layer B verdicts captured per source-grounded predictions) was only partially achieved (verdicts captured as `evaluated: false`, not as fired/not-fired/freshness/saturation distribution). **Layer 6 mechanically detected the gap that source-grounded predictions at layer 5 missed.**
+  - **Pattern confirmed:** validation that remediation achieved diagnostic prescription is structurally necessary, not optional. The §0218 source-grounded predictions per §0217 MO2 candidate (b) appeared comprehensive but missed the upstream parameter-propagation guard; only the layer-6 post-merge re-run surfaced the gap empirically. **The discipline works as designed; the sixth layer caught what the prior five layers + source-grounded predictions did not.**
+  - **Formal MO addendum to §0217 MO1 (per user-cravado decisão 5):**
+
+    > **MO addendum to §0217 MO1 — Six-layer closure model FIRST EMPIRICAL VALIDATION.** §0218 first prospective application executed at layer 5 (remediation); post-merge operator re-run at layer 6 (remediation_completeness) mechanically caught the §0022 surface (Surface §0218.1 — Layer B unevaluable due to orchestrator parameter-propagation gap) that source-grounded predictions (per §0217 MO2 candidate (b)) missed.
+    >
+    > **Pattern confirmed:** validation that remediation achieved diagnostic prescription is structurally necessary, not optional. §0218 executed cleanly at layer 5 but the PRESCRIPTION was only partially achieved; only the layer-6 post-merge re-run surfaced the gap empirically. The sixth layer caught what the prior five layers + source-grounded predictions did not.
+    >
+    > **Validates §0214 MO2 binding promotion at §0217 retroactively:** the six-layer model is not just precedented but mechanically catches gaps in real cycles. Reusable for Frente 2 + Frente 3 prospectively; every closure cycle should expect layer-6 catches that prior 5 layers + source-grounded predictions don't surface.
+
+  - **Recursive-discipline crystallization:** §0218 first material instance of methodological-discipline regulating its own promotion timing via its own pré-condição empírica (§0218 inline note); §0219 is FIRST EMPIRICAL ENACTMENT — six-layer model's sixth layer mechanically VALIDATED the model itself via real-cycle gap detection. The discipline self-validates: layer-6 caught a layer-5-missed gap → six-layer model demonstrably works in practice, not just in framing.
+  - **Destino:** formal MO addendum to §0217 MO1 (recorded above); not inline observation. Six-layer model's binding status reinforced empirically.
+
+- **Constitutional review:**
+
+  **Tier 1 (Charter)** — zero impact. §0011 / §0135 / §0138 / §0140 / §2.3 / §2.4 / §2.5 / §2.6 / §3 / §4 unchanged.
+
+  **Tier 2 (Ontology / schemas / canonical)** — zero impact. No proto / canonical-form / operational-definition change.
+
+  **Tier 3 (services / infra)** — zero impact at §0219 (documentation-only diagnostic-only). §0220 binding will touch orchestrator + parameter-propagation contract artifact placement (per decisão adicional; placement TBD at §0220 plan).
+
+  **Anchor verification per §0142 deliberate-inventory:**
+
+  - **§0011** — Layer A cadence semantic. Status: unchanged.
+  - **§0135 + §0138** — Layer B formula + inception defaults. Status: §0219 Finding 1 reveals operational-tier gap (parameter-propagation) NOT formula gap; Layer B inception defaults remain valid; orchestrator wiring needs `-layer-b` per §0220 binding.
+  - **§0142 MO3** — deliberate-inventory sweep. Status: applied; this anchor list is the sweep.
+  - **§0143 + §0143 D2** — Sub-benchmark 1 + audit-trail discipline. Status: §0219 Finding 5 + 6 reinforce the discipline empirically; six-layer closure layer 6 (remediation_completeness) caught the §0143 D2 implicit requirement (parameter-propagation discipline) that was not previously explicit.
+  - **§0162** — gaps structurally closed. Status: unchanged.
+  - **§0184 / §0186 MO2** — bundle-by-shape. Status: applied — §0219 diagnostic-only standalone; §0220 binding subsequent.
+  - **§0204 / §0205** — single-responsibility CLI + tier-3 audibility. Status: preserved; §0220 extends §0205 audibility commitment to parameter-propagation artifact (table durable; auditable).
+  - **§0207-§0218** — historical anchors unchanged.
+  - **§0213 + §0213 MO1 + §0213 MO2 + §0213 MO3** — integration-test masking → architectural-convention vs operator-workflow gap pattern + bridge architecture. Status: **§0219 Finding 1 is SEVENTH INSTANCE** of the §0022-emergence pattern (same class as §0213 Surface A; §0214 Finding 4; etc.). Pattern catalog extends: §0207 / §0208 / §0211 / §0212 / §0213 / §0214 / **§0219 Finding 1**.
+  - **§0214 MO1 + MO2** — wire-contract testing + remediation completeness binding (now via §0217). Status: **§0214 MO2 FIRST EMPIRICAL VALIDATION** per Finding 6 + formal MO addendum to §0217 MO1.
+  - **§0214.5** — editorial patch + decimal-suffix convention. Status: unchanged.
+  - **§0215** — bridge wire-contract remediation. Status: unchanged.
+  - **§0216 + §0216 MO1 + MO2** — pre-emption via source inspection + scope-bounding. Status: §0216 MO1 reinforced by §0219 Finding 2 evidence (partial citation failure mode crystallized); §0217 MO2 binding promotion at §0219 enacts the operational-mechanism strengthening MO1 prescribed without enforcement.
+  - **§0217 + §0217 MO1 + §0217 MO2** — six-layer closure binding + deliberation discipline operational mechanism. Status: **§0217 MO1 reinforced via §0214 MO2 first empirical validation MO addendum (Finding 6)**. **§0217 MO2 BINDING PROMOTION ENACTED at §0219 Finding 3** with candidates (a)+(b) combined selection; (c) deferred to §0230+ NBN.
+  - **§0218** — Surface A jq fix + first prospective applications of §0214 MO2 + §0217 MO2 (b). Status: Surface A operationally validated per Finding 5 (5/6 predictions confirmed verbatim); §0217 MO2 (b) alone insufficient per Finding 2 (partial citation failure mode); first prospective application correctly used (b); §0217 MO2 own pré-condição empírica triggered binding promotion at §0219.
+  - **§-renumbering reflow (+1 shift per user-cravado decisão 1):**
+    - **§0219** = diagnostic-only (this PR) — opens binding from §0218 NBN reserved slot
+    - **§0220 (NEW binding)** = pattern-level audit + `-layer-b` wiring + parameter-propagation contract artifact (per Finding 1 + decisão adicional)
+    - **§0221+** = renumbered §0218's §0220+ (per-column coercion) +1
+    - **§0222+** = renumbered §0218's §0221+ (endpoint_co_visit) +1
+    - **§0223+** = renumbered §0218's §0222+ (bucket calibration) +1
+    - **§0224+** = renumbered §0218's §0223+ (DeriveAll NBN) +1
+    - **§0225+** = renumbered §0218's §0224+ (sub-stat semantic) +1
+    - **§0226+** = renumbered §0218's §0225+ (Y refactor) +1
+    - **§0227+** = renumbered §0218's §0226+ (BC/CH/CR bridges) +1
+    - **§0228+ (renumbered + reframed BROADER per Finding 4)** = renumbered §0218's §0227+ (multi-run methodology); three-component scope (i)+(ii)+(iii) per Finding 4 reframe
+    - **§0229+ (renumbered)** = renumbered §0218's §0228+ (F3 calibration NBN with three-clause pré-condição); UNCHANGED reframe content from §0217
+    - **§0230+ (NEW NBN)** = candidate (c) automated check infrastructure; opens if (a)+(b) binding combination proves empirically insufficient (third instance of mechanism misframing recurrence post-§0219)
+
+  **Falsifiability:** every cited number / source-line / mechanism is reproducible mechanically:
+  - Finding 1: `jq '.demotions_report[0].layer_b' runs/20260608T200434Z/manifest.json` returns `{ "evaluated": false }`. Source citations (call-site, option definition, guard) verifiable via grep + cat on cited file:line.
+  - Finding 2: §0218 entry's source-grounded predictions retrievable from §0218 entry text; comparison with Finding 1 evidence shows mechanism mismatch.
+  - Finding 5: 5 confirmed predictions verifiable via `jq` on `runs/20260608T200434Z/manifest.json`.
+  - Finding 6: six-layer model's layer-6 catch is the §0219 entry itself — the existence of §0219 surfacing the §0022 gap §0218 missed IS the empirical validation.
+
+- **Consequences:**
+
+  - 1 file modified (`docs/charter/decision-log.md`). Zero code changes.
+  - **§0217 MO2 BINDING PROMOTION ENACTED at §0219.** Six future §-entries with predictive framing about code mechanism enforce (a)+(b) binding (full evaluation-path source inspection + source-grounded markers as audit trail). The recursive-discipline property crystallized at §0218 self-bootstraps at §0219.
+  - **§0214 MO2 first empirical validation** registered as formal MO addendum to §0217 MO1. Six-layer closure model empirically works as designed; layer-6 catches gaps that prior 5 layers + source-grounded predictions miss.
+  - **§0227+ broader reframe** integrates parameter-propagation discipline as foundational component of multi-run methodology. §0220 establishes the audit pattern; §0227+ inherits.
+  - **§-renumbering +1 reflow** consolidated; §0218 NOT amended per established forward-only correction discipline.
+
+  **Carry-forwards (consolidated post-renumbering):**
+
+  - **§0220 (NEW binding; depends on §0219)** — pattern-level audit + `-layer-b` wiring + parameter-propagation contract artifact. Per user-cravado decisão adicional: §0220 MUST produce a durable parameter-propagation contract artifact (table documenting, per CLI invoked in orchestrator, which opt-in flags affect downstream evaluation + whether wired). Placement TBD at §0220 plan (orchestrator comment block OR docs/adapters/ doc OR manifest_validation.json sub-field — selected per tier-3 audibility commitment). Rationale: without durable artifact, audit is one-time grep that future CLIs (F2/F3 bridges; new lifecycle steps) don't consult; with table, each new CLI has checklist against parameter-propagation discipline. Transforms instance-fix into pattern-prevention; §0228+ multi-run methodology inherits the artifact as pre-flight checklist.
+  - **§0221+ to §0227+** — renumbered §0218 carry-forwards (+1 shift) UNCHANGED in content.
+  - **§0228+ (renumbered + BROADER REFRAMED per Finding 4)** — multi-run methodology NBN with three-component scope: (i) parameter-propagation discipline + (ii) substrate accumulation + (iii) Layer B firing as empirical evidence. Binding promotion pré-condição: (i) AND (ii) AND (iii) all empirically materialized.
+  - **§0229+ (renumbered)** — F3 calibration NBN with three-clause pré-condição (per §0217 reframe; UNCHANGED).
+  - **§0230+ (NEW NBN per §0217 MO2 binding (c) deferral)** — automated check infrastructure (AST grep + verify cited file:line covers all call sites). Pré-condição empírica: §0219 binding (a)+(b) combination proves insufficient empirically (third instance of mechanism misframing recurrence post-§0219).
+
+  **Methodological observation 1 — §0217 MO2 BINDING PROMOTION ENACTED; recursive-discipline self-bootstraps at §0219.**
+
+  Per user-cravado decisão 2: candidates (a) + (b) combined binding; (c) deferred to §0230+ NBN if (a)+(b) insufficient. **Binding discipline operacionalizada:** predictive framing about code mechanism requires full evaluation-path source inspection (call-site → guard → function → output); source-grounded citations per (b) document each inspection step (audit trail) but do not substitute for inspection. **Failure mode specific:** partial citations appearing comprehensive (citing function-mechanism but missing call-site guards or early-return conditions) — §0218 cited `layerb.go:9-10+244-269` (Evaluate function) but missed `layerb.go:132` (the `opts.Params == nil` guard preventing Evaluate from running). Full-path inspection MUST include guards and early-return conditions, not just core formula. Recursive property: the §0217 MO2 own pré-condição empírica (binding promotion when recurrence within N=2) triggered §0218→§0219 binding enactment per the rule the MO itself established; discipline self-bootstraps.
+
+  **Methodological observation 2 — §0214 MO2 six-layer closure model FIRST EMPIRICAL VALIDATION (formal MO addendum to §0217 MO1).**
+
+  Per user-cravado decisão 5 verbatim:
+
+  > **MO addendum to §0217 MO1 — Six-layer closure model FIRST EMPIRICAL VALIDATION.** §0218 first prospective application executed at layer 5 (remediation); post-merge operator re-run at layer 6 (remediation_completeness) mechanically caught the §0022 surface (Surface §0218.1 — Layer B unevaluable due to orchestrator parameter-propagation gap) that source-grounded predictions (per §0217 MO2 candidate (b)) missed. **Pattern confirmed:** validation that remediation achieved diagnostic prescription is structurally necessary, not optional. The sixth layer caught what the prior five layers + source-grounded predictions did not. **Validates §0214 MO2 binding promotion at §0217 retroactively:** the six-layer model is not just precedented but mechanically catches gaps in real cycles. Reusable for Frente 2 + Frente 3 prospectively; every closure cycle should expect layer-6 catches that prior 5 layers + source-grounded predictions don't surface.
+
+  Registered as formal MO addendum (not inline observation) per decisão 5; first empirical validation of binding model merits formalization. Six-layer closure model's binding status reinforced empirically; not just precedented framing but operationally demonstrable.
+
+- **Supersession:** none in the structural sense. §0218 + §0218 entry preserved as historical artifact (Surface A fix + first prospective applications of §0214 MO2 + §0217 MO2 candidate (b)). §0217 MO2 NOT amended; §0219 promotes its candidates (a)+(b) to binding per the pré-condição empírica §0217 MO2 itself established. §0217 MO1 NOT amended; §0219 adds formal MO addendum per Finding 6 (first empirical validation crystallization). §0214 MO2 NOT amended; §0219 registers its first empirical validation per Finding 6. §0227+ pré-condição empírica reframed at §0219 inline (broader scope; parameter-propagation discipline integrated); §0218 carry-forward narrative for §0227+ NOT amended retroactively.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
