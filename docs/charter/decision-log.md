@@ -9858,6 +9858,116 @@ The §0143 mandatory instrumentation per `EvaluationStats` (ObservationsScanned 
 
 ---
 
+## `0215` — Bridge wire-contract remediation: Surface A JSON field-name fix + Surface B printf newline + real-wire fixture testing per §0214 MO1; first prospective application of MO1 discipline + §0225+ pré-condição refinement + §0226+ cross-CLI DRY deferral
+
+- **Status:** accepted
+- **Date:** 2026-06-08
+- **Context:** §0214 Findings 1+2 named two §0022 surfaces from the §0213 first-real-run (RUN_ID `20260608T045037Z`) requiring binding remediation: Surface A (JSON field-name mismatch — bridge envelope struct used `json:"source_hashes"`; upstream find-* CLIs emit `source_event_hashes_hex`; silent decode-mismatch → 10 broken-chain formations committed with empty source_event_hashes — §2.3 chain reconstruction broken on all 10) and Surface B (`promote_formations` durations array malformed via `printf '%s'` no-newline concatenation → 10 nanosecond integers collapsed into single ~1.9e+79 number when `jq -s '.'` slurped — observability data-loss). §0215 bundles both fixes per §0184/§0186 MO2 (shared shape: first remediation post-§0213 first-real-run; bridge code + observability + test discipline). The bridge JSON field name + the test fixture field name fix in lockstep, AND a NEW real-wire fixture test asserts source_hashes_count > 0 on committed formations (the assertion that would have caught Surface A pre-deployment — first prospective application of §0214 MO1 wire-contract integration testing pattern).
+
+  §0215 is **structurally NOT a §0022-emergent surface** — it is the remediation of two §0022 surfaces §0214 named. The §0022-emergence pattern catalogue (currently at 6 instances per §0214 narrative) does NOT extend with §0215; remediation entries are operational closures of prior §0022 surfaces, not new ones. The next §0022 surface (if any) will surface from §0216 candidacy evaluation OR §0217+ paralelos OR future operator-tier work.
+
+- **Decision:** land five file changes as a single PR per §0184/§0186 MO2 bundle-by-shape discipline (shared shape: first wire-contract remediation post-bridge-diagnostic):
+
+  ### 1. Surface A fix — JSON field name in bridge envelope struct
+
+  **File:** `services/ingestion/cmd/form-automation-group-from-candidate/main.go` (lines 218-237 envelope struct definition).
+
+  **Change:** single-line JSON field name correction on the SourceHashes field of the local `envelopeCandidate` struct:
+
+  - Pre-§0215: `SourceHashes []string \`json:"source_hashes"\``
+  - Post-§0215: `SourceHashes []string \`json:"source_event_hashes_hex"\``
+
+  **Cross-CLI verification per §0214 cravamento decision 4:** the JSON field name `source_event_hashes_hex` is universal across all five find-* CLIs (verified at §0214 Finding 1: `find-automation-group-candidates/main.go:101`, `find-behavioral-cluster-candidates/main.go:106`, `find-campaign-hypothesis-candidates/main.go:123`, `find-coordination-ring-candidates/main.go:129`, `find-automation-group-candidates-network/main.go:146`). The §0215 bridge fix template applies verbatim to future BC/CH/CR bridges per §0223+ inheritance. Inline comment in the envelope struct documents the §0214 cross-CLI cravamento + §0215 fix with explicit forbid-regression warning.
+
+  ### 2. Surface B fix — printf newline in orchestrator read_duration_ns
+
+  **File:** `infra/docker/run-sub-benchmark-1.sh` (read_duration_ns helper function).
+
+  **Change:** single-line printf format string correction + paired default-case correction:
+
+  - Pre-§0215: `printf '%s' "$v"` / `printf '0'`
+  - Post-§0215: `printf '%s\n' "$v"` / `printf '0\n'`
+
+  Newline separator restores per-promotion timing observability — `jq -s '.'` over the for-loop's stdout stream now slurps each value as an independent integer into an array. Inline comment documents §0214 Finding 2 / Surface B context + the concatenation-failure mechanism with explicit forbid-regression warning.
+
+  ### 3. Test fixture — testdata/sample-envelope.json (NEW; real-wire shape per §0214 MO1)
+
+  **File:** `services/ingestion/cmd/form-automation-group-from-candidate/testdata/sample-envelope.json` (NEW).
+
+  Hand-crafted synthetic envelope JSON mirroring the upstream `find-automation-group-candidates-network` CLI's emit shape verbatim: top-level `signature_name` + `candidate_count` + `candidates[]` + `stats{}` keys; per-candidate `signature_name` + `hypothesis_subtype` + `actor_refs` + **`source_event_hashes_hex`** + `evidence_count` + `confidence_hint` keys. Three AG candidates with cardinalities (3, 5, 1) actor_refs + (3, 5, 1) source_event_hashes_hex; tests assert against the cardinalities verbatim. Future bridge test fixtures for BC/CH/CR signatures (§0223+ scope) follow this fixture-pattern per §0214 MO1 discipline.
+
+  ### 4. Test refactor — bridge CLI tests consume real-wire fixture + new chain-intact assertion
+
+  **File:** `services/ingestion/cmd/form-automation-group-from-candidate/main_test.go`.
+
+  **Changes:**
+
+  - `envelopeFixture()` helper: `"source_hashes"` JSON key → `"source_event_hashes_hex"` in both AG and BC entries (per §0214 MO1 wire-shape correctness; the in-memory map MUST mirror upstream wire shape verbatim). Inline doc updated with §0215 + §0214 MO1 cross-reference + the pre-§0215 drift-shared-by-both-sides postmortem.
+  - **NEW test `TestRun_RealWireFixture_ChainIntact`** — loads `testdata/sample-envelope.json` via `os.ReadFile`; pipes to `run()` via stdin; asserts `len(out.FormationsCommitted) == 3` AND `out.FormationsCommitted[i].SourceHashesCount > 0` for all i (the §0215 assertion that would have caught §0214 Surface A pre-deployment) AND expected per-candidate hash counts (5, 3, 1) matching the fixture cardinality in actor-count-descending order. **This is the first prospective application of §0214 MO1 (wire-contract integration testing pattern); the test will fail on pre-§0215 bridge code and pass on post-§0215.**
+
+  ### 5. decision-log §0215 entry — this entry
+
+  **File:** `docs/charter/decision-log.md`. Documents the bundle; declares §0226+ cross-CLI DRY carry-forward; refines §0225+ pré-condição empírica clause (c); cravas §0216 shell-pre-filter site.
+
+- **Constitutional review:**
+
+  **Tier 1 (Charter)** — zero impact. No invariant touched. The §2.3 chain reconstruction restoration on the 10 NEW clean-chain formations (produced post-merge via re-run shakedown) is operational compliance with the existing §2.3 + §0143 D2 commitments; not an amendment. The 10 broken-chain historical formations + 10 broken-chain promotions committed at §0213 first-real-run remain in substrate per §2.1 immutability; §0215 does NOT supersede or modify them.
+
+  **Tier 2 (Ontology / schemas / canonical)** — zero impact. No proto / canonical-form / operational-definition change. AutomationGroupFormation canonical-form contract unchanged; the post-§0215 formations + pre-§0215 broken-chain formations are byte-identical in shape EXCEPT for the `source_event_hashes` field length (>0 vs 0). Both satisfy §0140 marshalling-boundary paired-dimension check (EvidentialIndependence present in both); both are valid AutomationGroupFormation records per the canonical-form contract.
+
+  **Tier 3 (services / infra)** — 5 files modified (1 bridge CLI .go + 1 orchestrator .sh + 1 NEW testdata .json + 1 bridge CLI _test.go + 1 decision-log .md). NO new packages; NO new dependencies; NO new substrate semantics. The bridge envelope struct + read_duration_ns helper changes are one-line patches with inline forbid-regression documentation.
+
+  **Anchor verification per §0142 deliberate-inventory:**
+
+  - §0027 AP6 — content-addressed immutability; re-run post-§0215 produces NEW formations with DIFFERENT content-hash from the 10 broken-chain historical (non-empty source_event_hashes → different canonical-form → different BLAKE3); both sets coexist per §2.1.
+  - §0140 — paired-dimension marshalling-boundary check; satisfied by both broken-chain and clean-chain formations (EI present in both). §0224+ named-but-non-binding tracks the §0140 scope extension question (whether non-empty source_event_hashes should join the enforcement); §0215 does NOT enact the extension.
+  - §0142 MO3 — deliberate-inventory sweep applied; this anchor list is the sweep.
+  - §0143 D2 — substrate-grounded comprovação criterion; restored on the 10 NEW clean-chain formations.
+  - §0157 — test helper precedent; superseded by §0214 MO1 wire-contract testing pattern for §0215 + future bridge tests. §0157 helper-bypass shape (test-only helpers bypassing CLI) remains documented as anti-pattern per §0213 MO1; §0214 MO1 extends to bridge tier (test fixtures must mirror upstream wire shape, not in-memory struct).
+  - §0184/§0186 MO2 — bundle-by-shape one-PR-per-advance; applied — five file changes share single shape "first wire-contract remediation post-bridge-diagnostic".
+  - §0204 — single-responsibility CLI; preserved (no `--auto-promote` or consolidation).
+  - §0205 tier-3 audibility — extended at §0216 carry-forward below: shell-based pre-filter site cravado per user decision (c).
+  - §0213 + §0213 MO1/MO2/MO3 — bridge architecture preserved; bridge code fix is one-line semantic change.
+  - §0214 + §0214 MO1/MO2 — **MO1 first prospective application**: bridge tests use real-wire fixture; new `TestRun_RealWireFixture_ChainIntact` asserts chain-intact post-§0215. **MO2 (remediation completeness as candidate sixth layer) first validation test**: §0215 IS the remediation §0214 prescribed; remediation_completeness validation happens at the re-run shakedown post-merge (Operator action; not part of this PR's diff). If post-merge re-run produces 10 clean-chain formations + correctly-shaped `step_durations.promote_formations` array, MO2 is empirically validated for the §0213→§0214→§0215 cycle. If unintended outcomes re-emerge, MO2 graduates from named-but-non-binding to binding sixth-layer candidate per the user-cravado pré-condição refinement at §0214 (second instance of intended-vs-actual gap).
+  - §0214.5 — editorial patch landed prior; CLAUDE.md §5 item 2 prose corrected; §0215 inherits the post-patch documentation state.
+  - **§0215 (this entry)** — Surface A + B fix + real-wire fixture testing.
+  - **§0216 (renumbered from §0214 reflow; binding next)** — candidacy evaluation. Pré-condição empírica: §0215 fix lands + operator re-runs shakedown producing 10 clean-chain formations. **Carry-forward cravado per user decision (c): the clean-chain filter `len(source_event_hashes) > 0` lives in the orchestrator shell step (preferred), NOT in the Layer B candidacy CLI nor in Go code.** Pre-filter via shell `jq` selects clean-chain formation hashes from `formations_report.formations_committed[]`; passes only those to the Layer B candidacy CLI invocation. Per §0205 tier-3 audibility commitment: each step shell-readable, not buried in Go code. Pattern reusable for any filtering discipline downstream — first crystallization at §0215 for §0216's consumption.
+  - **§0217-§0224+ (renumbered §0213 carry-forwards in §0214 reflow)** — unchanged.
+  - **§0225+ (named-but-non-binding; pré-condição refined per user-cravado addition (c))** — three-tier hook defense infrastructure remediation. Pré-condição empírica for binding promotion: (a) future audit reveals a drift leaked through; (b) Claude Code Stop hook confirmed fully broken in a subsequent session; **(c) NEW per user-cravado refinement: project migrates to a different agent / operator without the manual-invocation convention.** Clause (c) recognizes that agent discipline ≠ system enforcement; audit gap latente nomeado explicitly. CLAUDE.md §5 item 2 post-§0214.5 prose carries (a)/(b)/(c) verbatim; §0215 ratifies the trio at the carry-forward narrative tier.
+  - **§0226+ (NEW, named-but-non-binding per user-cravado decision (a))** — cross-CLI envelope struct DRY refactor. The bridge envelope struct (~16 LOC) is duplicated at §0215 within the AutomationGroup bridge; future BC/CH/CR bridges per §0223+ will each duplicate the struct (signature_name + hypothesis_subtype + actor_refs + source_event_hashes_hex + evidence_count + confidence_hint + interactions field shape is universal cross-CLI; only the bridge-specific commit logic varies). **Pré-condição empírica:** second bridge constructed under §0223+ template = duplicate-extract refactor PR in its own scope; the shared envelope struct lifts to `internal/cliutil/` or similar package. Pre-duplication abstraction rejected per §7 minimalism; the DRY refactor is conditional on actual duplication occurring, not on speculation.
+
+  **Falsifiability:**
+
+  - **Surface A fix:** `TestRun_RealWireFixture_ChainIntact` (NEW) fails on pre-§0215 bridge code (`SourceHashesCount = 0`); passes on post-§0215 (`SourceHashesCount` matches fixture cardinality 5/3/1). Test repository state pre-§0215 + post-§0215 mechanically distinguishes the fix.
+  - **Surface B fix:** `bash -n run-sub-benchmark-1.sh` syntax-checks; the printf newline change is one-line; manifest post-re-run carries `step_durations.promote_formations: [n1, n2, ..., n10]` proper array (was `[~1.9e+79]` single number pre-§0215). Operator can verify post-merge.
+  - **Cross-CLI universality:** `grep -nE 'source_event_hashes_hex' services/ingestion/cmd/find-*/main.go` returns 5 matches (one per find-* CLI). The §0215 bridge fix template applies verbatim to BC/CH/CR bridges; §0223+ inheritance verifiable at future lift.
+  - **§0214 MO1 first prospective application:** the new test `TestRun_RealWireFixture_ChainIntact` is structurally the assertion that would have caught Surface A pre-deployment. Pre-§0215 + new test → test FAILS (`SourceHashesCount = 0`). Post-§0215 + new test → test PASSES. The MO1 discipline is empirically validated by the test's structural form, not just by its passing.
+
+- **Consequences:**
+
+  - 5 files modified (1 bridge CLI + 1 orchestrator + 1 NEW testdata fixture + 1 bridge CLI tests + 1 decision-log). Bundle-by-shape per §0184/§0186 MO2.
+  - **§2.3 chain reconstruction restored on the 10 NEW clean-chain formations** produced post-re-run shakedown. Substrate post-§0215 + re-run carries 20 formations: 10 broken-chain historical (preserved per §2.1) + 10 clean-chain. §0216 candidacy evaluation operates exclusively over clean-chain via shell-based pre-filter per the user-cravado §0205 tier-3 audibility extension.
+  - **§0214 MO1 first prospective application validated structurally.** The `TestRun_RealWireFixture_ChainIntact` test is the canonical assertion form for future bridge tests; §0223+ inherits the discipline.
+  - **§0225+ pré-condição empírica refined.** Three-clause form (a)/(b)/(c) explicit in both CLAUDE.md (post-§0214.5) and §0215 carry-forward narrative. Clause (c) (agent transition) recognizes the audit gap latente that agent discipline ≠ system enforcement.
+  - **§0226+ named-but-non-binding cross-CLI DRY deferral.** Pre-duplication abstraction rejected; the refactor opens when the second bridge is constructed under §0223+ template.
+
+  **Carry-forwards (consolidated):**
+
+  - **§0216 (binding next; depends on §0215 + re-run shakedown)** — candidacy evaluation. Shell-based pre-filter site cravado.
+  - **§0217 / §0218 / §0219** — renumbered binding paralelos (per-column coercion / endpoint_co_visit / bucket calibration); unchanged from §0214 reflow.
+  - **§0220 / §0221+ / §0222+ / §0223+** — renumbered named-but-non-binding; unchanged from §0214 reflow.
+  - **§0224+** — renumbered named-but-non-binding (§0140 scope extension); unchanged from §0214.
+  - **§0225+** — renumbered named-but-non-binding (hook infrastructure remediation); pré-condição refined with clause (c).
+  - **§0226+ (NEW, named-but-non-binding)** — cross-CLI envelope struct DRY refactor. Pré-condição: second bridge constructed under §0223+ template.
+
+  **Methodological observation 1 — First prospective application of §0214 MO1 wire-contract integration testing pattern; the discipline empirically catches the class of bug it was named to catch.**
+
+  §0214 MO1 named "bridge tests MUST use fixtures derived from upstream CLI stdout (real wire shape), not from internal struct (in-memory shape)". §0215 is the first PR to APPLY the discipline prospectively: `TestRun_RealWireFixture_ChainIntact` (new) loads `testdata/sample-envelope.json` (hand-crafted to mirror upstream emit shape verbatim) and asserts that the bridge correctly decodes the upstream field name `source_event_hashes_hex` into non-empty `source_event_hashes` on committed formations. **The test is structurally the assertion that would have caught §0214 Surface A pre-deployment** — pre-§0215 bridge code (with `json:"source_hashes"` field name) FAILS the test; post-§0215 bridge code (with `json:"source_event_hashes_hex"` field name) PASSES. **Pattern empirically validated**: §0214 MO1 is not just a documented discipline but a mechanically-enforceable test pattern. Future bridges (§0223+ BC/CH/CR) MUST include analogous `TestRun_RealWireFixture_ChainIntact` tests with their respective testdata/ fixtures; the §0215 template is reusable verbatim with subtype + signature substitutions.
+
+- **Supersession:** none in the structural sense. The 10 broken-chain formations + 10 broken-chain promotions committed at §0213 first-real-run NOT superseded — they remain in substrate per §2.1 immutability as historical record of the §0213 first remediation execution. §0215 produces a DIFFERENT outcome on re-run (10 clean-chain formations); the historical and post-§0215 sets coexist. §0214 Finding 1 + Finding 2 are operationally closed by §0215 (the §0022 surfaces named at §0214 have their remediation landed); the entries themselves remain valid as the diagnostic record. §0157 test helper pattern not superseded — it remains valid for BehavioralCluster lifecycle tests at the substrate-write tier; §0214 MO1 + §0215 testing discipline ADDS the wire-contract test layer on top, not in place of.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
