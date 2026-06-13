@@ -13,6 +13,7 @@ help:
 	@echo "  generate       run protoc to produce $(GEN_OUT)/**/*.pb.go"
 	@echo "  build          go build -trimpath -o $(BIN_DIR)/ingestion ."
 	@echo "  ingest-cic-ids-build  go build -trimpath -o $(BIN_DIR)/ingest-cic-ids ./cmd/ingest-cic-ids"
+	@echo "  ingest-tls-fingerprint-build  go build -trimpath -o $(BIN_DIR)/ingest-tls-fingerprint ./cmd/ingest-tls-fingerprint"
 	@echo "  verify-build   go build -trimpath -o $(BIN_DIR)/verify ./cmd/verify"
 	@echo "  orphan-cleanup-build  go build -trimpath -o $(BIN_DIR)/orphan-cleanup ./cmd/orphan-cleanup"
 	@echo "  derive-build   go build -trimpath -o $(BIN_DIR)/derive-operational-session ./cmd/derive-operational-session"
@@ -27,6 +28,7 @@ help:
 	@echo "  list-hypotheses-build  go build -trimpath -o $(BIN_DIR)/list-hypotheses ./cmd/list-hypotheses"
 	@echo "  find-automation-group-candidates-build  go build -trimpath -o $(BIN_DIR)/find-automation-group-candidates ./cmd/find-automation-group-candidates"
 	@echo "  find-automation-group-candidates-network-build  go build -trimpath -o $(BIN_DIR)/find-automation-group-candidates-network ./cmd/find-automation-group-candidates-network"
+	@echo "  find-automation-group-candidates-tls-build  go build -trimpath -o $(BIN_DIR)/find-automation-group-candidates-tls ./cmd/find-automation-group-candidates-tls"
 	@echo "  find-behavioral-cluster-candidates-build  go build -trimpath -o $(BIN_DIR)/find-behavioral-cluster-candidates ./cmd/find-behavioral-cluster-candidates"
 	@echo "  find-campaign-hypothesis-candidates-build  go build -trimpath -o $(BIN_DIR)/find-campaign-hypothesis-candidates ./cmd/find-campaign-hypothesis-candidates"
 	@echo "  find-coordination-ring-candidates-build  go build -trimpath -o $(BIN_DIR)/find-coordination-ring-candidates ./cmd/find-coordination-ring-candidates"
@@ -59,6 +61,7 @@ help:
 	@echo "  replay-campaign-hypothesis-formation-build  go build -trimpath -o $(BIN_DIR)/replay-campaign-hypothesis-formation ./cmd/replay-campaign-hypothesis-formation"
 	@echo "  replay-coordination-ring-formation-build  go build -trimpath -o $(BIN_DIR)/replay-coordination-ring-formation ./cmd/replay-coordination-ring-formation"
 	@echo "  replay-all-formations-build  go build -trimpath -o $(BIN_DIR)/replay-all-formations ./cmd/replay-all-formations"
+	@echo "  replay-formation-provenance-build  go build -trimpath -o $(BIN_DIR)/replay-formation-provenance ./cmd/replay-formation-provenance"
 	@echo "  test           go test -race ./..."
 	@echo "  golden-corpus  regenerate canonical-corpus golden files (schemas-evolution event)"
 	@echo "  clean          remove $(GEN_OUT) + $(BIN_DIR)"
@@ -148,6 +151,11 @@ ingest-cic-ids-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/ingest-cic-ids ./cmd/ingest-cic-ids
 
+.PHONY: ingest-tls-fingerprint-build
+ingest-tls-fingerprint-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/ingest-tls-fingerprint ./cmd/ingest-tls-fingerprint
+
 .PHONY: verify-build
 verify-build:
 	@mkdir -p $(BIN_DIR)
@@ -217,6 +225,11 @@ find-automation-group-candidates-build:
 find-automation-group-candidates-network-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/find-automation-group-candidates-network ./cmd/find-automation-group-candidates-network
+
+.PHONY: find-automation-group-candidates-tls-build
+find-automation-group-candidates-tls-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/find-automation-group-candidates-tls ./cmd/find-automation-group-candidates-tls
 
 .PHONY: find-behavioral-cluster-candidates-build
 find-behavioral-cluster-candidates-build:
@@ -377,6 +390,11 @@ replay-coordination-ring-formation-build:
 replay-all-formations-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/replay-all-formations ./cmd/replay-all-formations
+
+.PHONY: replay-formation-provenance-build
+replay-formation-provenance-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/replay-formation-provenance ./cmd/replay-formation-provenance
 
 .PHONY: test
 test:
