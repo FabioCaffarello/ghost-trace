@@ -1,8 +1,16 @@
 // Sub-modality of NetworkObservation per decision-log §0144 (a)
 // discriminated-union framing. Carries TLS ClientHello fingerprint
-// features per the JA4 specification (FoxIO LLC). Sample sources cited
-// for fixture authorship: FoxIO JA4 reference documentation
-// (publicly published canonical-form examples).
+// features per the JA4 specification (FoxIO LLC) AND the predecessor
+// JA3 specification (Salesforce, MIT-licensed). Sample sources cited
+// for fixture authorship: FoxIO JA4 reference documentation + Salesforce
+// JA3 reference documentation (publicly published canonical-form examples).
+//
+// The ja3 / ja3_raw fields (5, 6) were added per decision-log §0221
+// (TLS fingerprint vertical slice) as a backward-compatible schemas-
+// evolution under the §0139 + §0140 discipline: additive fields,
+// proto3 string default "" for records committed before §0221. JA3 is
+// the legacy MD5-based fingerprint; JA4 (fields 1–2) is its successor.
+// A NetworkTlsJa4 record MAY carry either or both fingerprint families.
 //
 // No `confidence` / `evidential_independence` fields — Cat I sub-modality
 // payload, structurally excluded from paired-dimension per §2.6 BC3.
@@ -42,4 +50,20 @@ message NetworkTlsJa4 {
   // the repeated string here is supplementary for full ALPN list
   // inspection. Empty when ALPN extension absent.
   repeated string alpn_protocols = 4;
+
+  // ja3 is the canonical JA3 fingerprint per the Salesforce JA3 spec:
+  // the 32-character lowercase hex MD5 digest of `ja3_raw`. Example:
+  // "769,47-53-5-10-49161-49162-49171-49172-50-56-19-4,0-10-11,23-24-25,0"
+  // digests to "ada70206e40642a3e4461f35503241d5". Empty when not computed.
+  // Added per §0221 (schemas-evolution; field tag 5; backward-compatible).
+  string ja3 = 5;
+
+  // ja3_raw is the pre-digest canonical JA3 string per the Salesforce
+  // spec: the decimal-comma form
+  // "SSLVersion,Ciphers,Extensions,EllipticCurves,ECPointFormats" (the
+  // five comma-joined fields, each a hyphen-joined decimal list).
+  // Preserves the input the JA3 MD5 is computed from, for verification
+  // and re-derivation — mirrors ja4_raw's role for JA4. Empty when not
+  // computed. Added per §0221 (schemas-evolution; field tag 6).
+  string ja3_raw = 6;
 }
