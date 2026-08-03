@@ -130,10 +130,7 @@ func TestHighestSeqIsAHighWaterMark(t *testing.T) {
 
 	for _, seq := range []uint32{0, 3, 1, 7, 2} {
 		_ = s.With(tok, func(st *State) {
-			if seq > st.HighestSeq {
-				st.HighestSeq = seq
-			}
-			st.BatchesSeen++
+			st.ObserveBatch(seq, 0)
 		})
 	}
 
@@ -147,4 +144,36 @@ func TestHighestSeqIsAHighWaterMark(t *testing.T) {
 			t.Errorf("BatchesSeen = %d, want 5", st.BatchesSeen)
 		}
 	})
+}
+
+func TestObserveBatchAndEventTime(t *testing.T) {
+	var st State
+
+	// Envelope high-water marks: out-of-order sent_at must not regress.
+	st.ObserveBatch(2, 5000)
+	st.ObserveBatch(1, 3000)
+	if st.BatchesSeen != 2 || st.HighestSeq != 2 || st.LastEventMs != 5000 {
+		t.Errorf("after batches: %+v", st)
+	}
+
+	// Event times advance duration monotonically.
+	st.ObserveEventTime(4000) // older than 5000: no regress
+	st.ObserveEventTime(6200)
+	if st.LastEventMs != 6200 {
+		t.Errorf("LastEventMs = %d, want 6200", st.LastEventMs)
+	}
+}
+
+func TestNewIDShape(t *testing.T) {
+	a, err := NewID("ev_")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := NewID("ev_")
+	if a == b {
+		t.Error("two ids collided")
+	}
+	if len(a) != 3+24 { // prefix + base64url(18 bytes)
+		t.Errorf("id length = %d: %q", len(a), a)
+	}
 }
