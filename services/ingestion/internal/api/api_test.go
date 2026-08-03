@@ -379,3 +379,71 @@ func TestMalformedBodyIsRejected(t *testing.T) {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
 	}
 }
+
+// ---------------------------------------------------------------
+// POST /v1/outcomes
+// ---------------------------------------------------------------
+
+func TestOutcomesRequiresSecretKey(t *testing.T) {
+	// Labels come from the application server, never the browser. A
+	// browser that could report its own outcome could launder its way
+	// out of any calibration.
+	srv := newTestServer(t, policy.ModeMonitor)
+	token := startSession(t, srv)
+
+	status, _ := post(t, srv, "/v1/outcomes", token, map[string]any{
+		"evaluation_id": "ev_1", "outcome": "fraud_confirmed",
+	})
+	if status != http.StatusUnauthorized {
+		t.Errorf("status = %d with a session token, want 401", status)
+	}
+}
+
+func TestOutcomesRejectsUnknownLabel(t *testing.T) {
+	// A typo'd label is worse than a missing one: it silently degrades
+	// the calibration everything else depends on.
+	srv := newTestServer(t, policy.ModeMonitor)
+	status, _ := post(t, srv, "/v1/outcomes", testSecretKey, map[string]any{
+		"evaluation_id": "ev_1", "outcome": "probably_a_bot_i_think",
+	})
+	if status != http.StatusBadRequest {
+		t.Errorf("status = %d for an unknown outcome, want 400", status)
+	}
+}
+
+func TestOutcomesRequiresEvaluationID(t *testing.T) {
+	srv := newTestServer(t, policy.ModeMonitor)
+	status, _ := post(t, srv, "/v1/outcomes", testSecretKey, map[string]any{
+		"outcome": "login_success",
+	})
+	if status != http.StatusBadRequest {
+		t.Errorf("status = %d without evaluation_id, want 400", status)
+	}
+}
+
+func TestOutcomesWithoutStorageIsRefused(t *testing.T) {
+	// The test server has no archive. A label with nowhere durable to
+	// live must not be accepted: the caller would believe it had
+	// reported an outcome, and the loss would be invisible until
+	// calibration time.
+	srv := newTestServer(t, policy.ModeMonitor)
+	status, _ := post(t, srv, "/v1/outcomes", testSecretKey, map[string]any{
+		"evaluation_id": "ev_1", "outcome": "login_success",
+	})
+	if status != http.StatusServiceUnavailable {
+		t.Errorf("status = %d with no archive configured, want 503", status)
+	}
+}
+
+func TestAllContractOutcomeLabelsAccepted(t *testing.T) {
+	// The enumeration is contract surface (§3). If one of these is
+	// rejected, an integrator's labels vanish.
+	for _, label := range []string{
+		"login_success", "login_failure", "challenge_passed",
+		"challenge_failed", "fraud_confirmed", "user_appealed", "abandoned",
+	} {
+		if !validOutcomes[label] {
+			t.Errorf("contract outcome %q is not accepted", label)
+		}
+	}
+}

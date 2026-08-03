@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// Outcome is what actually happened after a decision (§3
+// POST /v1/outcomes).
+//
+// Without this endpoint there are no labels; without labels there is no
+// calibration; without calibration the false-positive rate is a guess.
+// It is the difference between a detector and a platform.
+//
+// Outcomes arrive late — a chargeback can land weeks after the decision,
+// long past the 7-day raw-event retention — which is why `evaluation_id`
+// must stay durable well beyond the events, and why the Evaluation
+// record carries its own feature state.
+//
+// An outcome is a Category I observation: an immutable historical fact
+// reported by the application. It is never revised. A later, better
+// outcome for the same evaluation is a NEW record, and the join is
+// resolved by reading time order rather than by mutation.
+message Outcome {
+  string tenant_id = 1;
+
+  // The decision this outcome is about.
+  string evaluation_id = 2;
+
+  // One of: login_success | login_failure | challenge_passed |
+  // challenge_failed | fraud_confirmed | user_appealed | abandoned.
+  string outcome = 3;
+
+  // When the application observed it, Unix nanoseconds. Application
+  // clock — trusted no more than any other caller-supplied value, but
+  // recorded as claimed.
+  int64 observed_at = 4;
+
+  // Server wall-clock nanoseconds at acceptance. Server-observed, so
+  // the trustworthy half of the pair; the gap between the two is itself
+  // worth watching.
+  int64 recorded_at = 5;
+}

@@ -101,6 +101,7 @@ func (s *Server) Routes() *http.ServeMux {
 	mux.HandleFunc("POST /v1/sessions", s.handleSessions)
 	mux.HandleFunc("POST /v1/telemetry", s.handleTelemetry)
 	mux.HandleFunc("POST /v1/decisions", s.handleDecisions)
+	mux.HandleFunc("POST /v1/outcomes", s.handleOutcomes)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
@@ -487,6 +488,79 @@ func (s *Server) handleDecisions(w http.ResponseWriter, r *http.Request) {
 		Evidence:       ev,
 		Mode:           s.cfg.Mode,
 	})
+}
+
+// ---------------------------------------------------------------
+// POST /v1/outcomes — application server
+// ---------------------------------------------------------------
+
+type outcomesRequest struct {
+	EvaluationID string `json:"evaluation_id"`
+	Outcome      string `json:"outcome"`
+	ObservedAt   string `json:"observed_at"`
+}
+
+// validOutcomes is the enumeration from contract §3. An unknown value is
+// rejected rather than stored: a typo'd label is worse than a missing
+// one, because it silently degrades the calibration everything else
+// depends on.
+var validOutcomes = map[string]bool{
+	"login_success":    true,
+	"login_failure":    true,
+	"challenge_passed": true,
+	"challenge_failed": true,
+	"fraud_confirmed":  true,
+	"user_appealed":    true,
+	"abandoned":        true,
+}
+
+func (s *Server) handleOutcomes(w http.ResponseWriter, r *http.Request) {
+	if bearerToken(r) != s.cfg.SecretKey {
+		writeError(w, http.StatusUnauthorized, "invalid secret_key")
+		return
+	}
+
+	var req outcomesRequest
+	if !s.decode(w, r, &req) {
+		return
+	}
+	if req.EvaluationID == "" {
+		writeError(w, http.StatusBadRequest, "evaluation_id is required")
+		return
+	}
+	if !validOutcomes[req.Outcome] {
+		writeError(w, http.StatusBadRequest, "unknown outcome")
+		return
+	}
+
+	observedAt := s.now().UnixNano()
+	if req.ObservedAt != "" {
+		if t, err := time.Parse(time.RFC3339, req.ObservedAt); err == nil {
+			observedAt = t.UnixNano()
+		}
+	}
+
+	rec := &eventsv1.Outcome{
+		TenantId:     s.cfg.TenantID,
+		EvaluationId: req.EvaluationID,
+		Outcome:      req.Outcome,
+		ObservedAt:   observedAt,
+		RecordedAt:   s.now().UnixNano(),
+	}
+
+	if s.archive == nil {
+		// A label with nowhere durable to live is worse than a refusal:
+		// the caller would believe it had reported an outcome.
+		writeError(w, http.StatusServiceUnavailable, "outcome storage not configured")
+		return
+	}
+	if _, err := s.archive.Append(r.Context(), rec, rec.RecordedAt); err != nil {
+		s.log.Error("archive outcome", "err", err, "evaluation_id", req.EvaluationID)
+		writeError(w, http.StatusInternalServerError, "could not record outcome")
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
 }
 
 // ---------------------------------------------------------------
