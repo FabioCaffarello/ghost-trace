@@ -1,0 +1,25 @@
+# Schema toolchain configuration. The module root is schemas/, so
+# proto paths are events/v1/... and breaking-change detection covers
+# every wire type the contract exposes (§2).
+version: v2
+modules:
+  - path: schemas
+lint:
+  use:
+    - STANDARD
+  except:
+    # The tree is schemas/events/v1 with package ghosttrace.events.v1.
+    # STANDARD wants the directory to spell the full package
+    # (ghosttrace/events/v1); the repo predates buf and the shorter
+    # layout is load-bearing in paths and docs. Everything else in
+    # STANDARD applies.
+    - PACKAGE_DIRECTORY_MATCH
+breaking:
+  use:
+    - FILE
+  except:
+    # go_package points at generated-code location, a Go build concern
+    # rather than a wire concern. Wire compatibility is what breaking
+    # detection is for; a go_package move breaks Go consumers instead,
+    # and the monorepo catches that at compile time.
+    - FILE_SAME_GO_PACKAGE

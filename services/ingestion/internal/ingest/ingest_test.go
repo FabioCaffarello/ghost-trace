@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/canonical"
-	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
+	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
 

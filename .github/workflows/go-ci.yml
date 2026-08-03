@@ -1,7 +1,9 @@
-# Go CI — build + test for the Ghost Trace service tree.
+# Go CI — schema checks + build + test for the Ghost Trace tree.
 #
-# internal/genproto is generated, not tracked, so `make generate` must run
-# before build or test on a fresh checkout.
+# Generated code is COMMITTED under libs/genproto; the genproto-sync step
+# regenerates and fails on any diff, so the schemas and the committed
+# bindings cannot drift. buf lint and breaking-change detection guard the
+# wire contract itself (§2, §7).
 #
 # The v1 workflow made every step conditional on a `hashFiles` probe for
 # services/ingestion/Makefile — which M0 deleted — so restoring it unchanged
@@ -20,6 +22,42 @@ permissions:
   contents: read
 
 jobs:
+  schemas:
+    name: schemas — lint + breaking + genproto sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: services/ingestion/go.sum
+
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          version: '1.68.4'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install protoc-gen-go
+        run: make -C services/ingestion tools
+
+      - name: buf lint
+        run: buf lint
+
+      # subdir=schemas pins the against-input root so the comparison
+      # aligns with refs that predate buf.yaml (module root = schemas/).
+      - name: buf breaking (against main)
+        if: github.event_name == 'pull_request'
+        run: buf breaking --against ".git#branch=origin/${{ github.base_ref }},subdir=schemas"
+
+      - name: genproto in sync
+        run: |
+          PATH="$(go env GOPATH)/bin:$PATH" buf generate
+          git diff --exit-code -- libs/genproto \
+            || { echo "::error::libs/genproto is stale — run 'buf generate' and commit"; exit 1; }
+
   ingestion:
     name: services/ingestion — build + test
     runs-on: ubuntu-latest
@@ -33,17 +71,6 @@ jobs:
         with:
           go-version: '1.22'
           cache-dependency-path: services/ingestion/go.sum
-
-      - uses: arduino/setup-protoc@v3
-        with:
-          version: '27.x'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install protoc-gen-go
-        run: make tools
-
-      - name: Generate protobuf bindings
-        run: make generate
 
       - name: Build
         run: make build
