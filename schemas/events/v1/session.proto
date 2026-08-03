@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// SessionStart records the issuance of a session token (§3
+// POST /v1/sessions).
+//
+// The client properties here are normalization inputs, not identity.
+// The admission test per contract §0: does this property change how
+// behaviour should be interpreted? A 400px viewport produces different
+// scroll dynamics than a 1440px one, and a trackpad produces a
+// structurally different pointer trace than a mouse — comparing them
+// without normalizing measures the input device, not the operator.
+//
+// Nothing here may be used to tell one browser from another. Canvas,
+// WebGL, font enumeration and audio fingerprinting are out of scope and
+// contradict the thesis (§0).
+message SessionStart {
+  string tenant_id = 1;
+  string session_id = 2;
+
+  // Server wall-clock nanoseconds at issuance.
+  int64 started_at = 3;
+
+  string page_path = 4;
+
+  // CSS pointer media feature: "fine" | "coarse" | "none".
+  string pointer_type = 5;
+  bool touch = 6;
+
+  uint32 viewport_w = 7;
+  uint32 viewport_h = 8;
+
+  // Minutes offset from UTC. Coarse; a normalization input for
+  // time-of-day effects, not a locator.
+  int32 tz_offset_min = 9;
+
+  // prefers-reduced-motion. Load-bearing for fairness: users with this
+  // set are among those most at risk of a false positive, so the signal
+  // must be available to the scorer rather than silently absent.
+  bool reduced_motion = 10;
+}

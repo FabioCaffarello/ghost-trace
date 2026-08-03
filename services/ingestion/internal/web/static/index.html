@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ghost Trace — M1 vertical slice</title>
+<style>
+  :root {
+    --bg: #0f1115; --fg: #e6e8ee; --muted: #9aa3b2;
+    --line: #232733; --card: #161922; --accent: #6ea8fe;
+    --allow: #4ade80; --challenge: #fbbf24; --block: #f87171;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f7f8fa; --fg: #14171f; --muted: #5b6474;
+      --line: #dfe3ea; --card: #ffffff; --accent: #2563eb;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1rem; min-height: 100vh;
+    background: var(--bg); color: var(--fg);
+    font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 46rem; margin: 0 auto; }
+  h1 { font-size: 1.35rem; margin: 0 0 .3rem; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 0 0 1.75rem; font-size: .92rem; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 1.25rem; margin-bottom: 1.1rem;
+  }
+  label { display: block; font-size: .82rem; color: var(--muted); margin-bottom: .3rem; }
+  input {
+    width: 100%; padding: .6rem .7rem; margin-bottom: .9rem;
+    background: var(--bg); color: var(--fg);
+    border: 1px solid var(--line); border-radius: 6px; font-size: .95rem;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button {
+    font: inherit; font-weight: 550; cursor: pointer;
+    padding: .6rem 1.1rem; border-radius: 6px; border: 1px solid transparent;
+    background: var(--accent); color: #fff;
+  }
+  button.ghost { background: transparent; border-color: var(--line); color: var(--fg); }
+  .row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+  .hint { color: var(--muted); font-size: .84rem; margin: .9rem 0 0; }
+  .verdict { display: flex; align-items: baseline; gap: .6rem; margin-bottom: .9rem; }
+  .pill {
+    font-weight: 650; font-size: .78rem; letter-spacing: .04em;
+    text-transform: uppercase; padding: .2rem .55rem; border-radius: 999px;
+    border: 1px solid currentColor;
+  }
+  .allow { color: var(--allow); } .challenge { color: var(--challenge); } .block { color: var(--block); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: .85rem; }
+  .metric { border: 1px solid var(--line); border-radius: 8px; padding: .65rem .75rem; }
+  .metric .k { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .metric .v { font-size: 1.3rem; font-variant-numeric: tabular-nums; margin-top: .15rem; }
+  table { width: 100%; border-collapse: collapse; margin-top: .9rem; font-size: .88rem; }
+  th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; font-size: .76rem; text-transform: uppercase; letter-spacing: .04em; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85em; }
+  .status { color: var(--muted); font-size: .82rem; margin-top: .5rem; font-variant-numeric: tabular-nums; }
+  .note { border-left: 2px solid var(--accent); padding-left: .8rem; color: var(--muted); font-size: .86rem; }
+  #result { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Ghost Trace — M1 vertical slice</h1>
+  <p class="sub">Demo page → SDK → ingest → decision → visible result. One feature: pointer linearity.</p>
+
+  <div class="card">
+    <form id="login" autocomplete="off">
+      <label for="u">Username</label>
+      <input id="u" name="username" value="demo@example.com">
+      <label for="p">Password</label>
+      <input id="p" name="password" type="password" value="hunter2">
+      <div class="row">
+        <button type="submit">Sign in</button>
+        <button type="button" class="ghost" id="sim">Simulate linear bot</button>
+      </div>
+    </form>
+    <p class="hint">
+      Move the pointer around the page, then sign in. Then reload and press
+      <em>Simulate linear bot</em>, which injects a perfectly straight
+      constant-velocity path, and compare the score.
+    </p>
+    <p class="status" id="status">initialising…</p>
+  </div>
+
+  <div class="card" id="result">
+    <div class="verdict">
+      <span class="pill" id="decision">—</span>
+      <span class="sub" style="margin:0" id="modeline"></span>
+    </div>
+    <div class="grid">
+      <div class="metric"><div class="k">Score</div><div class="v" id="score">—</div></div>
+      <div class="metric"><div class="k">Confidence</div><div class="v" id="confidence">—</div></div>
+      <div class="metric"><div class="k">Events</div><div class="v" id="events">—</div></div>
+      <div class="metric"><div class="k">Duration</div><div class="v" id="duration">—</div></div>
+    </div>
+    <table>
+      <thead><tr><th>Reason</th><th class="n">Weight</th></tr></thead>
+      <tbody id="reasons"></tbody>
+    </table>
+    <p class="status">evaluation <code id="evalid"></code></p>
+  </div>
+
+  <p class="note">
+    Keystroke content is never collected — M1 collects no key events at all.
+    No canvas, WebGL or font fingerprinting: those identify the browser, not
+    the behaviour. Thresholds are uncalibrated guesses until M2 measures them
+    against an adversary.
+  </p>
+</main>
+
+<script>
+  window.GHOST_TRACE_SITE_KEY = "SITE_KEY_PLACEHOLDER";
+</script>
+<script src="/sdk.js"></script>
+<script>
+  var statusEl = document.getElementById("status");
+
+  GhostTrace.onEvent(function (name, d) {
+    if (name === "session") {
+      statusEl.textContent = "collecting at " + d.collect.pointer_hz +
+        "Hz, batching every " + d.collect.batch_ms + "ms";
+    } else if (name === "flush") {
+      statusEl.textContent = "sent batch #" + d.seq + " (" + d.events + " polylines)";
+    }
+  });
+
+  GhostTrace.start().catch(function (e) {
+    statusEl.textContent = "session handshake failed: " + e;
+  });
+
+  document.getElementById("sim").addEventListener("click", function () {
+    GhostTrace._injectLinear(80);
+    statusEl.textContent = "injected a synthetic linear path — now sign in";
+  });
+
+  document.getElementById("login").addEventListener("submit", function (e) {
+    e.preventDefault();
+    GhostTrace.flush();
+
+    // Give the batch a moment to land. Telemetry is async and the
+    // decision reads whatever state has arrived — which is exactly the
+    // cold-start condition the confidence dimension exists to model.
+    setTimeout(function () {
+      fetch("/demo/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_token: GhostTrace.token(),
+          username: document.getElementById("u").value
+        })
+      })
+        .then(function (r) { return r.json(); })
+        .then(render)
+        .catch(function (err) { statusEl.textContent = "login failed: " + err; });
+    }, 250);
+  });
+
+  function render(d) {
+    document.getElementById("result").style.display = "block";
+
+    var shown = d.shadow_decision || d.decision;
+    var pill = document.getElementById("decision");
+    pill.textContent = shown;
+    pill.className = "pill " + shown;
+
+    document.getElementById("modeline").textContent =
+      d.shadow_decision
+        ? "mode: " + d.mode + " — returned " + d.decision + ", enforce would have said " + d.shadow_decision
+        : "mode: " + d.mode;
+
+    document.getElementById("score").textContent = d.score.toFixed(3);
+    document.getElementById("confidence").textContent = d.confidence.toFixed(3);
+    document.getElementById("events").textContent = d.evidence.events;
+    document.getElementById("duration").textContent = (d.evidence.duration_ms / 1000).toFixed(1) + "s";
+    document.getElementById("evalid").textContent = d.evaluation_id;
+
+    var tb = document.getElementById("reasons");
+    tb.innerHTML = "";
+    (d.reasons || []).forEach(function (r) {
+      var tr = document.createElement("tr");
+      tr.innerHTML = "<td><code>" + r.code + "</code></td><td class='n'>" +
+        r.weight.toFixed(2) + "</td>";
+      tb.appendChild(tr);
+    });
+    if (!(d.reasons || []).length) {
+      tb.innerHTML = "<tr><td colspan='2' class='sub'>no contributing factors</td></tr>";
+    }
+  }
+</script>
+</body>
+</html>
