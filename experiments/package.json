@@ -2,12 +2,15 @@
   "name": "ghost-trace-experiments",
   "version": "0.1.0",
   "private": true,
-  "description": "Adversarial harness: four bot tiers against the Ghost Trace slice.",
+  "description": "Adversarial experiments: six bot tiers against the Ghost Trace slice.",
   "type": "module",
   "scripts": {
     "tier1": "node tiers/tier1_playwright.js",
     "tier2": "node tiers/tier2_puppeteer_stealth.js",
-    "tier4": "node tiers/tier4_synthetic_linear.js"
+    "tier3": "python3 tiers/tier3_undetected_chromedriver.py",
+    "tier4": "node tiers/tier4_synthetic_linear.js",
+    "tier5": "node tiers/tier5_humanised.js",
+    "tier6": "node tiers/tier6_value_injection.js"
   },
   "dependencies": {
     "playwright": "^1.49.0",

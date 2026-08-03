@@ -54,3 +54,6 @@ tmp/
 
 # M1 local run data
 services/ingestion/.run-data/
+
+# Local agent-tooling state — recreated by tooling, never repo content
+.claude/
