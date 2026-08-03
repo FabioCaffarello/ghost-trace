@@ -62,6 +62,8 @@ help:
 	@echo "  replay-coordination-ring-formation-build  go build -trimpath -o $(BIN_DIR)/replay-coordination-ring-formation ./cmd/replay-coordination-ring-formation"
 	@echo "  replay-all-formations-build  go build -trimpath -o $(BIN_DIR)/replay-all-formations ./cmd/replay-all-formations"
 	@echo "  replay-formation-provenance-build  go build -trimpath -o $(BIN_DIR)/replay-formation-provenance ./cmd/replay-formation-provenance"
+	@echo "  decide-from-automation-group-build  go build -trimpath -o $(BIN_DIR)/decide-from-automation-group ./cmd/decide-from-automation-group"
+	@echo "  replay-decision-provenance-build  go build -trimpath -o $(BIN_DIR)/replay-decision-provenance ./cmd/replay-decision-provenance"
 	@echo "  test           go test -race ./..."
 	@echo "  golden-corpus  regenerate canonical-corpus golden files (schemas-evolution event)"
 	@echo "  clean          remove $(GEN_OUT) + $(BIN_DIR)"
@@ -108,6 +110,7 @@ generate: $(PROTOC_GEN_GO)
 	  events/v1/network_ip_asn.proto \
 	  events/v1/operational_session.proto \
 	  events/v1/orphan_cleanup_audit.proto \
+	  events/v1/operational_decision_audit.proto \
 	  events/v1/cross_subtype_merge_attachment.proto \
 	  events/v1/derived_actor_attribution.proto \
 	  events/v1/behavioral_cluster_formation.proto \
@@ -395,6 +398,16 @@ replay-all-formations-build:
 replay-formation-provenance-build:
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -o $(BIN_DIR)/replay-formation-provenance ./cmd/replay-formation-provenance
+
+.PHONY: decide-from-automation-group-build
+decide-from-automation-group-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/decide-from-automation-group ./cmd/decide-from-automation-group
+
+.PHONY: replay-decision-provenance-build
+replay-decision-provenance-build:
+	@mkdir -p $(BIN_DIR)
+	go build -trimpath -o $(BIN_DIR)/replay-decision-provenance ./cmd/replay-decision-provenance
 
 .PHONY: test
 test:

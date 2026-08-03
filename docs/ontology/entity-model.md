@@ -17,6 +17,7 @@ Examples (illustrative, not exhaustive):
 - Network-level events recorded by infrastructure collectors.
 - Transactions or state changes recorded by external authoritative systems.
 - Fingerprint snapshots collected at well-defined moments.
+- **`OperationalDecisionAudit`**: the audit record of an operator-elected enforcement decision (allow / challenge / block / shadow) taken on a subject actor under a versioned policy, per [`decision-log.md` §0222](../charter/decision-log.md) (operational-decision RFC, Framing A). It is a record of *historical fact* — what the operator/policy decided, when — that references the influencing Category III hypothesis by hash; it does not embody inferential commitment (so it carries no `confidence` / `evidential_independence` per [§2.6](../charter/constitutional-charter.md#26-evidential-independence-integrity) BC3). It is the [§3 N3](../charter/constitutional-charter.md#3-non-goals) audit-on-commit record: the operator identity it carries is the structural evidence that the action was operator-initiated, not autonomous substrate-side action.
 
 Per [`decision-log.md` §0015](../charter/decision-log.md) (Q1 resolution), `Session` as a domain concept resolves to two distinct entity-model types: `DeclaredSession` (Category I, defined here) and `OperationalSession` (Category II, defined below). The two diverge in the cases where investigation matters most; the type-level visibility of the divergence is intentional and structural.
 

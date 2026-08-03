@@ -25,6 +25,8 @@
 /services/ingestion/ingest-tls-fingerprint
 /services/ingestion/find-automation-group-candidates-tls
 /services/ingestion/replay-formation-provenance
+/services/ingestion/decide-from-automation-group
+/services/ingestion/replay-decision-provenance
 
 # Node (anticipated for simulator/frontend)
 node_modules/

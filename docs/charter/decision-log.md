@@ -10698,6 +10698,69 @@ The §0143 mandatory instrumentation per `EvaluationStats` (ObservationsScanned 
 
 ---
 
+## `0222` — Operational-decision RFC resolved as Framing A (Decision = Cat I audit record); decision layer implemented (`OperationalDecisionAudit` + versioned policy + operator-elected CLI + decision-provenance replay); completes the anti-bot vertical slice obs→inference→decision→replay
+
+- **Status:** accepted
+- **Date:** 2026-06-13
+- **Context:** §0221 carried the TLS fingerprint vertical slice through collection + inference + replay and STOPPED at the Decision layer — no decision/action/policy record type exists in any category — opening `docs/rfcs/draft/ontology-revision-operational-decision-record.md` (status discussion) with three candidate framings and no resolution, per the §6.2 rule that picking a §2.2 categorization is a constitutional move requiring explicit ratification. The operator ratified **Framing A** (Decision = Category I audit record) after a committee-mode deliberation of the three framings (A: Cat I audit; B: Cat II eval + Cat I audit; C: external consumer). This entry resolves the RFC and lands the materialization under ordinary RFC discipline (the implementation gate cleared at §0022).
+
+- **Decision:** resolve the operational-decision RFC as **Framing A** and implement the decision layer. Six surfaces:
+
+  ### 1. Schema — new Cat I `OperationalDecisionAudit` proto
+
+  **File:** `schemas/events/v1/operational_decision_audit.proto` (NEW). Records an operator-elected enforcement decision: nested `DecisionType` enum (ALLOW / CHALLENGE / BLOCK / SHADOW; UNSPECIFIED=0), `subject_actor_ref`, `decided_at` (int64 ns), `source_observation_hashes` (repeated bytes, §2.3 chain, §0139 element-shape), `influencing_hypothesis_hashes` (repeated bytes → Cat III formations), `policy_ref`, `operator_ref`. NO `confidence`/`evidential_independence` (Cat I record of historical fact, §2.6 BC3). Modeled on the `OrphanCleanupAudit` (§0104) Cat I audit precedent. Added to the Makefile `generate` target. Per the established audit-record convention (`OrphanCleanupAudit` is likewise absent from the canonical corpus), `OperationalDecisionAudit` is NOT added to the corpus; it carries no paired dimensions so it is not a `validatePairedDimensionCommitment` subject (verified: full canonical suite passes).
+
+  ### 2. Decision package — versioned in-process policy + audit commit
+
+  **File:** `internal/decision/decision.go` (NEW). `Policy` interface + `AutomationTieredV1` (`automation-tiered-v1`): maps the formation's committed `confidence` to a verdict via fixed thresholds (≥0.8 BLOCK; ≥0.5 CHALLENGE; >0 SHADOW; =0 ALLOW). The CONFIDENCE dimension is the sole input — `evidential_independence` is deliberately not consulted (a policy gating on independence would be a distinct versioned policy), honoring the §2.6 separation. `DecideFromAutomationGroup` evaluates the policy against a single-actor `AutomationGroupFormation` and commits one `OperationalDecisionAudit` (idempotent via content-addressing). Under Framing A the evaluation is in-process; only the verdict (the audit) is committed, with `policy_ref` + the referenced hypothesis as the re-derivation handle.
+
+  ### 3. CLI — `decide-from-automation-group` (operator-elected, §3 N3)
+
+  **File:** `cmd/decide-from-automation-group/main.go` (NEW) + Makefile target + `.gitignore`. Requires `-formation-event-hash` + `-operator` (non-empty enforced — a committed audit must name the elector). The substrate is NOT the actor: signatures never invoke this; the operator runs it. The committed `operator_ref` is the §3 N3 structural evidence that the action was operator-initiated.
+
+  ### 4. Replay — `decide`→hypothesis→observation reconstruction
+
+  **File:** `internal/replay/decision_provenance.go` (NEW) + `cmd/replay-decision-provenance/` + Makefile target + `.gitignore`. `ReconstructDecisionProvenance` resolves an audit's `influencing_hypothesis_hashes` (reusing the §0221 `ReconstructAutomationGroupProvenance`) → Cat I observations (surfacing the JA3/JA4), plus the audit's own `source_observation_hashes`. Completes the §0221 replay capability across the fourth (decision) hop: the full obs→inference→decision chain is reconstructible from the substrate for audit.
+
+  ### 5. Governance — RFC resolution + glossary + entity-model
+
+  - RFC `ontology-revision-operational-decision-record.md` status discussion → **accepted** (Framing A), with a Resolution section recording the rationale + the deferral of Framing B (not rejection — advances under empirical pressure for substrate-recorded deterministic verdict re-derivation) + the set-aside of Framing C.
+  - `docs/glossary.md`: the §0221 epistemic-audit V1 reconciliation enacted — the `assertion` `decision` forbidden-synonym narrowed to the *single-assertion-synonym* sense, and a NEW `operational decision` term registered (Category I; the audit record). No silent overwrite of the vocabulary rule.
+  - `docs/ontology/entity-model.md`: `OperationalDecisionAudit` added to the Category I examples (the entity-model surface the RFC promised at resolution).
+
+  ### 6. Tests
+
+  Full four-hop E2E `TestAntibotSlice_FullChain_ObservationToDecisionToReplay` (ingest JA3+JA4 → AutomationGroup → decide CHALLENGE under `automation-tiered-v1` → reconstruct the chain back to the exact JA4/JA3); policy unit (tiered thresholds); decision unit (commit, idempotency, single-actor guard, audit field correctness incl. `operator_ref` + provenance hashes).
+
+- **Constitutional review:**
+
+  **Tier 1 (Charter)** — zero amendment. §2.1 (the audit is immutable; a decision reversal is a new record). §2.2 (the categorization ratified: the decision audit is a Category I record of historical fact — the *enactment* — that references the inferential Cat III hypothesis by hash; the deterministic policy-*evaluation* that would be a Cat II construct is the deferred Framing B). §2.3 (provenance: `source_observation_hashes` inherited from the influencing formation; replay resolves the chain to Cat I). §2.4 (a Cat I audit carries no `influenced_by`; the inferential antecedent is referenced by hash, not restated — §2.4 does not reach a non-assertion record). §2.6 BC3 (Cat I record carries no paired dimensions — correct, not a gap). §3 N1 (the audit is not truth-bearing; it records a decided action + points to the hypothesis, which carries its own paired dimensions). §3 N3 (operator-elected via the CLI; `operator_ref` is the structural evidence of operator-initiation; signatures never auto-commit — a decision with no audit is the anomaly N3 forbids).
+
+  **Tier 2 (Ontology / schemas / canonical)** — new Cat I proto (schemas-evolution per §0024 + §0139/§0140; no paired-dimension subject); entity-model Category I example added; glossary term added + forbidden-synonym narrowed. The RFC moving to accepted resolves the question opened at §0221 (no other Ontology question touched; entity-model OMQs remain "(None remaining)").
+
+  **Tier 3 (services)** — new `internal/decision` package + two cmd CLIs + one replay function; all reuse existing substrate / canonical / hypothesis / replay surfaces (the decision replay reuses the §0221 AutomationGroup provenance reconstruction). No parallel structure.
+
+  **Anchor verification:** §0023 (single-tier `subject_actor_ref`), §0104 (`OrphanCleanupAudit` Cat I audit precedent — directly mirrored), §0139/§0140 (hash-list element-shape; OperationalDecisionAudit not a paired-dimension subject), §0143 D2 (observation-precedes-refactor — Framing B deferred until empirical pressure), §0149 MO4 (anti-marketing enum-naming — DecisionType values name the action structurally), §0213 (`AutomationGroupFormationFromCandidate` reused), §0221 (the slice + `ReconstructAutomationGroupProvenance` reused; the V1 glossary reconciliation enacted).
+
+  **Falsifiability:** (a) the four-hop E2E asserts the reconstructed chain resolves to the exact ingested JA4/JA3 with verdict CHALLENGE (confidence 0.5 tier), subject actor, policy_ref, operator_ref — verifiable by `go test -race ./...` (31 packages). (b) Policy table-test pins each confidence tier → verdict. (c) Idempotency: re-deciding identical inputs commits no new row (content-addressed). (d) Multi-actor formation is rejected (inception single-actor scope). (e) CLI requires `-operator` (N3 evidence).
+
+- **Consequences:**
+
+  - **Enabled:** the anti-bot vertical slice is complete across all four layers — obs→inference→decision→replay reconstructible end-to-end from the substrate. First enforcement-decision record type (`OperationalDecisionAudit`); first operator-elected decision CLI; the §0221 Definition-of-Done's "replay reconstructs the complete chain for a session, for audit" is now met at the decision hop.
+  - **Constrained:** Framing B (the Cat II `DecisionConstruct` making the verdict's policy-evaluation a substrate record with native §2.4 influence + §2.6 paired dimensions + Phase-2 deterministic re-derivation) is DEFERRED — under Framing A the verdict is re-derivable only by looking up `policy_ref`'s versioned thresholds against the referenced hypothesis, not from a committed eval record. Inception scope decides single-actor AutomationGroups only (multi-actor per-actor decision deferred). The policy layer is in-process (operator-owned), not a substrate definition. Decision enactment beyond the audit (the actual gateway action) is external per §3 N3 + the §3 external-system carve-out.
+
+  **Carry-forwards:**
+
+  - **§0223+ Framing B trigger (NBN)** — when an operator workflow empirically requires substrate-recorded deterministic verdict re-derivation (e.g. policy-version drift audits, or a decision influenced by multiple hypotheses needing native `influenced_by`), the Cat II `DecisionConstruct` advances under ordinary RFC discipline. Until then Framing A holds per §0143 D2.
+  - **§0223+ multi-actor decision (NBN)** — per-actor decisions over a multi-actor AutomationGroup; opens when a multi-actor TLS/network signature feeds the decision path.
+  - **AppendPair-with-IngestionEvent enrichment for the audit (NBN)** — the audit commits via `substrate.Append` (matching `AutomationGroupFormationFromCandidate`); pairing with an IngestionEvent recording channel/operator (the `OrphanCleanupAudit` AppendPair shape) is a deferred refinement; `operator_ref` already carries the N3 evidence.
+
+  **Methodological observation — Framing A is the §0143-D2 minimal step that still records the decision; the deferred completeness is named, not silently dropped.** The committee-mode deliberation surfaced that the §2.2 decomposition (eval = Cat II deterministic; enactment = Cat I historical fact) makes Framing B the most complete, but the project's inception discipline (conservative defaults; observation-precedes-refactor) favors the minimal substrate-recording step first. Framing A records the decision + discharges §3 N3 without the Cat II eval; its sole cost (verdict not re-derivable from a committed eval record) is named as the explicit §0223+ Framing-B trigger rather than absorbed silently. This mirrors the Layer A→Layer B and single-tier→multi-tier deferral pattern.
+
+- **Supersession:** none. The RFC `ontology-revision-operational-decision-record.md` moves discussion → accepted (status-line edit, the only permitted in-place RFC edit). §0221 entry preserved unamended. The glossary `assertion` forbidden-synonym is *narrowed* (not removed) and a new term added — a reconciliation enacted explicitly per the §0221 epistemic-audit V1, not a silent vocabulary overwrite.
+
+---
+
 <!-- DECISION TEMPLATE — copy below this line when recording a decision -->
 
 <!--
