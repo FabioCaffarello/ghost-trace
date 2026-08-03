@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
+	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
 )
 
 func sampleBatch() *eventsv1.TelemetryBatch {

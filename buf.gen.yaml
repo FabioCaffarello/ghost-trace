@@ -1,0 +1,8 @@
+# Code generation into the committed libs/genproto module. Generated
+# code is tracked so that consumers `go build` with no proto toolchain;
+# CI enforces sync with `buf generate && git diff --exit-code`.
+version: v2
+plugins:
+  - local: protoc-gen-go
+    out: libs/genproto
+    opt: paths=source_relative
