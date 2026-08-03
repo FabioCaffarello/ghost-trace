@@ -34,6 +34,8 @@ TIERS = [
      "none (stdlib fetch)"),
     ("tier5_humanised_mouse", "node", ["node", str(HERE / "tiers" / "tier5_humanised.js")],
      "playwright"),
+    ("tier6_value_injection", "node", ["node", str(HERE / "tiers" / "tier6_value_injection.js")],
+     "playwright"),
 ]
 
 

@@ -177,3 +177,60 @@ here that more engineering cannot accelerate.
   attack, one channel over.
 - **M4:** durable session state, `/v1/outcomes`, and the two-architecture
   benchmark that decides whether maintained state was worth it.
+
+---
+
+## Addendum: tier 6, and the shape of every remaining attack
+
+Tier 6 combines the two evasions the harness has already proven work,
+one per channel: tier 5's humanised mouse, and `page.fill()` instead of
+typing. It costs nothing beyond putting two existing things together.
+
+```
+                                  detected   score   confidence
+  without the counter-signal        4 / 10    0.442       0.664
+  with the counter-signal           9 / 10    0.713       0.809
+```
+
+The counter-signal is that **declining to type is itself observable**. A
+field whose contents change with no keystroke and no paste behind it was
+not filled by a person. It is tracked per field, so typing in one box
+while another is filled programmatically is still caught.
+
+Tiers that genuinely type were unaffected: tier 2 stayed at 8/8, tier 5
+at 8/8.
+
+### The pattern worth naming
+
+Every channel closed so far was closed against an adversary attacking
+**one channel at a time**. Tier 6 is the first that attacks two, and it
+does so by *declining to produce evidence* on each rather than faking
+either. Faking is expensive; abstaining is free.
+
+So the useful generalisation is not "add more channels". It is that
+**absence of evidence on a channel where evidence is expected is itself
+evidence** — which is what caught tier 3 (no pointer), and now tier 6
+(no keystrokes). The detector's job is less to recognise bot-like
+behaviour than to notice which human traces are missing.
+
+### A signal with a known false-positive population
+
+`VALUE_INJECTED` says a person cannot change a field's contents without
+typing, pasting, or autofill. That is very nearly true and not quite.
+
+**Speech-to-text dictation, IME composition (Chinese, Japanese, Korean),
+and some assistive input devices produce input events with no preceding
+keydown.** Under this rule they look like injection.
+
+That is precisely the population this project has said from the start it
+is most worried about mis-flagging, and it is now one of the strongest
+signals in the system. The signal ships because the alternative — a free
+evasion — is worse, but:
+
+- it is capped below categorical, unlike programmatic scroll;
+- it cannot produce a block alone, because blocks require two channels;
+- and the capture study needs dictation and IME sessions before anyone
+  considers raising its weight.
+
+Written into the source at `policy.ReasonValueInjected`, not filed in a
+backlog, because the code is where the next person will read it.

@@ -59,6 +59,22 @@ const (
 	// ever receiving focus.
 	ReasonNoFocusTransitions = "NO_FOCUS_TRANSITIONS"
 
+	// ReasonValueInjected: field contents changed with no keystroke and
+	// no paste behind them.
+	//
+	// KNOWN FALSE-POSITIVE POPULATION. "A person cannot do this" is very
+	// nearly true and not quite: speech-to-text dictation, IME
+	// composition (Chinese, Japanese, Korean), and some assistive input
+	// devices produce input events without a preceding keydown, and will
+	// look like injection under this rule.
+	//
+	// That is exactly the population the whole project says it is most
+	// worried about mis-flagging, so this signal must not be promoted to
+	// categorical without dictation and IME sessions in the capture
+	// study. Recorded here rather than in a backlog because the code is
+	// where someone will read it.
+	ReasonValueInjected = "VALUE_INJECTED"
+
 	// ReasonInsufficientEvidence: too little relevant evidence to
 	// support any judgement, including when the score is high. It is the
 	// reason a bot-looking session was still allowed.
@@ -322,8 +338,20 @@ func interactionChannel(st feature.InteractionState, weight float64) channel {
 	c := channel{weight: weight}
 
 	// No structural evidence at all — abstain rather than accuse.
-	if st.FocusTransitions == 0 && st.ScrollEvents == 0 && st.Pastes == 0 {
+	if st.FocusTransitions == 0 && st.ScrollEvents == 0 && st.Pastes == 0 &&
+		st.Injections == 0 {
 		return c
+	}
+
+	// Value injection. Close to categorical, like programmatic scroll:
+	// there is no way for a person to change a field's contents without
+	// typing, pasting, or autofill. One injected field is odd; a whole
+	// form is a script.
+	injected := 0.0
+	if st.Injections > 0 {
+		injected = min1(0.55 + 0.25*float64(st.InjectedFields))
+		c.reasons = append(c.reasons, Reason{ReasonValueInjected, injected})
+		c.confidence = 1
 	}
 
 	// Programmatic scrolling is close to categorical: a person cannot
@@ -344,7 +372,7 @@ func interactionChannel(st feature.InteractionState, weight float64) channel {
 	if c.confidence == 0 {
 		c.confidence = clamp01(float64(st.FocusTransitions)/6 + float64(st.ScrollEvents)/20)
 	}
-	c.score = maxOf(prog, noFocus)
+	c.score = maxOf(prog, noFocus, injected)
 	return c
 }
 
