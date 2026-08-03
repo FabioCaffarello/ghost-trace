@@ -493,3 +493,27 @@ func TestDecisionsConcurrentWithTelemetry(t *testing.T) {
 
 	wg.Wait()
 }
+
+// Both secret_key endpoints must reject a wrong key regardless of its
+// shape — same length, different length, empty — through the single
+// constant-time helper.
+func TestSecretKeyEndpointsRejectWrongKey(t *testing.T) {
+	srv := newTestServer(t, policy.ModeMonitor)
+	token := startSession(t, srv)
+
+	wrongKeys := []string{"", "sk_wrong", "sk_tes", testSecretKey + "x", "sk_text"}
+	for _, key := range wrongKeys {
+		status, _ := post(t, srv, "/v1/decisions", key, map[string]any{
+			"session_token": token, "action": "login",
+		})
+		if status != http.StatusUnauthorized {
+			t.Errorf("decisions with key %q = %d, want 401", key, status)
+		}
+		status, _ = post(t, srv, "/v1/outcomes", key, map[string]any{
+			"evaluation_id": "ev_x", "outcome": "login_success",
+		})
+		if status != http.StatusUnauthorized {
+			t.Errorf("outcomes with key %q = %d, want 401", key, status)
+		}
+	}
+}

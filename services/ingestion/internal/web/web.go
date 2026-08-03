@@ -146,6 +146,9 @@ type captureRow struct {
 
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
+	// 64KiB, deliberately far below the API's 1MiB: a telemetry batch
+	// carries event payloads, a demo login form carries two short
+	// strings. The two limits differ because the payloads do.
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req); err != nil {
 		http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
 		return

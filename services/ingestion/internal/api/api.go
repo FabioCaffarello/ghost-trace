@@ -13,6 +13,7 @@ package api
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -372,7 +373,7 @@ func (s *Server) handleDecisions(w http.ResponseWriter, r *http.Request) {
 	// secret_key authenticates the application server. This is the only
 	// endpoint that accepts subject_id and action, and it is the reason
 	// they are never read from a browser.
-	if bearerToken(r) != s.cfg.SecretKey {
+	if !s.authorizedSecret(r) {
 		writeError(w, http.StatusUnauthorized, "invalid secret_key")
 		return
 	}
@@ -519,7 +520,7 @@ var validOutcomes = map[string]bool{
 }
 
 func (s *Server) handleOutcomes(w http.ResponseWriter, r *http.Request) {
-	if bearerToken(r) != s.cfg.SecretKey {
+	if !s.authorizedSecret(r) {
 		writeError(w, http.StatusUnauthorized, "invalid secret_key")
 		return
 	}
@@ -586,6 +587,14 @@ func bearerToken(r *http.Request) string {
 		return h[7:]
 	}
 	return ""
+}
+
+// authorizedSecret reports whether the request carries the secret_key.
+// The comparison is constant-time: the secret authenticates the
+// application server on an internet-facing endpoint, and a byte-wise
+// == would leak prefix length through response timing.
+func (s *Server) authorizedSecret(r *http.Request) bool {
+	return subtle.ConstantTimeCompare([]byte(bearerToken(r)), []byte(s.cfg.SecretKey)) == 1
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
