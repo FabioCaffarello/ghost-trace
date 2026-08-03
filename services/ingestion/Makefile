@@ -6,7 +6,7 @@
 # The v1 Makefile enumerated all 58 protos by hand across 422 lines of
 # per-CLI targets; this globs the schema tree instead, so adding or
 # removing a proto needs no Makefile edit. M1 rewrites the schemas
-# against integration-contract.md §2.
+# against docs/architecture.md §2.
 
 .DEFAULT_GOAL := help
 

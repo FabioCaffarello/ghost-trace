@@ -199,8 +199,8 @@ between this directory and the 27,651 lines deleted in
 
 ## Reading order
 
-1. [`integration-contract.md`](integration-contract.md) — the external
-   surface everything is derived from
+1. [`docs/architecture.md`](docs/architecture.md) — the architecture
+   contract: the external surface everything is derived from
 2. [`docs/v1-retrospective.md`](docs/v1-retrospective.md) — what the
    first attempt got wrong
 3. [`docs/vertical-slice.md`](docs/vertical-slice.md) — the smallest

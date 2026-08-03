@@ -91,7 +91,8 @@ along the diagonal.
 64 GB, so compute-on-call at this load is expensive rather than
 impossible.
 
-**Wrong by 2×: the estimate.** REFACTOR-PLAN §8.1 predicted ~5.5 GB at
+**Wrong by 2×: the estimate.** The v2 refactor plan (§8.1, now archived
+in git history) predicted ~5.5 GB at
 this cell from back-of-envelope arithmetic. The measured figure is
 2.68 GB. The estimate was the right order of magnitude and the wrong
 number, which is the ordinary fate of estimates and the reason the
@@ -105,7 +106,7 @@ benchmark exists.
 
 ```
   compute-on-call p99, worst cell (10,000 x 1800s):   0.293 ms
-  the budget (contract §5, REFACTOR-PLAN §8.1):      80     ms
+  the budget (architecture.md §5 and §8.1):          80     ms
 ```
 
 Compute-on-call is **273× inside the latency budget** at the worst point
