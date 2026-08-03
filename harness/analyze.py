@@ -161,6 +161,20 @@ def report_bots(rows):
             f"[{lo:>5.1%}, {hi:>5.1%}]  {mean_score:>10.3f}"
         )
 
+    # Where each cohort sits relative to the decision boundary.
+    # A detection rate of 100% hides whether a tier was caught decisively
+    # or scraped over the threshold by 0.003, and those are very
+    # different claims about how much room an adversary has left.
+    print(f"\n  {'tier':<30} {'min':>7} {'median':>7} {'max':>7}   distance to floor")
+    print("  " + "-" * 84)
+    for cohort in sorted(by_cohort):
+        scores = sorted(r["score"] for r in by_cohort[cohort])
+        med = scores[len(scores) // 2]
+        # The straightness floor maps to score 0; anything above it is
+        # "suspicious at all". Report the median's margin.
+        margin = "at floor" if med <= 0.001 else f"+{med:.3f}"
+        print(f"  {cohort:<30} {scores[0]:>7.3f} {med:>7.3f} {scores[-1]:>7.3f}   {margin:>16}")
+
     # Evidence volume separates the two evasion modes and the summary
     # is misleading without it: a tier can score zero because it looks
     # human, or because it produced nothing to look at.

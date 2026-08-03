@@ -32,6 +32,8 @@ TIERS = [
      "undetected-chromedriver + selenium"),
     ("tier4_synthetic_linear", "node", ["node", str(HERE / "tiers" / "tier4_synthetic_linear.js")],
      "none (stdlib fetch)"),
+    ("tier5_humanised_mouse", "node", ["node", str(HERE / "tiers" / "tier5_humanised.js")],
+     "playwright"),
 ]
 
 

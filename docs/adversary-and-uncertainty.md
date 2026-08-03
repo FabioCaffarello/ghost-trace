@@ -242,14 +242,65 @@ unit, and why the sample is biased.
 
 ---
 
+## Tier 5: the detector's accuracy is a dial the adversary holds
+
+The first four tiers use their library's default mouse. Tier 5 spends an
+evening on it: Bézier curvature, a minimum-jerk velocity profile,
+overshoot with correction, Gaussian tremor, Fitts's-law timing, and human
+pauses between targets. About 140 lines.
+
+Rather than ship it as one point, the curvature is a parameter and the
+tier is run as a sweep. `bow` multiplies the perpendicular arc; 1.0 is a
+shallow, plausible reach.
+
+```
+  cohort                     n  detected    rate   mean score   median   mean conf
+  --------------------------------------------------------------------------------
+  tier5_humanised_bow0.5     6         6  100.0%        0.944    0.954       0.729
+  tier5_humanised_bow1.0    16        16  100.0%        0.942    0.950       0.732
+  tier5_humanised_bow2.0    12        12  100.0%        0.784    0.822       0.718
+  tier5_humanised_bow3.0    12        10   83.3%        0.663    0.771       0.732
+  tier5_humanised_bow5.0    12         5   41.7%        0.325    0.491       0.744
+```
+
+Confidence sits at 0.72–0.74 across every level. Evidence volume is
+constant and only the score moves, so the sweep isolates exactly one
+variable.
+
+**Detection rate is a smooth function of how much effort the adversary
+spent on curvature.** It is not a property of the detector. Between
+`bow` 2 and 5 — the difference between one plausible-looking arc and a
+more exaggerated one — detection falls from 100% to 42%.
+
+### And this is the part that matters
+
+The sweep produces a curve with **no reference point on it.**
+
+Nobody knows which `bow` value corresponds to a real human hand, because
+the human data does not exist yet. A shallow arc at `bow` 1.0 scores
+0.942 and is flagged every time. If that is what real reaching looks
+like, the 0.90 straightness floor is not a detector — it is a machine for
+flagging people.
+
+So the honest reading of tier 5 being *caught* at low curvature is not
+reassurance. It is evidence that **the threshold is unanchored**, and
+that the same measurement which produces a 100% detection rate could be
+producing an intolerable false-positive rate. Those two numbers are the
+same number seen from opposite sides, and this project currently has one
+of them.
+
+That is what the human capture study is for, and it is why no threshold
+should be calibrated before it lands.
+
+---
+
 ## What these numbers do not say
 
-- **Nothing about a competent adversary.** All four tiers use their
-  library's *default* mouse behaviour. Adding curvature and a velocity
-  profile to a synthetic path is perhaps twenty lines, and it defeats
-  this feature outright. That is tier 5, it does not exist yet, and until
-  it does the three 100% rows describe unskilled opposition only.
 - **Nothing about false positives.** See above, twice.
+- **Nothing about a determined adversary.** Tier 5 stops at curvature.
+  It does not replay recorded human paths — the telemetry-replay attack
+  the contract names as the strongest against any system in this class
+  and does not claim to solve.
 - **Nothing about production traffic.** Loopback, one machine, headless
   Chrome, one page.
 - **Nothing calibrated.** Every constant — the 0.90 straightness floor,
@@ -292,13 +343,15 @@ something — which is precisely what tier 3 turned out to be.
 
 ## Next
 
-**M3**, and the adversary has already written its agenda: keystroke
-timing, scroll dynamics, and focus events exist primarily to close the
-tier-3 blind spot. A session with no pointer data must still be
-judgeable, and the same evidence makes keyboard-navigating humans
-judgeable too — the same fix serves both, which is the strongest signal
-that it is the right one.
+**Human capture**, which is now the only thing standing between this
+project and a real number. Tier 5 turned the missing false-positive rate
+from an incompleteness into the blocking dependency: without it the
+straightness floor cannot be calibrated, and an uncalibrated floor makes
+every detection rate above meaningless.
 
-**Tier 5** — a humanised mouse path — belongs in the harness before any
-of that lands, or M3 will be measured against opposition that has already
-been beaten.
+**M3.** The adversary has written its agenda. Keystroke timing, scroll
+dynamics and focus events exist primarily to close the tier-3 blind
+spot: a session with no pointer data must still be judgeable. The same
+evidence makes keyboard-navigating humans judgeable, which is the
+strongest signal it is the right fix — one change serving both the
+detection gap and the fairness gap.
