@@ -60,6 +60,25 @@ message FeatureState {
   uint32 focus_transitions = 12;
   uint32 hidden_periods = 13;
   uint32 pastes = 14;
+
+  // Value-injection channel: field contents that changed with no
+  // keystroke, paste or autofill behind them. The policy's strongest
+  // signal — which is exactly why it must be in the durable record. An
+  // earlier version scored these without persisting them, and every
+  // evaluation written in that window is unreinterpretable on this
+  // channel; fields 15-19 close that gap.
+  uint32 injections = 15;
+
+  // Distinct fields affected. One is odd; every field is a script.
+  uint32 injected_fields = 16;
+
+  // Informing rather than accusing (people paste passwords constantly).
+  uint32 autofills = 17;
+  uint32 distinct_focus_targets = 18;
+
+  // Total key events accumulated — the keystroke analogue of
+  // pointer_points.
+  uint32 key_events = 19;
 }
 
 // Evaluation is the durable record of one decision (§3
