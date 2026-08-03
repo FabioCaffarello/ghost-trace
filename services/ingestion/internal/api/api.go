@@ -312,7 +312,7 @@ func (s *Server) handleTelemetry(w http.ResponseWriter, r *http.Request) {
 				})
 
 			case "form":
-				st.Interaction.AddForm(ev.Action)
+				st.Interaction.AddForm(ev.Action, ev.Target)
 				batch.FormEvents = append(batch.FormEvents, &eventsv1.FormEvent{
 					TMs: ev.T, Target: ev.Target, Action: ev.Action,
 				})

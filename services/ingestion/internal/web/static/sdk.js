@@ -152,16 +152,22 @@
     return id;
   }
 
+  // Last key / paste time per field, for injection detection.
+  var lastKeyAt = {};
+  var lastPasteAt = {};
+
   function attachKeys() {
     if (collect.types.indexOf("key") === -1) return;
     ["keydown", "keyup"].forEach(function (type) {
       window.addEventListener(type, function (e) {
+        var id = targetOf(e.target);
+        var t = now();
+        lastKeyAt[id] = t;
         queue.push({
-          type: "key",
-          t: now(),
+          type: "key", t: t,
           phase: type === "keydown" ? "down" : "up",
           class: classOf(e),
-          target: targetOf(e.target)
+          target: id
         });
       }, { passive: true, capture: true });
     });
@@ -213,17 +219,45 @@
     if (collect.types.indexOf("form") === -1) return;
     window.addEventListener("paste", function (e) {
       // The pasted CONTENT is never read.
-      queue.push({ type: "form", t: now(), target: targetOf(e.target), action: "paste" });
+      var id = targetOf(e.target);
+      lastPasteAt[id] = now();
+      queue.push({ type: "form", t: now(), target: id, action: "paste" });
     }, { passive: true, capture: true });
     window.addEventListener("submit", function (e) {
       queue.push({ type: "form", t: now(), target: targetOf(e.target), action: "submit" });
     }, { capture: true });
-    // Chrome fires an animationstart hook for autofill styling; absent
-    // that, autofill is detected as an input event with no keystrokes.
+    // Value injection: a field's contents changed without a keystroke
+    // and without a paste.
+    //
+    // page.fill(), element.value = "...", and send_keys-free automation
+    // all land here. A person cannot change a field's contents without
+    // typing into it, pasting into it, or the browser autofilling it —
+    // so an input event with none of those preceding it did not come
+    // from a person.
+    //
+    // Tracked per field rather than globally: typing in one box while
+    // another is filled programmatically must still be caught.
     window.addEventListener("input", function (e) {
-      if (e.inputType === undefined && !e.isTrusted) return;
+      var id = targetOf(e.target);
+      var t = now();
+      var lastKey = lastKeyAt[id] || -1e9;
+      var lastPaste = lastPasteAt[id] || -1e9;
+
+      // Autofill announces itself; treat it as its own thing.
       if (e.inputType === "insertReplacementText") {
-        queue.push({ type: "form", t: now(), target: targetOf(e.target), action: "autofill" });
+        queue.push({ type: "form", t: t, target: id, action: "autofill" });
+        return;
+      }
+      // 120ms covers the keydown -> input latency on a slow main thread
+      // without being wide enough to launder an injection behind an
+      // unrelated keystroke.
+      //
+      // Dictation and IME composition also reach here without a
+      // preceding keydown. See policy.ReasonValueInjected — this signal
+      // has a known false-positive population and must not be treated
+      // as categorical.
+      if (t - lastKey > 120 && t - lastPaste > 120) {
+        queue.push({ type: "form", t: t, target: id, action: "injected" });
       }
     }, { passive: true, capture: true });
   }
