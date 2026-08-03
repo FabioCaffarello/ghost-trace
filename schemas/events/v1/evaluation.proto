@@ -40,6 +40,26 @@ message FeatureState {
 
   // Total pointer vertices accumulated across the session.
   uint32 pointer_points = 4;
+
+  // Typing rhythm. Coefficient of variation of inter-key flight times;
+  // human typing is irregular and scripted typing is not.
+  float key_flight_cv = 5;
+  float key_dwell_cv = 6;
+
+  // Mean key-hold in milliseconds. Near zero means the key was never
+  // physically held.
+  float key_mean_dwell_ms = 7;
+
+  // Fraction of consecutive flight times that are byte-identical.
+  float key_exact_repeat_ratio = 8;
+  uint32 key_intervals = 9;
+
+  // Structural interaction evidence.
+  float programmatic_scroll_ratio = 10;
+  uint32 scroll_events = 11;
+  uint32 focus_transitions = 12;
+  uint32 hidden_periods = 13;
+  uint32 pastes = 14;
 }
 
 // Evaluation is the durable record of one decision (§3

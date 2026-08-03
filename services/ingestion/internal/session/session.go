@@ -47,8 +47,10 @@ type State struct {
 	Client    Client
 	StartedAt time.Time
 
-	// Pointer is the running feature accumulator.
-	Pointer feature.Pointer
+	// Feature accumulators, all O(1) in session duration.
+	Pointer     feature.Pointer
+	Keystroke   feature.Keystroke
+	Interaction feature.Interaction
 
 	// HighestSeq tracks the largest batch counter seen. Batches arrive
 	// out of order, so this is a high-water mark, not a cursor.

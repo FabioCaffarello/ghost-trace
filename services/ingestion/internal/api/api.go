@@ -208,10 +208,27 @@ type telemetryEnvelope struct {
 }
 
 type telemetryEvent struct {
-	Type string     `json:"type"`
-	T    uint32     `json:"t"`
-	Src  string     `json:"src"`
-	Pts  [][3]int32 `json:"pts"`
+	Type string `json:"type"`
+	T    uint32 `json:"t"`
+
+	// pointer
+	Src string     `json:"src"`
+	Pts [][3]int32 `json:"pts"`
+
+	// key — timing and coarse class only, never content (§2, §6)
+	Phase    string `json:"phase"`
+	KeyClass string `json:"class"`
+	Target   string `json:"target"`
+
+	// scroll
+	Dy   int32  `json:"dy"`
+	Mode string `json:"mode"`
+
+	// focus / visibility
+	State string `json:"state"`
+
+	// form
+	Action string `json:"action"`
 }
 
 func (s *Server) handleTelemetry(w http.ResponseWriter, r *http.Request) {
@@ -249,28 +266,57 @@ func (s *Server) handleTelemetry(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, ev := range env.Events {
-			// M1 collects pointer only. Unknown types are dropped
-			// silently rather than rejected: the collect policy is
-			// server-driven and may change at any time, so an SDK
-			// sending a type this build does not know is expected
-			// behaviour, not a client error (contract §7).
-			if ev.Type != "pointer" {
-				continue
-			}
 			if ev.T > st.LastEventMs {
 				st.LastEventMs = ev.T
 			}
 
-			pts := make([]feature.Point, 0, len(ev.Pts))
-			pe := &eventsv1.PointerEvent{TMs: ev.T, Src: ev.Src}
-			for _, p := range ev.Pts {
-				pts = append(pts, feature.Point{X: p[0], Y: p[1], DtMs: uint32(p[2])})
-				pe.Pts = append(pe.Pts, &eventsv1.PointerPoint{
-					X: p[0], Y: p[1], DtMs: uint32(p[2]),
+			// Unknown types are dropped silently rather than rejected:
+			// the collect policy is server-driven and may change at any
+			// time, so an SDK sending a type this build does not know is
+			// expected behaviour, not a client error (contract §7).
+			switch ev.Type {
+			case "pointer":
+				pts := make([]feature.Point, 0, len(ev.Pts))
+				pe := &eventsv1.PointerEvent{TMs: ev.T, Src: ev.Src}
+				for _, p := range ev.Pts {
+					pts = append(pts, feature.Point{X: p[0], Y: p[1], DtMs: uint32(p[2])})
+					pe.Pts = append(pe.Pts, &eventsv1.PointerPoint{
+						X: p[0], Y: p[1], DtMs: uint32(p[2]),
+					})
+				}
+				st.Pointer.Add(ev.T, pts)
+				batch.PointerEvents = append(batch.PointerEvents, pe)
+
+			case "key":
+				st.Keystroke.AddKey(ev.T, ev.Phase, ev.KeyClass, ev.Target)
+				batch.KeyEvents = append(batch.KeyEvents, &eventsv1.KeyEvent{
+					TMs: ev.T, Phase: ev.Phase, KeyClass: ev.KeyClass, Target: ev.Target,
+				})
+
+			case "scroll":
+				st.Interaction.AddScroll(ev.Mode)
+				batch.ScrollEvents = append(batch.ScrollEvents, &eventsv1.ScrollEvent{
+					TMs: ev.T, Dy: ev.Dy, Mode: ev.Mode,
+				})
+
+			case "focus":
+				st.Interaction.AddFocus(ev.Target)
+				batch.FocusEvents = append(batch.FocusEvents, &eventsv1.FocusEvent{
+					TMs: ev.T, State: ev.State, Target: ev.Target,
+				})
+
+			case "visibility":
+				st.Interaction.AddVisibility(ev.State)
+				batch.VisibilityEvents = append(batch.VisibilityEvents, &eventsv1.VisibilityEvent{
+					TMs: ev.T, State: ev.State,
+				})
+
+			case "form":
+				st.Interaction.AddForm(ev.Action)
+				batch.FormEvents = append(batch.FormEvents, &eventsv1.FormEvent{
+					TMs: ev.T, Target: ev.Target, Action: ev.Action,
 				})
 			}
-			st.Pointer.Add(ev.T, pts)
-			batch.PointerEvents = append(batch.PointerEvents, pe)
 		}
 	})
 	if err != nil {
@@ -285,7 +331,7 @@ func (s *Server) handleTelemetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.archive != nil && len(batch.PointerEvents) > 0 {
+	if s.archive != nil && batchHasEvents(batch) {
 		if _, err := s.archive.Append(r.Context(), batch, batch.ReceivedAt); err != nil {
 			s.log.Error("archive telemetry", "err", err, "session_id", batch.SessionId)
 		}
@@ -340,12 +386,16 @@ func (s *Server) handleDecisions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		st    feature.PointerState
+		st    policy.State
 		sess  *session.State
 		found = true
 	)
 	if err := s.sessions.With(req.SessionToken, func(s *session.State) {
-		st = s.Pointer.State()
+		st = policy.State{
+			Pointer:     s.Pointer.State(),
+			Keystroke:   s.Keystroke.State(),
+			Interaction: s.Interaction.State(),
+		}
 		sess = s
 	}); err != nil {
 		if !errors.Is(err, session.ErrNotFound) {
@@ -359,7 +409,8 @@ func (s *Server) handleDecisions(w http.ResponseWriter, r *http.Request) {
 		found = false
 	}
 
-	j := policy.Judge(st)
+	// Per-action, per §8.6: state is per-session, scoring is per-action.
+	j := policy.Judge(st, req.Action)
 	outcome, err := policy.Apply(j, s.cfg.Mode)
 	if err != nil {
 		s.log.Error("policy apply", "err", err)
@@ -373,7 +424,7 @@ func (s *Server) handleDecisions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ev := evidence{Events: st.Points}
+	ev := evidence{Events: st.Pointer.Points + st.Keystroke.Keys}
 	sessionID := ""
 	tenantID := s.cfg.TenantID
 	if found && sess != nil {
@@ -400,10 +451,20 @@ func (s *Server) handleDecisions(w http.ResponseWriter, r *http.Request) {
 			PolicyRef:          policy.Ref,
 			FeatureSetRef:      feature.SetRef,
 			Features: &eventsv1.FeatureState{
-				PointerStraightness: float32(st.Straightness),
-				PointerSegments:     st.Segments,
-				PointerPathPx:       float32(st.PathPx),
-				PointerPoints:       st.Points,
+				PointerStraightness:     float32(st.Pointer.Straightness),
+				PointerSegments:         st.Pointer.Segments,
+				PointerPathPx:           float32(st.Pointer.PathPx),
+				PointerPoints:           st.Pointer.Points,
+				KeyFlightCv:             float32(st.Keystroke.FlightCV),
+				KeyDwellCv:              float32(st.Keystroke.DwellCV),
+				KeyMeanDwellMs:          float32(st.Keystroke.MeanDwellMs),
+				KeyExactRepeatRatio:     float32(st.Keystroke.ExactRepeatRatio),
+				KeyIntervals:            st.Keystroke.Intervals,
+				ProgrammaticScrollRatio: float32(st.Interaction.ProgrammaticScrollRatio),
+				ScrollEvents:            st.Interaction.ScrollEvents,
+				FocusTransitions:        st.Interaction.FocusTransitions,
+				HiddenPeriods:           st.Interaction.HiddenPeriods,
+				Pastes:                  st.Interaction.Pastes,
 			},
 		}
 		for _, rs := range j.Reasons() {
@@ -457,6 +518,15 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+// batchHasEvents reports whether a batch carries anything worth
+// archiving. An empty batch still updates session counters but is not a
+// record.
+func batchHasEvents(b *eventsv1.TelemetryBatch) bool {
+	return len(b.PointerEvents) > 0 || len(b.KeyEvents) > 0 ||
+		len(b.ScrollEvents) > 0 || len(b.FocusEvents) > 0 ||
+		len(b.VisibilityEvents) > 0 || len(b.FormEvents) > 0
 }
 
 func round3(f float64) float64 {
