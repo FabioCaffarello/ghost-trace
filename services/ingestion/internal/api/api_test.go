@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -446,4 +447,49 @@ func TestAllContractOutcomeLabelsAccepted(t *testing.T) {
 			t.Errorf("contract outcome %q is not accepted", label)
 		}
 	}
+}
+
+// Telemetry keeps mutating session state under the store lock while
+// decisions snapshot it. The snapshot must be copied by value inside
+// the lock: an earlier version let the *session.State pointer escape
+// the With callback and read LastEventMs after it returned, which this
+// test catches under -race.
+func TestDecisionsConcurrentWithTelemetry(t *testing.T) {
+	srv := newTestServer(t, policy.ModeMonitor)
+	token := startSession(t, srv)
+
+	const iterations = 40
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		for seq := 1; seq <= iterations; seq++ {
+			status, _ := post(t, srv, "/v1/telemetry", token, linearBatch(token, seq, 12))
+			if status != http.StatusAccepted {
+				t.Errorf("POST /v1/telemetry = %d, want 202", status)
+				return
+			}
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			status, body := post(t, srv, "/v1/decisions", testSecretKey, map[string]any{
+				"session_token": token,
+				"action":        "login",
+			})
+			if status != http.StatusOK {
+				t.Errorf("POST /v1/decisions = %d, want 200", status)
+				return
+			}
+			if _, ok := body["evaluation_id"]; !ok {
+				t.Error("decision response missing evaluation_id")
+				return
+			}
+		}
+	}()
+
+	wg.Wait()
 }
