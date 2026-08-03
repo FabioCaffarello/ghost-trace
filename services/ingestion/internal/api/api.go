@@ -386,18 +386,26 @@ func (s *Server) handleDecisions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Everything needed after the callback is copied by value while the
+	// store lock is held. The *session.State pointer must not escape:
+	// concurrent telemetry batches keep mutating the state under the
+	// lock, and a read after With returns would race with them.
 	var (
-		st    policy.State
-		sess  *session.State
-		found = true
+		st         policy.State
+		durationMs uint32
+		sessionID  string
+		found      = true
 	)
-	if err := s.sessions.With(req.SessionToken, func(s *session.State) {
+	tenantID := s.cfg.TenantID
+	if err := s.sessions.With(req.SessionToken, func(sess *session.State) {
 		st = policy.State{
-			Pointer:     s.Pointer.State(),
-			Keystroke:   s.Keystroke.State(),
-			Interaction: s.Interaction.State(),
+			Pointer:     sess.Pointer.State(),
+			Keystroke:   sess.Keystroke.State(),
+			Interaction: sess.Interaction.State(),
 		}
-		sess = s
+		durationMs = sess.LastEventMs
+		sessionID = sess.ID
+		tenantID = sess.TenantID
 	}); err != nil {
 		if !errors.Is(err, session.ErrNotFound) {
 			writeError(w, http.StatusInternalServerError, "decision failed")
@@ -426,12 +434,8 @@ func (s *Server) handleDecisions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ev := evidence{Events: st.Pointer.Points + st.Keystroke.Keys}
-	sessionID := ""
-	tenantID := s.cfg.TenantID
-	if found && sess != nil {
-		ev.DurationMs = sess.LastEventMs
-		sessionID = sess.ID
-		tenantID = sess.TenantID
+	if found {
+		ev.DurationMs = durationMs
 	}
 
 	if s.archive != nil {
