@@ -1,10 +1,13 @@
 # Go CI — build + test for the Ghost Trace service tree.
 #
-# Runs `go build` and `go test -race` directly. The v1 workflow invoked a
-# per-service Makefile contract; M0 deleted that Makefile along with the 53
-# CLIs it drove. Depending on it here would make every step conditional and
-# report a vacuous green, so this runs the toolchain directly until M1
-# establishes the new build surface.
+# internal/genproto is generated, not tracked, so `make generate` must run
+# before build or test on a fresh checkout.
+#
+# The v1 workflow made every step conditional on a `hashFiles` probe for
+# services/ingestion/Makefile — which M0 deleted — so restoring it unchanged
+# would have skipped all steps and reported a vacuous green on a required
+# status check. These steps are unconditional: if the service does not
+# build, the check fails.
 
 name: go-ci
 
@@ -31,11 +34,22 @@ jobs:
           go-version: '1.22'
           cache-dependency-path: services/ingestion/go.sum
 
+      - uses: arduino/setup-protoc@v3
+        with:
+          version: '27.x'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install protoc-gen-go
+        run: make tools
+
+      - name: Generate protobuf bindings
+        run: make generate
+
       - name: Build
-        run: go build ./...
+        run: make build
 
       - name: Test (-race)
-        run: go test -race ./...
+        run: make test
 
       - name: Vet
-        run: go vet ./...
+        run: make vet
