@@ -3,7 +3,6 @@ module github.com/FabioCaffarello/ghost-trace/services/ingestion
 go 1.22
 
 require (
-	golang.org/x/sync v0.10.0
 	google.golang.org/protobuf v1.36.0
 	lukechampine.com/blake3 v1.3.0
 	modernc.org/sqlite v1.34.4
