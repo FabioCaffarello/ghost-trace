@@ -1,5 +1,5 @@
 """
-Statistics for the adversarial harness.
+Statistics for the adversarial experiments.
 
 Two populations, two very different epistemic situations, and the whole
 point of this file is to stop the second from being reported as if it
@@ -384,7 +384,7 @@ def main():
     bots = load("sessions.jsonl")
     humans = load("human_sessions.jsonl")
 
-    print("\nGhost Trace — M2 adversarial harness")
+    print("\nGhost Trace — adversarial experiments")
     print(f"bot sessions: {len(bots)}   human sessions: {len(humans)}")
 
     report_bots(bots)

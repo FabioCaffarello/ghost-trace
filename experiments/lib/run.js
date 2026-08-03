@@ -1,8 +1,8 @@
 /*
- * Shared harness plumbing: run one session against the slice, extract
- * the decision, append a labelled result.
+ * Shared experiment plumbing: run one session against the slice,
+ * extract the decision, append a labelled result.
  *
- * The engine has no idea a harness exists. Cohort labels live here, not
+ * The engine has no idea an experiment exists. Cohort labels live here, not
  * in the API — a session's population is a property of the experiment,
  * not of the product, and putting it in the contract would mean the
  * thing being measured knows which population it is looking at.
@@ -17,13 +17,16 @@ export const RESULTS_DIR = path.join(HERE, "..", "results");
 export const BASE = process.env.GT_BASE || "http://127.0.0.1:8080";
 export const SECRET_KEY = process.env.GT_SECRET_KEY || "sk_demo";
 
-// Chrome on this machine. puppeteer-core and playwright both drive the
-// installed browser rather than downloading their own — a bot that
-// evades detection in a bundled Chromium but not in real Chrome would
-// be measuring the wrong thing.
+// The installed browser. puppeteer-core and playwright both drive real
+// Chrome rather than downloading their own — a bot that evades
+// detection in a bundled Chromium but not in real Chrome would be
+// measuring the wrong thing. Override with GT_CHROME (in a container,
+// point it at the image's browser binary).
 export const CHROME =
   process.env.GT_CHROME ||
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+  (process.platform === "darwin"
+    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    : "/usr/bin/google-chrome");
 
 export function appendResult(cohort, row) {
   fs.mkdirSync(RESULTS_DIR, { recursive: true });

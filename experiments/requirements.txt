@@ -1,0 +1,12 @@
+# Python dependencies for the experiment tiers.
+#
+# Only tier 3 (undetected-chromedriver) needs anything beyond the
+# standard library. numbers.py, run.py, analyze.py and make_links.py are
+# stdlib-only by design — the statistics must be runnable anywhere a
+# Python interpreter exists, with nothing to install and nothing to
+# pin.
+#
+#   python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+undetected-chromedriver
+selenium
+setuptools

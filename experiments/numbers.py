@@ -38,13 +38,19 @@ PORT = int(os.environ.get("GT_PORT", "18099"))
 BASE = f"http://127.0.0.1:{PORT}"
 
 # Sample sizes. Bot tiers are free, so they are generous; the browser
-# tiers cost about two seconds a session, so they are not.
+# tiers cost about two seconds a session, so they are not. The defaults
+# are the published run; GT_N_TIER<k> overrides one tier for smoke runs
+# without changing what the canonical command measures.
+def _n(tier, default):
+    return int(os.environ.get(f"GT_N_TIER{tier}", str(default)))
+
+
 TIER_N = {
-    "tier1_playwright.js": 12,
-    "tier2_puppeteer_stealth.js": 12,
-    "tier4_synthetic_linear.js": 100,
-    "tier5_humanised.js": 10,
-    "tier6_value_injection.js": 10,
+    "tier1_playwright.js": _n(1, 12),
+    "tier2_puppeteer_stealth.js": _n(2, 12),
+    "tier4_synthetic_linear.js": _n(4, 100),
+    "tier5_humanised.js": _n(5, 10),
+    "tier6_value_injection.js": _n(6, 10),
 }
 
 
@@ -119,9 +125,10 @@ def main():
             if r.returncode != 0:
                 absent.append(f"{script}: {(r.stderr or '').strip().splitlines()[-1:] or 'failed'}")
 
-        log("tier: tier3_undetected_chromedriver (n=8)")
+        n3 = _n(3, 8)
+        log(f"tier: tier3_undetected_chromedriver (n={n3})")
         r = run([venv_python(), str(HERE / "tiers" / "tier3_undetected_chromedriver.py")],
-                env={"GT_N": "8"})
+                env={"GT_N": str(n3)})
         if r.returncode != 0:
             absent.append("tier3_undetected_chromedriver: dependencies missing")
 
