@@ -2,3 +2,5 @@ node_modules/
 .venv/
 results/*.jsonl
 results/absent_tiers.txt
+results/numbers-run/
+results/*.json
