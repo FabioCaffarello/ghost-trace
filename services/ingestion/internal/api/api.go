@@ -470,6 +470,11 @@ func (s *Server) handleDecisions(w http.ResponseWriter, r *http.Request) {
 				FocusTransitions:        st.Interaction.FocusTransitions,
 				HiddenPeriods:           st.Interaction.HiddenPeriods,
 				Pastes:                  st.Interaction.Pastes,
+				Injections:              st.Interaction.Injections,
+				InjectedFields:          st.Interaction.InjectedFields,
+				Autofills:               st.Interaction.Autofills,
+				DistinctFocusTargets:    st.Interaction.DistinctFocusTargets,
+				KeyEvents:               st.Keystroke.Keys,
 			},
 		}
 		for _, rs := range j.Reasons() {
