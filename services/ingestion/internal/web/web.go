@@ -128,7 +128,7 @@ type loginRequest struct {
 }
 
 // captureRow is one labelled human session, appended to the capture log
-// for harness/analyze.py.
+// for experiments/analyze.py.
 type captureRow struct {
 	Participant    string  `json:"participant"`
 	Arm            string  `json:"arm"`

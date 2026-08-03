@@ -1,6 +1,6 @@
 """Generate participant links for the capture study.
 
-    python3 harness/make_links.py --host 192.168.1.20 --arm B --people 20
+    python3 experiments/make_links.py --host 192.168.1.20 --arm B --people 20
 
 Arm B is breadth: many people, few sessions each. Its precision is
 governed by PERSON COUNT alone, so the ask is "five minutes each from as

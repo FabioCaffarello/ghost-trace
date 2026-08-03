@@ -204,7 +204,7 @@ def report_humans(rows):
 
   This is the binding constraint on the entire result, and it is
   calendar-bound rather than effort-bound: it needs people, and no
-  amount of engineering time substitutes. See harness/README.md.
+  amount of engineering time substitutes. See experiments/README.md.
 """)
         return
 
