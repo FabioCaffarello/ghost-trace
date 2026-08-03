@@ -15,6 +15,7 @@ PROTOC_GEN_GO := $(TOOLBIN)/protoc-gen-go
 GEN_OUT       := internal/genproto
 SCHEMAS_DIR   := ../../schemas
 PROTOBUF_VER  := v1.36.0
+RUN_DATA      := .run-data
 
 PROTO_FILES := $(shell cd $(SCHEMAS_DIR) && find . -name '*.proto' | sed 's|^\./||' | sort)
 
@@ -26,6 +27,11 @@ help:
 	@echo "  test      go test -race ./..."
 	@echo "  build     go build ./..."
 	@echo "  vet       go vet ./..."
+	@echo "  run       serve the M1 slice on 127.0.0.1:8080"
+
+.PHONY: run
+run: generate
+	go run ./cmd/ghost-trace -data $(RUN_DATA)
 
 .PHONY: tools
 tools:

@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// PointerPoint is one vertex of a decimated pointer polyline.
+// Wire form is [x, y, dt] per integration-contract.md §2; dt_ms is
+// milliseconds since the previous point in the same polyline.
+message PointerPoint {
+  int32 x = 1;
+  int32 y = 2;
+  uint32 dt_ms = 3;
+}
+
+// PointerEvent carries a decimated pointer polyline.
+//
+// Raw mousemove is several hundred events per second; the SDK decimates
+// client-side and ships a polyline. M1 uses fixed-rate decimation at the
+// server-driven collect.pointer_hz; the algorithm is a collect-policy
+// field so it can change without an SDK release (contract §8.2).
+message PointerEvent {
+  // Milliseconds since session start. Never wall-clock — client
+  // wall-clock is untrustworthy and leaks more than it gives (§2).
+  uint32 t_ms = 1;
+
+  // "mouse" | "trackpad" | "touch" | "pen". A normalization property,
+  // not an identifier: trackpad and mouse produce structurally
+  // different traces and must not be compared without it (§0).
+  string src = 2;
+
+  repeated PointerPoint pts = 3;
+}
+
+// TelemetryBatch is one accepted envelope from the browser (§2).
+//
+// Stored as an immutable observation. Everything in it arrived from a
+// hostile source and is treated as a claim, not a fact (§1 trust model).
+message TelemetryBatch {
+  string tenant_id = 1;
+
+  // Server-side session identifier. Deliberately NOT the session_token:
+  // the token is a bearer credential with a 30-minute life, and the
+  // archive outlives it. The token maps to this id server-side.
+  string session_id = 2;
+
+  // Per-session monotonic batch counter. Gaps are meaningful (§2).
+  uint32 seq = 3;
+
+  // Client-claimed milliseconds since session start.
+  uint32 sent_at_ms = 4;
+
+  string page_path = 5;
+  uint32 viewport_w = 6;
+  uint32 viewport_h = 7;
+
+  repeated PointerEvent pointer_events = 8;
+
+  // Server wall-clock nanoseconds at acceptance. Server-observed, so
+  // unlike every other timestamp here it is trustworthy — which is what
+  // makes network-arrival-vs-claimed-time checks possible later (§1).
+  int64 received_at = 9;
+}

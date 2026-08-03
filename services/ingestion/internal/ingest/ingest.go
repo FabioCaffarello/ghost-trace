@@ -1,13 +1,15 @@
-// Package ingest is the single Append entry point per
-// docs/architecture/concurrency-pattern.md §Substrate-Writer
-// Serialization. It composes the canonical-serialization pipeline
-// (canonical.MarshalAndHash) + substrate commit (substrate.AppendPair)
-// into one typed boundary that service-tier code calls.
+// Package ingest is the single write entry point to the substrate.
 //
-// Per decision-log §0038, every primary observation commits paired
-// with an IngestionEvent enrichment recording the act of ingestion
-// (channel + verified client identity when delivered over mTLS). The
-// pairing is atomic via substrate.AppendPair.
+// It exists to keep one property in one place: a record's identity is
+// the BLAKE3 hash of its canonical bytes, so appending the same record
+// twice is a no-op rather than a duplicate. Telemetry batches arrive out
+// of order and get retried after timeouts (contract §2), so this is not
+// a theoretical concern — retries are the normal case.
+//
+// Writing raw telemetry to an archive is not on the decision path. It
+// exists because M2 must re-score recorded sessions offline when a
+// threshold changes: you cannot re-recruit twenty people every time a
+// constant moves, so the sessions have to be replayable.
 package ingest
 
 import (
@@ -18,64 +20,17 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/canonical"
-	eventsv1 "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 )
 
-// Envelope captures the ingestion-act context observed by the service
-// at the moment of receiving the primary observation. Threaded into the
-// paired IngestionEvent per §0038.
-//
-// Fields:
-//   - Channel: wire channel the primary observation was delivered on.
-//     Inception values: "stdin", "http", "https", "https+mtls". Empty
-//     coerced to "unspecified" at commit time to enforce a non-empty
-//     channel marker.
-//   - ClientCommonName / ClientSubjectAltNames / ClientCertSHA256:
-//     populated when the channel is "https+mtls"; otherwise empty.
-//   - TokenID: per RFC architecture-http-auth-scope-model item 4(b),
-//     the operator-supplied identifier of the matched per-tier bearer
-//     token when only α is active and the token file carries a second
-//     line (`<token>\n<token_id>\n`). Empty when γ active (mTLS subject
-//     supersedes), when the matched token file is the legacy single-
-//     line shape, or when the channel is neither HTTP-α nor HTTP-γ.
-//   - ReceivedAt: Unix nanoseconds when the service first received the
-//     primary observation. Distinct from the producer's declared_at
-//     (which is on the primary observation itself) and from the
-//     IngestionEvent's ingested_at (set at commit time).
-type Envelope struct {
-	Channel              string
-	ClientCommonName     string
-	ClientSubjectAltNames []string
-	ClientCertSHA256     string
-	TokenID              string
-	ReceivedAt           int64
-}
-
-// channelOrUnspecified returns the channel field with empty coerced to
-// "unspecified" so IngestionEvent.channel is never an empty string at
-// commit time (operational discipline: every IngestionEvent carries a
-// non-empty channel marker for forensic provenance).
-func (e Envelope) channelOrUnspecified() string {
-	if e.Channel == "" {
-		return "unspecified"
-	}
-	return e.Channel
-}
-
-// Ingester accepts Protobuf messages, canonicalizes + hashes them, and
-// commits to the substrate alongside a paired IngestionEvent enrichment.
-// The Append method is the single per-process write entry point; it
-// inherits writeMu serialization from the underlying *substrate.Substrate
-// per concurrency-pattern §Substrate-Writer Serialization.
+// Ingester canonicalizes messages and commits them to the substrate.
 type Ingester struct {
 	sub *substrate.Substrate
-	now func() time.Time // injectable for deterministic tests
+	now func() time.Time
 }
 
-// New constructs an Ingester over sub. `now` is used for the
-// committed_at + ingested_at timestamps; pass time.Now in production,
-// an injected clock in tests.
+// New constructs an Ingester over sub. Pass nil for now to use
+// time.Now; tests inject a fixed clock.
 func New(sub *substrate.Substrate, now func() time.Time) *Ingester {
 	if now == nil {
 		now = time.Now
@@ -83,82 +38,45 @@ func New(sub *substrate.Substrate, now func() time.Time) *Ingester {
 	return &Ingester{sub: sub, now: now}
 }
 
-// AppendReport is the per-Append outcome surfaced to callers. Carries
-// the hex content-hashes of both the primary observation and its
-// paired IngestionEvent enrichment so logging surfaces preserve the
-// full per-ingest provenance pair.
-type AppendReport struct {
-	EventHashHex          string // primary observation content-hash
-	PayloadBytes          int    // primary observation canonical-bytes length
-	IngestionEventHashHex string // paired IngestionEvent content-hash
+// Report describes the outcome of an Append.
+type Report struct {
+	// Hash is the record's content address.
+	Hash [32]byte
+
+	// HashHex is Hash rendered for logs and URLs.
+	HashHex string
+
+	// MessageType is the full protobuf name, e.g.
+	// "ghosttrace.events.v1.TelemetryBatch".
+	MessageType string
 }
 
-// Append commits msg under eventTime + env to the substrate. Idempotent
-// on re-append of canonical-bytes-identical message+envelope (both the
-// primary observation and the paired IngestionEvent are content-
-// addressed; identical inputs produce identical hashes; substrate
-// AppendPair is idempotent on PRIMARY KEY conflict).
+// Append canonicalizes msg, hashes it, and commits it to the substrate.
 //
-// The message_type field is derived from the Protobuf descriptor full
-// name; the payload_ref is derived from the content-hash (two-character
-// shard prefix per substrate's blob-path convention).
-//
-// Two events commit atomically via substrate.AppendPair: the primary
-// observation (the msg argument) and an IngestionEvent referencing the
-// primary's content-hash + carrying env's channel + verified client
-// identity (when available from mTLS).
-func (in *Ingester) Append(ctx context.Context, msg proto.Message, eventTime int64, env Envelope) (AppendReport, error) {
-	primaryPayload, primaryHash, err := canonical.MarshalAndHash(msg)
+// eventTime is the record's own notion of when it happened, in Unix
+// nanoseconds — distinct from the commit timestamp, which the substrate
+// sets. Re-appending identical content is a no-op and returns the same
+// hash.
+func (in *Ingester) Append(ctx context.Context, msg proto.Message, eventTime int64) (Report, error) {
+	payload, hash, err := canonical.MarshalAndHash(msg)
 	if err != nil {
-		return AppendReport{}, fmt.Errorf("ingest.Append: marshal primary: %w", err)
+		return Report{}, fmt.Errorf("ingest.Append: canonicalize: %w", err)
 	}
-	committedAt := in.now().UnixNano()
 
-	primaryHex := canonical.HashHex(primaryHash)
-	primaryRow := substrate.EventRow{
-		EventHash:   primaryHash,
+	hexed := canonical.HashHex(hash)
+	messageType := string(msg.ProtoReflect().Descriptor().FullName())
+
+	row := substrate.EventRow{
+		EventHash:   hash,
 		EventTime:   eventTime,
-		MessageType: string(msg.ProtoReflect().Descriptor().FullName()),
-		PayloadRef:  primaryHex[:2] + "/" + primaryHex[2:],
-		CommittedAt: committedAt,
+		MessageType: messageType,
+		PayloadRef:  hexed[:2] + "/" + hexed[2:],
+		CommittedAt: in.now().UnixNano(),
 	}
 
-	// Construct the paired IngestionEvent. ReceivedAt defaults to
-	// committedAt if the caller did not populate it (zero value).
-	receivedAt := env.ReceivedAt
-	if receivedAt == 0 {
-		receivedAt = committedAt
-	}
-	ingEvent := &eventsv1.IngestionEvent{
-		PrimaryEventHash:      primaryHash[:],
-		ReceivedAt:            receivedAt,
-		IngestedAt:            committedAt,
-		Channel:               env.channelOrUnspecified(),
-		ClientCommonName:      env.ClientCommonName,
-		ClientSubjectAltNames: env.ClientSubjectAltNames,
-		ClientCertSha256:      env.ClientCertSHA256,
-		TokenId:               env.TokenID,
-	}
-	enrichmentPayload, enrichmentHash, err := canonical.MarshalAndHash(ingEvent)
-	if err != nil {
-		return AppendReport{}, fmt.Errorf("ingest.Append: marshal enrichment: %w", err)
-	}
-	enrichmentHex := canonical.HashHex(enrichmentHash)
-	enrichmentRow := substrate.EventRow{
-		EventHash:   enrichmentHash,
-		EventTime:   receivedAt,
-		MessageType: string(ingEvent.ProtoReflect().Descriptor().FullName()),
-		PayloadRef:  enrichmentHex[:2] + "/" + enrichmentHex[2:],
-		CommittedAt: committedAt,
+	if err := in.sub.Append(ctx, row, payload); err != nil {
+		return Report{}, fmt.Errorf("ingest.Append: commit: %w", err)
 	}
 
-	if err := in.sub.AppendPair(ctx, primaryRow, primaryPayload, enrichmentRow, enrichmentPayload); err != nil {
-		return AppendReport{}, fmt.Errorf("ingest.Append: substrate: %w", err)
-	}
-
-	return AppendReport{
-		EventHashHex:          primaryHex,
-		PayloadBytes:          len(primaryPayload),
-		IngestionEventHashHex: enrichmentHex,
-	}, nil
+	return Report{Hash: hash, HashHex: hexed, MessageType: messageType}, nil
 }

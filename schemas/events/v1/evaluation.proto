@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/genproto/events/v1;eventsv1";
+
+// Reason is one contributing factor in a decision (§3).
+//
+// `code` is a stable, documented enumeration. Adding a code is
+// non-breaking; changing what an existing code means is not (§7).
+message Reason {
+  string code = 1;
+  float weight = 2;
+}
+
+// FeatureState is the derived feature vector at decision time.
+//
+// This exists because of one line in contract §3: the evaluation record
+// "must carry enough feature state to be reinterpreted without the
+// original events". Outcomes arrive late — a chargeback can land weeks
+// after the decision, long past the 7-day raw-event retention (§8.3) —
+// so an evaluation that cannot be re-read without its events produces
+// labels that cannot be used.
+//
+// These are Category II values: deterministic functions of raw events
+// under a versioned definition. They are facts about what was computed,
+// not judgements. `score` and `confidence` on Evaluation are the
+// judgement, and the separation is what lets a recalibrated model
+// reinterpret an old record instead of silently rewriting history.
+message FeatureState {
+  // Mean path-length-weighted straightness across qualifying pointer
+  // segments, in [0, 1]. 1.0 is a perfectly straight path.
+  float pointer_straightness = 1;
+
+  // Count of movement segments that met the qualifying thresholds.
+  uint32 pointer_segments = 2;
+
+  // Total qualifying path length in CSS pixels.
+  float pointer_path_px = 3;
+
+  // Total pointer vertices accumulated across the session.
+  uint32 pointer_points = 4;
+}
+
+// Evaluation is the durable record of one decision (§3
+// POST /v1/decisions).
+//
+// Retention is 13 months, well beyond raw events, because outcomes
+// arrive late and `evaluation_id` is the join key (§8.3).
+message Evaluation {
+  string tenant_id = 1;
+  string evaluation_id = 2;
+  string session_id = 3;
+
+  // Supplied by the application server, authenticated with secret_key.
+  // NEVER read from the browser (§1 trust model).
+  string action = 4;
+  string subject_id = 5;
+
+  int64 decided_at = 6;
+
+  // "allow" | "challenge" | "block".
+  string decision = 7;
+
+  // In monitor mode `decision` is always "allow" and this carries what
+  // enforce mode would have returned (§4).
+  string shadow_decision = 8;
+
+  // "monitor" | "enforce".
+  string mode = 9;
+
+  // How bot-like the behaviour looks, in [0, 1].
+  //
+  // Separate from `confidence` by design, and this is the most important
+  // decision in the contract (§3). A session eleven events old can
+  // produce a high score and must not produce a block. Answering
+  // cold-start here rather than in the model means every consumer
+  // handles it the same way.
+  float score = 10;
+
+  // How much evidence supports that judgement, in [0, 1].
+  float confidence = 11;
+
+  repeated Reason reasons = 12;
+
+  uint32 evidence_events = 13;
+  uint32 evidence_duration_ms = 14;
+
+  // Versioned identifier of the policy that mapped
+  // (score, confidence, action) to `decision`.
+  string policy_ref = 15;
+
+  // Versioned identifier of the feature extractor set that produced
+  // `features`. Recalibration bumps this; old records stay readable
+  // under the definition they were computed with.
+  string feature_set_ref = 16;
+
+  FeatureState features = 17;
+}

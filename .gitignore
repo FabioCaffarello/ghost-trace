@@ -68,3 +68,6 @@ tmp/
 # never committed to the repository.
 infra/docker/seed/
 infra/docker/runs/
+
+# M1 local run data
+services/ingestion/.run-data/

@@ -26,10 +26,11 @@ func newTestSubstrate(t *testing.T) *Substrate {
 
 func newTestPayload(t *testing.T) ([]byte, [32]byte) {
 	t.Helper()
-	msg := &eventsv1.DeclaredSession{
-		DeclaredAt:        1716120000000000000,
-		ActorRef:          "test-actor",
-		SessionDescriptor: []byte("session-descriptor-bytes"),
+	msg := &eventsv1.SessionStart{
+		TenantId:  "t_test",
+		SessionId: "s_test",
+		StartedAt: 1716120000000000000,
+		PagePath:  "/login",
 	}
 	payload, hash, err := canonical.MarshalAndHash(msg)
 	if err != nil {
@@ -58,7 +59,7 @@ func TestAppendAndLookup(t *testing.T) {
 	row := EventRow{
 		EventHash:   hash,
 		EventTime:   1716120000000000000,
-		MessageType: "ghosttrace.events.v1.DeclaredSession",
+		MessageType: "ghosttrace.events.v1.SessionStart",
 		PayloadRef:  hex[:2] + "/" + hex[2:],
 		CommittedAt: 1716120000000000001,
 	}
@@ -91,7 +92,7 @@ func TestAppendIdempotent(t *testing.T) {
 	row := EventRow{
 		EventHash:   hash,
 		EventTime:   1,
-		MessageType: "ghosttrace.events.v1.DeclaredSession",
+		MessageType: "ghosttrace.events.v1.SessionStart",
 		PayloadRef:  hex[:2] + "/" + hex[2:],
 		CommittedAt: 2,
 	}
