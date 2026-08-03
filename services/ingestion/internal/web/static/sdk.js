@@ -85,8 +85,14 @@
    * Pointer capture
    * ------------------------------------------------------------ */
   function attach() {
-    if (collect.types.indexOf("pointer") === -1) return;
 
+    attachKeys();
+    attachScroll();
+    attachFocus();
+    attachVisibility();
+    attachForm();
+
+    if (collect.types.indexOf("pointer") === -1) return;
     window.addEventListener("pointermove", function (e) {
       var t = now();
       // Fixed-rate decimation. Raw pointermove is several hundred
@@ -102,6 +108,124 @@
       pts.push([Math.round(e.clientX), Math.round(e.clientY), dt]);
       if (pts.length >= 256) cutPolyline(srcOf(e));
     }, { passive: true });
+  }
+
+  /* --------------------------------------------------------------
+   * Key capture — TIMING AND COARSE CLASS ONLY
+   * ------------------------------------------------------------ */
+  // Key CONTENT is never collected. `class` preserves cadence and
+  // digraph structure while making reconstruction of typed text
+  // infeasible, and `target` is a stable hash of the field identity,
+  // never its value (§2, §6).
+  function classOf(e) {
+    var k = e.key;
+    if (!k) return "other";
+    if (k.length === 1) {
+      if (/[a-zA-Z]/.test(k)) return "alpha";
+      if (/[0-9]/.test(k)) return "digit";
+      if (k === " ") return "whitespace";
+      return "other";
+    }
+    if (k === "Tab" || k === "Enter" || k.indexOf("Arrow") === 0 ||
+        k === "Home" || k === "End" || k === "PageUp" || k === "PageDown" ||
+        k === "Backspace" || k === "Delete") return "nav";
+    if (k === "Shift" || k === "Control" || k === "Alt" || k === "Meta" ||
+        k === "CapsLock") return "mod";
+    return "other";
+  }
+
+  // Field identity hash. FNV-1a over a structural descriptor — never the
+  // field's value, which never leaves the page.
+  var targetCache = new WeakMap();
+  function targetOf(el) {
+    if (!el || el === document || el === window) return "";
+    if (targetCache.has(el)) return targetCache.get(el);
+    var desc = (el.tagName || "") + "|" + (el.type || "") + "|" +
+               (el.name || "") + "|" + (el.id || "");
+    var h = 0x811c9dc5;
+    for (var i = 0; i < desc.length; i++) {
+      h ^= desc.charCodeAt(i);
+      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+    }
+    var id = "f_" + h.toString(16);
+    targetCache.set(el, id);
+    return id;
+  }
+
+  function attachKeys() {
+    if (collect.types.indexOf("key") === -1) return;
+    ["keydown", "keyup"].forEach(function (type) {
+      window.addEventListener(type, function (e) {
+        queue.push({
+          type: "key",
+          t: now(),
+          phase: type === "keydown" ? "down" : "up",
+          class: classOf(e),
+          target: targetOf(e.target)
+        });
+      }, { passive: true, capture: true });
+    });
+  }
+
+  function attachScroll() {
+    if (collect.types.indexOf("scroll") === -1) return;
+    var lastY = window.scrollY;
+    var sawUserGesture = false;
+    ["wheel", "touchmove", "keydown"].forEach(function (t) {
+      window.addEventListener(t, function () { sawUserGesture = true; },
+        { passive: true, capture: true });
+    });
+    window.addEventListener("scroll", function () {
+      var y = window.scrollY;
+      var dy = y - lastY;
+      lastY = y;
+      // A scroll with no preceding user gesture was issued by the page.
+      // Programmatic scrolls are a strong automation signal on their own.
+      queue.push({
+        type: "scroll", t: now(), dy: dy,
+        mode: sawUserGesture ? "wheel" : "programmatic"
+      });
+      sawUserGesture = false;
+    }, { passive: true });
+  }
+
+  function attachFocus() {
+    if (collect.types.indexOf("focus") === -1) return;
+    ["focusin", "focusout"].forEach(function (type) {
+      window.addEventListener(type, function (e) {
+        queue.push({
+          type: "focus", t: now(),
+          state: type === "focusin" ? "focus" : "blur",
+          target: targetOf(e.target)
+        });
+      }, { passive: true, capture: true });
+    });
+  }
+
+  function attachVisibility() {
+    if (collect.types.indexOf("visibility") === -1) return;
+    document.addEventListener("visibilitychange", function () {
+      queue.push({ type: "visibility", t: now(), state: document.visibilityState });
+    });
+  }
+
+  function attachForm() {
+    if (collect.types.indexOf("form") === -1) return;
+    window.addEventListener("paste", function (e) {
+      // The pasted CONTENT is never read.
+      queue.push({ type: "form", t: now(), target: targetOf(e.target), action: "paste" });
+    }, { passive: true, capture: true });
+    window.addEventListener("submit", function (e) {
+      queue.push({ type: "form", t: now(), target: targetOf(e.target), action: "submit" });
+    }, { capture: true });
+    // Chrome fires an animationstart hook for autofill styling; absent
+    // that, autofill is detected as an input event with no keystrokes.
+    window.addEventListener("input", function (e) {
+      if (e.inputType === undefined && !e.isTrusted) return;
+      if (e.inputType === "insertReplacementText") {
+        queue.push({ type: "form", t: now(), target: targetOf(e.target), action: "autofill" });
+      }
+    }, { passive: true, capture: true });
   }
 
   function srcOf(e) {

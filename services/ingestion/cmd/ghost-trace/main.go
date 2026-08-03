@@ -82,7 +82,7 @@ func run() error {
 		CollectPolicy: api.CollectPolicy{
 			PointerHz: *pointerHz,
 			BatchMs:   *batchMs,
-			Types:     []string{"pointer"},
+			Types:     []string{"pointer", "key", "scroll", "focus", "visibility", "form"},
 		},
 	}, sessions, archive, time.Now, log)
 

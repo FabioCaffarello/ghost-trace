@@ -55,9 +55,69 @@ message TelemetryBatch {
   uint32 viewport_h = 7;
 
   repeated PointerEvent pointer_events = 8;
+  repeated KeyEvent key_events = 10;
+  repeated ScrollEvent scroll_events = 11;
+  repeated FocusEvent focus_events = 12;
+  repeated VisibilityEvent visibility_events = 13;
+  repeated FormEvent form_events = 14;
 
   // Server wall-clock nanoseconds at acceptance. Server-observed, so
   // unlike every other timestamp here it is trustworthy — which is what
   // makes network-arrival-vs-claimed-time checks possible later (§1).
   int64 received_at = 9;
+}
+
+// KeyEvent carries key TIMING and coarse class, never content (§2, §6).
+//
+// The class taxonomy preserves cadence and digraph structure while
+// making reconstruction of typed text infeasible: knowing that six
+// alphas were typed at particular intervals says a great deal about
+// whether a human typed them and nothing about what they were.
+message KeyEvent {
+  uint32 t_ms = 1;
+
+  // "down" | "up". Both are needed: dwell is down→up on one key and
+  // flight is up→down between keys, and the two behave differently.
+  string phase = 2;
+
+  // "alpha" | "digit" | "nav" | "mod" | "whitespace" | "other".
+  string key_class = 3;
+
+  // Stable hash of the field identity. Never its value.
+  string target = 4;
+}
+
+// ScrollEvent carries scroll displacement and input mode.
+message ScrollEvent {
+  uint32 t_ms = 1;
+  int32 dy = 2;
+
+  // "wheel" | "touch" | "key" | "programmatic". Programmatic scrolls
+  // are a strong automation signal on their own — a person cannot
+  // produce one.
+  string mode = 3;
+}
+
+// FocusEvent tracks focus and blur on identified fields.
+//
+// A form completed with no focus transitions at all was not completed
+// by someone tabbing or clicking through it.
+message FocusEvent {
+  uint32 t_ms = 1;
+  string state = 2; // "focus" | "blur"
+  string target = 3;
+}
+
+// VisibilityEvent tracks page visibility.
+message VisibilityEvent {
+  uint32 t_ms = 1;
+  string state = 2; // "visible" | "hidden"
+}
+
+// FormEvent records paste, autofill and submit against a field
+// identity. Field identity only, never content.
+message FormEvent {
+  uint32 t_ms = 1;
+  string target = 2;
+  string action = 3; // "paste" | "autofill" | "submit"
 }
