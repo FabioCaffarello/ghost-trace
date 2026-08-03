@@ -23,7 +23,7 @@ import (
 
 // Ref versions the scoring definition. Stored on every evaluation so a
 // record stays interpretable after the constants below move.
-const Ref = "pointer-linearity-v1"
+const Ref = "pointer-linearity-v2"
 
 // Reason codes are a stable enumeration (contract §7). Adding one is
 // non-breaking; changing what one means is not.

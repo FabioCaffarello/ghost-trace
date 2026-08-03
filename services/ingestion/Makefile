@@ -27,11 +27,21 @@ help:
 	@echo "  test      go test -race ./..."
 	@echo "  build     go build ./..."
 	@echo "  vet       go vet ./..."
-	@echo "  run       serve the M1 slice on 127.0.0.1:8080"
+	@echo "  run       serve the slice on 127.0.0.1:8080"
+	@echo "  capture   serve on 0.0.0.0:8080 with human capture enabled"
 
 .PHONY: run
 run: generate
 	go run ./cmd/ghost-trace -data $(RUN_DATA)
+
+# Bound to all interfaces so participant links reach the machine from
+# other devices. Human capture is calendar-bound rather than
+# effort-bound, so it starts as early as possible and runs while the
+# rest of the work continues.
+.PHONY: capture
+capture: generate
+	go run ./cmd/ghost-trace -addr 0.0.0.0:8080 -data $(RUN_DATA) \
+	  -capture-log ../../harness/results/human_sessions.jsonl
 
 .PHONY: tools
 tools:

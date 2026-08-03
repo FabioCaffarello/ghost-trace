@@ -6,7 +6,8 @@
 // keeping the two apart is what lets a recalibrated model reinterpret an
 // old evaluation record instead of silently rewriting history.
 //
-// M1 ships exactly one feature. That is deliberate: a second feature
+// M1 shipped exactly one feature; M2 corrected its segmentation.
+// Still one feature. That is deliberate: a second feature
 // added before there is an adversary to measure it against is
 // unfalsifiable, and the whole point of M2 is to make the first one
 // falsifiable before adding more.
@@ -17,7 +18,7 @@ import "math"
 // SetRef versions the extractor set. It is stored on every evaluation,
 // so a record computed under pointer-v1 stays readable after the
 // definition changes. Bump it whenever the arithmetic below changes.
-const SetRef = "pointer-v1"
+const SetRef = "pointer-v2"
 
 const (
 	// segmentGapMs splits the pointer stream into distinct movement
@@ -37,6 +38,26 @@ const (
 	// humans look most robotic, so admitting them would inflate the
 	// score for everyone.
 	minSegmentPathPx = 40.0
+
+	// turnThresholdRad splits a segment when the pointer changes
+	// direction sharply, independent of timing.
+	//
+	// Time alone is not enough, and the M2 harness proved it. A bot
+	// filling a form moves to each field back-to-back with no pause, so
+	// the 300ms rule never fires and three straight legs merge into one
+	// path whose direction changes look exactly like human correction:
+	// path 1345px, net 424px, straightness 0.315 — a perfect evasion,
+	// produced by nothing more sophisticated than not pausing.
+	//
+	// A human reach curves continuously and turns gently; arriving at a
+	// different target is a sharp corner. 60° separates the two.
+	// Uncalibrated, like every other constant here.
+	turnThresholdRad = 60 * math.Pi / 180
+
+	// minTurnStepPx is the shortest step whose direction is trusted.
+	// Below this, quantisation to integer pixels dominates the angle and
+	// a slow human drag would shatter into fragments.
+	minTurnStepPx = 4.0
 )
 
 // Point is one pointer sample. DtMs is milliseconds since the previous
@@ -74,6 +95,10 @@ type Pointer struct {
 	// invisible and two unrelated moves get welded into one segment.
 	lastAbsMs uint32
 	started   bool
+
+	// Direction of the most recent trusted step, for turn detection.
+	dirX, dirY float64
+	hasDir     bool
 }
 
 // PointerState is the extracted feature vector.
@@ -132,10 +157,48 @@ func (p *Pointer) Add(startMs uint32, pts []Point) {
 			continue
 		}
 
-		p.curPathPx += dist(p.curLast, pt)
+		// Direction change, independent of timing.
+		stepLen := dist(p.curLast, pt)
+		if p.hasDir && stepLen >= minTurnStepPx {
+			dx, dy := float64(pt.X-p.curLast.X), float64(pt.Y-p.curLast.Y)
+			if turnAngle(p.dirX, p.dirY, dx, dy) > turnThresholdRad {
+				p.closeSegment()
+				p.startSegment(p.curLast) // the corner belongs to both legs
+				p.curPathPx = stepLen
+				p.curLast = pt
+				p.curCount = 2
+				p.dirX, p.dirY = dx, dy
+				// startSegment cleared this; without restoring it the
+				// very next step skips its turn check, so every second
+				// corner is missed and each segment swallows one jump.
+				p.hasDir = true
+				continue
+			}
+		}
+		if stepLen >= minTurnStepPx {
+			p.dirX, p.dirY = float64(pt.X-p.curLast.X), float64(pt.Y-p.curLast.Y)
+			p.hasDir = true
+		}
+
+		p.curPathPx += stepLen
 		p.curLast = pt
 		p.curCount++
 	}
+}
+
+// turnAngle returns the angle between two direction vectors, in radians.
+func turnAngle(ax, ay, bx, by float64) float64 {
+	na, nb := math.Hypot(ax, ay), math.Hypot(bx, by)
+	if na == 0 || nb == 0 {
+		return 0
+	}
+	cos := (ax*bx + ay*by) / (na * nb)
+	if cos > 1 {
+		cos = 1
+	} else if cos < -1 {
+		cos = -1
+	}
+	return math.Acos(cos)
 }
 
 // State returns the current feature vector, including any in-progress
@@ -164,6 +227,7 @@ func (p *Pointer) startSegment(pt Point) {
 	p.curFirst, p.curLast = pt, pt
 	p.curPathPx = 0
 	p.curCount = 1
+	p.hasDir = false
 }
 
 func (p *Pointer) closeSegment() {

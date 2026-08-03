@@ -17,7 +17,9 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -39,6 +41,10 @@ type Config struct {
 	// DecisionTimeout is the client-side budget. Contract §5 sets it at
 	// roughly 3× the p99 target; at an 80ms p99 that is 250ms.
 	DecisionTimeout time.Duration
+
+	// CaptureLog, when set, is a JSONL file of labelled human sessions
+	// for the M2 study. Empty disables capture.
+	CaptureLog string
 }
 
 // Handler serves the demo.
@@ -48,6 +54,11 @@ type Handler struct {
 	page []byte
 	sdk  []byte
 	http *http.Client
+
+	// captureMu serializes appends. Volunteers overlap in practice —
+	// a link goes out to a group chat and several people open it at
+	// once — and interleaved writes would corrupt the JSONL.
+	captureMu sync.Mutex
 }
 
 // New constructs the demo handler.
@@ -103,6 +114,34 @@ func (h *Handler) serveSDK(w http.ResponseWriter, r *http.Request) {
 type loginRequest struct {
 	SessionToken string `json:"session_token"`
 	Username     string `json:"username"`
+
+	// Capture-study labels, supplied by the participant's link. They
+	// travel through the contract's existing fields — subject_id and
+	// context — rather than through any new API surface, because a
+	// session's cohort is a property of the experiment, not of the
+	// product. The engine must not know which population it is looking
+	// at.
+	Participant string `json:"participant"`
+	Arm         string `json:"arm"`
+	Condition   string `json:"condition"`
+	Visit       int    `json:"visit"`
+}
+
+// captureRow is one labelled human session, appended to the capture log
+// for harness/analyze.py.
+type captureRow struct {
+	Participant    string  `json:"participant"`
+	Arm            string  `json:"arm"`
+	Condition      string  `json:"condition"`
+	Visit          int     `json:"visit"`
+	EvaluationID   string  `json:"evaluation_id"`
+	Decision       string  `json:"decision"`
+	ShadowDecision string  `json:"shadow_decision"`
+	Score          float64 `json:"score"`
+	Confidence     float64 `json:"confidence"`
+	Events         float64 `json:"events"`
+	DurationMs     float64 `json:"duration_ms"`
+	At             string  `json:"at"`
 }
 
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
@@ -116,14 +155,30 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	// browser. Ghost Trace cannot independently verify the binding
 	// between a browser session and an account — it exists because the
 	// application says so (§1).
+	//
+	// During the capture study the participant code plays that role: it
+	// is the pseudonymous identity the host application asserts, which
+	// is exactly what subject_id is for.
+	subject := "user_" + req.Username
+	if req.Participant != "" {
+		subject = req.Participant
+	}
 	body, _ := json.Marshal(map[string]any{
 		"session_token": req.SessionToken,
 		"action":        "login",
-		"subject_id":    "user_" + req.Username,
-		"context":       map[string]any{"attempt_n": 1},
+		"subject_id":    subject,
+		"context": map[string]any{
+			"attempt_n": 1,
+			"arm":       req.Arm,
+			"condition": req.Condition,
+			"visit":     req.Visit,
+		},
 	})
 
 	decision, err := h.decide(r.Context(), body)
+	if err == nil && req.Participant != "" {
+		h.appendCapture(req, decision)
+	}
 	if err != nil {
 		// Fail-open is the default for every action (§5). A detector
 		// that takes down a customer's login when it degrades is worse
@@ -142,6 +197,74 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(decision)
+}
+
+// appendCapture records one labelled human session.
+//
+// Failures are logged and swallowed: a volunteer's five minutes must not
+// be wasted by a full disk, and a missing row is a missing observation
+// rather than a corrupted one.
+func (h *Handler) appendCapture(req loginRequest, d map[string]any) {
+	if h.cfg.CaptureLog == "" {
+		return
+	}
+
+	num := func(k string) float64 {
+		if v, ok := d[k].(float64); ok {
+			return v
+		}
+		return 0
+	}
+	str := func(k string) string {
+		if v, ok := d[k].(string); ok {
+			return v
+		}
+		return ""
+	}
+	evidence, _ := d["evidence"].(map[string]any)
+	ev := func(k string) float64 {
+		if evidence == nil {
+			return 0
+		}
+		if v, ok := evidence[k].(float64); ok {
+			return v
+		}
+		return 0
+	}
+
+	row := captureRow{
+		Participant:    req.Participant,
+		Arm:            req.Arm,
+		Condition:      req.Condition,
+		Visit:          req.Visit,
+		EvaluationID:   str("evaluation_id"),
+		Decision:       str("decision"),
+		ShadowDecision: str("shadow_decision"),
+		Score:          num("score"),
+		Confidence:     num("confidence"),
+		Events:         ev("events"),
+		DurationMs:     ev("duration_ms"),
+		At:             time.Now().UTC().Format(time.RFC3339),
+	}
+
+	line, err := json.Marshal(row)
+	if err != nil {
+		h.log.Error("capture marshal", "err", err)
+		return
+	}
+
+	h.captureMu.Lock()
+	defer h.captureMu.Unlock()
+
+	f, err := os.OpenFile(h.cfg.CaptureLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		h.log.Error("capture open", "err", err, "path", h.cfg.CaptureLog)
+		return
+	}
+	defer func() { _ = f.Close() }()
+	if _, err := f.Write(append(line, '\n')); err != nil {
+		h.log.Error("capture write", "err", err)
+	}
 }
 
 func (h *Handler) decide(ctx context.Context, body []byte) (map[string]any, error) {

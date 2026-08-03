@@ -41,10 +41,10 @@ type Client struct {
 
 // State is one session's accumulated evidence.
 type State struct {
-	ID       string
-	TenantID string
-	PagePath string
-	Client   Client
+	ID        string
+	TenantID  string
+	PagePath  string
+	Client    Client
 	StartedAt time.Time
 
 	// Pointer is the running feature accumulator.
@@ -69,11 +69,11 @@ type State struct {
 // boring; sharding it before there is a measurement showing contention
 // would be optimising against a guess.
 type Store struct {
-	mu       sync.Mutex
-	byToken  map[string]*State
-	ttl      time.Duration
-	now      func() time.Time
-	expires  map[string]time.Time
+	mu      sync.Mutex
+	byToken map[string]*State
+	ttl     time.Duration
+	now     func() time.Time
+	expires map[string]time.Time
 }
 
 // NewStore constructs a Store with the given token lifetime.

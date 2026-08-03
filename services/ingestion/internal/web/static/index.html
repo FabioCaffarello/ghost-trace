@@ -70,6 +70,15 @@
   <h1>Ghost Trace — M1 vertical slice</h1>
   <p class="sub">Demo page → SDK → ingest → decision → visible result. One feature: pointer linearity.</p>
 
+  <div class="card" id="study" style="display:none">
+    <p class="note" style="margin:0">
+      <strong>Capture study.</strong> You are participant
+      <code id="pcode"></code><span id="pcond"></span>.
+      Use the page as you normally would, then sign in. Nothing you type is
+      recorded — only how the pointer moves.
+    </p>
+  </div>
+
   <div class="card">
     <form id="login" autocomplete="off">
       <label for="u">Username</label>
@@ -140,6 +149,22 @@
     statusEl.textContent = "injected a synthetic linear path — now sign in";
   });
 
+  // Capture-study labels come from the participant's link:
+  //   ?p=<code>&arm=<A|B>&c=<condition>&v=<visit>
+  var q = new URLSearchParams(location.search);
+  var study = {
+    participant: q.get("p") || "",
+    arm: q.get("arm") || "",
+    condition: q.get("c") || "",
+    visit: parseInt(q.get("v") || "0", 10) || 0
+  };
+  if (study.participant) {
+    document.getElementById("study").style.display = "block";
+    document.getElementById("pcode").textContent = study.participant;
+    document.getElementById("pcond").textContent =
+      study.condition ? ", condition " + study.condition : "";
+  }
+
   document.getElementById("login").addEventListener("submit", function (e) {
     e.preventDefault();
     GhostTrace.flush();
@@ -153,7 +178,11 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           session_token: GhostTrace.token(),
-          username: document.getElementById("u").value
+          username: document.getElementById("u").value,
+          participant: study.participant,
+          arm: study.arm,
+          condition: study.condition,
+          visit: study.visit
         })
       })
         .then(function (r) { return r.json(); })
