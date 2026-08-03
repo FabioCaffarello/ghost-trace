@@ -14,19 +14,9 @@
 /bin/
 
 # Accidental binaries from `go build ./cmd/X/` (no `-o` flag) at
-# services/ingestion/. Always use `make X-build` per the
-# services/ingestion/Makefile — it writes to services/ingestion/bin/.
-# Specific entries are added reactively as accidents occur per the
-# defensive-.gitignore feedback memory pattern (the binary name
-# matches the cmd subdir name; new entries inherit this convention).
-/services/ingestion/ingest-cic-ids
-/services/ingestion/derive-actor-attribution
-/services/ingestion/form-automation-group-from-candidate
-/services/ingestion/ingest-tls-fingerprint
-/services/ingestion/find-automation-group-candidates-tls
-/services/ingestion/replay-formation-provenance
-/services/ingestion/decide-from-automation-group
-/services/ingestion/replay-decision-provenance
+# services/ingestion/ — the binary name matches the cmd subdir name.
+/services/ingestion/ghost-trace
+/services/ingestion/bench-architecture
 
 # Node (anticipated for simulator/frontend)
 node_modules/
@@ -61,13 +51,6 @@ tmp/
 
 # Generated docs
 /site/
-
-# Sub-benchmark 1 deployment scaffold — operator-supplied seed data
-# (CIC-IDS-2017 distribution + future synthetic + honeypot frentes)
-# is bind-mounted at runtime per infra/docker/.env CIC_IDS_SEED_DIR;
-# never committed to the repository.
-infra/docker/seed/
-infra/docker/runs/
 
 # M1 local run data
 services/ingestion/.run-data/
