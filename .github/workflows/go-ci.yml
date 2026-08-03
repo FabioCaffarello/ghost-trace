@@ -1,0 +1,41 @@
+# Go CI — build + test for the Ghost Trace service tree.
+#
+# Runs `go build` and `go test -race` directly. The v1 workflow invoked a
+# per-service Makefile contract; M0 deleted that Makefile along with the 53
+# CLIs it drove. Depending on it here would make every step conditional and
+# report a vacuous green, so this runs the toolchain directly until M1
+# establishes the new build surface.
+
+name: go-ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ingestion:
+    name: services/ingestion — build + test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ingestion
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: services/ingestion/go.sum
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test (-race)
+        run: go test -race ./...
+
+      - name: Vet
+        run: go vet ./...
