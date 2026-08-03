@@ -34,15 +34,16 @@ func main() {
 
 func run() error {
 	var (
-		addr      = flag.String("addr", "127.0.0.1:8080", "listen address")
-		dataDir   = flag.String("data", "", "substrate directory; empty disables the raw event archive")
-		mode      = flag.String("mode", policy.ModeMonitor, "monitor | enforce")
-		tenantID  = flag.String("tenant", "t_demo", "tenant id")
-		siteKey   = flag.String("site-key", "pk_demo", "public site key, embedded in the page")
-		secretKey = flag.String("secret-key", "sk_demo", "secret key for server-to-server decision calls")
-		pointerHz = flag.Int("pointer-hz", 20, "collect policy: pointer sample rate")
-		batchMs   = flag.Int("batch-ms", 2000, "collect policy: telemetry batch interval")
-		ttl       = flag.Duration("session-ttl", 30*time.Minute, "session token lifetime")
+		addr       = flag.String("addr", "127.0.0.1:8080", "listen address")
+		dataDir    = flag.String("data", "", "substrate directory; empty disables the raw event archive")
+		mode       = flag.String("mode", policy.ModeMonitor, "monitor | enforce")
+		tenantID   = flag.String("tenant", "t_demo", "tenant id")
+		siteKey    = flag.String("site-key", "pk_demo", "public site key, embedded in the page")
+		secretKey  = flag.String("secret-key", "sk_demo", "secret key for server-to-server decision calls")
+		pointerHz  = flag.Int("pointer-hz", 20, "collect policy: pointer sample rate")
+		batchMs    = flag.Int("batch-ms", 2000, "collect policy: telemetry batch interval")
+		ttl        = flag.Duration("session-ttl", 30*time.Minute, "session token lifetime")
+		captureLog = flag.String("capture-log", "", "JSONL file of labelled human sessions for the M2 study; empty disables capture")
 	)
 	flag.Parse()
 
@@ -92,11 +93,15 @@ func run() error {
 		SiteKey:         *siteKey,
 		SecretKey:       *secretKey,
 		DecisionTimeout: 250 * time.Millisecond,
+		CaptureLog:      *captureLog,
 	}, log)
 	if err != nil {
 		return fmt.Errorf("demo handler: %w", err)
 	}
 	demo.Register(mux)
+	if *captureLog != "" {
+		log.Info("human capture enabled", "log", *captureLog)
+	}
 
 	// Expired sessions are never otherwise removed, so without this the
 	// store grows for the life of the process.
