@@ -12,7 +12,7 @@ import (
 //
 // It exists to be measured against Store, not to be used. The whole
 // project rests on the claim that maintained state is necessary, and a
-// claim with no measured alternative is an assertion. REFACTOR-PLAN §8.1
+// claim with no measured alternative is an assertion. Contract §8.1
 // predicts where they diverge:
 //
 //	maintained state  O(sessions)              — a fixed accumulator

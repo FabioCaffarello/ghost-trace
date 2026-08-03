@@ -1,5 +1,5 @@
 // Wire-contract tests. These drive real HTTP with the JSON shapes from
-// integration-contract.md §2–§3 rather than calling handlers with
+// docs/architecture.md §2–§3 rather than calling handlers with
 // in-memory structs.
 //
 // v1 learned this the expensive way: a JSON field-name mismatch between

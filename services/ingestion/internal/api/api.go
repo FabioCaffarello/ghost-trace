@@ -1,4 +1,4 @@
-// Package api implements the endpoints of integration-contract.md §3.
+// Package api implements the endpoints of docs/architecture.md §3.
 //
 // M1 ships three of the four: sessions, telemetry, decisions. Outcomes
 // is M4, because a label channel with nothing durable behind it stores
@@ -41,7 +41,7 @@ func randomEvaluationID() (string, error) {
 // One tenant, supplied at startup. `tenant_id` is threaded through
 // every record from day one because adding the column later is a
 // migration of every store and index, while carrying it now costs
-// nothing (REFACTOR-PLAN §8.4).
+// nothing (contract §8.4).
 type Config struct {
 	TenantID  string
 	SiteKey   string

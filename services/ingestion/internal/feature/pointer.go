@@ -71,7 +71,7 @@ type Point struct {
 //
 // It holds running aggregates, not the raw points: state is O(1) in
 // session duration, which is the property that makes maintained state
-// cheap at concurrency (see REFACTOR-PLAN §8.1). Deliberately not
+// cheap at concurrency (see contract §8.1). Deliberately not
 // safe for concurrent use — the session store serializes access.
 type Pointer struct {
 	// weightedStraightness is Σ(straightness_i × pathLen_i) over
