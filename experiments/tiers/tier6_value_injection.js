@@ -1,7 +1,7 @@
 /*
  * Tier 6 — humanised mouse plus value injection.
  *
- * The attack M3 named. It combines the two evasions the harness has
+ * The attack M3 named. It combines the two evasions the experiments have
  * already proven work, each on a different channel:
  *
  *   - the pointer channel is defeated by tier 5's humanised path

@@ -6,7 +6,7 @@ Run the adversarial tiers against a running slice.
     python3 experiments/analyze.py
 
 A tier whose dependencies are missing is recorded as ABSENT, not
-skipped. Silent omission is the failure mode that makes a harness lie:
+skipped. Silent omission is the failure mode that makes an experiment lie:
 four tiers listed and three run reads as "we tested four things", and
 the missing one is invariably the one that would have found something.
 """
@@ -56,7 +56,7 @@ def main():
     RESULTS.mkdir(parents=True, exist_ok=True)
     absent = []
 
-    print(f"\nGhost Trace — adversarial harness against {BASE}\n")
+    print(f"\nGhost Trace — adversarial experiments against {BASE}\n")
 
     for name, runtime, cmd, deps in TIERS:
         if runtime == "node" and shutil.which("node") is None:

@@ -1,6 +1,8 @@
-# Adversarial harness
+# Experiments
 
-Four bot tiers and a human capture study against the M1 slice.
+The validation layer: six adversarial bot tiers, the statistics that
+exist to prevent false precision, and a human capture study — all run
+against the live slice.
 
 Without an adversary every metric is unfalsifiable, which is why this
 exists before any further features.
@@ -18,7 +20,7 @@ confidence interval is tight. Detection rate is a real measurement.
 
 The human side is capped by how many people will give up five minutes,
 and its observations are **not independent** — sessions cluster within
-people. Three separate problems follow, and the README, the harness
+people. Three separate problems follow, and the README, the experiment
 output and the write-up all state them:
 
 1. **Sample size.** A production anti-bot system operates near 0.1%
@@ -57,31 +59,42 @@ correlation is **estimated from the data**, never assumed.
 
 ## Running it
 
-```bash
-# terminal 1 — the slice
-cd services/ingestion
-make run
+The canonical entry point is one command from the repository root:
 
-# terminal 2 — the adversary
+```bash
+python3 experiments/numbers.py
+```
+
+It builds the service binary, starts it on a private port with a
+private data directory, runs every tier, measures latency /
+time-to-confident-decision / cold start, runs the two-architecture
+benchmark, and writes `results/numbers.json` plus the printed table the
+README's six numbers come from.
+
+One-time setup for the browser tiers:
+
+```bash
 cd experiments
-npm install --registry=https://registry.npmjs.org   # see note below
-pip3 install undetected-chromedriver selenium       # tier 3 only
-python3 run.py
-python3 analyze.py
+npm ci                                              # tiers 1, 2, 5, 6
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # tier 3
 ```
 
 Tier 4 needs no dependencies at all — it speaks the API directly with
-Node's built-in fetch.
+Node's built-in fetch. Tiers 1, 2, 5 and 6 drive the installed Chrome;
+set `GT_CHROME` if yours is somewhere unusual.
 
-> **npm note.** This machine's npm is configured against a local
-> Verdaccio proxy at `localhost:4874`. When that is not running, npm
-> hangs and then fails with `ECONNREFUSED`. The `--registry` flag above
-> overrides it for one command without touching your config.
+The two-terminal flow is still available for iterating on a single
+tier against a long-lived server:
+
+```bash
+cd services/ingestion && make run          # terminal 1
+cd experiments && python3 run.py && python3 analyze.py   # terminal 2
+```
 
 A tier whose dependencies are missing is recorded in
 `results/absent_tiers.txt` and reported by `analyze.py` as **ABSENT**,
-never silently skipped. Four tiers listed and three run reads as "we
-tested four things", and the missing one is always the one that would
+never silently skipped. Six tiers listed and five run reads as "we
+tested six things", and the missing one is always the one that would
 have found something.
 
 ---
@@ -94,6 +107,8 @@ have found something.
 | 2 | `puppeteer-extra-plugin-stealth` | fingerprinting: `navigator.webdriver`, plugin arrays, WebGL vendor, CDP markers |
 | 3 | `undetected-chromedriver` | fingerprinting: patched chromedriver, CDP concealment, automation flags |
 | 4 | Synthetic linear script, no browser | everything fingerprint-shaped — there is no browser to fingerprint |
+| 5 | Humanised mouse (Bézier, minimum-jerk, overshoot, tremor) | the pointer channel, by mimicry |
+| 6 | Humanised mouse **+** value injection (`page.fill`) | pointer by mimicry, keystrokes by declining to produce evidence |
 
 **Tier 2 is the one the thesis stands or falls on.** Every evasion the
 stealth plugin implements targets *which browser this is*. None of them
@@ -133,7 +148,7 @@ switching trackpad→mouse move it more than alert→tired?
 
 **Arm A reports effect sizes and no false-positive rate.** Three people
 cannot support a population rate, and printing one would be exactly the
-false precision this harness exists to prevent.
+false precision this experiment layer exists to prevent.
 
 The habituation contrast is the one most likely to matter: the 30th
 visit to a form produces fast, ballistic, low-correction movement that
