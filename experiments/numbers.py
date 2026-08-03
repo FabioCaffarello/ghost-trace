@@ -1,12 +1,12 @@
 """
 Produce the six numbers. One command, from a clean checkout.
 
-    python3 harness/numbers.py
+    python3 experiments/numbers.py
 
 Builds the binary, starts it on a private port and data directory, runs
 every adversarial tier, measures latency / time-to-confident-decision /
 cold start, runs the two-architecture benchmark, and writes
-harness/results/numbers.json plus a printed table.
+experiments/results/numbers.json plus a printed table.
 
 Contract §9 names five of these and calls them the difference between a
 project and a stack list. The sixth is the architecture benchmark.
@@ -255,7 +255,7 @@ def report(nums):
         print("   This is the number that governs everything: a detector that")
         print("   flags every session scores 100% on every tier above. Until")
         print("   this row has a value, number 1 is not a measurement.\n")
-        print("   It is calendar-bound, not effort-bound. See harness/README.md.")
+        print("   It is calendar-bound, not effort-bound. See experiments/README.md.")
     else:
         print(f"   {fpr['people_flagged']} of {fpr['people']} people falsely flagged "
               f"at least once")
@@ -309,7 +309,7 @@ def report(nums):
         print("   A tier that did not run is not a tier that found nothing.")
 
     print(f"\n{line}")
-    print("wrote harness/results/numbers.json")
+    print("wrote experiments/results/numbers.json")
 
 
 if __name__ == "__main__":

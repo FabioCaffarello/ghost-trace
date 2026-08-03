@@ -1,5 +1,5 @@
 {
-  "name": "ghost-trace-harness",
+  "name": "ghost-trace-experiments",
   "version": "0.1.0",
   "private": true,
   "description": "Adversarial harness: four bot tiers against the Ghost Trace slice.",

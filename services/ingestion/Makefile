@@ -41,7 +41,7 @@ run: generate
 .PHONY: capture
 capture: generate
 	go run ./cmd/ghost-trace -addr 0.0.0.0:8080 -data $(RUN_DATA) \
-	  -capture-log ../../harness/results/human_sessions.jsonl
+	  -capture-log ../../experiments/results/human_sessions.jsonl
 
 .PHONY: tools
 tools:

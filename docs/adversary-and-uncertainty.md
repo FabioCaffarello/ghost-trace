@@ -174,7 +174,7 @@ Two consequences follow, and the second is worse than the first.
 ## How the false-positive side will be reported
 
 No human sessions exist yet, so the statistics were validated against a
-synthetic fixture (`harness/testdata/`, run with `analyze.py
+synthetic fixture (`experiments/testdata/`, run with `analyze.py
 --selftest`). Shipping untested statistics into a study you can only run
 once would be careless; the fixture is explicitly not data and lives
 outside the results directory so it cannot be mistaken for it.
@@ -314,7 +314,7 @@ should be calibrated before it lands.
 
 ```bash
 cd services/ingestion && make run          # terminal 1
-cd harness
+cd experiments
 npm install --registry=https://registry.npmjs.org
 python3 -m venv .venv && .venv/bin/pip install undetected-chromedriver selenium setuptools
 .venv/bin/python run.py

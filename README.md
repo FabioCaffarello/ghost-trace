@@ -18,7 +18,7 @@ cd services/ingestion && make run     # then open http://127.0.0.1:8080
 Reproduce all of them with one command:
 
 ```bash
-python3 harness/numbers.py
+python3 experiments/numbers.py
 ```
 
 ### 1. Detection rate per adversarial tier
@@ -61,7 +61,7 @@ The statistics to report it are built, tested against a synthetic
 fixture, and waiting: person-level counts as the primary figure, an
 intraclass correlation estimated from the data rather than assumed, and
 no code path anywhere that emits a bare session-level rate. See
-[`harness/README.md`](harness/README.md).
+[`experiments/README.md`](experiments/README.md).
 
 What is missing is people. It is calendar-bound, not effort-bound.
 
@@ -161,7 +161,7 @@ one browser from another.
     internal/api/              the four contract endpoints
     internal/web/              demo page and SDK
     cmd/bench-architecture/    the concurrency x duration grid
-  harness/                     six adversarial tiers + the statistics
+  experiments/                 six adversarial tiers + the statistics
   schemas/events/v1/           wire schema
   docs/                        write-ups of work that has run
 ```

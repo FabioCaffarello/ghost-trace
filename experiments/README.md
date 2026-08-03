@@ -63,7 +63,7 @@ cd services/ingestion
 make run
 
 # terminal 2 — the adversary
-cd harness
+cd experiments
 npm install --registry=https://registry.npmjs.org   # see note below
 pip3 install undetected-chromedriver selenium       # tier 3 only
 python3 run.py
@@ -168,7 +168,7 @@ Run the slice with `-capture-log` to record them:
 
 ```bash
 go run ./cmd/ghost-trace -data .run-data \
-  -capture-log ../../harness/results/human_sessions.jsonl \
+  -capture-log ../../experiments/results/human_sessions.jsonl \
   -addr 0.0.0.0:8080
 ```
 

@@ -2,8 +2,8 @@
 Run the adversarial tiers against a running slice.
 
     cd services/ingestion && make run          # terminal 1
-    python3 harness/run.py                     # terminal 2
-    python3 harness/analyze.py
+    python3 experiments/run.py                     # terminal 2
+    python3 experiments/analyze.py
 
 A tier whose dependencies are missing is recorded as ABSENT, not
 skipped. Silent omission is the failure mode that makes a harness lie:
@@ -97,7 +97,7 @@ def main():
             print(f"    {a}")
         print("\n  A tier that did not run is not a tier that found nothing.")
 
-    print("\n  Now: python3 harness/analyze.py")
+    print("\n  Now: python3 experiments/analyze.py")
     return 0
 
 
