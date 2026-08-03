@@ -1,6 +1,6 @@
 # RFC — Operational Decision Record (entity-model surface for allow / challenge / block / shadow)
 
-- **Status:** discussion (framing PR; resolution pending committee deliberation + decision-log entry)
+- **Status:** accepted (Framing A — Decision = Cat I audit record; resolved at [`decision-log §0222`](../../charter/decision-log.md))
 - **Authors:** Ghost Trace committee (opened under empirical pressure from the §0221 TLS fingerprint vertical slice)
 - **Date:** 2026-06-13
 - **Type:** ontology-revision
@@ -90,6 +90,16 @@ Additive under all framings. No existing record type changes; historical replay 
 - [`decision-log §0104`](../../charter/decision-log.md) — `OrphanCleanupAudit` audit-on-commit precedent.
 - [`entity-model.md`](../../ontology/entity-model.md) — the three categories + Assertion typed references.
 
+## Resolution
+
+**Framing A (Decision = Category I audit record) was ratified and is resolved at [`decision-log §0222`](../../charter/decision-log.md).** Rationale (full constitutional review in §0222):
+
+- It is the minimal step consistent with the project's inception discipline (conservative defaults; observation-precedes-refactor per [`§0143`](../../charter/decision-log.md) D2) that still records the decision in the substrate and discharges §3 N3 by construction.
+- It is constitutionally clean: the audit is a record of historical fact (Cat I) that *references* the inferential hypothesis by hash; it does not embody inferential commitment, so the §2.6-BC3 absence of paired dimensions is correct, not a gap, and there is no §3 N1 truth-bearing-record concern.
+- Framing B (the Cat II `DecisionConstruct` that would make the verdict's policy-evaluation a substrate record with native §2.4 influence + §2.6 paired dimensions and Phase-2 deterministic re-derivation) is **deferred**, not rejected — it advances under ordinary RFC discipline when empirical pressure surfaces a need for substrate-recorded deterministic verdict re-derivation. Framing C (external consumer) was set aside because it abandons the obs→inference→decision audit hop the slice requires.
+
+The materialization: a new Cat I `OperationalDecisionAudit` proto, a versioned in-process policy layer (`internal/decision`), the `decide-from-automation-group` operator CLI (§3 N3 operator-elected), and `replay-decision-provenance` completing the obs→inference→decision reconstruction. The glossary reconciliation owed at Q2 (narrowing the `assertion`→`decision` forbidden-synonym entry + registering "operational decision") is enacted in the same change set.
+
 ## Decision Record
 
-If accepted (a framing chosen), this RFC is recorded in [`../../charter/decision-log.md`](../../charter/decision-log.md) with a decision number resolving the framing. The framing PR itself is registered at [`§0221`](../../charter/decision-log.md) as the opening of the question.
+Resolved at [`decision-log §0222`](../../charter/decision-log.md) (Framing A). The framing PR that opened the question is registered at [`§0221`](../../charter/decision-log.md).

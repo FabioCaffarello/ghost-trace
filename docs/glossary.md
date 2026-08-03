@@ -60,6 +60,14 @@ Missing fields are marked `pending`, never omitted.
 - **Last amendment.** [`decision-log.md` §0015](./charter/decision-log.md).
 - **Forbidden synonyms.** `session` as a bare reference to the operational form (use `operational session`); `inferred session` (description rather than canonical term); `reconstructed session` (engineering vocabulary, not Ontology); `derived session` (acceptable in informal context; `operational session` is canonical).
 
+### `operational decision`
+
+- **Canonical definition.** Category I record (`OperationalDecisionAudit`): the audit record of an operator-elected enforcement decision (allow / challenge / block / shadow) taken on a subject actor under a versioned policy. A record of historical fact — what the operator/policy decided, when — that references the influencing Category III hypothesis by hash; it does not embody inferential commitment. Committed to the substrate as the §3 N3 audit-on-commit record (the operator identity it carries is the structural evidence that the action was operator-initiated, not autonomous substrate-side action).
+- **Introduction.** [`decision-log.md` §0222 — operational-decision RFC, Framing A](./charter/decision-log.md); [`ontology/entity-model.md` §Category I](./ontology/entity-model.md).
+- **Stabilization.** Ontology — Drafted (Category I, §0222).
+- **Last amendment.** [`decision-log.md` §0222](./charter/decision-log.md).
+- **Forbidden synonyms.** `verdict` (acceptable informally for the `decision_type` value; the record is the `operational decision`); `enforcement` standalone (names the downstream action, not the substrate record); `mitigation` (engineering/security vocabulary, not Ontology). Distinct from `assertion` (which forbids `decision` only in the single-assertion-synonym sense per §0222); an operational decision is a Category I fact, not an inferential assertion.
+
 ### `hypothesis`
 
 - **Canonical definition.** A Category III record; probabilistic inference whose boundaries, membership, and continued existence are matters of degree.
@@ -170,7 +178,7 @@ Missing fields are marked `pending`, never omitted.
 - **Introduction.** [Charter §1](./charter/constitutional-charter.md#1-thesis).
 - **Stabilization.** pending.
 - **Last amendment.** [`amendments.md` `v0.1` — Charter Inception](./charter/amendments.md) (Thesis is frozen).
-- **Forbidden synonyms.** `claim` (informal); `decision` (the Charter treats decisions as temporally extended sequences of assertions, not as one).
+- **Forbidden synonyms.** `claim` (informal); `decision` *as a synonym for a single assertion* (the Charter treats decisions as temporally extended sequences of assertions, not as one). Per [`decision-log.md` §0222](./charter/decision-log.md), `operational decision` is a distinct Category I entity-model term — the audit record of an operator-elected enforcement action — and does NOT collide with this rule, which forbids only the single-assertion-synonym sense.
 
 ### `provenance`
 
