@@ -1,0 +1,37 @@
+# OpenAPI linting — the same philosophy as .golangci.yml.
+#
+# Keep the rules that catch a specification which is WRONG; drop the
+# ones that express a preference. A linter that reports things nobody
+# intends to change teaches people to read a red gate as background
+# noise, and then the finding that mattered scrolls past with the rest.
+#
+# The rules kept here have already earned it. `oas3-valid-schema-example`
+# caught the generated TelemetryEvent schema demanding every field of a
+# flat union — `phase`, `dy`, `action` and four others — on a pointer
+# event that carries none of them. That was a real defect in the
+# published contract, found by this file.
+#
+# Run: make openapi-lint
+
+extends: [[spectral:oas, recommended]]
+
+rules:
+  # The wire is snake_case and stays that way. It is the shape the SDK,
+  # six experiment clients and every committed golden already speak;
+  # renaming it to satisfy a naming convention would break all of them
+  # to win a style argument.
+  camel-case-properties: off
+
+  # Examples live on the OPERATIONS, where a client author looks — and
+  # the response examples are the committed byte-level goldens, so they
+  # are bytes the server has actually produced rather than a plausible
+  # invention. This rule wants one on every individual property too,
+  # which would be several dozen restatements of the descriptions.
+  oas3-missing-example: off
+
+  # Two fields that mean the same thing are described in the same
+  # words, deliberately: `page.path` is the same concept in a session
+  # request and a telemetry batch, and a 401 is the same 401 on both
+  # authenticated endpoints. Rewording one to be different would make
+  # the contract less clear, not more.
+  description-duplication: off
