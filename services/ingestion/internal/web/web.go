@@ -10,64 +10,65 @@
 package web
 
 import (
-	"bytes"
 	"context"
 	"embed"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
-	"sync"
 	"time"
 )
 
 //go:embed static/*
 var static embed.FS
 
-// Config holds what the demo host application needs to call the API.
+// Config holds what the demo handler itself needs. Everything about
+// HOW to reach the engine or WHERE capture rows go lives behind the
+// ports below — the handler no longer holds the secret key at all, so
+// it cannot leak what it does not have.
 type Config struct {
-	// APIBase is the Ghost Trace origin, e.g. http://127.0.0.1:8080.
-	APIBase string
-
 	// SiteKey is public and substituted into the page.
 	SiteKey string
+}
 
-	// SecretKey authenticates the server-to-server decision call and is
-	// never sent to the browser.
-	SecretKey string
+// DecisionClient is the handler's port to the decision engine. The
+// production implementation (HTTPDecisionClient) speaks HTTP with the
+// secret key exactly as a real integrator would — that trust-boundary
+// dogfooding is the demo's whole point — while tests substitute fakes
+// without a network.
+type DecisionClient interface {
+	Decide(ctx context.Context, body []byte) (map[string]any, error)
+}
 
-	// DecisionTimeout is the client-side budget. Contract §5 sets it at
-	// roughly 3× the p99 target; at an 80ms p99 that is 250ms.
-	DecisionTimeout time.Duration
-
-	// CaptureLog, when set, is a JSONL file of labelled human sessions
-	// for the M2 study. Empty disables capture.
-	CaptureLog string
+// CaptureSink records one labelled human session for the capture
+// study. FileCaptureSink appends JSONL; NoCapture discards.
+type CaptureSink interface {
+	Append(row CaptureRow) error
 }
 
 // Handler serves the demo.
 type Handler struct {
-	cfg  Config
-	log  *slog.Logger
-	page []byte
-	sdk  []byte
-	http *http.Client
-
-	// captureMu serializes appends. Volunteers overlap in practice —
-	// a link goes out to a group chat and several people open it at
-	// once — and interleaved writes would corrupt the JSONL.
-	captureMu sync.Mutex
+	cfg       Config
+	log       *slog.Logger
+	page      []byte
+	sdk       []byte
+	decisions DecisionClient
+	capture   CaptureSink
 }
 
-// New constructs the demo handler.
-func New(cfg Config, log *slog.Logger) (*Handler, error) {
+// New constructs the demo handler over its two ports. A nil capture
+// means no capture study is running (NoCapture).
+func New(cfg Config, decisions DecisionClient, capture CaptureSink, log *slog.Logger) (*Handler, error) {
 	if log == nil {
 		log = slog.Default()
 	}
-	if cfg.DecisionTimeout == 0 {
-		cfg.DecisionTimeout = 250 * time.Millisecond
+	if decisions == nil {
+		return nil, errors.New("web: DecisionClient is required")
+	}
+	if capture == nil {
+		capture = NoCapture{}
 	}
 
 	page, err := static.ReadFile("static/index.html")
@@ -80,11 +81,12 @@ func New(cfg Config, log *slog.Logger) (*Handler, error) {
 	}
 
 	return &Handler{
-		cfg:  cfg,
-		log:  log,
-		page: []byte(strings.Replace(string(page), "SITE_KEY_PLACEHOLDER", cfg.SiteKey, 1)),
-		sdk:  sdk,
-		http: &http.Client{Timeout: cfg.DecisionTimeout},
+		cfg:       cfg,
+		log:       log,
+		page:      []byte(strings.Replace(string(page), "SITE_KEY_PLACEHOLDER", cfg.SiteKey, 1)),
+		sdk:       sdk,
+		decisions: decisions,
+		capture:   capture,
 	}, nil
 }
 
@@ -127,9 +129,10 @@ type loginRequest struct {
 	Visit       int    `json:"visit"`
 }
 
-// captureRow is one labelled human session, appended to the capture log
-// for experiments/analyze.py.
-type captureRow struct {
+// CaptureRow is one labelled human session, appended to the capture
+// log for experiments/analyze.py. Exported because it is the value the
+// CaptureSink port carries.
+type CaptureRow struct {
 	Participant    string  `json:"participant"`
 	Arm            string  `json:"arm"`
 	Condition      string  `json:"condition"`
@@ -178,7 +181,7 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
-	decision, err := h.decide(r.Context(), body)
+	decision, err := h.decisions.Decide(r.Context(), body)
 	if err == nil && req.Participant != "" {
 		h.appendCapture(req, decision)
 	}
@@ -202,16 +205,12 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(decision)
 }
 
-// appendCapture records one labelled human session.
+// appendCapture records one labelled human session through the sink.
 //
 // Failures are logged and swallowed: a volunteer's five minutes must not
 // be wasted by a full disk, and a missing row is a missing observation
 // rather than a corrupted one.
 func (h *Handler) appendCapture(req loginRequest, d map[string]any) {
-	if h.cfg.CaptureLog == "" {
-		return
-	}
-
 	num := func(k string) float64 {
 		if v, ok := d[k].(float64); ok {
 			return v
@@ -235,7 +234,7 @@ func (h *Handler) appendCapture(req loginRequest, d map[string]any) {
 		return 0
 	}
 
-	row := captureRow{
+	row := CaptureRow{
 		Participant:    req.Participant,
 		Arm:            req.Arm,
 		Condition:      req.Condition,
@@ -250,44 +249,7 @@ func (h *Handler) appendCapture(req loginRequest, d map[string]any) {
 		At:             time.Now().UTC().Format(time.RFC3339),
 	}
 
-	line, err := json.Marshal(row)
-	if err != nil {
-		h.log.Error("capture marshal", "err", err)
-		return
+	if err := h.capture.Append(row); err != nil {
+		h.log.Error("capture append", "err", err)
 	}
-
-	h.captureMu.Lock()
-	defer h.captureMu.Unlock()
-
-	f, err := os.OpenFile(h.cfg.CaptureLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		h.log.Error("capture open", "err", err, "path", h.cfg.CaptureLog)
-		return
-	}
-	defer func() { _ = f.Close() }()
-	if _, err := f.Write(append(line, '\n')); err != nil {
-		h.log.Error("capture write", "err", err)
-	}
-}
-
-func (h *Handler) decide(ctx context.Context, body []byte) (map[string]any, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		h.cfg.APIBase+"/v1/decisions", bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+h.cfg.SecretKey)
-
-	resp, err := h.http.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	var out map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, err
-	}
-	return out, nil
 }
