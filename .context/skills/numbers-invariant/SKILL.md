@@ -17,15 +17,30 @@ the exact failure this repository exists to avoid.
 ## Required after any change to `services/`, `experiments/` or `schemas/`
 
 ```bash
-make numbers            # ~7 minutes, needs real browsers
+make numbers            # ~7 minutes, needs real browsers; measures AND checks
 ```
 
-Compare against the most recent manifest in `docs/results/`:
+The comparison against the most recent manifest in `docs/results/` is no
+longer yours to do by eye — `make numbers` ends by running it, and
+`make numbers-check` re-runs it against a run already on disk. It
+enforces:
 
-- detection rates inside its Wilson intervals
+- detection rates inside the baseline's Wilson intervals, in **both**
+  directions. A detector that suddenly catches more is as much a change
+  to explain as one that catches less
+- no tier present in the baseline missing from the run
 - p99 inside the 80ms budget
 - cold start still `never_blocks: true`
-- the memory benchmark without a >10% regression
+- a false-positive rate that had a value has not lost it
+- the memory benchmark without a >10% regression, per cell
+
+Read the printed table anyway. The check enforces the rules; it does not
+tell you whether the run **meant** anything.
+
+The baseline is the manifest with the newest `provenance.generated_at`,
+not the last filename — manifest names carry a content hash, so sorting
+them by name picks an arbitrary one. That mistake was made twice by
+hand before the check existed, which is why it exists.
 
 ## Read the run honestly
 

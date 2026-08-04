@@ -543,10 +543,24 @@ experiments-check: ## Syntax-check every tier and run the asserted statistics se
 	@cd $(EXPERIMENTS) && python3 analyze.py --selftest
 	@echo "== numbers.json schema selftest"
 	@cd $(EXPERIMENTS) && python3 -m schema --selftest
+	@echo "== numbers-check selftest (asserted)"
+	@python3 $(EXPERIMENTS)/numbers_check.py --selftest
 
+# Measuring and CHECKING are one target, because they were two habits
+# and the second one kept being skipped. The run prints the six numbers
+# either way; the check is what decides whether they reproduced.
 .PHONY: numbers
-numbers: ## Reproduce the six numbers (the invariant; needs browsers)
+numbers: ## Reproduce the six numbers and check them (the invariant; needs browsers)
 	python3 $(EXPERIMENTS)/numbers.py
+	@$(MAKE) --no-print-directory numbers-check
+
+# The invariant CONTRIBUTING has always stated, finally enforced.
+# Separate from `numbers` so a run already on disk can be re-checked
+# against a newly published manifest without paying seven minutes for
+# it.
+.PHONY: numbers-check
+numbers-check: ## Check the last run against the newest published manifest
+	@python3 $(EXPERIMENTS)/numbers_check.py
 
 # Promoting a run to docs/results/ is a deliberate act, not a side
 # effect of measuring: the manifest is the record someone else will

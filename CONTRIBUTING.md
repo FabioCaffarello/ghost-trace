@@ -101,18 +101,24 @@ humans, CI and agents share one vocabulary.
 `services/` or `experiments/`:
 
 ```bash
-make numbers          # ~7 minutes; needs browsers
+make numbers          # ~7 minutes; needs browsers. Measures AND checks.
 ```
 
-Detection rates should stay within the Wilson intervals of the last
-committed manifest in [`docs/results/`](docs/results/), p99 inside the
-80ms budget, cold start still never blocking, and the memory benchmark
-without a >10% regression. Tiers 5 and 6 are seeded (`GT_SEED`), so
-their numbers are repeatable; the others have no randomness.
+It ends by comparing the run against the newest manifest in
+[`docs/results/`](docs/results/): detection rates inside its Wilson
+intervals (in both directions), no tier that ran before missing now, p99
+inside the 80ms budget, cold start still never blocking, a
+false-positive rate that had a value not having lost it, and the memory
+benchmark without a >10% regression. `make numbers-check` runs the same
+comparison against a run already on disk.
+
+Tiers 5 and 6 are seeded (`GT_SEED`), so their numbers are repeatable;
+the others have no randomness.
 
 If a number moves and you meant it to, say so explicitly in the PR and
 publish a manifest (`make numbers-manifest`). A moved number with no
-explanation is indistinguishable from a broken detector.
+explanation is indistinguishable from a broken detector — which is the
+sentence this repository wrote long before anything enforced it.
 
 ## Two rules that are not style
 
