@@ -33,6 +33,9 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # The job name is a required status check on main. It now also gates
+  # the HTTP contract, but renaming it to say so would silently remove
+  # the protection, so the name stays and this comment carries the news.
   schemas:
     name: schemas — lint + breaking + genproto sync
     runs-on: ubuntu-latest
@@ -68,6 +71,17 @@ jobs:
 
       - name: genproto in sync
         run: make genproto-sync
+
+      # The published HTTP contract is generated from the Go wire types.
+      # Committing it and failing on drift is what stops it becoming a
+      # description of last quarter's API; the lint is a curated ruleset
+      # (.vacuum.yaml) that already caught a schema demanding every
+      # field of a discriminated union.
+      - name: openapi in sync
+        run: make openapi-sync
+
+      - name: openapi lint
+        run: make openapi-lint
 
   # The job name is a required status check on main. Renaming it silently
   # removes the protection, so it stays as it is.

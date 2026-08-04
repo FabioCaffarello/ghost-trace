@@ -1,0 +1,1 @@
+{"evaluation_id":"ev_NORMALIZED","decision":"allow","shadow_decision":"challenge","score":1,"confidence":0.448,"reasons":[{"code":"POINTER_LINEARITY","weight":1}],"evidence":{"events":120,"duration_ms":16840},"mode":"monitor"}

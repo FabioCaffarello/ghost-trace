@@ -45,7 +45,6 @@ def decide(token, subject):
                 "session_token": token,
                 "action": "login",
                 "subject_id": subject,
-                "context": {"harness": True},
             }
         ).encode(),
         headers={

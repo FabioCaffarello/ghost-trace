@@ -49,7 +49,6 @@ export async function decide(sessionToken, { action = "login", subjectId = "harn
       session_token: sessionToken,
       action,
       subject_id: subjectId,
-      context: { harness: true },
     }),
   });
   if (!res.ok) throw new Error(`/v1/decisions -> HTTP ${res.status}`);

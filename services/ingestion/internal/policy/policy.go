@@ -77,6 +77,31 @@ const (
 	ReasonInsufficientEvidence = "INSUFFICIENT_EVIDENCE"
 )
 
+// ReasonCodes is the §7 enumeration as DATA.
+//
+// The contract has promised a stable set of reason codes since it was
+// written, and never listed one — because the codes were constants,
+// and a constant is something no generator and no client can
+// enumerate. Publishing the set is what lets the OpenAPI schema say
+// which codes exist instead of `type: string`.
+//
+// Order is the order above: rough order of evidential strength, which
+// is how a reader should meet them.
+//
+// reason_codes_test.go parses this file and asserts that this slice
+// and the constants are the same set, in both directions. There is
+// deliberately no exception list.
+var ReasonCodes = []string{
+	ReasonPointerLinearity,
+	ReasonKeyIntervalVarianceLow,
+	ReasonKeyDwellAbsent,
+	ReasonKeyIntervalsIdentical,
+	ReasonProgrammaticScroll,
+	ReasonNoFocusTransitions,
+	ReasonValueInjected,
+	ReasonInsufficientEvidence,
+}
+
 // Decisions.
 const (
 	DecisionAllow     = "allow"

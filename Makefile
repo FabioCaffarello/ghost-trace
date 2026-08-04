@@ -47,6 +47,7 @@ PROTOC_GEN_GO_VER := v1.36.0
 GOLANGCI_VER      := v2.12.2
 GOVULNCHECK_VER   := v1.1.4
 BUF_VER           := 1.68.4
+VACUUM_VER        := v0.30.0
 
 # Minimum toolchain versions asserted by `make bootstrap`.
 GO_MIN     := 1.26
@@ -289,6 +290,53 @@ genproto-sync: require-buf tool-protoc-gen-go ## Fail if libs/genproto differs f
 	fi
 	@echo "libs/genproto in sync"
 
+##@ Contract
+
+# The published HTTP contract is GENERATED from the Go types the
+# handlers decode into, then committed and drift-gated — the same
+# discipline libs/genproto is under, for the same reason: a
+# specification nothing checks is a specification that describes last
+# quarter's API.
+.PHONY: openapi
+openapi: ## Regenerate contract/openapi.yaml from the wire types
+	cd $(SERVICE) && go run ./cmd/gen-openapi "$(CURDIR)/contract/openapi.yaml"
+
+# Generates to a temporary file and diffs, rather than regenerating in
+# place and asking git what changed. Two reasons: the check never
+# mutates the tree it is judging, and it does not depend on git's
+# staging state — a newly added file reads as "A" in `git status` and
+# the git-based version called that drift on the very commit that
+# introduced the file.
+.PHONY: openapi-sync
+openapi-sync: ## Fail if contract/openapi.yaml differs from a fresh generation
+	@# An explicit XXXXXX template, not `mktemp -t openapi`: BSD mktemp
+	@# treats -t as a prefix and GNU requires the X's, so the short form
+	@# works on a Mac and fails on the runner. Errors are NOT swallowed —
+	@# the first version hid the real cause behind a generic message.
+	@tmp=$$(mktemp "$${TMPDIR:-/tmp}/openapi.XXXXXX"); \
+	trap 'rm -f "$$tmp"' EXIT; \
+	(cd $(SERVICE) && go run ./cmd/gen-openapi "$$tmp") >/dev/null || \
+		{ echo "gen-openapi failed — see above"; exit 1; }; \
+	if ! diff -u contract/openapi.yaml "$$tmp" >/dev/null 2>&1; then \
+		diff -u contract/openapi.yaml "$$tmp" | head -60; \
+		echo ""; \
+		echo "contract/openapi.yaml is out of sync with the wire types"; \
+		echo "fix: make openapi && git add contract/openapi.yaml"; \
+		exit 1; \
+	fi; \
+	echo "contract/openapi.yaml in sync"
+
+.PHONY: openapi-lint
+openapi-lint: tool-vacuum ## Lint the specification (structure, descriptions, operation ids)
+	@# --fail-severity warn, because the ruleset is curated: anything it
+	@# still reports is something we decided we care about.
+	@"$(TOOLBIN)/vacuum" lint --details --no-banner --fail-severity warn \
+		--ruleset .vacuum.yaml contract/openapi.yaml
+
+.PHONY: tool-vacuum
+tool-vacuum:
+	@$(call ensure_tool,vacuum,github.com/daveshanley/vacuum@$(VACUUM_VER))
+
 ##@ Experiments
 
 .PHONY: experiments-check
@@ -340,7 +388,7 @@ verify: fmt-check vet lint test-race ## Pre-push gate: format, vet, lint, race t
 # ci: the whole gate. `make ci` green locally and a green CI run are the
 # same statement — that equivalence is the reason this file exists.
 .PHONY: ci
-ci: fmt-check tidy-check lint-commit-selftest buf-lint genproto-sync vet lint test-race coverage experiments-check vuln ## Everything CI runs
+ci: fmt-check tidy-check lint-commit-selftest buf-lint genproto-sync openapi-sync openapi-lint vet lint test-race coverage experiments-check vuln ## Everything CI runs
 
 ##@ Housekeeping
 
