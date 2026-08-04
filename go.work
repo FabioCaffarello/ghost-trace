@@ -26,5 +26,6 @@ use (
 	./libs/id
 	./libs/wire
 	./services/archive
+	./services/decision-engine
 	./services/ingestion
 )

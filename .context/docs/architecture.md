@@ -17,8 +17,9 @@ this file will not repeat it.
 ```
 browser ──sdk.js──> /v1/sessions, /v1/telemetry ──> internal/api (thin transport)
                                                           │
-app server ────────> /v1/decisions, /v1/outcomes ──> libs/decision (shared: both
-                                                     services mount it — ADR-0005)
+app server ────────> /v1/decisions, /v1/outcomes ──> libs/decision (shared: the
+                                                     collector AND the decision
+                                                     engine mount it — ADR-0005)
                                                           │
                                                           v
                                             internal/app (use cases, ports)

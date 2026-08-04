@@ -31,6 +31,12 @@ make ci          # everything CI runs, in the order CI runs it
 decide when things run; the Makefile decides what they do. If `make ci`
 is green and CI is not, that is a bug in the split and worth reporting.
 
+Two checks need infrastructure and so sit outside `make ci`, refusing to
+run rather than skipping: `make parity` and `make shadow` want a broker
+(`GT_NATS_URL`), and `make shadow-http` wants the composed topology up —
+it asks the collector and the decision engine the same question and
+compares their answers.
+
 `make hooks` installs the git hooks: fast checks on commit, `make
 verify` on push, every failure naming the command that fixes it.
 

@@ -2,8 +2,11 @@
 #
 # Profiles (combine as needed):
 #
-#   core           the slice: API + demo page + archive on a named volume
+#   core           the topology: collector + demo page, decision engine,
+#                  event stream, archive on a named volume
 #                    docker compose --profile core up
+#                  With it up, `make shadow-http` A/Bs the collector
+#                  against the decision engine over real HTTP.
 #   demo           the slice with human-capture enabled; rows land in
 #                  ./experiments/results/human_sessions.jsonl on the host
 #                    docker compose --profile demo up
@@ -112,6 +115,46 @@ services:
       # /healthz on the monitoring port; the image has no curl, so this
       # uses the nats binary's own readiness probe.
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    restart: unless-stopped
+
+  # The decision engine: the same two endpoints the collector serves,
+  # answered from the snapshots the collector publishes instead of from
+  # sessions it observed. It is mounted from the same package (ADR-0005),
+  # so the only thing that differs is where the state came from — which
+  # is exactly what `make shadow-http` compares while both are up.
+  #
+  # No volume: it holds no session state and has no local store.
+  decision-engine:
+    <<: *hardened
+    profiles: [core, demo]
+    image: ghost-trace/decision-engine:${IMAGE_TAG:-dev}
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.decision-engine
+      args:
+        GOLANG_IMAGE: ${GOLANG_IMAGE:-golang:1.26-alpine}
+        DISTROLESS_IMAGE: ${DISTROLESS_IMAGE:-gcr.io/distroless/static-debian12:nonroot}
+    command:
+      - -addr=0.0.0.0:8082
+      - -nats=nats://nats:4222
+      - -mode=${GT_MODE:-monitor}
+      - -tenant=${GT_TENANT:-t_demo}
+      - -secret-key=${GT_SECRET_KEY:-sk_demo}
+      # Must match the collector's -session-ttl: it is the snapshot
+      # bucket's TTL, and two services declaring different lifetimes for
+      # the same bucket is a race over when a session stops existing.
+      - -session-ttl=${GT_SESSION_TTL:-30m}
+    ports:
+      - "127.0.0.1:8082:8082"
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/decision-engine", "-healthcheck", "-addr", "0.0.0.0:8082"]
       interval: 5s
       timeout: 3s
       retries: 5
