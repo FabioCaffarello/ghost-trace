@@ -85,9 +85,16 @@ def pick_newest(paths, stamp) -> str | None:
     return max(paths, key=stamp)
 
 
-def newest_manifest() -> str | None:
-    return pick_newest(glob.glob(MANIFEST_GLOB),
-                       lambda p: load(p)["provenance"]["generated_at"])
+def newest_manifest(want: str) -> str | None:
+    """The newest published manifest OF THE SAME TOPOLOGY.
+
+    Not simply the newest. Once a composed baseline exists, "newest"
+    alone would hand a monolith run a composed one to be judged against,
+    and the topology check would then reject a perfectly good run for a
+    reason that is the picker's fault rather than the run's.
+    """
+    same = [p for p in glob.glob(MANIFEST_GLOB) if topology(load(p)) == want]
+    return pick_newest(same, lambda p: load(p)["provenance"]["generated_at"])
 
 
 def check_detection(base: dict, run: dict, rep: Report) -> None:
@@ -126,6 +133,25 @@ def check_absent_tiers(base: dict, run: dict, rep: Report) -> None:
         )
     for tier in sorted(was - now):
         rep.note(f"{tier}: absent in the baseline, present here")
+
+
+def topology(d: dict) -> str:
+    """Manifests from before the split recorded no topology; there was
+    only one thing they could have been."""
+    return (d.get("provenance", {}).get("run", {}) or {}).get("topology", "monolith")
+
+
+def check_topology(base: dict, run: dict, rep: Report) -> None:
+    b, n = topology(base), topology(run)
+    if b != n:
+        rep.fail(
+            f"this run is {n} and the baseline is {b}. A decision answered in "
+            f"process and one answered across a network hop and a KV read are "
+            f"different measurements wearing the same name; comparing them "
+            f"would report a topology change as a regression, or hide one. "
+            f"Publish a baseline for {n} (`make numbers-manifest`) and compare "
+            f"against that."
+        )
 
 
 def check_session(base: dict, run: dict, rep: Report) -> None:
@@ -182,7 +208,7 @@ def check_architecture(base: dict, run: dict, rep: Report) -> None:
             )
 
 
-def no_baseline() -> int:
+def no_baseline(want: str = "") -> int:
     """No manifest to check against.
 
     This FAILS. Nothing was compared, and a check that compared nothing
@@ -191,7 +217,8 @@ def no_baseline() -> int:
     docs/results/ is committed content; an empty one is a broken
     checkout, not a state a run should pass through quietly.
     """
-    print("numbers-check: NOTHING WAS CHECKED — docs/results/ holds no manifest,",
+    which = f" for the {want} topology" if want else ""
+    print(f"numbers-check: NOTHING WAS CHECKED — docs/results/ holds no manifest{which},",
           file=sys.stderr)
     print("               so the run was compared against nothing.", file=sys.stderr)
     print("fix: publish the first baseline with `make numbers-manifest`", file=sys.stderr)
@@ -201,6 +228,7 @@ def no_baseline() -> int:
 def verdict(base: dict, run: dict) -> Report:
     """Every rule CONTRIBUTING states, applied to two runs."""
     rep = Report()
+    check_topology(base, run, rep)
     check_detection(base, run, rep)
     check_absent_tiers(base, run, rep)
     check_session(base, run, rep)
@@ -240,7 +268,8 @@ def _baseline() -> dict:
         "architecture": [{"architecture": "maintained", "sessions": 100,
                           "duration_s": 10, "bytes_per_session": 700}],
         "provenance": {"generated_at": "2026-01-01T00:00:00Z",
-                       "run": {"seed": "s"}, "git": {"commit": "0" * 40}},
+                       "run": {"seed": "s", "topology": "monolith"},
+                       "git": {"commit": "0" * 40}},
     }
 
 
@@ -260,6 +289,10 @@ def selftest() -> int:
     cases: list[tuple[str, dict, bool]] = []
 
     cases.append(("an identical run", _mutate(), True))
+
+    composed = _mutate()
+    composed["provenance"]["run"]["topology"] = "composed"
+    cases.append(("a composed run against a monolith baseline", composed, False))
 
     # Both directions. A detector that suddenly catches MORE is as much
     # a change to explain as one that catches less — and 10/10 against a
@@ -332,13 +365,25 @@ def selftest() -> int:
     else:
         print("  ok    an empty manifest list has no newest member")
 
+    manifests = {"a.json": ("monolith", "2026-01-01T00:00:00Z"),
+                 "b.json": ("composed", "2026-06-01T00:00:00Z"),
+                 "c.json": ("monolith", "2026-03-01T00:00:00Z")}
+    newest_monolith = pick_newest([p for p, (t, _) in manifests.items() if t == "monolith"],
+                                  lambda p: manifests[p][1])
+    if newest_monolith != "c.json":
+        failures += 1
+        print(f"  FAIL  a monolith run should pick the newest MONOLITH manifest, "
+              f"picked {newest_monolith}")
+    else:
+        print("  ok    the baseline is the newest of the SAME topology, not the newest")
+
     if no_baseline() == 0:
         failures += 1
         print("  FAIL  no baseline was reported as a pass; nothing was compared")
     else:
         print("  ok    no baseline is a failure, not a pass")
 
-    total = len(cases) + 4
+    total = len(cases) + 5
     print(f"\n  {total - failures}/{total} numbers-check cases hold")
     return 1 if failures else 0
 
@@ -362,9 +407,10 @@ def main() -> int:
         return 1
     run = load(args.run)
 
-    baseline_path = args.baseline or newest_manifest()
+    want = topology(run)
+    baseline_path = args.baseline or newest_manifest(want)
     if baseline_path is None:
-        return no_baseline()
+        return no_baseline(want)
 
     base = load(baseline_path)
 
@@ -383,6 +429,7 @@ def main() -> int:
     print(f"               generated {prov['generated_at']}, "
           f"seed {prov['run'].get('seed', '(none recorded)')}, "
           f"commit {prov['git']['commit'][:12]}")
+    print(f"               topology {topology(base)} -> {topology(run)}")
     print()
 
     for tier in sorted(run["detection"]):

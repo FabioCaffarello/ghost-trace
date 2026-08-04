@@ -118,6 +118,14 @@ comparison against a run already on disk.
 Tiers 5 and 6 are seeded (`GT_SEED`), so their numbers are repeatable;
 the others have no randomness.
 
+Runs are compared **within a topology**. `GT_ENGINE_BASE` pointing at a
+separate decision engine makes the run `composed`; unset, it is
+`monolith`. A decision answered in process and one answered across a
+network hop and a KV read are different measurements wearing the same
+name, so the check refuses to compare them and picks the newest manifest
+of the matching topology. `docs/results/latency-gate-2026-08-04.md` is
+what the split cost.
+
 If a number moves and you meant it to, say so explicitly in the PR and
 publish a manifest (`make numbers-manifest`). A moved number with no
 explanation is indistinguishable from a broken detector — which is the

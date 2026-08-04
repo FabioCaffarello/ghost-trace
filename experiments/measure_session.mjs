@@ -3,8 +3,13 @@
  * decision, and cold-start behaviour.
  *
  * Numbers 3, 4 and 5 of the six. Emits JSON on stdout for numbers.py.
+ *
+ * Sessions and telemetry go to GT_BASE; decisions go to GT_ENGINE_BASE,
+ * which is the same host in the all-in-one binary and the decision
+ * engine in the composed topology. Number 3 therefore measures whatever
+ * actually answers a decision, which is the point of the phase gate.
  */
-import { BASE, decide } from "./lib/run.js";
+import { BASE, ENGINE_BASE, decide } from "./lib/run.js";
 import { keyEvent, pointerEvent, sessionBody, telemetryBody } from "./lib/wire.js";
 
 const CHALLENGE_FLOOR = 0.40;
@@ -101,6 +106,10 @@ for (let i = 0; i < 500; i++) {
   lat.push(Number(process.hrtime.bigint() - t0) / 1e6);
 }
 const latency = {
+  // Recorded so a figure cannot be read without knowing what answered
+  // it. A p99 from the composed topology and one from the monolith are
+  // different measurements wearing the same name.
+  engine_base: ENGINE_BASE === BASE ? "same-process" : "separate-service",
   n: lat.length,
   p50: +pct(lat, 0.50).toFixed(3),
   p95: +pct(lat, 0.95).toFixed(3),
