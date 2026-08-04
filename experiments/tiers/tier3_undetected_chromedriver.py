@@ -146,16 +146,22 @@ def main():
         except Exception:  # noqa: BLE001
             pass
 
-    if rows:
-        n = len(rows)
-        flagged = sum(1 for r in rows if (r["shadow_decision"] or r["decision"]) != "allow")
-        print(
-            f"  {COHORT:<26} n={n:>3}  "
-            f"score={sum(r['score'] for r in rows)/n:.3f}  "
-            f"conf={sum(r['confidence'] for r in rows)/n:.3f}  "
-            f"events={round(sum(r['events'] for r in rows)/n)}  "
-            f"flagged={flagged}/{n}"
-        )
+    if not rows:
+        # Fail loudly: per-session errors are caught inside the loop, so a
+        # run where every session failed would otherwise exit 0 and vanish
+        # from the results as neither present nor absent.
+        print(f"  {COHORT}: no sessions completed", file=sys.stderr)
+        return 1
+
+    n = len(rows)
+    flagged = sum(1 for r in rows if (r["shadow_decision"] or r["decision"]) != "allow")
+    print(
+        f"  {COHORT:<26} n={n:>3}  "
+        f"score={sum(r['score'] for r in rows)/n:.3f}  "
+        f"conf={sum(r['confidence'] for r in rows)/n:.3f}  "
+        f"events={round(sum(r['events'] for r in rows)/n)}  "
+        f"flagged={flagged}/{n}"
+    )
     return 0
 
 

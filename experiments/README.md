@@ -91,9 +91,10 @@ cd services/ingestion && make run          # terminal 1
 cd experiments && python3 run.py && python3 analyze.py   # terminal 2
 ```
 
-A tier whose dependencies are missing is recorded in
-`results/absent_tiers.txt` and reported by `analyze.py` as **ABSENT**,
-never silently skipped. Six tiers listed and five run reads as "we
+A tier that does not run — missing dependencies, a dead endpoint, or a
+run where every session failed — exits non-zero and is recorded as
+**ABSENT** (`results/absent_tiers.txt` for `run.py`, `absent_tiers` in
+`numbers.json` for the canonical command), never silently skipped. Six tiers listed and five run reads as "we
 tested six things", and the missing one is always the one that would
 have found something.
 
