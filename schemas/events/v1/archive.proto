@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1;eventsv1";
+
+// ArchiveRecord is one Category I record in flight between the service
+// that produced it and the archive that stores it.
+//
+// IT CARRIES THE CANONICAL BYTES, NOT THE MESSAGE. That is the whole
+// point of this envelope. Records are content-addressed by a BLAKE3
+// hash over their canonical encoding, and
+// `proto.MarshalOptions{Deterministic: true}` explicitly does NOT
+// promise the same bytes across builds or protobuf versions. A consumer
+// that re-marshalled the message to recompute the hash could therefore
+// disagree with the producer about a record's identity — silently
+// breaking idempotency across exactly the version skew a deployed
+// system spends its life in.
+//
+// So the producer canonicalizes once, and everything downstream treats
+// `canonical_payload` as opaque bytes it may verify but must never
+// regenerate.
+message ArchiveRecord {
+  // The exact canonical encoding of the record. Opaque here.
+  bytes canonical_payload = 1;
+
+  // Lowercase hex BLAKE3 over canonical_payload. The consumer verifies
+  // rather than trusts: a mismatch means the bytes did not survive the
+  // trip, and committing them would poison a content-addressed store.
+  string event_hash = 2;
+
+  // The record's own notion of when it happened, Unix nanoseconds —
+  // distinct from the commit timestamp, which the archive sets on
+  // arrival. The gap between the two is itself information.
+  int64 event_time = 3;
+
+  // Fully-qualified protobuf name of the message inside
+  // canonical_payload, e.g. "ghosttrace.events.v1.Evaluation".
+  string message_type = 4;
+
+  // The tenant this record belongs to. Also the last token of the
+  // subject it travels on, so a consumer can be scoped without
+  // decoding.
+  string tenant = 5;
+}

@@ -48,7 +48,7 @@ linters:
       # dual. Here the original spells out "not a digit and not a
       # lowercase hex letter", which is the property being asserted;
       # the dual is shorter and says less.
-      - path: internal/canonical/canonical_test\.go
+      - path: canonical_test\.go
         linters:
           - staticcheck
         text: QF1001

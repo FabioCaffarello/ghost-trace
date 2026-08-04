@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/FabioCaffarello/ghost-trace/libs/canonical"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/canonical"
 )
 
 func newTestSubstrate(t *testing.T) *Substrate {

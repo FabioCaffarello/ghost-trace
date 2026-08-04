@@ -25,7 +25,7 @@ import (
 	// fully static binary and the runtime image be distroless.
 	_ "modernc.org/sqlite"
 
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/canonical"
+	"github.com/FabioCaffarello/ghost-trace/libs/canonical"
 )
 
 // eventsSchemaDDL — the events table. WITHOUT ROWID suppresses the implicit SQLite ROWID
@@ -413,4 +413,39 @@ func (s *Substrate) AppendPair(ctx context.Context,
 		return fmt.Errorf("substrate.AppendPair: commit: %w", err)
 	}
 	return nil
+}
+
+// AppendCanonical commits a record from bytes that are ALREADY
+// canonical, deriving the row from them.
+//
+// It exists so the two producers cannot disagree about how a record
+// becomes a row. The collector canonicalizes a live message and commits
+// it; the archive service receives canonical bytes over the wire and
+// commits those. If each built its own EventRow, the blob-sharding
+// scheme would be written twice and would eventually be written
+// differently — and a content-addressed store whose two writers shard
+// differently is a store with two halves.
+//
+// The hash is VERIFIED against the payload rather than trusted. For the
+// archive service that is the whole safety argument: it never
+// re-marshals a message (protobuf's deterministic marshalling makes no
+// cross-build promise, so re-marshalling could legitimately produce
+// different bytes and a different identity), so verifying is the only
+// check it has that the bytes survived the trip.
+func (s *Substrate) AppendCanonical(ctx context.Context, payload []byte, eventHash [32]byte,
+	eventTime int64, messageType string, committedAt int64) error {
+
+	if got := canonical.Hash(payload); got != eventHash {
+		return fmt.Errorf("%w: payload hashes to %s, record claims %s",
+			ErrHashMismatch, canonical.HashHex(got), canonical.HashHex(eventHash))
+	}
+
+	hexed := canonical.HashHex(eventHash)
+	return s.Append(ctx, EventRow{
+		EventHash:   eventHash,
+		EventTime:   eventTime,
+		MessageType: messageType,
+		PayloadRef:  hexed[:2] + "/" + hexed[2:],
+		CommittedAt: committedAt,
+	}, payload)
 }

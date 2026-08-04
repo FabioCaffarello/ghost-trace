@@ -19,8 +19,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/canonical"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
+	"github.com/FabioCaffarello/ghost-trace/libs/canonical"
+	"github.com/FabioCaffarello/ghost-trace/libs/substrate"
 )
 
 // Ingester canonicalizes messages and commits them to the substrate.
@@ -66,15 +66,10 @@ func (in *Ingester) Append(ctx context.Context, msg proto.Message, eventTime int
 	hexed := canonical.HashHex(hash)
 	messageType := string(msg.ProtoReflect().Descriptor().FullName())
 
-	row := substrate.EventRow{
-		EventHash:   hash,
-		EventTime:   eventTime,
-		MessageType: messageType,
-		PayloadRef:  hexed[:2] + "/" + hexed[2:],
-		CommittedAt: in.now().UnixNano(),
-	}
-
-	if err := in.sub.Append(ctx, row, payload); err != nil {
+	// Through the shared helper, so this and the archive service commit
+	// identically-shaped rows. See substrate.AppendCanonical.
+	if err := in.sub.AppendCanonical(ctx, payload, hash, eventTime,
+		messageType, in.now().UnixNano()); err != nil {
 		return Report{}, fmt.Errorf("ingest.Append: commit: %w", err)
 	}
 
