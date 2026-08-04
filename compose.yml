@@ -11,9 +11,16 @@
 #                  ./experiments/results/human_sessions.jsonl on the host
 #                    docker compose --profile demo up
 #                  (core and demo both claim 127.0.0.1:8083 — run one)
-#   experiments    the adversarial tiers against the running slice
+#   experiments    the adversarial tiers against the running topology
 #                    docker compose --profile core --profile experiments \
 #                      run --rm experiments
+#                  BOTH profiles are needed even to BUILD it: the service
+#                  depends on collector, which lives in core, and compose
+#                  refuses a project with an undefined dependency. And
+#                  `--profile core up --build` does NOT rebuild this
+#                  image — a stale one runs an old copy of experiments/
+#                  and fails in ways that look like a topology problem.
+#                  It cost an afternoon once.
 #   observability  Prometheus scraping /metrics, bound to 127.0.0.1:9090
 #                    docker compose --profile core --profile observability up
 #
@@ -60,7 +67,7 @@ services:
       # demo used to hide. Allowlist, never "*", and it covers
       # /v1/sessions and /v1/telemetry only: the secret-key endpoints
       # are server-to-server and a page must never reach them.
-      - -cors-origin=${GT_DEMO_ORIGIN:-http://127.0.0.1:8083}
+      - -cors-origin=${GT_DEMO_ORIGIN:-http://127.0.0.1:8083},${GT_DEMO_ORIGIN_INTERNAL:-http://demo-web-internal:8083}
       # Transitional dual-write: records still land in the local
       # substrate, and a copy is mirrored to the archive service. The
       # local write stays authoritative — a broker outage is counted,
@@ -234,6 +241,33 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # The demo host as a browser INSIDE this network sees it.
+  #
+  # It exists because ONE PAGE CANNOT NAME AN ORIGIN THAT IS RIGHT FOR
+  # BOTH. The page substitutes an absolute API origin, and the operator's
+  # browser needs 127.0.0.1 while a browser in the experiments container
+  # needs a service name. Serving the operator's page to the tiers meant
+  # the SDK tried to reach 127.0.0.1:8080 — itself — and every browser
+  # tier reported "no sessions completed".
+  #
+  # No published port: nothing outside this network addresses it.
+  demo-web-internal:
+    <<: *hardened
+    profiles: [experiments]
+    image: ghost-trace/demo-web:${IMAGE_TAG:-dev}
+    build: *demo-build
+    command:
+      - -addr=0.0.0.0:8083
+      - -api=${GT_API_URL:-http://collector:8080}
+      - -engine=${GT_ENGINE_SERVICE:-http://decision-engine:8082}
+      - -site-key=${GT_SITE_KEY:-pk_demo}
+      - -secret-key=${GT_SECRET_KEY:-sk_demo}
+    depends_on:
+      collector:
+        condition: service_healthy
+    healthcheck: *demo-health
+    restart: unless-stopped
+
   experiments:
     <<: *hardened
     profiles: [experiments]
@@ -245,7 +279,7 @@ services:
         PLAYWRIGHT_IMAGE: ${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.49.1-noble}
     environment:
       GT_BASE: http://collector:8080
-      GT_DEMO_BASE: http://demo-web:8083
+      GT_DEMO_BASE: http://demo-web-internal:8083
       GT_SITE_KEY: ${GT_SITE_KEY:-pk_demo}
       GT_SECRET_KEY: ${GT_SECRET_KEY:-sk_demo}
     volumes:
@@ -254,7 +288,7 @@ services:
     depends_on:
       collector:
         condition: service_healthy
-      demo-web:
+      demo-web-internal:
         condition: service_healthy
     restart: "no"
 
