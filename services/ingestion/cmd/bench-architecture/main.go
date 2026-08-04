@@ -2,7 +2,7 @@
 // compute-on-call across a concurrency × duration grid.
 //
 // This is M5's sixth number and the project's central claim. The claim
-// is NOT that decisions are fast — docs/architecture.md §8.1 records
+// is NOT that decisions are fast — contract/architecture.md §8.1 records
 // that per-request arithmetic is cheap either way, and M1 measured a
 // p99 of 6.4ms against an 80ms budget. The claim is that:
 //

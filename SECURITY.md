@@ -1,5 +1,20 @@
 # Security Policy
 
+## Reporting
+
+**Please do not open a public issue.** Report privately by opening a
+draft advisory:
+
+https://github.com/FabioCaffarello/ghost-trace/security/advisories/new
+
+It is visible only to the maintainers. This policy named no channel at
+all until R1.16b, which meant the only way to report anything was the
+public tracker — the opposite of what it intended.
+
+Expect an acknowledgement within a week. This is a research project
+maintained by one person, not a vendor with an on-call rota, and saying
+so is more useful than a response time nobody can honour.
+
 ## Project status
 
 Ghost Trace is a research project. The repository contains a running Go

@@ -1,8 +1,11 @@
-// Package substrate implements the inception-phase Tier 1 primary event
-// log per decision-log §0027 (SQLite + content-addressed blob-store on
-// local filesystem). Reads concurrent-without-restriction; writes
-// serialize through a single Append entry point per
-// docs/architecture/concurrency-pattern.md §Substrate-Writer Serialization.
+// Package substrate implements the primary event log: SQLite for the
+// index, a content-addressed blob store on the local filesystem for the
+// payloads.
+//
+// Reads are concurrent without restriction; writes serialize through a
+// single Append entry point, which is what makes the append-only
+// guarantee cheap to state and cheap to check — there is exactly one
+// place where bytes become durable.
 package substrate
 
 import (
@@ -18,13 +21,14 @@ import (
 	"strings"
 	"sync"
 
-	_ "modernc.org/sqlite" // pure-Go driver per decision-log §0027 Proposal item 4.
+	// Pure Go, deliberately: it is what lets CGO_ENABLED=0 produce a
+	// fully static binary and the runtime image be distroless.
+	_ "modernc.org/sqlite"
 
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/canonical"
 )
 
-// eventsSchemaDDL — events-table definition per decision-log §0027
-// Proposal item 1. WITHOUT ROWID suppresses the implicit SQLite ROWID
+// eventsSchemaDDL — the events table. WITHOUT ROWID suppresses the implicit SQLite ROWID
 // per AP "Using SQLite ROWID as event identity instead of event_hash".
 const eventsSchemaDDL = `
 CREATE TABLE IF NOT EXISTS events (
@@ -36,8 +40,7 @@ CREATE TABLE IF NOT EXISTS events (
 ) WITHOUT ROWID;
 `
 
-// canonicalPragmas — applied at Open per decision-log §0027 Proposal
-// item 1 + §0029 modification 2. journal_mode=WAL for concurrent-reader
+// canonicalPragmas — applied at Open. journal_mode=WAL for concurrent-reader
 // + single-writer semantics; synchronous=FULL for §2.1 durability
 // guarantee under power loss.
 var canonicalPragmas = []string{
@@ -46,20 +49,20 @@ var canonicalPragmas = []string{
 }
 
 // ErrHashMismatch indicates a §2.1 immutability violation: the recomputed
-// content hash does not match the stored hash. Per decision-log §0027
+// content hash does not match the stored hash. Per
 // AP4 (§2.1-inheritance restatement) + AP5 (operational discipline).
 var ErrHashMismatch = errors.New("substrate: hash-mismatch — §2.1 violation")
 
 // ErrBlobCollision indicates a write attempt whose hash matches an
-// existing blob but whose payload bytes differ. Per decision-log §0027
+// existing blob but whose payload bytes differ. Per
 // AP6 — apparent-duplicate-write byte-equality verification.
 var ErrBlobCollision = errors.New("substrate: blob byte-equality violation on apparent-duplicate write")
 
 // Substrate is the inception-phase primary event log + blob-store.
 //
-// Concurrent reads are safe. Writes serialize through the application-
-// layer writeMu per docs/architecture/concurrency-pattern.md §Substrate-
-// Writer Serialization (single Append entry point).
+// Concurrent reads are safe. Writes serialize through the
+// application-layer writeMu — a single Append entry point, so the
+// append-only guarantee has one enforcement site rather than several.
 type Substrate struct {
 	db      *sql.DB
 	blobDir string
@@ -154,7 +157,7 @@ func (s *Substrate) Append(ctx context.Context, row EventRow, payload []byte) er
 }
 
 // blobPath returns the on-disk path for a content-hash. Two-character
-// prefix shard per decision-log §0027 Proposal item 2.
+// prefix shard
 func (s *Substrate) blobPath(hash [32]byte) (shardDir, finalPath string) {
 	hex := canonical.HashHex(hash)
 	shardDir = filepath.Join(s.blobDir, hex[:2])
@@ -164,7 +167,7 @@ func (s *Substrate) blobPath(hash [32]byte) (shardDir, finalPath string) {
 
 // writeBlob writes payload to the blob-store under hash. Idempotent on
 // identical content; ErrBlobCollision on byte-inequality with existing
-// blob (per decision-log §0027 AP6).
+// blob (
 //
 // POSIX-only: uses write-temp-then-rename atomicity. Decision-log §0027
 // Open Questions surfaces the POSIX-only inception-phase constraint;
@@ -216,7 +219,7 @@ func (s *Substrate) writeBlob(hash [32]byte, payload []byte) error {
 // ReadBlob reads the blob for hash. Recomputes the content hash on read
 // and returns ErrHashMismatch on §2.1 violation per the canonical-
 // serialization-contract anti-pattern "hash-verification omitted from
-// blob-read path" and decision-log §0027 AP5.
+// blob-read path" and AP5.
 func (s *Substrate) ReadBlob(_ context.Context, hash [32]byte) ([]byte, error) {
 	_, finalPath := s.blobPath(hash)
 
@@ -265,8 +268,8 @@ func (s *Substrate) Count(ctx context.Context) (int64, error) {
 // Files that do not match the convention (temp files, accidentally-
 // placed artifacts) are silently skipped.
 //
-// Used by the verify CLI's orphan-blob detection per
-// docs/charter/decision-log.md §0040. Read-only walk; no writeMu.
+// Written for orphan-blob detection: a blob with no event referencing
+// it. Read-only walk; no writeMu.
 //
 // Order is filesystem-iteration order (operating-system dependent;
 // typically sorted by shard then filename on POSIX). Callers MUST NOT
@@ -312,9 +315,9 @@ func (s *Substrate) WalkBlobs(ctx context.Context, fn func(hash [32]byte, path s
 // content. If fn returns a non-nil error, iteration stops and the
 // error is propagated to the caller; the cursor is then closed.
 //
-// Used by the verify CLI per docs/charter/decision-log.md §0039 +
-// §0033 §Restoration Procedure. The walk is read-only; the writeMu
-// is NOT acquired (WAL mode permits concurrent readers per §0027).
+// Written for integrity verification and restoration. The walk is
+// read-only and does NOT acquire writeMu: WAL mode permits concurrent
+// readers, so a verification pass cannot stall ingestion.
 func (s *Substrate) WalkEvents(ctx context.Context, fn func(EventRow) error) error {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT event_hash, event_time, message_type, payload_ref, committed_at
@@ -345,7 +348,7 @@ func (s *Substrate) WalkEvents(ctx context.Context, fn func(EventRow) error) err
 // AppendPair commits two events atomically: a primary observation and
 // an enrichment record paired by reference. Used by the ingestion path
 // to commit a primary observation (e.g. DeclaredSession) alongside its
-// paired IngestionEvent per docs/charter/decision-log.md §0038.
+// paired IngestionEvent.
 //
 // Atomicity discipline:
 //  1. Both hashes are verified against their payloads (hash mismatch

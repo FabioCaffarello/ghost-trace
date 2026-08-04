@@ -21,7 +21,7 @@ const (
 )
 
 // PointerPoint is one vertex of a decimated pointer polyline.
-// Wire form is [x, y, dt] per docs/architecture.md §2; dt_ms is
+// Wire form is [x, y, dt] per contract/architecture.md §2; dt_ms is
 // milliseconds since the previous point in the same polyline.
 type PointerPoint struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`

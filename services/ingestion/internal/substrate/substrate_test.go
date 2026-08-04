@@ -163,7 +163,7 @@ func TestReadBlobHashMismatchOnCorruption(t *testing.T) {
 	}
 
 	// Deliberately corrupt the on-disk blob to exercise §2.1 violation
-	// detection on the read path per decision-log §0027 AP5.
+	// detection on the read path
 	_, finalPath := s.blobPath(hash)
 	if err := os.WriteFile(finalPath, []byte("corrupted-content"), 0o644); err != nil {
 		t.Fatalf("corrupt blob: %v", err)

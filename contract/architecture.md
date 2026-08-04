@@ -8,9 +8,18 @@ repository. Section numbers §0–§9 are preserved from that document so that
 every existing `contract §N` citation in code and schemas continues to
 resolve.
 
-Unlike everything else in `docs/` — written artifacts about work that has
-run — this file is deliberately upstream of the code. It is the one
-standing exception to the directory's rule.
+It lives in `contract/` rather than `docs/` because it is a
+specification: upstream of the code, describing what must be true rather
+than what happened. `docs/` holds written artifacts about work that has
+run, and this file spent its first months as that directory's one
+standing exception. Splitting the directory preserves the rule instead
+of eroding it.
+
+Its companions here are [`openapi.yaml`](openapi.yaml), generated from
+the Go types the handlers decode into, and
+[`fixtures/`](fixtures/), which is what the experiment harness actually
+sends. The forward-looking plan that used to be §10 now lives in
+[`roadmap.md`](roadmap.md).
 
 ---
 
@@ -127,7 +136,7 @@ continuous feature maintenance; measurement corrected this — at login
 volume the compute is microseconds and the real force is **session
 duration × concurrency** (memory held, not time to answer). The
 correction and the measurement are in
-[`duration-forces-the-architecture.md`](duration-forces-the-architecture.md).
+[`duration-forces-the-architecture.md`](../docs/duration-forces-the-architecture.md).
 
 ## §6 — Demo surface
 
@@ -193,29 +202,3 @@ Refactoring PRs must not move these numbers. A change that does is either
 a bug in the change or a declared recalibration — never an accident.
 
 ---
-
-## §10 — Target architecture (forward-looking)
-
-The refactor program in progress evolves the single binary in two phases
-without changing the §3 surface:
-
-**Phase 1 — Clean Architecture inside the service.** Domain
-(`session`, `feature`, `policy`, `canonical`) ← application use-cases
-behind ports (`SessionRepository`, `EventArchive`, `Clock`) ← adapters
-(HTTP, in-memory store, substrate archive, proto mapping). Contracts
-versioned with buf; generated code moves to an importable module
-(`libs/genproto`); the service and the experiment layer become
-containerized (`docker compose`); CI gains lint, vulnerability scanning,
-image build/publish, and schema breaking-change detection.
-
-**Phase 2 — Physical decomposition.** Four services with single
-responsibilities: **collector** (`/v1/sessions`, `/v1/telemetry`; sole
-writer of session state, snapshots to NATS KV), **decision-engine**
-(`/v1/decisions`, `/v1/outcomes`; stateless, reads KV), **archive**
-(consumes the event stream from NATS JetStream into the substrate;
-idempotent by canonical hash), **demo-web** (a pure HTTP client of the
-public contract — dogfooding it). Internal synchronous calls are gRPC;
-the event flow is JetStream subjects partitioned by tenant. The split
-ships only if the §5 budget holds in the composed topology, re-measured
-by the same experiments that produced §9; the all-in-one binary remains
-as the development composition and the cheap rollback.

@@ -3,7 +3,7 @@
  *
  * Collects pointer geometry only. No canvas, WebGL, font enumeration or
  * audio fingerprinting: those identify the browser rather than the
- * behaviour and are out of scope per docs/architecture.md §0.
+ * behaviour and are out of scope per contract/architecture.md §0.
  *
  * Nothing persistent is written to the client. The session token lives
  * in a closure and dies with the page.
