@@ -85,11 +85,11 @@ func NewOnCallStore(ttl time.Duration, now func() time.Time) *OnCallStore {
 
 // Create issues a session.
 func (s *OnCallStore) Create(tenantID, pagePath string, c Client) (string, *OnCallState, error) {
-	token, err := randomID("st_")
+	token, err := NewID("st_")
 	if err != nil {
 		return "", nil, err
 	}
-	id, err := randomID("s_")
+	id, err := NewID("s_")
 	if err != nil {
 		return "", nil, err
 	}

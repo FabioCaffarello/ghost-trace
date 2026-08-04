@@ -12,9 +12,7 @@
 package api
 
 import (
-	"crypto/rand"
 	"crypto/subtle"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -22,19 +20,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/feature"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/feature"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/policy"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
 )
 
 func randomEvaluationID() (string, error) {
-	b := make([]byte, 18)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return "ev_" + base64.RawURLEncoding.EncodeToString(b), nil
+	return session.NewID("ev_")
 }
 
 // Config holds the server's tenant credentials and operating mode.
@@ -259,18 +253,10 @@ func (s *Server) handleTelemetry(w http.ResponseWriter, r *http.Request) {
 		batch.TenantId = st.TenantID
 		batch.SessionId = st.ID
 
-		st.BatchesSeen++
-		if env.Seq > st.HighestSeq {
-			st.HighestSeq = env.Seq
-		}
-		if env.SentAtMs > st.LastEventMs {
-			st.LastEventMs = env.SentAtMs
-		}
+		st.ObserveBatch(env.Seq, env.SentAtMs)
 
 		for _, ev := range env.Events {
-			if ev.T > st.LastEventMs {
-				st.LastEventMs = ev.T
-			}
+			st.ObserveEventTime(ev.T)
 
 			// Unknown types are dropped silently rather than rejected:
 			// the collect policy is server-driven and may change at any

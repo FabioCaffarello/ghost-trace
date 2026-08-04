@@ -6,11 +6,11 @@
 // keeping the two apart is what lets a recalibrated model reinterpret an
 // old evaluation record instead of silently rewriting history.
 //
-// M1 shipped exactly one feature; M2 corrected its segmentation.
-// Still one feature. That is deliberate: a second feature
-// added before there is an adversary to measure it against is
-// unfalsifiable, and the whole point of M2 is to make the first one
-// falsifiable before adding more.
+// M1 shipped exactly one extractor (pointer) and M2 falsified it
+// before anything else was added. M3 added the other two — keystroke
+// timing and structural interaction — once the adversarial tiers
+// existed to measure them against. Three accumulators now live here,
+// all O(1) in session duration.
 package feature
 
 import "math"

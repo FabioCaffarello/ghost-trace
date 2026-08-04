@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/feature"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/feature"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/policy"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"

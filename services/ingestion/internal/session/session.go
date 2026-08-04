@@ -65,6 +65,37 @@ type State struct {
 	LastEventMs uint32
 }
 
+// ObserveBatch records the arrival of one accepted telemetry envelope.
+//
+// Batches arrive out of order and get retried (contract §2), so both
+// counters are high-water marks, never cursors: HighestSeq minus
+// BatchesSeen exposes gaps, and gaps are meaningful. This is the
+// domain invariant — callers must not reimplement it inline.
+func (st *State) ObserveBatch(seq, sentAtMs uint32) {
+	st.BatchesSeen++
+	if seq > st.HighestSeq {
+		st.HighestSeq = seq
+	}
+	if sentAtMs > st.LastEventMs {
+		st.LastEventMs = sentAtMs
+	}
+}
+
+// ObserveEventTime advances the observed session duration to t if it
+// is the latest client-claimed timestamp seen.
+func (st *State) ObserveEventTime(t uint32) {
+	if t > st.LastEventMs {
+		st.LastEventMs = t
+	}
+}
+
+// entry pairs a session with its expiry so the two cannot fall out of
+// step — one map, one delete, no parallel bookkeeping.
+type entry struct {
+	state     *State
+	expiresAt time.Time
+}
+
 // Store maps tokens to session state.
 //
 // One mutex guards the whole map. At M1 volume that is correct and
@@ -72,10 +103,9 @@ type State struct {
 // would be optimising against a guess.
 type Store struct {
 	mu      sync.Mutex
-	byToken map[string]*State
+	byToken map[string]*entry
 	ttl     time.Duration
 	now     func() time.Time
-	expires map[string]time.Time
 }
 
 // NewStore constructs a Store with the given token lifetime.
@@ -84,8 +114,7 @@ func NewStore(ttl time.Duration, now func() time.Time) *Store {
 		now = time.Now
 	}
 	return &Store{
-		byToken: make(map[string]*State),
-		expires: make(map[string]time.Time),
+		byToken: make(map[string]*entry),
 		ttl:     ttl,
 		now:     now,
 	}
@@ -98,11 +127,11 @@ func NewStore(ttl time.Duration, now func() time.Time) *Store {
 // records. Reusing one as the other would put a live credential into
 // storage that outlives it by 7 days.
 func (s *Store) Create(tenantID, pagePath string, c Client) (token string, st *State, err error) {
-	token, err = randomID("st_")
+	token, err = NewID("st_")
 	if err != nil {
 		return "", nil, err
 	}
-	id, err := randomID("s_")
+	id, err := NewID("s_")
 	if err != nil {
 		return "", nil, err
 	}
@@ -117,8 +146,7 @@ func (s *Store) Create(tenantID, pagePath string, c Client) (token string, st *S
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.byToken[token] = st
-	s.expires[token] = s.now().Add(s.ttl)
+	s.byToken[token] = &entry{state: st, expiresAt: s.now().Add(s.ttl)}
 	return token, st, nil
 }
 
@@ -131,16 +159,15 @@ func (s *Store) With(token string, fn func(*State)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	st, ok := s.byToken[token]
+	e, ok := s.byToken[token]
 	if !ok {
 		return ErrNotFound
 	}
-	if exp, ok := s.expires[token]; ok && s.now().After(exp) {
+	if s.now().After(e.expiresAt) {
 		delete(s.byToken, token)
-		delete(s.expires, token)
 		return ErrNotFound
 	}
-	fn(st)
+	fn(e.state)
 	return nil
 }
 
@@ -161,17 +188,20 @@ func (s *Store) Sweep() int {
 
 	now := s.now()
 	n := 0
-	for tok, exp := range s.expires {
-		if now.After(exp) {
+	for tok, e := range s.byToken {
+		if now.After(e.expiresAt) {
 			delete(s.byToken, tok)
-			delete(s.expires, tok)
 			n++
 		}
 	}
 	return n
 }
 
-func randomID(prefix string) (string, error) {
+// NewID returns a prefixed, URL-safe, 144-bit random identifier. It is
+// the single implementation for every identifier the system mints —
+// session tokens, session ids, evaluation ids — so entropy and format
+// decisions live in one place.
+func NewID(prefix string) (string, error) {
 	b := make([]byte, 18)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
