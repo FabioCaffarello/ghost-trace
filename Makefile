@@ -268,27 +268,32 @@ buf-lint: require-buf ## buf lint over schemas/
 buf-breaking: require-buf ## buf breaking against origin/$(BASE_REF) (default: main)
 	buf breaking --against ".git#branch=origin/$(or $(BASE_REF),main),subdir=schemas"
 
-# Delete-then-regenerate so bindings orphaned by a removed proto surface
-# as deletions; `git status --porcelain` rather than `git diff`, which is
-# blind to untracked files, so a NEW proto whose .pb.go was never
-# committed also fails.
+# Generated to a temporary tree and diffed, so the check depends on
+# nothing but the generator's output.
 #
-# Narrowed to *.pb.go: libs/genproto also holds a hand-maintained go.mod
-# (it carries the protobuf archive-format pin), and editing that is not
-# a generated-code drift. Checking the whole directory made this gate
-# fail on an unrelated dependency edit — a false red teaches people to
-# ignore it just as reliably as a false green.
+# This gate used `git status --porcelain` for three milestones, and the
+# same defect surfaced three times: git reports a file as changed
+# relative to HEAD, which is not the question. It called a correctly
+# regenerated but uncommitted binding "drift", and it called a newly
+# added path drift on the very commit introducing it (R1.14 openapi,
+# R1.15 fixtures). Diffing against a fresh generation asks the actual
+# question, and it catches what git ALSO caught: a new proto whose
+# .pb.go was never committed shows up as a file present in the temp
+# tree and absent here.
 .PHONY: genproto-sync
 genproto-sync: require-buf tool-protoc-gen-go ## Fail if libs/genproto differs from a fresh buf generate
-	find libs/genproto -name '*.pb.go' -delete
-	PATH="$(TOOLBIN):$$PATH" buf generate
-	@drift=$$(git status --porcelain -- libs/genproto | grep -E '\.pb\.go$$' || true); \
-	if [ -n "$$drift" ]; then \
-		echo "$$drift"; \
-		echo "libs/genproto is out of sync — fix: make generate && git add libs/genproto"; \
+	@tmp=$$(mktemp -d "$${TMPDIR:-/tmp}/gtgenproto.XXXXXX"); \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	PATH="$(TOOLBIN):$$PATH" buf generate -o "$$tmp" >/dev/null || \
+		{ echo "buf generate failed — run: make generate"; exit 1; }; \
+	if ! diff -ru libs/genproto/events "$$tmp/libs/genproto/events" >/dev/null 2>&1; then \
+		diff -ru libs/genproto/events "$$tmp/libs/genproto/events" | head -40; \
+		echo ""; \
+		echo "libs/genproto is out of sync with schemas/"; \
+		echo "fix: make generate && git add libs/genproto"; \
 		exit 1; \
-	fi
-	@echo "libs/genproto in sync"
+	fi; \
+	echo "libs/genproto in sync"
 
 ##@ Contract
 

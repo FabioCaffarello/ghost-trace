@@ -9,7 +9,7 @@
  * producer sending the old name, the server zero-filling the new one,
  * and every measurement quietly degrading with the suite still green.
  * That is audit finding M22, and it is the exact accident
- * docs/architecture.md §2 forbids.
+ * contract/architecture.md §2 forbids.
  *
  * Two things follow from putting the shapes here. A rename is now one
  * edit rather than four. And `make contract-fixtures` emits the

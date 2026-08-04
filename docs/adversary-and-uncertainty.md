@@ -6,6 +6,33 @@ Written during the work. The headline result is not the detection rate —
 it is that the adversary falsified the detector within an hour of first
 contact, and that one of the four tiers still walks straight through.
 
+> [!IMPORTANT]
+> **Superseded in part.** This is the M2 write-up, kept as the record of
+> what was true when it was written. Two of its results have since
+> reversed, and a reader following the reading order meets them here
+> first:
+>
+> - **Tier 3 is reported at 0.0% below. It is now 100%.** The tier walks
+>   straight through a detector that did not yet read the keystroke and
+>   form channels; those landed in M3, and its evasion — jumping the
+>   cursor instead of moving it — now shows up as *absence of evidence*
+>   rather than as human-looking evidence.
+> - **Tier 6 did not exist yet.** It was written in M3 and is caught at
+>   100% — by `VALUE_INJECTED`, the one signal the policy refuses to
+>   treat as categorical.
+>
+> What has NOT changed, and is the more important half: the tier 5
+> sweep below still falls to **41.7% at `bow` 5.0**. The README
+> publishes only the `bow` 1.0 point. Detection is a smooth function of
+> how much curvature the adversary paid for, and the curve still has no
+> human reference point on it.
+>
+> The current figures, with the commit and seed that produced them, are
+> in [`docs/results/`](results/) and the README. The argument this
+> document makes — that three 100% rows and no false-positive rate is
+> not a result — is unchanged and is why it is still in the reading
+> order.
+
 ---
 
 ## The number that matters is missing

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/FabioCaffarello/ghost-trace/security/advisories/new
+    about: Report privately. Please do not open a public issue.
+  - name: Participating in the human study
+    url: https://github.com/FabioCaffarello/ghost-trace/blob/main/experiments/README.md
+    about: What is collected, what is refused, and how to take part.

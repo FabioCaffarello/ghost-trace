@@ -5,7 +5,7 @@ package ghosttrace.events.v1;
 option go_package = "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1;eventsv1";
 
 // PointerPoint is one vertex of a decimated pointer polyline.
-// Wire form is [x, y, dt] per docs/architecture.md §2; dt_ms is
+// Wire form is [x, y, dt] per contract/architecture.md §2; dt_ms is
 // milliseconds since the previous point in the same polyline.
 message PointerPoint {
   int32 x = 1;

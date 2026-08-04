@@ -65,7 +65,7 @@ to the bot, and the interesting question — how much closer — is exactly
 what M2 exists to answer. No claim is being made here.
 
 **p99 6.38ms against an 80ms budget.** This confirms the argument in
-[`architecture.md`](architecture.md) §8.1 rather than undermining it: per-request latency was
+[`architecture.md`](../contract/architecture.md) §8.1 rather than undermining it: per-request latency was
 never the hard part. An 8-second session is a few hundred points and
 scoring it is microseconds. What costs is holding a hundred thousand of
 them at once, over long sessions, which is why M5's sixth number is a

@@ -1,5 +1,5 @@
 // Package api is the HTTP transport adapter for the endpoints of
-// docs/architecture.md §3.
+// contract/architecture.md §3.
 //
 // Handlers are deliberately thin: decode the wire shape, authenticate,
 // call the use case, encode the result. Orchestration lives in
