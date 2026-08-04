@@ -197,6 +197,10 @@
             "base": {
               "type": "string"
             },
+            "demo_base": {
+              "type": "string",
+              "description": "The origin serving the demo page the browser tiers drove. It is a DIFFERENT origin from base since the demo host became its own service: the page is cross-origin to the collector, exactly as a customer's site would be. Optional because manifests published before the split have no such distinction to record \u2014 where it is absent, page and API were one origin."
+            },
             "sample_sizes": {
               "type": "object",
               "description": "What was actually measured. GT_N_TIER<k> silently changes this, so a manifest without it cannot be compared to another.",

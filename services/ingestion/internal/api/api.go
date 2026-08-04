@@ -16,8 +16,10 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"github.com/FabioCaffarello/ghost-trace/libs/middleware"
 	"github.com/FabioCaffarello/ghost-trace/libs/wire"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/sdk"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
 	"log/slog"
 	"net/http"
@@ -32,6 +34,12 @@ import (
 // where nothing reads it is a credential that outlives its purpose.
 type Config struct {
 	SiteKey string
+
+	// AllowedOrigins are the page origins permitted to call the browser
+	// endpoints cross-origin. Empty disables CORS entirely, which is
+	// correct for a same-origin deployment and is the default: a
+	// mechanism that defaults to permissive is not an allowlist.
+	AllowedOrigins []string
 
 	// CollectPolicy is served to the SDK at session start and is
 	// remotely tunable without shipping a new SDK (contract §3).
@@ -73,8 +81,37 @@ func New(cfg Config, a *app.App, log *slog.Logger) *Server {
 // adapter would be a copy of the contract.
 func (s *Server) Routes() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /v1/sessions", s.handleSessions)
-	mux.HandleFunc("POST /v1/telemetry", s.handleTelemetry)
+
+	// CORS wraps these two and NOTHING else. They are the endpoints a
+	// page calls; /v1/decisions and /v1/outcomes carry the secret key
+	// and are server-to-server (§1), so allowing a browser to preflight
+	// them would advertise a door whose key must never be in a browser.
+	//
+	// The OPTIONS routes are registered explicitly because Go's mux
+	// matches on method: without them a preflight would get 405 and the
+	// browser would refuse the real request, with nothing in any log
+	// saying why.
+	browser := middleware.CORS(s.cfg.AllowedOrigins)
+	for path, h := range map[string]http.HandlerFunc{
+		"POST /v1/sessions":  s.handleSessions,
+		"POST /v1/telemetry": s.handleTelemetry,
+	} {
+		mux.Handle(path, browser(h))
+	}
+	for _, path := range []string{"OPTIONS /v1/sessions", "OPTIONS /v1/telemetry"} {
+		mux.Handle(path, browser(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			// Reached only when CORS did not treat it as a preflight —
+			// an OPTIONS with no Access-Control-Request-Method. Nothing
+			// to allow, nothing to refuse.
+			w.WriteHeader(http.StatusNoContent)
+		})))
+	}
+
+	// Ghost Trace's own artefact, served from Ghost Trace's origin. A
+	// classic script tag is not CORS-restricted, so a page anywhere can
+	// load it.
+	sdk.Register(mux)
+
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))

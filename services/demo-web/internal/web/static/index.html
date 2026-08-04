@@ -126,8 +126,14 @@
 
 <script>
   window.GHOST_TRACE_SITE_KEY = "SITE_KEY_PLACEHOLDER";
+  // The collector is a different origin from this page — which is the
+  // ordinary integration, not a quirk of the demo: a customer's site
+  // and the collector are never the same host. Empty means same-origin.
+  window.GHOST_TRACE_API = "API_BASE_PLACEHOLDER";
 </script>
-<script src="/sdk.js"></script>
+<!-- Loaded from the COLLECTOR, not from here. The SDK is Ghost
+     Trace's artefact; a customer embeds it, they do not vendor it. -->
+<script src="API_BASE_PLACEHOLDER/sdk.js"></script>
 <script>
   var statusEl = document.getElementById("status");
 

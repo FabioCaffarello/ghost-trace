@@ -1,0 +1,52 @@
+# syntax=docker/dockerfile:1
+#
+# Ghost Trace demo host — the stand-in customer site, containerised.
+#
+# Same shape as the other Go images: pinned base digests with all-zero
+# defaults so an unpinned build fails fast, CGO_ENABLED=0, distroless
+# static, non-root.
+#
+# It ships the page and the SDK (embedded in the binary) and holds the
+# secret key it calls /v1/decisions with. No /data: it stores nothing
+# except an optional capture log, which is bind-mounted when the human
+# study is running.
+ARG GOLANG_IMAGE=golang@sha256:0000000000000000000000000000000000000000000000000000000000000000
+ARG DISTROLESS_IMAGE=gcr.io/distroless/static-debian12@sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+FROM ${GOLANG_IMAGE} AS build
+WORKDIR /src
+
+# Module graph first. Every module the service replaces needs its go.mod
+# here before download; the list is explicit so a missing one fails at
+# build time. ADD A LINE PER NEW LIB.
+COPY libs/genproto/go.mod libs/genproto/go.sum libs/genproto/
+COPY libs/middleware/go.mod libs/middleware/
+COPY libs/canonical/go.mod libs/canonical/go.sum libs/canonical/
+COPY libs/feature/go.mod libs/feature/
+COPY libs/policy/go.mod libs/policy/
+COPY libs/snapshot/go.mod libs/snapshot/go.sum libs/snapshot/
+COPY libs/wire/go.mod libs/wire/
+COPY libs/archive/go.mod libs/archive/go.sum libs/archive/
+COPY libs/id/go.mod libs/id/
+COPY libs/decision/go.mod libs/decision/go.sum libs/decision/
+COPY services/demo-web/go.mod services/demo-web/go.sum services/demo-web/
+RUN --mount=type=cache,target=/go/pkg/mod \
+    cd services/demo-web && go mod download
+
+COPY libs/ libs/
+COPY services/demo-web/ services/demo-web/
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    cd services/demo-web && \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" \
+      -o /out/demo-web ./cmd/demo-web && \
+    test -x /out/demo-web && \
+    mkdir -p /out/captures
+
+FROM ${DISTROLESS_IMAGE}
+USER nonroot
+COPY --from=build /out/demo-web /demo-web
+COPY --from=build --chown=nonroot:nonroot /out/captures /captures
+EXPOSE 8083
+ENTRYPOINT ["/demo-web"]
+CMD ["-addr", "0.0.0.0:8083"]

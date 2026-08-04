@@ -164,6 +164,7 @@ jobs:
           - libs/wire
           - services/archive
           - services/decision-engine
+          - services/demo-web
           - services/ingestion
     env:
       GOWORK: "off"

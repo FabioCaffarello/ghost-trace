@@ -1,6 +1,13 @@
 // Package web serves the demo page, the SDK, and a stand-in host
 // application.
 //
+// It is its own service because it is the only thing here that is not
+// Ghost Trace: it stands in for a CUSTOMER, and a customer runs on
+// their own origin. Keeping it inside the collector made the demo
+// same-origin with the API, which quietly meant the browser endpoints
+// never had to answer a cross-origin request — the one thing every real
+// integration does.
+//
 // The demo backend calls /v1/decisions over HTTP with the secret_key
 // exactly as a real integrator would, rather than reaching into the
 // policy package in-process. That is the point of it: it exercises the
@@ -31,6 +38,12 @@ var static embed.FS
 type Config struct {
 	// SiteKey is public and substituted into the page.
 	SiteKey string
+
+	// APIBase is the collector's origin, substituted into the page so
+	// the SDK knows where to send sessions and telemetry. Empty means
+	// same-origin, which no longer describes any deployment here but is
+	// the SDK's own default and stays the honest zero value.
+	APIBase string
 }
 
 // DecisionClient is the handler's port to the decision engine. The
@@ -53,7 +66,6 @@ type Handler struct {
 	cfg       Config
 	log       *slog.Logger
 	page      []byte
-	sdk       []byte
 	decisions DecisionClient
 	capture   CaptureSink
 }
@@ -75,16 +87,13 @@ func New(cfg Config, decisions DecisionClient, capture CaptureSink, log *slog.Lo
 	if err != nil {
 		return nil, err
 	}
-	sdk, err := static.ReadFile("static/sdk.js")
-	if err != nil {
-		return nil, err
-	}
-
 	return &Handler{
-		cfg:       cfg,
-		log:       log,
-		page:      []byte(strings.Replace(string(page), "SITE_KEY_PLACEHOLDER", cfg.SiteKey, 1)),
-		sdk:       sdk,
+		cfg: cfg,
+		log: log,
+		page: []byte(strings.NewReplacer(
+			"SITE_KEY_PLACEHOLDER", cfg.SiteKey,
+			"API_BASE_PLACEHOLDER", cfg.APIBase,
+		).Replace(string(page))),
 		decisions: decisions,
 		capture:   capture,
 	}, nil
@@ -93,7 +102,6 @@ func New(cfg Config, decisions DecisionClient, capture CaptureSink, log *slog.Lo
 // Register mounts the demo routes on mux.
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /", h.servePage)
-	mux.HandleFunc("GET /sdk.js", h.serveSDK)
 	mux.HandleFunc("POST /demo/login", h.login)
 }
 
@@ -105,12 +113,6 @@ func (h *Handler) servePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(h.page)
-}
-
-func (h *Handler) serveSDK(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write(h.sdk)
 }
 
 type loginRequest struct {

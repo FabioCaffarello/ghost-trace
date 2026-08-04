@@ -7,10 +7,10 @@
 #                    docker compose --profile core up
 #                  With it up, `make shadow-http` A/Bs the collector
 #                  against the decision engine over real HTTP.
-#   demo           the slice with human-capture enabled; rows land in
+#   demo           the topology with human-capture enabled; rows land in
 #                  ./experiments/results/human_sessions.jsonl on the host
 #                    docker compose --profile demo up
-#                  (core and demo both claim 127.0.0.1:8080 — run one)
+#                  (core and demo both claim 127.0.0.1:8083 — run one)
 #   experiments    the adversarial tiers against the running slice
 #                    docker compose --profile core --profile experiments \
 #                      run --rm experiments
@@ -45,7 +45,7 @@ x-ingestion-build: &ingestion-build
 services:
   ingestion:
     <<: *hardened
-    profiles: [core]
+    profiles: [core, demo]
     image: ghost-trace/ingestion:${IMAGE_TAG:-dev}
     build: *ingestion-build
     command:
@@ -54,6 +54,13 @@ services:
       - -mode=${GT_MODE:-monitor}
       - -site-key=${GT_SITE_KEY:-pk_demo}
       - -secret-key=${GT_SECRET_KEY:-sk_demo}
+      # The demo page is served by another origin now, so the browser
+      # endpoints have to answer a cross-origin request — which is what
+      # every real integration does and what being same-origin with the
+      # demo used to hide. Allowlist, never "*", and it covers
+      # /v1/sessions and /v1/telemetry only: the secret-key endpoints
+      # are server-to-server and a page must never reach them.
+      - -cors-origin=${GT_DEMO_ORIGIN:-http://127.0.0.1:8083}
       # Transitional dual-write: records still land in the local
       # substrate, and a copy is mirrored to the archive service. The
       # local write stays authoritative — a broker outage is counted,
@@ -75,31 +82,73 @@ services:
       start_period: 3s
     restart: unless-stopped
 
-  # The capture variant for the human study: same image, capture log
-  # bind-mounted to the host where analyze.py reads it.
-  ingestion-capture:
+  # The demo host: the only service here that is NOT Ghost Trace. It
+  # stands in for a customer's site — its own origin, embedding the SDK,
+  # calling /v1/decisions server-to-server with the secret key. The page
+  # never sees that key.
+  demo-web:
     <<: *hardened
-    profiles: [demo]
-    image: ghost-trace/ingestion:${IMAGE_TAG:-dev}
-    build: *ingestion-build
-    command:
-      - -addr=0.0.0.0:8080
-      - -data=/data
-      - -mode=${GT_MODE:-monitor}
+    profiles: [core]
+    image: ghost-trace/demo-web:${IMAGE_TAG:-dev}
+    build: &demo-build
+      context: .
+      dockerfile: deploy/docker/Dockerfile.demo-web
+      args:
+        GOLANG_IMAGE: ${GOLANG_IMAGE:-golang:1.26-alpine}
+        DISTROLESS_IMAGE: ${DISTROLESS_IMAGE:-gcr.io/distroless/static-debian12:nonroot}
+    command: &demo-command
+      - -addr=0.0.0.0:8083
+      # TWO DIFFERENT KINDS OF ADDRESS, and they are not
+      # interchangeable.
+      #
+      # -api is substituted into the PAGE, so it must be what the
+      # operator's browser can reach: a host address, not a container
+      # name.
+      #
+      # -engine is dialled by THIS PROCESS, server-to-server, from
+      # inside the compose network — so it must be the container name. A
+      # host address here resolves to this container, the decision call
+      # fails, and §5 fail-open turns that into a permanent "allow" that
+      # looks like a working demo. It did exactly that before this
+      # comment existed.
+      - -api=${GT_API_ORIGIN:-http://127.0.0.1:8080}
+      - -engine=${GT_ENGINE_SERVICE:-http://decision-engine:8082}
       - -site-key=${GT_SITE_KEY:-pk_demo}
       - -secret-key=${GT_SECRET_KEY:-sk_demo}
-      - -capture-log=/captures/human_sessions.jsonl
     ports:
-      - "127.0.0.1:8080:8080"
-    volumes:
-      - gt-data:/data
-      - ./experiments/results:/captures
-    healthcheck:
-      test: ["CMD", "/ghost-trace", "-healthcheck", "-addr", "0.0.0.0:8080"]
+      - "127.0.0.1:8083:8083"
+    depends_on:
+      decision-engine:
+        condition: service_healthy
+    healthcheck: &demo-health
+      test: ["CMD", "/demo-web", "-healthcheck", "-addr", "0.0.0.0:8083"]
       interval: 5s
       timeout: 3s
       retries: 5
       start_period: 3s
+    restart: unless-stopped
+
+  # The capture variant for the human study: same image, capture log
+  # bind-mounted to the host where analyze.py reads it. Capture belongs
+  # to the demo host because it records what the HOST APPLICATION
+  # learned about a session, not what the collector observed.
+  demo-web-capture:
+    <<: *hardened
+    profiles: [demo]
+    image: ghost-trace/demo-web:${IMAGE_TAG:-dev}
+    build: *demo-build
+    command:
+      - -addr=0.0.0.0:8083
+      - -api=${GT_API_ORIGIN:-http://127.0.0.1:8080}
+      - -engine=${GT_ENGINE_SERVICE:-http://decision-engine:8082}
+      - -site-key=${GT_SITE_KEY:-pk_demo}
+      - -secret-key=${GT_SECRET_KEY:-sk_demo}
+      - -capture-log=/captures/human_sessions.jsonl
+    ports:
+      - "127.0.0.1:8083:8083"
+    volumes:
+      - ./experiments/results:/captures
+    healthcheck: *demo-health
     restart: unless-stopped
 
   # The event stream. JetStream on, file-backed, so a restart does not
@@ -196,6 +245,7 @@ services:
         PLAYWRIGHT_IMAGE: ${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.49.1-noble}
     environment:
       GT_BASE: http://ingestion:8080
+      GT_DEMO_BASE: http://demo-web:8083
       GT_SITE_KEY: ${GT_SITE_KEY:-pk_demo}
       GT_SECRET_KEY: ${GT_SECRET_KEY:-sk_demo}
     volumes:
@@ -203,6 +253,8 @@ services:
       - ./experiments/results:/work/experiments/results
     depends_on:
       ingestion:
+        condition: service_healthy
+      demo-web:
         condition: service_healthy
     restart: "no"
 

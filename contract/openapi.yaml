@@ -568,6 +568,34 @@ paths:
       tags:
       - application
   /v1/sessions:
+    options:
+      description: |-
+        Answered for page origins the deployment allows. The allowlist is configuration and never a wildcard; an origin that is not on it receives no Access-Control-Allow-Origin and the browser refuses the request that would have followed.
+
+        Access-Control-Allow-Credentials is never sent: the SDK authenticates with a bearer token it holds in memory and sends no cookies.
+      operationId: startSessionPreflight
+      responses:
+        "204":
+          description: Preflight answered. Allow headers are present only for an allowed
+            origin.
+          headers:
+            Access-Control-Allow-Headers:
+              description: Content-Type, Authorization.
+              schema:
+                type: string
+            Access-Control-Allow-Origin:
+              description: The request's origin, echoed, when it is on the allowlist.
+              schema:
+                type: string
+            Vary:
+              description: Always Origin, so a shared cache cannot serve one origin's
+                answer to another.
+              schema:
+                type: string
+      security: []
+      summary: CORS preflight
+      tags:
+      - browser
     post:
       description: |-
         Returns a session token and the collection policy the SDK should apply. The collect block is server-driven so collection can be retuned without shipping a new SDK.
@@ -635,6 +663,34 @@ paths:
       tags:
       - browser
   /v1/telemetry:
+    options:
+      description: |-
+        Answered for page origins the deployment allows. The allowlist is configuration and never a wildcard; an origin that is not on it receives no Access-Control-Allow-Origin and the browser refuses the request that would have followed.
+
+        Access-Control-Allow-Credentials is never sent: the SDK authenticates with a bearer token it holds in memory and sends no cookies.
+      operationId: postTelemetryPreflight
+      responses:
+        "204":
+          description: Preflight answered. Allow headers are present only for an allowed
+            origin.
+          headers:
+            Access-Control-Allow-Headers:
+              description: Content-Type, Authorization.
+              schema:
+                type: string
+            Access-Control-Allow-Origin:
+              description: The request's origin, echoed, when it is on the allowlist.
+              schema:
+                type: string
+            Vary:
+              description: Always Origin, so a shared cache cannot serve one origin's
+                answer to another.
+              schema:
+                type: string
+      security: []
+      summary: CORS preflight
+      tags:
+      - browser
     post:
       description: |-
         Fire-and-forget. Always 202 on an accepted request, INCLUDING when the session token is unknown or expired: telemetry loss is expected (§5), and an error there would only teach a stale SDK to retry in a loop. Ingestion is idempotent on (session, seq).
@@ -709,7 +765,9 @@ servers:
 - description: Local slice (make run, or the compose core profile)
   url: http://127.0.0.1:8080
 tags:
-- description: Called by the SDK in the page. Hostile input.
+- description: Called by the SDK in the page. Hostile input. Answers cross-origin
+    requests from an allowlist of page origins; the application endpoints deliberately
+    do not.
   name: browser
 - description: Called by the application server with secret_key.
   name: application

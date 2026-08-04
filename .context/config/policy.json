@@ -30,7 +30,8 @@
       "effect": "require_approval",
       "when": {
         "paths": [
-          "services/ingestion/internal/web/static/sdk.js",
+          "services/ingestion/internal/sdk/sdk.js",
+          "services/demo-web/internal/web/static/index.html",
           "experiments/README.md",
           "SECURITY.md"
         ]

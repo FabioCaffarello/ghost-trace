@@ -5,27 +5,28 @@
 // The `replace` directives stay in each go.mod on purpose. This
 // workspace serves local development and CI; the replaces keep every
 // module buildable ON ITS OWN, which is exactly what the container
-// build does — it copies libs/ and services/ingestion/ and never sees
-// this file.
+// build does — each image copies libs/ and one service directory, and
+// never sees this file.
 
 go 1.26
 
 toolchain go1.26.5
 
 use (
+	./libs/archive
 	./libs/canonical
+	./libs/decision
 	./libs/eventstream
 	./libs/feature
 	./libs/genproto
+	./libs/id
 	./libs/middleware
 	./libs/policy
 	./libs/snapshot
 	./libs/substrate
-	./libs/archive
-	./libs/decision
-	./libs/id
 	./libs/wire
 	./services/archive
 	./services/decision-engine
+	./services/demo-web
 	./services/ingestion
 )

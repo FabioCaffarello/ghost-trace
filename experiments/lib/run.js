@@ -16,7 +16,19 @@ import { decisionBody } from "./wire.js";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const RESULTS_DIR = path.join(HERE, "..", "results");
 
+// GT_BASE is the COLLECTOR: /v1/sessions, /v1/telemetry, /v1/decisions.
+// It keeps that meaning so the latency number keeps measuring the same
+// path it always did.
 export const BASE = process.env.GT_BASE || "http://127.0.0.1:8080";
+
+// GT_DEMO_BASE is the page the browser tiers drive. It is a DIFFERENT
+// origin now — the demo host is a separate service, standing in for a
+// customer's site, and a customer's site is never the collector. The
+// SDK on that page posts cross-origin to BASE, which is why the
+// collector has an origin allowlist at all.
+//
+// Defaulting to BASE keeps a same-origin deployment working unchanged.
+export const DEMO_BASE = process.env.GT_DEMO_BASE || BASE;
 export const SECRET_KEY = process.env.GT_SECRET_KEY || "sk_demo";
 
 // The installed browser. puppeteer-core and playwright both drive real

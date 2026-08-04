@@ -59,6 +59,19 @@ a genuine human session, replay its event stream under a fresh token.
 Partial mitigations raise the cost; none close it. This is stated as a
 limitation, not solved.
 
+**Origins.** The page is on the customer's domain and the collector is
+not, so `/v1/sessions` and `/v1/telemetry` answer cross-origin requests
+from a configured **allowlist** — never a wildcard, and never with
+`Access-Control-Allow-Credentials`, because the SDK authenticates with a
+bearer token it holds in memory and sends no cookies.
+
+`/v1/decisions` and `/v1/outcomes` deliberately do **not**. They carry
+`secret_key` and are server-to-server; a browser that could call them
+would only succeed if the secret had already been shipped to one. CORS
+is a browser mechanism and never an authorization one — a non-browser
+client was never constrained by it, and the allowlist is not a
+substitute for the credential.
+
 ## §2 — Telemetry wire schema
 
 Telemetry travels in envelopes: `{session_token, seq, sent_at_ms,
@@ -141,10 +154,19 @@ correction and the measurement are in
 ## §6 — Demo surface
 
 Non-contract, but load-bearing for the project: `GET /` (demo login
-page), `GET /sdk.js`, `POST /demo/login` (a stand-in application server
-that calls `/v1/decisions` like any integrator). The demo page is also
-the capture instrument for the human study — it cannot break while
-recruitment is open.
+page) and `POST /demo/login` (a stand-in application server that calls
+`/v1/decisions` like any integrator), served by a **separate host on its
+own origin** — a customer's site is never the collector, and while these
+were served by the collector the browser endpoints never had to answer a
+cross-origin request (§1).
+
+`GET /sdk.js` is served by the **collector**, not by the demo host: the
+SDK is Ghost Trace's artefact, embedded by a customer rather than
+vendored. A vendored copy is how every deployment ends up running a
+different version of the thing that decides what the wire carries.
+
+The demo page is also the capture instrument for the human study — it
+cannot break while recruitment is open.
 
 ## §7 — Stability and failure semantics
 

@@ -36,9 +36,20 @@ from schema import SCHEMA_VERSION, validate_numbers
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 SVC = ROOT / "services" / "ingestion"
+DEMO_SVC = ROOT / "services" / "demo-web"
 RESULTS = HERE / "results"
 
 PORT = int(os.environ.get("GT_PORT", "18099"))
+
+# The demo page is a SEPARATE ORIGIN now — the demo host is its own
+# service, standing in for a customer's site. The browser tiers load the
+# page from here and the SDK on it posts cross-origin to the collector,
+# which is why the collector is started with this origin allowlisted.
+#
+# Keeping GT_BASE meaning the COLLECTOR is deliberate: number 3 is
+# measured against it directly, so the latency path is the same one it
+# has always been and the figure stays comparable across the split.
+DEMO_PORT = int(os.environ.get("GT_DEMO_PORT", str(PORT + 1)))
 
 # GT_BASE in the environment points the run at an ALREADY-RUNNING slice
 # — the compose experiments profile sets it to the ingestion container.
@@ -47,6 +58,8 @@ PORT = int(os.environ.get("GT_PORT", "18099"))
 # measurement, not a client of the slice).
 EXTERNAL_BASE = os.environ.get("GT_BASE", "")
 BASE = EXTERNAL_BASE or f"http://127.0.0.1:{PORT}"
+DEMO_BASE = (os.environ.get("GT_DEMO_BASE", "") or
+             (BASE if EXTERNAL_BASE else f"http://127.0.0.1:{DEMO_PORT}"))
 
 # The adversary's seed. Tiers 5 and 6 derive every random draw from it
 # (lib/prng.js); the others are deterministic already. Recorded in the
@@ -82,11 +95,11 @@ def log(msg):
     print(f"  {msg}", flush=True)
 
 
-def wait_healthy(timeout=30):
+def wait_healthy(base, timeout=30):
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            with urllib.request.urlopen(BASE + "/healthz", timeout=2) as r:
+            with urllib.request.urlopen(base + "/healthz", timeout=2) as r:
                 if r.status == 200:
                     return True
         except (urllib.error.URLError, OSError):
@@ -98,6 +111,7 @@ def run(cmd, env=None, cwd=None, timeout=2400):
     e = dict(os.environ)
     e.setdefault("SETUPTOOLS_USE_DISTUTILS", "local")
     e["GT_BASE"] = BASE
+    e["GT_DEMO_BASE"] = DEMO_BASE
     # Passed explicitly rather than inherited: the seed recorded in the
     # manifest must be the seed the tiers actually drew from, and a
     # default agreed in two places is a default that can disagree.
@@ -127,27 +141,41 @@ def main():
     print("\nGhost Trace — producing the six numbers\n")
 
     # ---- build + start (or target an external slice) ----
-    proc = None
+    procs = []
     if EXTERNAL_BASE:
-        log(f"targeting external slice at {BASE}")
+        log(f"targeting external slice at {BASE} (demo page at {DEMO_BASE})")
     else:
         log("building")
-        b = subprocess.run(["go", "build", "-o", str(data_dir / "ghost-trace"),
-                            "./cmd/ghost-trace"], cwd=SVC, capture_output=True, text=True)
-        if b.returncode != 0:
-            print(b.stderr)
-            return 1
+        for svc, cmd_path, out in ((SVC, "./cmd/ghost-trace", "ghost-trace"),
+                                   (DEMO_SVC, "./cmd/demo-web", "demo-web")):
+            b = subprocess.run(["go", "build", "-o", str(data_dir / out), cmd_path],
+                               cwd=svc, capture_output=True, text=True)
+            if b.returncode != 0:
+                print(b.stderr)
+                return 1
 
-        log(f"starting slice on {BASE}")
-        proc = subprocess.Popen(
+        log(f"starting collector on {BASE}")
+        procs.append(subprocess.Popen(
             [str(data_dir / "ghost-trace"), "-addr", f"127.0.0.1:{PORT}",
-             "-data", str(data_dir / "substrate")],
+             "-data", str(data_dir / "substrate"),
+             # The demo page's origin, allowlisted. Without this every
+             # browser tier would load the page and then watch the SDK's
+             # first request be refused by the browser.
+             "-cors-origin", DEMO_BASE],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
+        ))
+
+        log(f"starting demo host on {DEMO_BASE}")
+        procs.append(subprocess.Popen(
+            [str(data_dir / "demo-web"), "-addr", f"127.0.0.1:{DEMO_PORT}",
+             "-api", BASE],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        ))
     try:
-        if not wait_healthy():
-            log("slice did not become healthy")
-            return 1
+        for name, base in (("collector", BASE), ("demo host", DEMO_BASE)):
+            if not wait_healthy(base):
+                log(f"{name} at {base} did not become healthy")
+                return 1
 
         # ---- 1. detection rate per tier ----
         absent = []
@@ -173,7 +201,7 @@ def main():
         if session_numbers is None:
             log(f"session measurement failed: {(r.stderr or '')[-300:]}")
     finally:
-        if proc is not None:
+        for proc in procs:
             proc.send_signal(signal.SIGTERM)
             try:
                 proc.wait(timeout=10)
@@ -290,6 +318,7 @@ def provenance():
             # which is a different claim about what was under test.
             "mode": "external" if EXTERNAL_BASE else "local",
             "base": BASE,
+            "demo_base": DEMO_BASE,
             "seed": SEED,
             "sample_sizes": {
                 **{k.rsplit(".", 1)[0]: v for k, v in TIER_N.items()},
