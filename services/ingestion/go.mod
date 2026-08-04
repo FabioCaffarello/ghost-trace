@@ -13,8 +13,10 @@ require (
 require (
 	github.com/FabioCaffarello/ghost-trace/libs/canonical v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/eventstream v0.0.0
+	github.com/FabioCaffarello/ghost-trace/libs/feature v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/genproto v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/middleware v0.0.0
+	github.com/FabioCaffarello/ghost-trace/libs/policy v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/substrate v0.0.0
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -59,6 +61,10 @@ require (
 replace github.com/FabioCaffarello/ghost-trace/libs/canonical => ../../libs/canonical
 
 replace github.com/FabioCaffarello/ghost-trace/libs/eventstream => ../../libs/eventstream
+
+replace github.com/FabioCaffarello/ghost-trace/libs/feature => ../../libs/feature
+
+replace github.com/FabioCaffarello/ghost-trace/libs/policy => ../../libs/policy
 
 replace github.com/FabioCaffarello/ghost-trace/libs/genproto => ../../libs/genproto
 

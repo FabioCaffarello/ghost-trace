@@ -37,7 +37,7 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"sigs.k8s.io/yaml"
 
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/policy"
+	"github.com/FabioCaffarello/ghost-trace/libs/policy"
 )
 
 const fixtureDir = "../../../../contract/fixtures/requests"

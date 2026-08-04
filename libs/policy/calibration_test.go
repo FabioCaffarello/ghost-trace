@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/feature"
+	"github.com/FabioCaffarello/ghost-trace/libs/feature"
 )
 
 // swapCalibration restores the package state after a test that loads a

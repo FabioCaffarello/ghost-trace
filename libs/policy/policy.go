@@ -26,7 +26,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/feature"
+	"github.com/FabioCaffarello/ghost-trace/libs/feature"
 )
 
 // Reason codes are a stable enumeration (contract §7). Adding a code is

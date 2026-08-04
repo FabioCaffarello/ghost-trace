@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package ghosttrace.events.v1;
+
+import "events/v1/evaluation.proto";
+
+option go_package = "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1;eventsv1";
+
+// SessionSnapshot is everything a decision needs about a session,
+// serialized so the decision can be made by a process that did not
+// observe it.
+//
+// It carries FEATURE STATE, never raw events. That is what makes the
+// split affordable: the decision path already reduces a session to
+// nineteen numbers before scoring it, so the snapshot is small and
+// bounded no matter how long the session runs — and it is also what
+// keeps the collector the single writer, since nothing downstream needs
+// the event history to reproduce a judgement.
+//
+// The collector writes one on every telemetry batch; the decision
+// engine reads the latest. That is the same semantics the monolith
+// already has — "decide on the most recent state" — expressed across a
+// process boundary instead of a mutex.
+message SessionSnapshot {
+  string tenant_id = 1;
+  string session_id = 2;
+
+  // Milliseconds from session start to the most recent event. This is
+  // the evidence window a decision reports, and it is a property of the
+  // session rather than of the snapshot.
+  uint32 last_event_ms = 3;
+
+  // Unix nanoseconds when the collector produced this snapshot.
+  // Distinct from last_event_ms: the gap between them is how stale the
+  // reader's view is, which is the cost of the split made visible.
+  int64 written_at = 4;
+
+  // The nineteen numbers a judgement is computed from. Reusing
+  // FeatureState rather than declaring a second shape is deliberate:
+  // the archived evaluation already carries this message, and two
+  // definitions of "what the detector looked at" would be free to
+  // drift.
+  FeatureState features = 5;
+}

@@ -15,8 +15,11 @@ toolchain go1.26.5
 use (
 	./libs/canonical
 	./libs/eventstream
+	./libs/feature
 	./libs/genproto
 	./libs/middleware
+	./libs/policy
+	./libs/snapshot
 	./libs/substrate
 	./services/archive
 	./services/ingestion

@@ -5,7 +5,7 @@
 # cannot drift into meaning two different things: to know what CI will
 # do, run `make ci`.
 #
-# Seven Go modules under a go.work workspace. The per-module targets
+# Ten Go modules under a go.work workspace. The per-module targets
 # loop over $(GO_MODULES) so none can be quietly left out of a gate.
 
 SHELL := /bin/bash
@@ -20,7 +20,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 # --- layout ----------------------------------------------------------
-GO_MODULES  := services/ingestion services/archive libs/canonical libs/eventstream libs/genproto libs/middleware libs/substrate
+GO_MODULES  := services/ingestion services/archive libs/canonical libs/eventstream libs/feature libs/genproto libs/middleware libs/policy libs/snapshot libs/substrate
 SERVICE     := services/ingestion
 EXPERIMENTS := experiments
 COVER_DIR   := .coverage

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/feature"
+	"github.com/FabioCaffarello/ghost-trace/libs/feature"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
 )
 
