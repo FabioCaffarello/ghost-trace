@@ -19,6 +19,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
+
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
 )
 
@@ -45,6 +47,28 @@ type EventArchive interface {
 	Append(ctx context.Context, msg proto.Message, eventTime int64) error
 }
 
+// SessionSnapshots publishes the state a decision is computed from, so
+// a process that did not observe the session can still judge it.
+//
+// Best-effort by construction, and the reason is the same asymmetry
+// ADR-0003 settled for the archive: this service already holds the
+// authoritative state in memory and answers decisions from it. A
+// snapshot store that is unreachable must slow nothing down and fail
+// nothing — it makes another process's decisions stale, which is that
+// process's problem to detect, not a reason to reject telemetry here.
+//
+// NullSnapshots implements it for runs with no snapshot store.
+type SessionSnapshots interface {
+	Put(ctx context.Context, token string, snap *eventsv1.SessionSnapshot) error
+}
+
+// NullSnapshots is the do-nothing store: the all-in-one binary needs no
+// snapshots because nothing else reads its sessions.
+type NullSnapshots struct{}
+
+// Put discards the snapshot.
+func (NullSnapshots) Put(context.Context, string, *eventsv1.SessionSnapshot) error { return nil }
+
 // Config is the application-level configuration: who the tenant is and
 // how decisions operate. Transport credentials (site_key, secret_key)
 // deliberately live with the transport adapter, not here.
@@ -57,11 +81,12 @@ type Config struct {
 
 // App wires the use cases to their ports.
 type App struct {
-	cfg      Config
-	sessions SessionRepository
-	archive  EventArchive
-	now      func() time.Time
-	log      *slog.Logger
+	cfg       Config
+	sessions  SessionRepository
+	archive   EventArchive
+	snapshots SessionSnapshots
+	now       func() time.Time
+	log       *slog.Logger
 }
 
 // New constructs the application. Pass nil for now to use time.Now.
@@ -73,7 +98,21 @@ func New(cfg Config, sessions SessionRepository, archive EventArchive, now func(
 	if log == nil {
 		log = slog.Default()
 	}
-	return &App{cfg: cfg, sessions: sessions, archive: archive, now: now, log: log}
+	return &App{cfg: cfg, sessions: sessions, archive: archive,
+		snapshots: NullSnapshots{}, now: now, log: log}
+}
+
+// WithSnapshots returns a copy publishing session snapshots to store.
+// Optional rather than a constructor argument because the all-in-one
+// binary genuinely has no use for it, and a required nil would be a
+// worse API than an explicit opt-in.
+func (a *App) WithSnapshots(store SessionSnapshots) *App {
+	if store == nil {
+		store = NullSnapshots{}
+	}
+	b := *a
+	b.snapshots = store
+	return &b
 }
 
 // Mode reports the operating mode decisions run under.

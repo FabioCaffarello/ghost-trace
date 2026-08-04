@@ -6,6 +6,9 @@ import (
 	"fmt"
 
 	"github.com/FabioCaffarello/ghost-trace/libs/feature"
+	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
+	"github.com/FabioCaffarello/ghost-trace/libs/policy"
+	"github.com/FabioCaffarello/ghost-trace/libs/snapshot"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
 )
 
@@ -58,6 +61,12 @@ type TelemetryEvent struct {
 // the process; transport and serialization work must never run under
 // it.
 func (a *App) IngestTelemetry(ctx context.Context, env TelemetryEnvelope) error {
+	// Captured inside the store callback, published after it returns.
+	var (
+		snapshotState policy.State
+		snapshotMs    uint32
+	)
+
 	// Pre-convert pointer polylines outside the lock.
 	points := make([][]feature.Point, len(env.Events))
 	for i := range env.Events {
@@ -100,12 +109,38 @@ func (a *App) IngestTelemetry(ctx context.Context, env TelemetryEnvelope) error 
 				st.Interaction.AddForm(ev.Action, ev.Target)
 			}
 		}
+
+		// Copied by value while the lock is held, for the same reason
+		// Decide does it: concurrent batches keep mutating this state,
+		// and reading it after With returns would race with them.
+		snapshotState = policy.State{
+			Pointer:     st.Pointer.State(),
+			Keystroke:   st.Keystroke.State(),
+			Interaction: st.Interaction.State(),
+		}
+		snapshotMs = st.LastEventMs
 	})
 	if err != nil {
 		if errors.Is(err, session.ErrNotFound) {
 			return ErrSessionNotFound
 		}
 		return fmt.Errorf("ingest telemetry: %w", err)
+	}
+
+	// Published after the state is durable in memory and before the
+	// archive write, so a reader sees the batch's effect as soon as this
+	// call returns. Best effort: a snapshot store that is down makes
+	// another process's view stale, which is not a reason to reject
+	// telemetry here.
+	if err := a.snapshots.Put(ctx, env.SessionToken, &eventsv1.SessionSnapshot{
+		TenantId:    tenantID,
+		SessionId:   sessionID,
+		LastEventMs: snapshotMs,
+		WrittenAt:   a.now().UnixNano(),
+		Features:    snapshot.FromState(snapshotState),
+	}); err != nil {
+		a.log.WarnContext(ctx, "session snapshot not published",
+			"err", err, "session_id", sessionID)
 	}
 
 	batch := buildTelemetryBatch(env, tenantID, sessionID, a.now().UnixNano())
