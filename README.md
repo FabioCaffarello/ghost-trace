@@ -173,6 +173,38 @@ between this directory and the 27,651 lines deleted in
 
 ---
 
+## Working on it
+
+```bash
+make bootstrap   # assert the toolchain, and name what is missing
+make help        # every target, grouped
+make verify      # format, vet, lint, race tests — run this before pushing
+make ci          # everything CI runs, in the order CI runs it
+```
+
+Every step in the pipeline is a `make` target and nothing else, so a
+green CI run and a green `make ci` are the same statement rather than
+two things that resemble each other. `make hooks` installs the git hooks
+that run the fast half of it on commit.
+
+Commits follow [Conventional Commits](https://www.conventionalcommits.org),
+with the milestone as the scope:
+
+```
+feat(r1.14): expose the decision contract as OpenAPI 3.1
+fix(policy): stop rounding scores below zero to positive
+ci(r1.13): pin every action by commit SHA
+refactor(session)!: ports take a context      # ! is a breaking change
+```
+
+`feat` releases a minor, `fix` and `perf` a patch, `!` a major, and
+everything else releases nothing — release automation reads the log, so
+the type is a decision rather than a label. Pull requests are
+squash-merged, which means **the PR title is the commit that lands**; it
+is checked in CI by the same script the commit hook runs.
+
+---
+
 ## Honest limitations
 
 - **No false-positive rate.** Everything above describes machines.

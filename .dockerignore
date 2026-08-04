@@ -2,9 +2,20 @@
 # needs libs/ + services/ingestion/; the experiments image needs
 # experiments/ (minus its local state below).
 .git
+.github
 .tmp
+.coverage
 docs
 deploy/observability
+
+# Developer tooling: nothing in the images consumes it, and keeping it
+# out means editing a lint rule cannot invalidate a build cache layer.
+Makefile
+lefthook.yml
+.golangci.yml
+.editorconfig
+.gitattributes
+.tool-versions
 experiments/.venv
 experiments/node_modules
 experiments/results

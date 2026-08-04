@@ -1,0 +1,115 @@
+# Ghost Trace — container images: build, scan, inventory.
+#
+# R1.12 containerised the slice; nothing checked that the images still
+# build. This does, on every pull request, and then asks two questions
+# no build answers on its own: does the image ship a known vulnerable
+# package (Trivy), and what exactly is in it (SBOM).
+#
+# Nothing is published. The images are built, examined and discarded —
+# a registry push is a separate decision that wants a consumer first.
+#
+# Base-image tags come from .env.example rather than being restated
+# here, so this workflow cannot drift from the compose topology it is
+# supposed to be verifying. The Dockerfile's own defaults are invalid
+# all-zero digests, which is what makes forgetting to pass them a hard
+# failure instead of a floating build.
+
+name: image
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  ingestion:
+    name: image — ingestion build + scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Resolve base image tags from .env.example
+        run: grep -E '^(GOLANG|DISTROLESS)_IMAGE=' .env.example >> "$GITHUB_ENV"
+
+      # Loaded into the local daemon rather than pushed: the scanner and
+      # the SBOM generator both need a real image, and nobody else does.
+      - name: Build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.ingestion
+          build-args: |
+            GOLANG_IMAGE=${{ env.GOLANG_IMAGE }}
+            DISTROLESS_IMAGE=${{ env.DISTROLESS_IMAGE }}
+          tags: ghost-trace/ingestion:ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ignore-unfixed: an advisory with no patch available is not a
+      # thing this PR can act on, and a gate that cannot be satisfied
+      # gets disabled. Fixable HIGH and CRITICAL fail the build.
+      - name: Scan for known vulnerabilities
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: ghost-trace/ingestion:ci
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      # The distroless runtime image carries a static binary and little
+      # else, which is the claim; the SBOM is how that claim becomes
+      # checkable rather than asserted.
+      - name: Generate SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: ghost-trace/ingestion:ci
+          format: spdx-json
+          artifact-name: sbom-ingestion.spdx.json
+          output-file: sbom-ingestion.spdx.json
+
+  # The experiments image sits on the official Playwright base — a
+  # multi-gigabyte pull that would dominate the run for little signal.
+  # BuildKit's own checks catch the Dockerfile-level regressions
+  # (stale syntax, unset ARGs, bad COPY forms) without fetching it.
+  dockerfiles:
+    name: image — Dockerfile checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Resolve base image tags from .env.example
+        run: grep -E '^(GOLANG|DISTROLESS|PLAYWRIGHT)_IMAGE=' .env.example >> "$GITHUB_ENV"
+
+      - name: Check Dockerfile.ingestion
+        run: |
+          docker buildx build --check \
+            --build-arg GOLANG_IMAGE="$GOLANG_IMAGE" \
+            --build-arg DISTROLESS_IMAGE="$DISTROLESS_IMAGE" \
+            -f deploy/docker/Dockerfile.ingestion .
+
+      - name: Check Dockerfile.experiments
+        run: |
+          docker buildx build --check \
+            --build-arg PLAYWRIGHT_IMAGE="$PLAYWRIGHT_IMAGE" \
+            -f deploy/docker/Dockerfile.experiments .
+
+      # compose.yml is the deployment contract for four profiles; a YAML
+      # or interpolation error in it currently surfaces only when
+      # someone tries to run it.
+      - name: Validate compose topology
+        run: docker compose --profile core --profile demo --profile experiments --profile observability config --quiet

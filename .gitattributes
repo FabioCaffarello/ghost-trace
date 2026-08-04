@@ -1,0 +1,22 @@
+# Line endings are normalised on the way in, so a Windows checkout
+# cannot turn every file into a diff.
+* text=auto eol=lf
+
+# Shell scripts and the compose entrypoints must be LF regardless of
+# platform: CRLF here produces "bad interpreter" at container start.
+*.sh text eol=lf
+
+# Machine-authored. Marking these keeps them out of language statistics
+# and collapses them by default in pull request diffs, so a real change
+# is not buried under regenerated bindings.
+libs/genproto/** linguist-generated=true
+experiments/package-lock.json linguist-generated=true
+**/go.sum linguist-generated=true
+
+# Fixtures are data, not prose: never merged line-by-line, and diffing
+# them line-by-line is noise rather than information.
+experiments/testdata/*.jsonl -diff -merge
+
+# Documentation drives the repository language stats; Go and the
+# experiment tiers are what the language bar should describe.
+docs/** linguist-documentation=true

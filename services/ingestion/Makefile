@@ -1,26 +1,26 @@
-# Ghost Trace ingestion service — build contract.
+# Ghost Trace ingestion — the targets specific to running this service.
 #
-# Generated protobuf bindings live in the committed libs/genproto module,
-# produced by `buf generate` at the repository root (see buf.gen.yaml).
-# A fresh checkout builds with no proto toolchain installed; `generate`
-# exists for schema changes and CI enforces that its output is committed.
+# Everything shared with the rest of the repository (build, test, vet,
+# lint, coverage, generate, the schema gates) now lives in the root
+# Makefile and is driven from there, so a gate cannot be strengthened at
+# the root and quietly left behind here. From the repository root:
+#
+#   make help        the full target list
+#   make build       compile every module
+#   make test-race   the race suite
+#   make generate    buf generate -> libs/genproto (committed)
+#   make ci          everything CI runs
+#
+# Generated protobuf bindings live in the committed libs/genproto
+# module, so a fresh checkout builds with no proto toolchain installed.
 
 .DEFAULT_GOAL := help
 
-TOOLBIN      := $(shell go env GOPATH)/bin
-REPO_ROOT    := ../..
-PROTOBUF_VER := v1.36.0
-RUN_DATA     := .run-data
+RUN_DATA := .run-data
 
 .PHONY: help
 help:
-	@echo "Targets:"
-	@echo "  tools     install protoc-gen-go $(PROTOBUF_VER) (buf itself: brew install buf)"
-	@echo "  generate  buf generate -> libs/genproto (committed; run after schema edits)"
-	@echo "  lint      buf lint over schemas/"
-	@echo "  test      go test -race ./..."
-	@echo "  build     go build ./..."
-	@echo "  vet       go vet ./..."
+	@echo "Service-local targets (everything else: 'make help' at the repository root):"
 	@echo "  run       serve the slice on 127.0.0.1:8080"
 	@echo "  capture   serve on 0.0.0.0:8080 with human capture enabled"
 
@@ -36,27 +36,3 @@ run:
 capture:
 	go run ./cmd/ghost-trace -addr 0.0.0.0:8080 -data $(RUN_DATA) \
 	  -capture-log ../../experiments/results/human_sessions.jsonl
-
-.PHONY: tools
-tools:
-	go install google.golang.org/protobuf/cmd/protoc-gen-go@$(PROTOBUF_VER)
-
-.PHONY: generate
-generate:
-	cd $(REPO_ROOT) && PATH="$(TOOLBIN):$$PATH" buf generate
-
-.PHONY: lint
-lint:
-	cd $(REPO_ROOT) && buf lint
-
-.PHONY: test
-test:
-	go test -race ./...
-
-.PHONY: build
-build:
-	go build ./...
-
-.PHONY: vet
-vet:
-	go vet ./...

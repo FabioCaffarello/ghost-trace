@@ -39,7 +39,7 @@ func Recovery(log *slog.Logger) Middleware {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if rec := recover(); rec != nil {
-					log.Error("panic in handler",
+					log.ErrorContext(r.Context(), "panic in handler",
 						"panic", rec,
 						"method", r.Method,
 						"path", r.URL.Path,

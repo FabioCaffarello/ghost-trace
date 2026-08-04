@@ -1,0 +1,90 @@
+# Dependency updates.
+#
+# Weekly and grouped: a stream of one-dependency pull requests trains
+# people to merge without reading, which is the opposite of the point.
+# One PR per ecosystem per week is small enough to actually review.
+#
+# Prefix `chore` with the scope included, so Dependabot's own pull
+# request titles read `chore(deps): bump x` — Conventional Commits, the
+# same rule CI enforces on every other PR title. `deps:` is not a type
+# any release tool knows, and those PRs would arrive permanently red.
+#
+# There is deliberately no `docker` entry. Both Dockerfiles take their
+# base image via ARG, sourced from .env.example, so there is no literal
+# FROM tag for Dependabot to parse; those bumps run through
+# deploy/docker/pin-base-images.sh and are a human decision. An entry
+# here would open no PRs and quietly read as coverage.
+
+version: 2
+
+updates:
+  - package-ecosystem: gomod
+    directory: /services/ingestion
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      go-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      # The protobuf runtime is an ARCHIVE-FORMAT pin, not a dependency.
+      # Canonical bytes are hashed for content-addressed identity, so a
+      # bump is an archive-compatibility event that needs the golden
+      # hash fixture re-examined by a person — never an automatic merge.
+      # See services/ingestion/internal/canonical.
+      - dependency-name: google.golang.org/protobuf
+
+  - package-ecosystem: gomod
+    directory: /libs/genproto
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    ignore:
+      - dependency-name: google.golang.org/protobuf
+
+  - package-ecosystem: npm
+    directory: /experiments
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      experiment-tiers:
+        patterns: ['*']
+
+  - package-ecosystem: pip
+    directory: /experiments
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore
+      include: scope
+
+  # The supply chain that matters most here: these actions run with a
+  # token against this repository, and they are pinned by SHA precisely
+  # so that upgrading is a reviewed act rather than a silent one.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      actions:
+        patterns: ['*']

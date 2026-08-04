@@ -1,0 +1,61 @@
+# golangci-lint — the defect-class gate.
+#
+# Deliberately a core set, not everything. A lint config that fires on
+# style opinions trains people to read failures as noise, and then the
+# one finding that was a real bug scrolls past with the rest. Every
+# linter here guards a class of defect, not a preference:
+#
+#   errcheck      an ignored error is a silent failure
+#   govet         the compiler's own suspicion list
+#   ineffassign   a write nobody reads is a bug or a leftover
+#   staticcheck   the broad correctness corpus
+#   unused        dead code lies about what the program does
+#   contextcheck  a dropped context is a cancellation that never arrives
+#                 — cheap now, load-bearing once Phase 2 puts real hops
+#                 between the services
+#
+# The linters' own defaults are left alone; the two exclusions below are
+# the only opinions expressed here, and each names its reason. Growing
+# this set is a decision worth its own PR, not a drive-by.
+#
+# Formatting is not litigated here: `make fmt-check` runs gofmt -s and
+# is a separate, unarguable gate.
+#
+# Run: make lint   (installs the pinned version if yours differs)
+
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: standard # errcheck govet ineffassign staticcheck unused
+  enable:
+    - contextcheck
+
+  exclusions:
+    generated: strict # libs/genproto is machine-authored; not ours to lint
+    rules:
+      # contextcheck cannot see that a deferred recover closure has
+      # nothing context-shaped left to pass: the log call already uses
+      # ErrorContext, and http.Error has no context-taking form.
+      - path: internal/httpmw/logging\.go
+        linters:
+          - contextcheck
+
+      # QF1001 rewrites `!(a && b) && !(c && d)` into its De Morgan
+      # dual. Here the original spells out "not a digit and not a
+      # lowercase hex letter", which is the property being asserted;
+      # the dual is shorter and says less.
+      - path: internal/canonical/canonical_test\.go
+        linters:
+          - staticcheck
+        text: QF1001
+
+formatters:
+  enable:
+    - gofmt
+  settings:
+    gofmt:
+      simplify: true

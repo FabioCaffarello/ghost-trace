@@ -3,17 +3,12 @@ package httpmw
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
-
-func discard() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
-}
 
 func TestRequestIDGeneratedAndEchoed(t *testing.T) {
 	var seen string
