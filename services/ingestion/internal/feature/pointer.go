@@ -16,9 +16,15 @@ package feature
 import "math"
 
 // SetRef versions the extractor set. It is stored on every evaluation,
-// so a record computed under pointer-v1 stays readable after the
-// definition changes. Bump it whenever the arithmetic below changes.
-const SetRef = "pointer-v2"
+// so a record computed under an older definition stays readable after
+// the arithmetic changes. Bump it whenever any extractor changes.
+//
+// The lineage is pointer-v1 → pointer-v2 → features-v3: the first two
+// names predate the keystroke and interaction extractors, and keeping
+// "pointer" once the set covered three channels misdescribed every
+// evaluation that cited it. v3 continues the version sequence so refs
+// still order chronologically.
+const SetRef = "features-v3"
 
 const (
 	// segmentGapMs splits the pointer stream into distinct movement
