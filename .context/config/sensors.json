@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "source": "manual",
+  "note": "Every sensor is a make target and nothing else. The Makefile is already the single definition of what CI runs (R1.13); binding sensors to it means humans, CI and agents share one vocabulary, and a gate cannot be strengthened in one place and quietly left behind in the others. If a sensor here would need a command that is not a make target, the target is what is missing.",
+  "stack": {
+    "primaryLanguage": "go",
+    "languages": ["go", "python", "javascript"],
+    "frameworks": [],
+    "buildTools": ["make", "buf", "docker"],
+    "testFrameworks": ["go test"],
+    "packageManager": "npm",
+    "stackNote": "The bootstrap scan reported typescript as primary and found no Docker and no build tools. It had indexed experiments/ and the browser SDK only — the Go service under services/ingestion/internal was absent from its map entirely. Corrected by hand rather than preserved: a harness that describes the wrong repository is worse than none."
+  },
+  "sensors": [
+    {
+      "id": "format",
+      "name": "gofmt clean",
+      "description": "Every Go source is gofmt -s clean. Formatting is never litigated in review here.",
+      "command": "make fmt-check",
+      "severity": "warning",
+      "blocking": true,
+      "phase": "V"
+    },
+    {
+      "id": "tests-passing",
+      "name": "race suite",
+      "description": "go test -race across both modules. The api package drives real HTTP rather than calling handlers directly, because v1 lost a provenance chain to a field-name mismatch that every in-memory test survived.",
+      "command": "make test-race",
+      "severity": "critical",
+      "blocking": true,
+      "phase": "V"
+    },
+    {
+      "id": "lint",
+      "name": "golangci-lint",
+      "description": "Core defect-class set only (.golangci.yml). Every linter guards a class of bug, not a preference — a config that fires on style teaches people to read red as noise.",
+      "command": "make lint",
+      "severity": "critical",
+      "blocking": true,
+      "phase": "V"
+    },
+    {
+      "id": "vulnerabilities",
+      "name": "govulncheck",
+      "description": "Reachable advisories in both modules. go.mod pins toolchain go1.26.5 as the security floor.",
+      "command": "make vuln",
+      "severity": "critical",
+      "blocking": true,
+      "phase": "V"
+    },
+    {
+      "id": "contracts-in-sync",
+      "name": "generated artifacts match their sources",
+      "description": "libs/genproto from schemas/, contract/openapi.yaml from the Go wire types, contract/fixtures/ from the harness wire modules. All three are committed and drift-gated; none may be edited by hand.",
+      "command": "make genproto-sync openapi-sync contract-fixtures-sync",
+      "severity": "critical",
+      "blocking": true,
+      "phase": "V"
+    },
+    {
+      "id": "contract-lint",
+      "name": "OpenAPI specification lint",
+      "description": "Curated vacuum ruleset (.vacuum.yaml), failing on warnings. It has already caught a schema demanding every field of a discriminated union, and a published example outside its own enumeration.",
+      "command": "make openapi-lint",
+      "severity": "warning",
+      "blocking": true,
+      "phase": "V"
+    },
+    {
+      "id": "experiments-check",
+      "name": "experiment harness syntax and asserted selftests",
+      "description": "py_compile, node --check, the statistics selftest (22 assertions) and the numbers-schema fixture corpus (21 fixtures). No browsers, no network — the part of the harness that is checkable on every push.",
+      "command": "make experiments-check",
+      "severity": "critical",
+      "blocking": true,
+      "phase": "V"
+    },
+    {
+      "id": "modules-tidy",
+      "name": "go.mod tidy",
+      "description": "Runs against copies and restores the originals, so the check never mutates the tree it is judging.",
+      "command": "make tidy-check",
+      "severity": "warning",
+      "blocking": true,
+      "phase": "V"
+    },
+    {
+      "id": "coverage",
+      "name": "coverage measured",
+      "description": "Reported, never thresholded. -coverpkg so the wire-level tests get credit for the packages they actually drive. A threshold would become a number to satisfy; this figure exists to be looked at.",
+      "command": "make coverage",
+      "severity": "info",
+      "blocking": false,
+      "phase": "V"
+    },
+    {
+      "id": "ci",
+      "name": "the whole gate",
+      "description": "Everything CI runs, in the order CI runs it. `make ci` green locally and a green pipeline are the same statement — that equivalence is the reason the Makefile exists.",
+      "command": "make ci",
+      "severity": "critical",
+      "blocking": true,
+      "phase": "C"
+    },
+    {
+      "id": "numbers-reproduce",
+      "name": "the six numbers",
+      "description": "THE project invariant, and deliberately outside `make ci`: it needs real browsers and takes about seven minutes. Required after any change touching services/, experiments/ or schemas/. Detection rates must sit inside the Wilson intervals of the last manifest in docs/results/, p99 inside the 80ms budget, cold start still never blocking. Tiers 5 and 6 are seeded (GT_SEED), so their figures are repeatable; a moved number with no explanation is indistinguishable from a broken detector.",
+      "command": "make numbers",
+      "severity": "critical",
+      "blocking": true,
+      "expensive": true,
+      "gated": true,
+      "appliesTo": ["services/**", "experiments/**", "schemas/**"],
+      "phase": "V"
+    }
+  ]
+}

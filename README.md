@@ -198,6 +198,7 @@ one browser from another.
   contract/                    what must be true: the architecture contract,
                                the generated OpenAPI surface, the fixtures
                                the harness actually sends, the target design
+  .context/                    agent harness: playbooks, skills, sensors, policy
   experiments/schema/          the contract the six numbers satisfy
   docs/                        write-ups of work that has run
   docs/results/                committed run manifests, with provenance

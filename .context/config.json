@@ -1,0 +1,9 @@
+{
+  "exclude": [
+    "experiments/node_modules/**",
+    "experiments/.venv/**",
+    "libs/genproto/**",
+    ".tmp/**",
+    "experiments/results/**"
+  ]
+}

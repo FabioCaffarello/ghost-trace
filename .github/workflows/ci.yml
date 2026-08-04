@@ -89,6 +89,12 @@ jobs:
       - name: contract fixtures in sync
         run: make contract-fixtures-sync
 
+      # CLAUDE.md is a generated export of .context/, which is the
+      # versioned source of what an agent picking this up cold is told.
+      # Same discipline as every other generated artifact here.
+      - name: agent context in sync
+        run: make context-sync-check
+
   # The job name is a required status check on main. Renaming it silently
   # removes the protection, so it stays as it is.
   ingestion:
