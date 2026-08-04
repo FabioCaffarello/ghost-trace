@@ -52,11 +52,20 @@ jobs:
         if: github.event_name == 'pull_request'
         run: buf breaking --against ".git#branch=origin/${{ github.base_ref }},subdir=schemas"
 
+      # Delete-then-regenerate so orphaned bindings from removed protos
+      # surface as deletions. The porcelain check (unlike `git diff
+      # --exit-code`, which only sees tracked files — the old vacuous
+      # green) also fails on a NEW proto whose generated .pb.go was
+      # never committed.
       - name: genproto in sync
         run: |
+          find libs/genproto -name '*.pb.go' -delete
           PATH="$(go env GOPATH)/bin:$PATH" buf generate
-          git diff --exit-code -- libs/genproto \
-            || { echo "::error::libs/genproto is stale — run 'buf generate' and commit"; exit 1; }
+          if [ -n "$(git status --porcelain -- libs/genproto)" ]; then
+            git status --porcelain -- libs/genproto
+            echo "::error::libs/genproto is out of sync — run 'buf generate' and commit the result"
+            exit 1
+          fi
 
   ingestion:
     name: services/ingestion — build + test
