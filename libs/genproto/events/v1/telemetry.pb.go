@@ -96,7 +96,10 @@ type PointerEvent struct {
 	TMs uint32 `protobuf:"varint,1,opt,name=t_ms,json=tMs,proto3" json:"t_ms,omitempty"`
 	// "mouse" | "trackpad" | "touch" | "pen". A normalization property,
 	// not an identifier: trackpad and mouse produce structurally
-	// different traces and must not be compared without it (§0).
+	// different traces and must not be compared without it (§0). The
+	// shipping SDK emits pointerType verbatim — "touch", "pen", else
+	// "mouse" — so "trackpad" is reserved vocabulary: browsers do not
+	// expose it, and claiming it would require inference downstream.
 	Src           string          `protobuf:"bytes,2,opt,name=src,proto3" json:"src,omitempty"`
 	Pts           []*PointerPoint `protobuf:"bytes,3,rep,name=pts,proto3" json:"pts,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -399,7 +402,10 @@ type ScrollEvent struct {
 	Dy    int32                  `protobuf:"varint,2,opt,name=dy,proto3" json:"dy,omitempty"`
 	// "wheel" | "touch" | "key" | "programmatic". Programmatic scrolls
 	// are a strong automation signal on their own — a person cannot
-	// produce one.
+	// produce one. The shipping SDK emits only "wheel" and
+	// "programmatic": it classifies by user-gesture presence, not input
+	// device, so "touch" and "key" are reserved vocabulary until the
+	// collector can tell them apart.
 	Mode          string `protobuf:"bytes,3,opt,name=mode,proto3" json:"mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -573,13 +579,25 @@ func (x *VisibilityEvent) GetState() string {
 	return ""
 }
 
-// FormEvent records paste, autofill and submit against a field
-// identity. Field identity only, never content.
+// FormEvent records how a field came to hold its value, against a
+// field identity. Field identity only, never content.
 type FormEvent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TMs           uint32                 `protobuf:"varint,1,opt,name=t_ms,json=tMs,proto3" json:"t_ms,omitempty"`
-	Target        string                 `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
-	Action        string                 `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"` // "paste" | "autofill" | "submit"
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	TMs    uint32                 `protobuf:"varint,1,opt,name=t_ms,json=tMs,proto3" json:"t_ms,omitempty"`
+	Target string                 `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	// "paste" | "autofill" | "submit" | "injected".
+	//
+	// "injected" is the SDK's report that a field's value changed with no
+	// preceding keydown on that field — page.fill, execute_script and
+	// friends. It feeds FeatureState.injections, the policy's strongest
+	// signal, so a client written from this schema that never emits it
+	// produces sessions the best detector cannot see. This value was
+	// live in the SDK before it was documented here; the enumeration in
+	// this comment is the wire contract and must list every emitted
+	// member. Known false-positive population: dictation, IME
+	// composition, some assistive input (§6) — which is why the signal
+	// is capped below categorical and cannot block alone.
+	Action        string `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
