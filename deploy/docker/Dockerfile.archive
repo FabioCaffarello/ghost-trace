@@ -1,0 +1,44 @@
+# syntax=docker/dockerfile:1
+#
+# Ghost Trace archive — the event-stream consumer, containerised.
+#
+# Same shape as the ingestion image and for the same reasons: pinned
+# base digests with all-zero defaults so an unpinned build fails fast,
+# CGO_ENABLED=0 because modernc.org/sqlite is pure Go, distroless
+# static, non-root, and /data shipped in the image owned by nonroot so a
+# fresh named volume inherits the ownership.
+ARG GOLANG_IMAGE=golang@sha256:0000000000000000000000000000000000000000000000000000000000000000
+ARG DISTROLESS_IMAGE=gcr.io/distroless/static-debian12@sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+FROM ${GOLANG_IMAGE} AS build
+WORKDIR /src
+
+# Module graph first. Every module the service replaces needs its go.mod
+# here before download; the list is explicit so a missing one fails at
+# build time. ADD A LINE PER NEW LIB.
+COPY libs/genproto/go.mod libs/genproto/go.sum libs/genproto/
+COPY libs/middleware/go.mod libs/middleware/
+COPY libs/canonical/go.mod libs/canonical/go.sum libs/canonical/
+COPY libs/eventstream/go.mod libs/eventstream/go.sum libs/eventstream/
+COPY libs/substrate/go.mod libs/substrate/go.sum libs/substrate/
+COPY services/archive/go.mod services/archive/go.sum services/archive/
+RUN --mount=type=cache,target=/go/pkg/mod \
+    cd services/archive && go mod download
+
+COPY libs/ libs/
+COPY services/archive/ services/archive/
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    cd services/archive && \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" \
+      -o /out/archive ./cmd/archive && \
+    test -x /out/archive && \
+    mkdir -p /out/data
+
+FROM ${DISTROLESS_IMAGE}
+USER nonroot
+COPY --from=build /out/archive /archive
+COPY --from=build --chown=nonroot:nonroot /out/data /data
+EXPOSE 8081
+ENTRYPOINT ["/archive"]
+CMD ["-addr", "0.0.0.0:8081", "-data", "/data"]

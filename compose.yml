@@ -51,10 +51,18 @@ services:
       - -mode=${GT_MODE:-monitor}
       - -site-key=${GT_SITE_KEY:-pk_demo}
       - -secret-key=${GT_SECRET_KEY:-sk_demo}
+      # Transitional dual-write: records still land in the local
+      # substrate, and a copy is mirrored to the archive service. The
+      # local write stays authoritative — a broker outage is counted,
+      # never surfaced.
+      - -nats=nats://nats:4222
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
       - gt-data:/data
+    depends_on:
+      nats:
+        condition: service_healthy
     healthcheck:
       # Execs the binary itself: distroless ships no shell or curl.
       test: ["CMD", "/ghost-trace", "-healthcheck", "-addr", "0.0.0.0:8080"]
@@ -91,6 +99,49 @@ services:
       start_period: 3s
     restart: unless-stopped
 
+  # The event stream. JetStream on, file-backed, so a restart does not
+  # lose records the archive has not consumed yet.
+  nats:
+    <<: *hardened
+    profiles: [core, demo]
+    image: ${NATS_IMAGE:-nats:2.10-alpine}
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    volumes:
+      - nats-data:/data
+    healthcheck:
+      # /healthz on the monitoring port; the image has no curl, so this
+      # uses the nats binary's own readiness probe.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    restart: unless-stopped
+
+  # The archive service: consumes the stream, stores nothing else.
+  archive:
+    <<: *hardened
+    profiles: [core, demo]
+    image: ghost-trace/archive:${IMAGE_TAG:-dev}
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.archive
+      args:
+        GOLANG_IMAGE: ${GOLANG_IMAGE:-golang:1.26-alpine}
+        DISTROLESS_IMAGE: ${DISTROLESS_IMAGE:-gcr.io/distroless/static-debian12:nonroot}
+    command:
+      - -addr=0.0.0.0:8081
+      - -data=/data
+      - -nats=nats://nats:4222
+    ports:
+      - "127.0.0.1:8081:8081"
+    volumes:
+      - gt-archive-data:/data
+    depends_on:
+      nats:
+        condition: service_healthy
+    restart: unless-stopped
+
   experiments:
     <<: *hardened
     profiles: [experiments]
@@ -125,4 +176,6 @@ services:
 
 volumes:
   gt-data:
+  gt-archive-data:
+  nats-data:
   prom-data:

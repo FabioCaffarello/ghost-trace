@@ -18,8 +18,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/FabioCaffarello/ghost-trace/libs/eventstream"
 	"github.com/FabioCaffarello/ghost-trace/libs/middleware"
 	"github.com/FabioCaffarello/ghost-trace/libs/substrate"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/streamarchive"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/substratearchive"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/api"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
@@ -38,6 +40,8 @@ func main() {
 
 func run() error {
 	var (
+		natsURL = flag.String("nats", os.Getenv("GT_NATS_URL"),
+			"mirror archived records onto this NATS event stream (empty disables it)")
 		addr       = flag.String("addr", "127.0.0.1:8080", "listen address")
 		dataDir    = flag.String("data", "", "substrate directory; empty disables the raw event archive")
 		mode       = flag.String("mode", policy.ModeMonitor, "monitor | enforce")
@@ -88,6 +92,32 @@ func run() error {
 		defer func() { _ = sub.Close() }()
 		archive = substratearchive.New(ingest.New(sub, time.Now))
 		log.Info("raw event archive enabled", "dir", *dataDir)
+
+		// Transitional dual-write. With -nats set, every record still
+		// goes to the local substrate AND is mirrored onto the event
+		// stream for the archive service. The local write stays
+		// authoritative: a broker outage is logged and counted, never
+		// returned, because adding a broker must not make this service
+		// less reliable than it was without one. PR-2.5 removes the
+		// local write once parity is demonstrated.
+		if *natsURL != "" {
+			nc, js, err := eventstream.Connect(*natsURL, "ghost-trace-collector")
+			if err != nil {
+				return fmt.Errorf("connect event stream: %w", err)
+			}
+			defer nc.Close()
+			if err := eventstream.EnsureStream(ctx, js); err != nil {
+				return fmt.Errorf("ensure event stream: %w", err)
+			}
+			mirror := streamarchive.New(archive, eventstream.NewPublisher(js), *tenantID, log)
+			archive = mirror
+			defer func() {
+				appended, published, dropped := mirror.Counts()
+				log.Info("event stream mirror", "appended", appended,
+					"published", published, "dropped", dropped)
+			}()
+			log.Info("event stream mirror enabled", "nats", *natsURL)
+		}
 	} else {
 		log.Warn("raw event archive disabled; sessions will not be replayable (-data to enable)")
 	}

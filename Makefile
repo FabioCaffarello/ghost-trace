@@ -5,7 +5,7 @@
 # cannot drift into meaning two different things: to know what CI will
 # do, run `make ci`.
 #
-# Six Go modules under a go.work workspace. The per-module targets
+# Seven Go modules under a go.work workspace. The per-module targets
 # loop over $(GO_MODULES) so none can be quietly left out of a gate.
 
 SHELL := /bin/bash
@@ -20,7 +20,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 # --- layout ----------------------------------------------------------
-GO_MODULES  := services/ingestion libs/canonical libs/eventstream libs/genproto libs/middleware libs/substrate
+GO_MODULES  := services/ingestion services/archive libs/canonical libs/eventstream libs/genproto libs/middleware libs/substrate
 SERVICE     := services/ingestion
 EXPERIMENTS := experiments
 COVER_DIR   := .coverage
@@ -395,6 +395,23 @@ context-sync-check: ## Fail if CLAUDE.md has gone stale against .context/docs/RE
 	out = pathlib.Path('CLAUDE.md').read_text(); \
 	sys.exit(0) if src in out else sys.exit('CLAUDE.md is stale against .context/docs/README.md\nfix: make context-sync && git add CLAUDE.md')"
 	@echo "CLAUDE.md in sync"
+
+# The archive parity check: what the collector wrote locally, the
+# archive holds too. It needs a real broker and SKIPS without one, which
+# is why it is its own target rather than part of `make ci` — a skipped
+# parity test reported as a pass is the vacuous green this repository
+# keeps finding.
+#
+#   docker run --rm -d -p 4222:4222 --name gt-nats nats:alpine -js
+#   GT_NATS_URL=nats://127.0.0.1:4222 make parity
+.PHONY: parity
+parity: ## Archive parity against a real broker (needs GT_NATS_URL)
+	@if [ -z "$${GT_NATS_URL:-}" ]; then \
+		echo "GT_NATS_URL is not set — the parity test would skip, which is not a pass."; \
+		echo "start a broker:  docker run --rm -d -p 4222:4222 --name gt-nats nats:alpine -js"; \
+		exit 1; \
+	fi
+	cd services/archive && go test -count=1 ./internal/consumer/ -run Archive -v
 
 ##@ Experiments
 

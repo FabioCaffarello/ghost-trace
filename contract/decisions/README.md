@@ -14,3 +14,4 @@ reverse without knowing what it cost.
 | --- | --- | --- |
 | [0001](0001-go-workspace-and-module-boundaries.md) | A Go workspace, and when a library gets extracted | accepted |
 | [0002](0002-library-naming.md) | Libraries are named for what they are | accepted |
+| [0003](0003-dual-write-during-the-split.md) | The local substrate stays authoritative during the split | accepted |

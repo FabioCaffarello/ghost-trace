@@ -18,5 +18,6 @@ use (
 	./libs/genproto
 	./libs/middleware
 	./libs/substrate
+	./services/archive
 	./services/ingestion
 )
