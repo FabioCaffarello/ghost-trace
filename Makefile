@@ -20,7 +20,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 # --- layout ----------------------------------------------------------
-GO_MODULES  := services/ingestion services/archive services/decision-engine libs/archive libs/canonical libs/decision libs/eventstream libs/feature libs/genproto libs/id libs/middleware libs/policy libs/snapshot libs/substrate libs/wire
+GO_MODULES  := services/ingestion services/archive services/decision-engine services/demo-web libs/archive libs/canonical libs/decision libs/eventstream libs/feature libs/genproto libs/id libs/middleware libs/policy libs/snapshot libs/substrate libs/wire
 SERVICE     := services/ingestion
 EXPERIMENTS := experiments
 COVER_DIR   := .coverage
@@ -503,12 +503,14 @@ shadow: ## Snapshot-shadow equivalence against a real broker (needs GT_NATS_URL)
 #   docker compose --profile core up -d
 #   make shadow-http
 .PHONY: shadow-http
-shadow-http: ## A/B the collector against the decision engine over HTTP (needs both up)
+shadow-http: ## A/B the collector against the engine, and check the demo is wired (needs the topology up)
 	@if [ -z "$${GT_COLLECTOR_URL:-}" ] && [ -z "$${GT_ENGINE_URL:-}" ]; then \
 		echo "using the compose defaults: collector :8080, engine :8082"; \
 		echo "(override with GT_COLLECTOR_URL and GT_ENGINE_URL)"; \
 	fi
-	@for pair in "$${GT_COLLECTOR_URL:-http://127.0.0.1:8080}" "$${GT_ENGINE_URL:-http://127.0.0.1:8082}"; do \
+	@for pair in "$${GT_COLLECTOR_URL:-http://127.0.0.1:8080}" \
+	             "$${GT_ENGINE_URL:-http://127.0.0.1:8082}" \
+	             "$${GT_DEMO_URL:-http://127.0.0.1:8083}"; do \
 		curl -fsS -o /dev/null --max-time 3 "$$pair/healthz" || { \
 			echo "$$pair is not answering /healthz — the shadow test would skip, which is not a pass."; \
 			echo "bring both up:  docker compose --profile core up -d"; \
@@ -518,6 +520,7 @@ shadow-http: ## A/B the collector against the decision engine over HTTP (needs b
 	cd services/decision-engine && \
 		GT_COLLECTOR_URL="$${GT_COLLECTOR_URL:-http://127.0.0.1:8080}" \
 		GT_ENGINE_URL="$${GT_ENGINE_URL:-http://127.0.0.1:8082}" \
+		GT_DEMO_URL="$${GT_DEMO_URL:-http://127.0.0.1:8083}" \
 		go test -count=1 ./internal/shadow/ -v
 
 .PHONY: parity

@@ -14,7 +14,7 @@
  * write-up as a known gap.
  */
 import { chromium } from "playwright";
-import { BASE, CHROME, appendResult, decide, summarize, sleep } from "../lib/run.js";
+import { DEMO_BASE, CHROME, appendResult, decide, summarize, sleep } from "../lib/run.js";
 
 const COHORT = "tier1_playwright_naive";
 const N = Number(process.env.GT_N || 25);
@@ -22,7 +22,7 @@ const N = Number(process.env.GT_N || 25);
 async function once(browser, i) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
-  await page.goto(BASE + "/", { waitUntil: "networkidle" });
+  await page.goto(DEMO_BASE + "/", { waitUntil: "networkidle" });
 
   // Let the session handshake land.
   await page.waitForFunction(() => window.GhostTrace && window.GhostTrace.token(), null, {

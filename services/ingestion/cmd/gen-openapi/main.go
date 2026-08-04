@@ -126,13 +126,21 @@ observed" is distinguishable from "this looks human".
 			},
 		},
 		"tags": []any{
-			map[string]any{"name": "browser", "description": "Called by the SDK in the page. Hostile input."},
+			map[string]any{"name": "browser", "description": "Called by the SDK in the page. Hostile input. " +
+				"Answers cross-origin requests from an allowlist of page origins; the application " +
+				"endpoints deliberately do not."},
 			map[string]any{"name": "application", "description": "Called by the application server with secret_key."},
 			map[string]any{"name": "operations", "description": "Liveness."},
 		},
 		"paths": map[string]any{
-			"/v1/sessions":  map[string]any{"post": opSessions(ref)},
-			"/v1/telemetry": map[string]any{"post": opTelemetry(ref)},
+			"/v1/sessions": map[string]any{
+				"post":    opSessions(ref),
+				"options": opPreflight("startSession"),
+			},
+			"/v1/telemetry": map[string]any{
+				"post":    opTelemetry(ref),
+				"options": opPreflight("postTelemetry"),
+			},
 			"/v1/decisions": map[string]any{"post": opDecisions(ref)},
 			"/v1/outcomes":  map[string]any{"post": opOutcomes(ref)},
 			"/healthz":      map[string]any{"get": opHealthz()},
@@ -161,6 +169,49 @@ observed" is distinguishable from "this looks human".
 // ---------------------------------------------------------------
 // operations
 // ---------------------------------------------------------------
+
+// opPreflight documents the CORS preflight the browser endpoints
+// answer.
+//
+// It is published because an integrator has to know it exists, and
+// because the ABSENCE of it on /v1/decisions and /v1/outcomes is itself
+// part of the contract: those carry secret_key, are server-to-server,
+// and a browser must never be able to call them. A specification that
+// showed CORS uniformly would suggest the secret is usable from a page.
+func opPreflight(of string) map[string]any {
+	return map[string]any{
+		"operationId": of + "Preflight",
+		"summary":     "CORS preflight",
+		"description": "Answered for page origins the deployment allows. The allowlist is " +
+			"configuration and never a wildcard; an origin that is not on it receives no " +
+			"Access-Control-Allow-Origin and the browser refuses the request that would " +
+			"have followed.\n\n" +
+			"Access-Control-Allow-Credentials is never sent: the SDK authenticates with a " +
+			"bearer token it holds in memory and sends no cookies.",
+		"tags":     []any{"browser"},
+		"security": []any{},
+		"responses": map[string]any{
+			"204": map[string]any{
+				"description": "Preflight answered. Allow headers are present only for an allowed origin.",
+				"headers": map[string]any{
+					"Access-Control-Allow-Origin": map[string]any{
+						"description": "The request's origin, echoed, when it is on the allowlist.",
+						"schema":      map[string]any{"type": "string"},
+					},
+					"Access-Control-Allow-Headers": map[string]any{
+						"description": "Content-Type, Authorization.",
+						"schema":      map[string]any{"type": "string"},
+					},
+					"Vary": map[string]any{
+						"description": "Always Origin, so a shared cache cannot serve one origin's " +
+							"answer to another.",
+						"schema": map[string]any{"type": "string"},
+					},
+				},
+			},
+		},
+	}
+}
 
 func opSessions(ref refFunc) map[string]any {
 	return map[string]any{

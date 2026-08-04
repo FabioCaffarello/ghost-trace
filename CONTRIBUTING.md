@@ -35,7 +35,10 @@ Two checks need infrastructure and so sit outside `make ci`, refusing to
 run rather than skipping: `make parity` and `make shadow` want a broker
 (`GT_NATS_URL`), and `make shadow-http` wants the composed topology up —
 it asks the collector and the decision engine the same question and
-compares their answers.
+compares their answers, and separately checks that the demo host can
+actually reach the engine. That second one exists because fail-open
+(§5) means a demo wired to an unreachable engine answers "allow"
+forever and looks perfectly healthy.
 
 `make hooks` installs the git hooks: fast checks on commit, `make
 verify` on push, every failure naming the command that fixes it.

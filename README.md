@@ -191,10 +191,11 @@ one browser from another.
     internal/policy/           score / confidence / decision
     internal/session/          maintained state + the on-call comparison
     internal/api/              the browser-facing endpoints
-    internal/web/              demo page and SDK
+    internal/sdk/              the browser SDK, served from here
     cmd/bench-architecture/    the concurrency x duration grid
   services/decision-engine/    /v1/decisions and /v1/outcomes, answered from
                                snapshots rather than observed sessions
+  services/demo-web/           the stand-in customer site, on its own origin
   services/archive/            consumes the event stream, stores records
   experiments/                 six adversarial tiers + the statistics
   schemas/events/v1/           protobuf archive schema

@@ -20,7 +20,7 @@
  */
 import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
-import { BASE, CHROME, appendResult, decide, summarize, sleep } from "../lib/run.js";
+import { DEMO_BASE, CHROME, appendResult, decide, summarize, sleep } from "../lib/run.js";
 
 puppeteer.use(StealthPlugin());
 
@@ -30,7 +30,7 @@ const N = Number(process.env.GT_N || 25);
 async function once(browser, i) {
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 900 });
-  await page.goto(BASE + "/", { waitUntil: "networkidle0" });
+  await page.goto(DEMO_BASE + "/", { waitUntil: "networkidle0" });
   await page.waitForFunction(() => window.GhostTrace && window.GhostTrace.token(), {
     timeout: 5000,
   });

@@ -40,7 +40,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [ingestion, archive, decision-engine]
+        service: [ingestion, archive, decision-engine, demo-web]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -106,7 +106,7 @@ jobs:
       # Every Go image, not just the one that happened to be first.
       - name: Check the Go service Dockerfiles
         run: |
-          for svc in ingestion archive decision-engine; do
+          for svc in ingestion archive decision-engine demo-web; do
             echo "== Dockerfile.$svc"
             docker buildx build --check \
               --build-arg GOLANG_IMAGE="$GOLANG_IMAGE" \

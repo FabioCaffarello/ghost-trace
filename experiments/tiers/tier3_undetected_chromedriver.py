@@ -29,7 +29,11 @@ import sys
 import time
 import urllib.request
 
+# The collector (API) and the demo page are different origins now; see
+# experiments/lib/run.js for why. DEMO_BASE defaults to BASE so a
+# same-origin deployment is unaffected.
 BASE = os.environ.get("GT_BASE", "http://127.0.0.1:8080")
+DEMO_BASE = os.environ.get("GT_DEMO_BASE", BASE)
 SECRET_KEY = os.environ.get("GT_SECRET_KEY", "sk_demo")
 COHORT = "tier3_undetected_chromedriver"
 N = int(os.environ.get("GT_N", "15"))
@@ -103,7 +107,7 @@ def main():
     try:
         for i in range(N):
             try:
-                driver.get(BASE + "/")
+                driver.get(DEMO_BASE + "/")
                 time.sleep(1.0)
 
                 user = driver.find_element(By.ID, "u")

@@ -10,10 +10,17 @@ scaffoldVersion: "2.0.0"
 ---
 ## What you own here
 
-`services/ingestion/internal/web/static/sdk.js` — the browser SDK, and
-`internal/web` which serves the demo page. This is not a frontend
-practice: it is **the producer of the telemetry wire**, and that is the
-only reason it needs its own playbook.
+`services/ingestion/internal/sdk/sdk.js` — the browser SDK, served by
+the COLLECTOR because it is Ghost Trace's artefact and not the
+customer's — and `services/demo-web`, the stand-in customer site on its
+own origin. This is not a frontend practice: sdk.js is **the producer of
+the telemetry wire**, and that is the only reason it needs its own
+playbook.
+
+The two are separate services now, and the page loads the SDK
+cross-origin exactly as an integrator would. If you change where the SDK
+lives, `internal/ingest/vocabulary_test.go` reads it by path and will
+say so loudly rather than pass.
 
 ## The SDK defines the vocabulary
 

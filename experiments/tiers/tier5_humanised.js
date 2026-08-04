@@ -17,7 +17,7 @@
  * additional evidence types are load-bearing rather than incremental.
  */
 import { chromium } from "playwright";
-import { BASE, CHROME, appendResult, decide, summarize, sleep } from "../lib/run.js";
+import { DEMO_BASE, CHROME, appendResult, decide, summarize, sleep } from "../lib/run.js";
 import { moveHuman, thinkMs } from "../lib/human_mouse.js";
 import { sessionLabel, sessionRand } from "../lib/prng.js";
 
@@ -30,7 +30,7 @@ const N = Number(process.env.GT_N || 25);
 async function once(browser, i) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
-  await page.goto(BASE + "/", { waitUntil: "networkidle" });
+  await page.goto(DEMO_BASE + "/", { waitUntil: "networkidle" });
   await page.waitForFunction(() => window.GhostTrace && window.GhostTrace.token(), null, {
     timeout: 5000,
   });

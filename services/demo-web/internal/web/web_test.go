@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/FabioCaffarello/ghost-trace/libs/wire"
 	"io"
 	"log/slog"
 	"net/http"
@@ -15,40 +14,47 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FabioCaffarello/ghost-trace/libs/archive"
 	"github.com/FabioCaffarello/ghost-trace/libs/decision"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/livesessions"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/api"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
 )
 
 const (
 	testSiteKey   = "pk_webtest"
 	testSecretKey = "sk_webtest"
+
+	// The collector's origin as the BROWSER sees it. It is not this
+	// service, which is the whole point of the split.
+	testAPIBase = "https://collector.example"
 )
 
 func discard() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-// startAPI brings up a real API server for the demo host to call: the
-// demo's whole point is exercising the HTTP trust boundary, so its
-// tests do too.
-func startAPI(t *testing.T) *httptest.Server {
-	t.Helper()
-	store := session.NewStore(30*time.Minute, time.Now)
-	a := app.New(app.Config{TenantID: "t_test"}, store, app.NullArchive{}, time.Now, discard())
-	s := api.New(api.Config{
-		SiteKey:       testSiteKey,
-		CollectPolicy: wire.CollectPolicy{PointerHz: 20, BatchMs: 2000, Types: []string{"pointer"}},
-	}, a, discard())
-	decisions := decision.New(decision.Config{
-		TenantID: "t_test", Mode: policy.ModeMonitor, SecretKey: testSecretKey,
-	}, livesessions.New(store), app.NullArchive{}, time.Now, discard())
+// fixedSessions answers every lookup with the same session. It stands
+// in for the collector's state without this module depending on the
+// collector — which it must not, now that they are separate services.
+type fixedSessions struct{}
 
-	mux := s.Routes()
-	decisions.Mount(mux)
+func (fixedSessions) Lookup(context.Context, string) (decision.Session, bool, error) {
+	return decision.Session{ID: "s_webtest", TenantID: "t_test"}, true, nil
+}
+
+// startEngine brings up a REAL /v1/decisions for the demo host to call.
+//
+// It mounts libs/decision — the same package the collector and the
+// decision engine mount — rather than a hand-written stub, because the
+// demo's whole point is exercising the HTTP trust boundary and a stub
+// would exercise the test author's idea of it. What is faked here is
+// only where the session state comes from.
+func startEngine(t *testing.T) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	decision.New(decision.Config{
+		TenantID: "t_test", Mode: policy.ModeMonitor, SecretKey: testSecretKey,
+	}, fixedSessions{}, archive.Null{}, time.Now, discard()).Mount(mux)
+
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv
@@ -60,7 +66,7 @@ func startDemo(t *testing.T, apiBase, captureLog string) *httptest.Server {
 	if captureLog != "" {
 		sink = NewFileCaptureSink(captureLog)
 	}
-	h, err := New(Config{SiteKey: testSiteKey},
+	h, err := New(Config{SiteKey: testSiteKey, APIBase: testAPIBase},
 		NewHTTPDecisionClient(apiBase, testSecretKey, 0), sink, discard())
 	if err != nil {
 		t.Fatalf("web.New: %v", err)
@@ -102,27 +108,6 @@ func startDemoWithPorts(t *testing.T, d DecisionClient, c CaptureSink) *httptest
 	return srv
 }
 
-func newSessionToken(t *testing.T, apiSrv *httptest.Server) string {
-	t.Helper()
-	body, _ := json.Marshal(map[string]any{
-		"site_key": testSiteKey,
-		"page":     map[string]any{"path": "/login"},
-		"client":   map[string]any{"pointer": "fine", "viewport": []int{1440, 900}},
-	})
-	resp, err := http.Post(apiSrv.URL+"/v1/sessions", "application/json", bytes.NewReader(body))
-	if err != nil {
-		t.Fatalf("sessions: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	var out struct {
-		SessionToken string `json:"session_token"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || out.SessionToken == "" {
-		t.Fatalf("no session token (err=%v)", err)
-	}
-	return out.SessionToken
-}
-
 func postLogin(t *testing.T, demo *httptest.Server, payload map[string]any) (int, map[string]any) {
 	t.Helper()
 	b, _ := json.Marshal(payload)
@@ -156,25 +141,46 @@ func TestServePageSubstitutesSiteKey(t *testing.T) {
 	}
 }
 
-func TestServeSDK(t *testing.T) {
+func TestTheDemoHostDoesNotServeTheSDK(t *testing.T) {
+	// The SDK is Ghost Trace's artefact, served from Ghost Trace's
+	// origin. A customer embeds it; they do not vendor a copy, and a
+	// vendored copy is how every deployment ends up running a different
+	// version of the thing that decides what the wire carries.
 	demo := startDemo(t, "http://127.0.0.1:1", "")
 	resp, err := http.Get(demo.URL + "/sdk.js")
 	if err != nil {
 		t.Fatalf("GET /sdk.js: %v", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "javascript") {
-		t.Errorf("Content-Type = %q", ct)
-	}
-	sdk, _ := io.ReadAll(resp.Body)
-	if len(sdk) == 0 {
-		t.Error("empty SDK body")
-	}
-	if strings.Contains(string(sdk), testSecretKey) {
-		t.Error("secret key leaked into the SDK")
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d, want 404: this service must not ship the SDK", resp.StatusCode)
 	}
 }
 
+func TestThePageLoadsTheSDKFromTheCollector(t *testing.T) {
+	demo := startDemo(t, "http://127.0.0.1:1", "")
+	resp, err := http.Get(demo.URL + "/")
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	page, _ := io.ReadAll(resp.Body)
+
+	if !strings.Contains(string(page), `src="`+testAPIBase+`/sdk.js"`) {
+		t.Errorf("the page does not load the SDK from %s", testAPIBase)
+	}
+	// And the SDK is told where to POST, since it is no longer
+	// same-origin with the collector.
+	if !strings.Contains(string(page), `window.GHOST_TRACE_API = "`+testAPIBase+`"`) {
+		t.Errorf("the page does not point the SDK at %s", testAPIBase)
+	}
+	if strings.Contains(string(page), "API_BASE_PLACEHOLDER") {
+		t.Error("placeholder survived substitution")
+	}
+	if strings.Contains(string(page), testSecretKey) {
+		t.Error("secret key leaked into the page")
+	}
+}
 func TestUnknownPathIs404(t *testing.T) {
 	demo := startDemo(t, "http://127.0.0.1:1", "")
 	resp, err := http.Get(demo.URL + "/nope")
@@ -188,12 +194,11 @@ func TestUnknownPathIs404(t *testing.T) {
 }
 
 func TestLoginReturnsRealDecision(t *testing.T) {
-	apiSrv := startAPI(t)
-	demo := startDemo(t, apiSrv.URL, "")
-	token := newSessionToken(t, apiSrv)
+	engine := startEngine(t)
+	demo := startDemo(t, engine.URL, "")
 
 	status, out := postLogin(t, demo, map[string]any{
-		"session_token": token, "username": "alice",
+		"session_token": "st_webtest", "username": "alice",
 	})
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
@@ -273,19 +278,18 @@ func TestCaptureFailureDoesNotCostTheSession(t *testing.T) {
 }
 
 func TestLoginAppendsCaptureRow(t *testing.T) {
-	apiSrv := startAPI(t)
+	engine := startEngine(t)
 	log := t.TempDir() + "/human_sessions.jsonl"
-	demo := startDemo(t, apiSrv.URL, log)
-	token := newSessionToken(t, apiSrv)
+	demo := startDemo(t, engine.URL, log)
 
 	// Participant present: the row is recorded.
 	postLogin(t, demo, map[string]any{
-		"session_token": token, "username": "x",
+		"session_token": "st_webtest", "username": "x",
 		"participant": "p07", "arm": "B", "condition": "mouse-desktop", "visit": 3,
 	})
 	// No participant: nothing is recorded.
 	postLogin(t, demo, map[string]any{
-		"session_token": token, "username": "y",
+		"session_token": "st_webtest", "username": "y",
 	})
 
 	raw, err := os.ReadFile(log)

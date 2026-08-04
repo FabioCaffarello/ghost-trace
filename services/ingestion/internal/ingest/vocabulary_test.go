@@ -22,7 +22,7 @@ import (
 // The server tolerates unknown values by design, so nothing else would
 // have caught either direction. That is audit finding M22, and this is
 // the guard for the half of it that crosses the language boundary.
-const sdkPath = "../web/static/sdk.js"
+const sdkPath = "../sdk/sdk.js"
 
 func sdkSource(t *testing.T) string {
 	t.Helper()

@@ -7,9 +7,16 @@
 // request put to the collector and to the decision engine, and the two
 // answers compared field by field.
 //
-// It needs both services. Without GT_COLLECTOR_URL and GT_ENGINE_URL it
-// SKIPS rather than passes, because a shadow test that quietly does
-// nothing is the vacuous green this repository keeps finding.
+// The file also holds one assertion that is not about the shadow at
+// all: that the demo host actually reaches the engine. Fail-open (§5)
+// means a demo wired to an unreachable engine answers "allow" forever
+// and looks perfectly healthy — which is what happened the first time
+// this topology ran, because the demo was handed a host address for a
+// call it makes server-side from inside the compose network.
+//
+// It needs the services. Without the URLs it SKIPS rather than passes,
+// because a shadow test that quietly does nothing is the vacuous green
+// this repository keeps finding.
 //
 //	make shadow-http
 package shadow
@@ -222,4 +229,42 @@ func reasonCodes(body map[string]any) string {
 		out += fmt.Sprintf("%v ", m["code"])
 	}
 	return out
+}
+
+func TestTheDemoHostReachesTheEngine(t *testing.T) {
+	demo := os.Getenv("GT_DEMO_URL")
+	if demo == "" {
+		t.Skip("GT_DEMO_URL not set — bring the topology up and run `make shadow-http`")
+	}
+	e := fromEnv(t)
+
+	status, body := post(t, e.collector+"/v1/sessions", "", map[string]any{
+		"site_key": e.siteKey,
+		"page":     map[string]any{"path": "/login"},
+		"client":   map[string]any{"pointer": "fine"},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("POST /v1/sessions = %d, want 200 (body %v)", status, body)
+	}
+	token, _ := body["session_token"].(string)
+
+	status, out := post(t, demo+"/demo/login", "", map[string]any{
+		"session_token": token, "username": "alice",
+	})
+	if status != http.StatusOK {
+		t.Fatalf("POST /demo/login = %d, want 200 (body %v)", status, out)
+	}
+
+	// The tell. Fail-open is CORRECT behaviour for an unreachable
+	// engine; it is a misconfiguration only because the engine is right
+	// there. A demo that always allows demonstrates nothing, and
+	// nothing else in this repository would notice.
+	if out["mode"] == "fail-open" {
+		t.Fatalf("the demo host failed open: it cannot reach the decision engine. "+
+			"A server-side call needs a service address, not the browser-facing one "+
+			"(got %v)", out)
+	}
+	if id, _ := out["evaluation_id"].(string); id == "" {
+		t.Error("no evaluation_id: the decision did not come from the engine")
+	}
 }

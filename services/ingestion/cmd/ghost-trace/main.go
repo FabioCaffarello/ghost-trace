@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -31,7 +32,6 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/web"
 )
 
 func main() {
@@ -45,19 +45,20 @@ func run() error {
 	var (
 		natsURL = flag.String("nats", os.Getenv("GT_NATS_URL"),
 			"mirror archived records onto this NATS event stream (empty disables it)")
-		addr       = flag.String("addr", "127.0.0.1:8080", "listen address")
-		dataDir    = flag.String("data", "", "substrate directory; empty disables the raw event archive")
-		mode       = flag.String("mode", policy.ModeMonitor, "monitor | enforce")
-		policyFile = flag.String("policy", "", "calibration JSON; empty uses the embedded default")
-		tenantID   = flag.String("tenant", "t_demo", "tenant id")
-		siteKey    = flag.String("site-key", "pk_demo", "public site key, embedded in the page")
-		secretKey  = flag.String("secret-key", "sk_demo", "secret key for server-to-server decision calls")
-		pointerHz  = flag.Int("pointer-hz", 20, "collect policy: pointer sample rate")
-		batchMs    = flag.Int("batch-ms", 2000, "collect policy: telemetry batch interval")
-		ttl        = flag.Duration("session-ttl", 30*time.Minute, "session token lifetime")
-		captureLog = flag.String("capture-log", "", "JSONL file of labelled human sessions for the M2 study; empty disables capture")
-		decisionTO = flag.Duration("decision-timeout", 250*time.Millisecond, "demo backend's client-side decision budget (contract §5: ~3x the p99 target)")
-		health     = flag.Bool("healthcheck", false, "probe /healthz on -addr and exit 0/1; the container health check execs the binary because distroless ships no shell or curl")
+		addr        = flag.String("addr", "127.0.0.1:8080", "listen address")
+		dataDir     = flag.String("data", "", "substrate directory; empty disables the raw event archive")
+		mode        = flag.String("mode", policy.ModeMonitor, "monitor | enforce")
+		policyFile  = flag.String("policy", "", "calibration JSON; empty uses the embedded default")
+		tenantID    = flag.String("tenant", "t_demo", "tenant id")
+		siteKey     = flag.String("site-key", "pk_demo", "public site key, embedded in the page")
+		secretKey   = flag.String("secret-key", "sk_demo", "secret key for server-to-server decision calls")
+		pointerHz   = flag.Int("pointer-hz", 20, "collect policy: pointer sample rate")
+		batchMs     = flag.Int("batch-ms", 2000, "collect policy: telemetry batch interval")
+		ttl         = flag.Duration("session-ttl", 30*time.Minute, "session token lifetime")
+		corsOrigins = flag.String("cors-origin", os.Getenv("GT_CORS_ORIGINS"),
+			"comma-separated page origins allowed to call /v1/sessions and /v1/telemetry "+
+				"cross-origin; empty disables CORS (same-origin deployments)")
+		health = flag.Bool("healthcheck", false, "probe /healthz on -addr and exit 0/1; the container health check execs the binary because distroless ships no shell or curl")
 	)
 	flag.Parse()
 
@@ -157,7 +158,8 @@ func run() error {
 	}, livesessions.New(sessions), archive, time.Now, log)
 
 	apiSrv := api.New(api.Config{
-		SiteKey: *siteKey,
+		SiteKey:        *siteKey,
+		AllowedOrigins: splitOrigins(*corsOrigins),
 		CollectPolicy: wire.CollectPolicy{
 			PointerHz: *pointerHz,
 			BatchMs:   *batchMs,
@@ -168,21 +170,6 @@ func run() error {
 
 	mux := apiSrv.Routes()
 	decisions.Mount(mux)
-
-	// The demo host reaches the engine through its ports. Loopback is a
-	// choice this composition root makes for the all-in-one binary, not
-	// an assumption baked into the client.
-	decisionClient := web.NewHTTPDecisionClient("http://"+*addr, *secretKey, *decisionTO)
-	var capture web.CaptureSink = web.NoCapture{}
-	if *captureLog != "" {
-		capture = web.NewFileCaptureSink(*captureLog)
-		log.Info("human capture enabled", "log", *captureLog)
-	}
-	demo, err := web.New(web.Config{SiteKey: *siteKey}, decisionClient, capture, log)
-	if err != nil {
-		return fmt.Errorf("demo handler: %w", err)
-	}
-	demo.Register(mux)
 
 	// Expired sessions are never otherwise removed, so without this the
 	// store grows for the life of the process.
@@ -209,8 +196,8 @@ func run() error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Info("listening", "addr", *addr, "mode", *mode, "policy", policy.Ref)
-		log.Info("demo page", "url", "http://"+*addr+"/")
+		log.Info("listening", "addr", *addr, "mode", *mode, "policy", policy.Ref,
+			"cors_origins", splitOrigins(*corsOrigins))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errCh <- err
 		}
@@ -225,6 +212,19 @@ func run() error {
 		defer cancel()
 		return srv.Shutdown(shutdownCtx)
 	}
+}
+
+// splitOrigins parses the comma-separated allowlist. Empty entries are
+// dropped rather than becoming an origin of "", which would match a
+// request that sent no Origin header at all.
+func splitOrigins(csv string) []string {
+	var out []string
+	for _, o := range strings.Split(csv, ",") {
+		if o = strings.TrimSpace(o); o != "" {
+			out = append(out, o)
+		}
+	}
+	return out
 }
 
 // probeHealth GETs /healthz on the listen address. A wildcard listen
