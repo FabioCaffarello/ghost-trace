@@ -88,7 +88,12 @@ export function summarize(cohort, rows) {
     return;
   }
   const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
-  const detected = scored.filter((r) => r.shadow_decision !== "allow" || r.decision !== "allow");
+  // Coalesce, matching analyze.flagged: in monitor mode the shadow is
+  // what enforce would have done; in enforce mode shadow_decision is
+  // omitted entirely (omitempty), so a disjunction over the missing key
+  // (`undefined !== "allow"`) would count every session as flagged and
+  // print 100% detection in exactly the mode that matters.
+  const detected = scored.filter((r) => (r.shadow_decision || r.decision) !== "allow");
   console.log(
     `  ${cohort.padEnd(26)} n=${String(scored.length).padStart(3)}  ` +
       `score=${mean(scored.map((r) => r.score)).toFixed(3)}  ` +

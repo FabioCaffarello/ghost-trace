@@ -200,12 +200,12 @@ def summarize_tiers():
         by[r["cohort"]].append(r)
 
     sys.path.insert(0, str(HERE))
-    from analyze import wilson  # noqa: E402
+    from analyze import flagged, wilson  # noqa: E402
 
     out = {}
     for cohort, rs in by.items():
         n = len(rs)
-        det = sum(1 for r in rs if (r.get("shadow_decision") or r["decision"]) != "allow")
+        det = sum(1 for r in rs if flagged(r))
         lo, hi = wilson(det, n)
         out[cohort] = {
             "n": n, "detected": det, "rate": det / n,
@@ -233,14 +233,11 @@ def human_fpr():
 
     from collections import defaultdict
     sys.path.insert(0, str(HERE))
-    from analyze import wilson, icc_anova, design_effect  # noqa: E402
+    from analyze import design_effect, flagged, icc_anova, wilson  # noqa: E402
 
     by_person = defaultdict(list)
     for r in arm_b:
         by_person[r["participant"]].append(r)
-
-    def flagged(r):
-        return (r.get("shadow_decision") or r.get("decision")) != "allow"
 
     people = len(by_person)
     sessions = len(arm_b)
