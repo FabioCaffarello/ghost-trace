@@ -26,7 +26,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/policy"
+	"github.com/FabioCaffarello/ghost-trace/libs/policy"
 )
 
 var updateGolden = flag.Bool("update", false, "rewrite golden files from current output")

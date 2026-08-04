@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/feature"
+	"github.com/FabioCaffarello/ghost-trace/libs/feature"
 )
 
 func TestCreateIssuesDistinctTokenAndID(t *testing.T) {

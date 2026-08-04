@@ -3,7 +3,7 @@ package policy
 import (
 	"testing"
 
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/feature"
+	"github.com/FabioCaffarello/ghost-trace/libs/feature"
 )
 
 // strong is a feature vector with a perfectly linear path and ample

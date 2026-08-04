@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/feature"
+	"github.com/FabioCaffarello/ghost-trace/libs/feature"
 )
 
 // ErrNotFound is returned for an unknown or expired token.

@@ -32,10 +32,10 @@ import (
 	"github.com/invopop/jsonschema"
 	"sigs.k8s.io/yaml"
 
+	"github.com/FabioCaffarello/ghost-trace/libs/policy"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/api"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/policy"
 )
 
 // The spec version tracks the CONTRACT, not the build. It moves when
