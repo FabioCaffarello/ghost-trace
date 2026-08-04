@@ -112,11 +112,39 @@ func (a *App) WithSnapshots(store SessionSnapshots) *App {
 	return &b
 }
 
+// BestEffortTimeout bounds how long a best-effort write may hold a
+// user-facing request.
+//
+// It exists because "best effort" was true of the OUTCOME and false of
+// the LATENCY. With the broker down, a JetStream publish waits for a
+// server ack that never comes and gives up after five seconds — so
+// /v1/telemetry, which does two of them, took ten seconds to return its
+// 202. The status was fail-open; the request was not. At any real
+// concurrency that exhausts the collector, which is precisely the
+// failure mode the local write used to prevent and ADR-0006 retired.
+//
+// The consequence is accepted rather than hidden: during an outage a
+// bounded wait DROPS records that an unbounded one would eventually
+// have published. Contract §5 says telemetry loss is expected and the
+// service is fail-open, and every drop is logged. Outcomes do not come
+// through here — they require durability and are allowed to fail
+// honestly instead.
+const BestEffortTimeout = 250 * time.Millisecond
+
+// bestEffort bounds ctx so a stalled dependency cannot hold a
+// user-facing request open.
+func bestEffort(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(ctx, BestEffortTimeout)
+}
+
 // archiveBestEffort appends a record, logging failures instead of
 // surfacing them. Archival off the decision path must never take a
-// user-facing request down with it; a missing archive is not a failure
-// at these call sites, so ErrArchiveUnavailable is not even logged.
+// user-facing request down with it — not by failing it and not by
+// holding it open — so a missing archive is not a failure at these call
+// sites and ErrArchiveUnavailable is not even logged.
 func (a *App) archiveBestEffort(ctx context.Context, msg proto.Message, eventTime int64, what string, args ...any) {
+	ctx, cancel := bestEffort(ctx)
+	defer cancel()
 	if err := a.archive.Append(ctx, msg, eventTime); err != nil && !errors.Is(err, archive.ErrUnavailable) {
 		a.log.Error("archive "+what, append([]any{"err", err}, args...)...)
 	}

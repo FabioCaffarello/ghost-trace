@@ -132,7 +132,9 @@ func (a *App) IngestTelemetry(ctx context.Context, env TelemetryEnvelope) error 
 	// call returns. Best effort: a snapshot store that is down makes
 	// another process's view stale, which is not a reason to reject
 	// telemetry here.
-	if err := a.snapshots.Put(ctx, env.SessionToken, &eventsv1.SessionSnapshot{
+	snapCtx, cancelSnap := bestEffort(ctx)
+	defer cancelSnap()
+	if err := a.snapshots.Put(snapCtx, env.SessionToken, &eventsv1.SessionSnapshot{
 		TenantId:    tenantID,
 		SessionId:   sessionID,
 		LastEventMs: snapshotMs,
