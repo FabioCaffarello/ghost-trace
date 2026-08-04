@@ -81,6 +81,34 @@ The canonical entry point is one command from the repository root:
 python3 experiments/numbers.py
 ```
 
+### Seeding
+
+Tiers 5 and 6 are the only ones with randomness, and until R1.16 they
+drew from `Math.random` — `humanPath` took a `rand` parameter and no
+caller ever passed one (audit M13). Every published rate from those
+tiers was a sample of an unrepeatable experiment.
+
+```bash
+GT_SEED=ghost-trace-v1 python3 experiments/numbers.py   # the default
+```
+
+Each session derives its own generator from `<seed>:<cohort>:<index>`,
+so session 7 draws the same numbers whether it ran alone or after six
+others — which is what makes one flagged session replayable. The label
+is recorded in every result row and the run seed in every manifest,
+because a seeded run nobody wrote down is exactly as unreproducible as
+an unseeded one.
+
+`rand` is now **required**: `humanPath` and `thinkMs` throw without it.
+A default was what let four published runs go unseeded unnoticed, and
+the requirement caught two call sites this change had missed.
+
+What seeding buys is the adversary, not the measurement. A real browser
+is in the loop and its event dispatch, scheduling and the SDK's sampling
+clock are not ours to seed — three runs at one seed gave identical
+verdicts with scores drifting 0.757–0.775. It removes the variance we
+control and leaves the variance we do not.
+
 ### What the harness sends
 
 Every request body the harness builds comes from one module per

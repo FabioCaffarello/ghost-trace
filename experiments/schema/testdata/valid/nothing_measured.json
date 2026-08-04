@@ -20,7 +20,8 @@
       "sample_sizes": {
         "tier1_playwright": 12,
         "tier4_synthetic_linear": 100
-      }
+      },
+      "seed": "ghost-trace-v1"
     }
   },
   "detection": {},

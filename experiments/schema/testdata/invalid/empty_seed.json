@@ -21,7 +21,7 @@
         "tier1_playwright": 12,
         "tier4_synthetic_linear": 100
       },
-      "seed": "ghost-trace-v1"
+      "seed": ""
     }
   },
   "detection": {
@@ -35,16 +35,7 @@
       "mean_confidence": 0.72
     }
   },
-  "false_positive_rate": {
-    "people": 2,
-    "sessions": 4,
-    "people_flagged": 0,
-    "person_ci_low": 0.0,
-    "person_ci_high": 0.658,
-    "rho": 1.7,
-    "design_effect": null,
-    "effective_n": 2.0
-  },
+  "false_positive_rate": null,
   "session": {
     "cold_start": {
       "n": 5,

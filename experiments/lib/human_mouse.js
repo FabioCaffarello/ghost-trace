@@ -56,9 +56,20 @@ export function fittsMs(distance, targetWidth = 60) {
  * decimated away.
  */
 export function humanPath(from, to, opts = {}) {
+  if (typeof opts.rand !== "function") {
+    throw new TypeError(
+      "humanPath needs a seeded rand — see lib/prng.js. Falling back to " +
+        "Math.random would make this path unreproducible (audit M13)."
+    );
+  }
   const {
     hz = 60,
-    rand = Math.random,
+    // REQUIRED, and deliberately without a default. `rand = Math.random`
+    // is what audit finding M13 actually was: the parameter existed,
+    // every caller forgot it, and the tiers ran unseeded for four
+    // published runs with nothing to notice. A missing generator is now
+    // a crash rather than a silent reversion.
+    rand,
     tremorPx = 1.1,
     overshoot = true,
     targetWidth = 60,
@@ -140,6 +151,9 @@ export async function moveHuman(mouse, from, to, opts = {}) {
 }
 
 /** A human pause: reading a label, deciding, finding the next field. */
-export function thinkMs(rand = Math.random) {
+export function thinkMs(rand) {
+  if (typeof rand !== "function") {
+    throw new TypeError("thinkMs needs a seeded rand — see lib/prng.js (audit M13).");
+  }
   return 350 + Math.round(rand() * 900);
 }

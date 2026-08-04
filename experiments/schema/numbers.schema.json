@@ -181,6 +181,7 @@
           "required": [
             "mode",
             "base",
+            "seed",
             "sample_sizes"
           ],
           "additionalProperties": false,
@@ -203,6 +204,11 @@
                 "type": "integer",
                 "minimum": 1
               }
+            },
+            "seed": {
+              "type": "string",
+              "description": "The adversary's seed. Tiers 5 and 6 derive every random draw from it, so two manifests are only comparable when this matches \u2014 before R1.16 they were unseeded and tier 6 was observed at 70%, 90%, 80% and 100% across four runs of unchanged code.",
+              "minLength": 1
             }
           }
         }
