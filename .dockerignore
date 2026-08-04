@@ -1,0 +1,15 @@
+# Keep build contexts small and deterministic. The ingestion image
+# needs libs/ + services/ingestion/; the experiments image needs
+# experiments/ (minus its local state below).
+.git
+.tmp
+docs
+deploy/observability
+experiments/.venv
+experiments/node_modules
+experiments/results
+experiments/__pycache__
+**/*.md
+.env
+.env.example
+compose.yml

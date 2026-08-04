@@ -1,0 +1,39 @@
+# syntax=docker/dockerfile:1
+#
+# Ghost Trace experiments — the adversarial tiers and the statistics,
+# targeting a running slice over the network (GT_BASE).
+#
+# Base is the official Playwright image matching the version pinned in
+# experiments/package-lock.json — the browsers baked into the image
+# must be the ones the installed playwright expects. It ships Node and
+# Chromium; Python is added for the orchestrators and the statistics.
+#
+# What runs in this container and what does not:
+#   - tiers 1, 2, 4, 5, 6 + measure_session drive the image's Chromium
+#     via GT_CHROME (resolved by the entrypoint — the path carries the
+#     browser build number, so it cannot be hardcoded here);
+#   - tier 3 (undetected-chromedriver) needs real Chrome, which has no
+#     linux/arm64 build — in-container it records itself ABSENT, and
+#     since R1.7.x(b) that absence is loud, not silent;
+#   - number 6 (the architecture benchmark) is an in-process
+#     measurement, not a client of the slice: numbers.py skips it here
+#     (no Go toolchain) and says so in the report.
+ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright@sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+FROM ${PLAYWRIGHT_IMAGE}
+WORKDIR /work/experiments
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3 python3-venv && \
+    rm -rf /var/lib/apt/lists/*
+
+# Node deps from the lockfile; PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD because
+# the image already carries the matching browsers.
+COPY experiments/package.json experiments/package-lock.json ./
+RUN PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm ci
+
+COPY experiments/ ./
+COPY deploy/docker/experiments-entrypoint.sh /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["python3", "numbers.py"]

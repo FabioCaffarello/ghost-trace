@@ -1,0 +1,128 @@
+# Ghost Trace — compose topology for the all-in-one slice.
+#
+# Profiles (combine as needed):
+#
+#   core           the slice: API + demo page + archive on a named volume
+#                    docker compose --profile core up
+#   demo           the slice with human-capture enabled; rows land in
+#                  ./experiments/results/human_sessions.jsonl on the host
+#                    docker compose --profile demo up
+#                  (core and demo both claim 127.0.0.1:8080 — run one)
+#   experiments    the adversarial tiers against the running slice
+#                    docker compose --profile core --profile experiments \
+#                      run --rm experiments
+#   observability  Prometheus scraping /metrics, bound to 127.0.0.1:9090
+#                    docker compose --profile core --profile observability up
+#
+# Base-image digests come from .env — copy .env.example and run
+# deploy/docker/pin-base-images.sh to resolve them. Without a .env the
+# floating-tag defaults below apply (fine for development; pinning is
+# what makes a rebuild six months from now byte-identical).
+#
+# Ports bind 127.0.0.1 only: nothing here is hardened for exposure.
+
+x-hardened: &hardened
+  init: true
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-ingestion-build: &ingestion-build
+  context: .
+  dockerfile: deploy/docker/Dockerfile.ingestion
+  args:
+    GOLANG_IMAGE: ${GOLANG_IMAGE:-golang:1.26-alpine}
+    DISTROLESS_IMAGE: ${DISTROLESS_IMAGE:-gcr.io/distroless/static-debian12:nonroot}
+
+services:
+  ingestion:
+    <<: *hardened
+    profiles: [core]
+    image: ghost-trace/ingestion:${IMAGE_TAG:-dev}
+    build: *ingestion-build
+    command:
+      - -addr=0.0.0.0:8080
+      - -data=/data
+      - -mode=${GT_MODE:-monitor}
+      - -site-key=${GT_SITE_KEY:-pk_demo}
+      - -secret-key=${GT_SECRET_KEY:-sk_demo}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - gt-data:/data
+    healthcheck:
+      # Execs the binary itself: distroless ships no shell or curl.
+      test: ["CMD", "/ghost-trace", "-healthcheck", "-addr", "0.0.0.0:8080"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    restart: unless-stopped
+
+  # The capture variant for the human study: same image, capture log
+  # bind-mounted to the host where analyze.py reads it.
+  ingestion-capture:
+    <<: *hardened
+    profiles: [demo]
+    image: ghost-trace/ingestion:${IMAGE_TAG:-dev}
+    build: *ingestion-build
+    command:
+      - -addr=0.0.0.0:8080
+      - -data=/data
+      - -mode=${GT_MODE:-monitor}
+      - -site-key=${GT_SITE_KEY:-pk_demo}
+      - -secret-key=${GT_SECRET_KEY:-sk_demo}
+      - -capture-log=/captures/human_sessions.jsonl
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - gt-data:/data
+      - ./experiments/results:/captures
+    healthcheck:
+      test: ["CMD", "/ghost-trace", "-healthcheck", "-addr", "0.0.0.0:8080"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    restart: unless-stopped
+
+  experiments:
+    <<: *hardened
+    profiles: [experiments]
+    image: ghost-trace/experiments:${IMAGE_TAG:-dev}
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.experiments
+      args:
+        PLAYWRIGHT_IMAGE: ${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.49.1-noble}
+    environment:
+      GT_BASE: http://ingestion:8080
+      GT_SITE_KEY: ${GT_SITE_KEY:-pk_demo}
+      GT_SECRET_KEY: ${GT_SECRET_KEY:-sk_demo}
+    volumes:
+      # Results land on the host so numbers.json survives the container.
+      - ./experiments/results:/work/experiments/results
+    depends_on:
+      ingestion:
+        condition: service_healthy
+    restart: "no"
+
+  prometheus:
+    <<: *hardened
+    profiles: [observability]
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.1.0}
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom-data:/prometheus
+    restart: unless-stopped
+
+volumes:
+  gt-data:
+  prom-data:
