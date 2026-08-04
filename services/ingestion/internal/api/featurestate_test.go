@@ -17,6 +17,8 @@ import (
 	"time"
 
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/substratearchive"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/feature"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/policy"
@@ -93,13 +95,14 @@ func TestEvaluationRecordCarriesFullFeatureState(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = sub.Close() })
 
-	cfg := Config{
-		TenantID: "t_test", SiteKey: testSiteKey, SecretKey: testSecretKey,
-		Mode:          policy.ModeMonitor,
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	a := app.New(app.Config{TenantID: "t_test", Mode: policy.ModeMonitor},
+		session.NewStore(30*time.Minute, time.Now),
+		substratearchive.New(ingest.New(sub, time.Now)), time.Now, log)
+	s := New(Config{
+		SiteKey: testSiteKey, SecretKey: testSecretKey,
 		CollectPolicy: CollectPolicy{PointerHz: 20, BatchMs: 2000, Types: []string{"pointer"}},
-	}
-	s := New(cfg, session.NewStore(30*time.Minute, time.Now), ingest.New(sub, time.Now),
-		time.Now, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	}, a, log)
 	srv := httptest.NewServer(s.Routes())
 	t.Cleanup(srv.Close)
 	token := startSession(t, srv)

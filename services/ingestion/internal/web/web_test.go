@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/api"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/policy"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
 )
@@ -31,12 +32,12 @@ func discard() *slog.Logger {
 // tests do too.
 func startAPI(t *testing.T) *httptest.Server {
 	t.Helper()
-	cfg := api.Config{
-		TenantID: "t_test", SiteKey: testSiteKey, SecretKey: testSecretKey,
-		Mode:          policy.ModeMonitor,
+	a := app.New(app.Config{TenantID: "t_test", Mode: policy.ModeMonitor},
+		session.NewStore(30*time.Minute, time.Now), app.NullArchive{}, time.Now, discard())
+	s := api.New(api.Config{
+		SiteKey: testSiteKey, SecretKey: testSecretKey,
 		CollectPolicy: api.CollectPolicy{PointerHz: 20, BatchMs: 2000, Types: []string{"pointer"}},
-	}
-	s := api.New(cfg, session.NewStore(30*time.Minute, time.Now), nil, time.Now, discard())
+	}, a, discard())
 	srv := httptest.NewServer(s.Routes())
 	t.Cleanup(srv.Close)
 	return srv

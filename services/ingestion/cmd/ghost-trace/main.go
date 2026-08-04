@@ -17,7 +17,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/substratearchive"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/api"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/policy"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
@@ -59,14 +61,14 @@ func run() error {
 	// Raw event archive. Optional: the decision path does not read from
 	// it, so a slice can run entirely in memory. It exists so M2 can
 	// re-score recorded sessions when a threshold moves.
-	var archive *ingest.Ingester
+	var archive app.EventArchive = app.NullArchive{}
 	if *dataDir != "" {
 		sub, err := substrate.Open(ctx, *dataDir+"/events.db", *dataDir+"/blobs")
 		if err != nil {
 			return fmt.Errorf("open substrate: %w", err)
 		}
 		defer func() { _ = sub.Close() }()
-		archive = ingest.New(sub, time.Now)
+		archive = substratearchive.New(ingest.New(sub, time.Now))
 		log.Info("raw event archive enabled", "dir", *dataDir)
 	} else {
 		log.Warn("raw event archive disabled; sessions will not be replayable (-data to enable)")
@@ -74,17 +76,20 @@ func run() error {
 
 	sessions := session.NewStore(*ttl, time.Now)
 
+	application := app.New(app.Config{
+		TenantID: *tenantID,
+		Mode:     *mode,
+	}, sessions, archive, time.Now, log)
+
 	apiSrv := api.New(api.Config{
-		TenantID:  *tenantID,
 		SiteKey:   *siteKey,
 		SecretKey: *secretKey,
-		Mode:      *mode,
 		CollectPolicy: api.CollectPolicy{
 			PointerHz: *pointerHz,
 			BatchMs:   *batchMs,
 			Types:     []string{"pointer", "key", "scroll", "focus", "visibility", "form"},
 		},
-	}, sessions, archive, time.Now, log)
+	}, application, log)
 
 	mux := apiSrv.Routes()
 
