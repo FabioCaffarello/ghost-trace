@@ -47,6 +47,13 @@ GOLANGCI_VER      := v2.12.2
 GOVULNCHECK_VER   := v1.1.4
 BUF_VER           := 1.68.4
 VACUUM_VER        := v0.30.0
+DOTCONTEXT_VER    := 1.1.1
+
+# The agent-harness exporter, named once because `make context-sync`
+# invokes it three times. Three separately pinned call sites is three
+# chances to export half the harness with one version and half with
+# another, and nothing downstream would notice.
+DOTCONTEXT        := npx -y @dotcontext/cli@$(DOTCONTEXT_VER)
 
 # Minimum toolchain versions asserted by `make bootstrap`.
 GO_MIN     := 1.26
@@ -377,7 +384,35 @@ tool-vacuum:
 # regenerate, and let a gate catch the drift.
 .PHONY: context-sync
 context-sync: ## Regenerate CLAUDE.md and .claude/ from .context/
-	npx -y @dotcontext/cli@1.1.1 sync --preset claude --force
+	@# THREE exports, not one. `sync` handles agent playbooks and
+	@# nothing else — it does not write CLAUDE.md and it does not touch
+	@# .claude/skills/. CLAUDE.md comes from `export-rules`; the skills
+	@# come from `admin skill export`.
+	@#
+	@# The first version of this target ran only the first command, so
+	@# editing .context/docs/README.md turned context-sync-check red and
+	@# `make context-sync` — the fix that check itself prints — could not
+	@# turn it green. .claude/skills/ had been a frozen copy of
+	@# .context/skills/ since the bootstrap for the same reason: an agent
+	@# was reading instructions the repository had already revised.
+	@#
+	@# One version for all three. Three call sites pinned separately is
+	@# three chances to export half the harness with a different tool.
+	@tmp=$$(mktemp "$${TMPDIR:-/tmp}/claude-md.XXXXXX"); \
+	trap 'rm -f "$$tmp"' EXIT; \
+	cp CLAUDE.md "$$tmp" 2>/dev/null || :; \
+	$(DOTCONTEXT) sync --preset claude --force || exit 1; \
+	$(DOTCONTEXT) export-rules --preset claude --force || exit 1; \
+	$(DOTCONTEXT) admin skill export --preset claude --force || exit 1; \
+	python3 -c 'import pathlib, re, sys; \
+	old = pathlib.Path(sys.argv[1]); \
+	new = pathlib.Path(sys.argv[2]); \
+	a = old.read_text() if old.exists() else None; \
+	b = new.read_text(); \
+	norm = lambda s: re.sub(r"^(> Auto-generated from .* on ).*", r"\1", s, flags=re.M); \
+	sys.exit(0) if a is None or a == b or norm(a) != norm(b) else \
+	  (new.write_text(a), print("CLAUDE.md content unchanged; kept the committed timestamp"))' \
+	  "$$tmp" CLAUDE.md
 
 .PHONY: context-sync-check
 context-sync-check: ## Fail if CLAUDE.md has gone stale against .context/docs/README.md
@@ -395,6 +430,47 @@ context-sync-check: ## Fail if CLAUDE.md has gone stale against .context/docs/RE
 	out = pathlib.Path('CLAUDE.md').read_text(); \
 	sys.exit(0) if src in out else sys.exit('CLAUDE.md is stale against .context/docs/README.md\nfix: make context-sync && git add CLAUDE.md')"
 	@echo "CLAUDE.md in sync"
+
+# Deliberately outside `make ci`, for the same reason parity and shadow
+# are: it needs the network. The check it exercises is offline on
+# purpose — putting npm in the gate would make every push depend on a
+# registry being up.
+.PHONY: context-sync-selftest
+context-sync-selftest: ## Prove `make context-sync` fixes what context-sync-check rejects (needs npm)
+	@# The bug this guards survived a whole milestone: context-sync-check
+	@# went red exactly as designed, while `make context-sync` — the fix
+	@# that check prints in its own failure message — left it red,
+	@# because the target ran one of the exporter's three commands. A
+	@# check nobody can act on is worse than no check, because it reads
+	@# as a working gate.
+	@#
+	@# So this asserts both halves: red on an edited source, and green
+	@# after the documented fix. It edits a TRACKED file, so the restore
+	@# is a trap rather than a final line — same reason tidy-check works
+	@# on copies.
+	@# Both files are saved and both are restored. Restoring only the
+	@# source and regenerating would leave CLAUDE.md carrying a fresh
+	@# timestamp — a selftest that dirties a tracked file every time it
+	@# passes.
+	@src=.context/docs/README.md; \
+	tmp=$$(mktemp "$${TMPDIR:-/tmp}/ctxsrc.XXXXXX"); \
+	out=$$(mktemp "$${TMPDIR:-/tmp}/ctxout.XXXXXX"); \
+	cp "$$src" "$$tmp"; cp CLAUDE.md "$$out"; \
+	trap 'cp "$$tmp" "$$src"; cp "$$out" CLAUDE.md; rm -f "$$tmp" "$$out"' EXIT; \
+	printf '\n## context-sync-selftest\n\nWritten and removed by the selftest.\n' >> "$$src"; \
+	if $(MAKE) -s context-sync-check >/dev/null 2>&1; then \
+		echo "context-sync-selftest: FAIL — the check passed on an edited"; \
+		echo "source, so it is not measuring anything"; \
+		exit 1; \
+	fi; \
+	$(MAKE) -s context-sync >/dev/null || \
+		{ echo "context-sync-selftest: FAIL — context-sync itself errored"; exit 1; }; \
+	if ! $(MAKE) -s context-sync-check >/dev/null; then \
+		echo "context-sync-selftest: FAIL — context-sync-check is still red"; \
+		echo "after running the fix its own failure message prints"; \
+		exit 1; \
+	fi; \
+	echo "context-sync-selftest: red on an edited source, green after its own fix"
 
 # The archive parity check: what the collector wrote locally, the
 # archive holds too. It needs a real broker and SKIPS without one, which
