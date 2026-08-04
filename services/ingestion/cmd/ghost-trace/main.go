@@ -39,6 +39,7 @@ func run() error {
 		addr       = flag.String("addr", "127.0.0.1:8080", "listen address")
 		dataDir    = flag.String("data", "", "substrate directory; empty disables the raw event archive")
 		mode       = flag.String("mode", policy.ModeMonitor, "monitor | enforce")
+		policyFile = flag.String("policy", "", "calibration JSON; empty uses the embedded default")
 		tenantID   = flag.String("tenant", "t_demo", "tenant id")
 		siteKey    = flag.String("site-key", "pk_demo", "public site key, embedded in the page")
 		secretKey  = flag.String("secret-key", "sk_demo", "secret key for server-to-server decision calls")
@@ -53,6 +54,15 @@ func run() error {
 
 	if *mode != policy.ModeMonitor && *mode != policy.ModeEnforce {
 		return fmt.Errorf("unknown -mode %q (want %q or %q)", *mode, policy.ModeMonitor, policy.ModeEnforce)
+	}
+
+	// Calibration must be settled before anything serves: every
+	// evaluation records policy.Ref, and a ref that changed mid-process
+	// would make the archive lie about which numbers judged a session.
+	if *policyFile != "" {
+		if err := policy.LoadCalibration(*policyFile); err != nil {
+			return err
+		}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

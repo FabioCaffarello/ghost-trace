@@ -29,10 +29,6 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/feature"
 )
 
-// Ref versions the scoring definition. Stored on every evaluation so a
-// record stays interpretable after the constants below move.
-const Ref = "multi-signal-v1"
-
 // Reason codes are a stable enumeration (contract §7). Adding a code is
 // non-breaking; changing what an existing code means is not.
 const (
@@ -96,55 +92,11 @@ const (
 	ModeEnforce = "enforce"
 )
 
-// Scoring constants.
-//
-// UNCALIBRATED. Inception-phase guesses, not measurements. The M2
-// harness falsified the pointer SEGMENTATION but calibrated nothing:
-// tier 5 showed a plausibly-curved path scoring 0.942 against a 0.90
-// floor, which means the floor is unanchored until human capture lands.
-// Treating any number here as tuned would be exactly the unfalsifiable
-// metric this project exists to avoid.
-const (
-	straightnessFloor = 0.90
-	straightnessCeil  = 0.995
-
-	// Flight-time coefficient of variation. Human typing is irregular;
-	// below this it is scripted. Note the ceiling is BELOW the floor —
-	// low variance is the suspicious direction.
-	flightCVFloor = 0.45
-	flightCVCeil  = 0.12
-
-	// Mean key-hold below this means the key was never held.
-	dwellAbsentMs = 12.0
-
-	// Fraction of byte-identical consecutive gaps that counts as damning.
-	identicalIntervalRatio = 0.25
-
-	// Evidence saturation points.
-	confidenceSegments  = 6.0
-	confidencePathPx    = 1500.0
-	confidenceIntervals = 20.0
-
-	// Cold-start floors. A block is a serious act and requires strong
-	// evidence; the asymmetry is deliberate, because blocking a human is
-	// far worse than admitting a bot (contract §9).
-	minConfidenceToChallenge = 0.40
-	minConfidenceToBlock     = 0.70
-
-	scoreToChallenge = 0.50
-	scoreToBlock     = 0.80
-
-	// A block requires agreement from at least two independent evidence
-	// channels. This is v1's evidential-independence idea surviving in a
-	// new form: a belief must not inflate on a single source, however
-	// strong that source looks.
-	//
-	// It is a decision-rule requirement, deliberately NOT folded into
-	// confidence. Confidence answers "how much evidence"; corroboration
-	// answers "how many independent things agree". Conflating them is
-	// what produced the tier-1/tier-4 regression above.
-	minChannelsToBlock = 2
-)
+// The scoring numbers live in Calibration (calibration.go), loaded
+// from the embedded calibration.json or a -policy file. The formulas
+// below are the scoring DEFINITION and stay in code; the numbers they
+// consume are configuration, because the calibration loop must not
+// require a recompile per iteration.
 
 // State is the full per-session feature vector handed to the policy.
 type State struct {
@@ -276,7 +228,7 @@ func Judge(st State, action string) Judgement {
 		j.confidence = clamp01(weighted / maxWeight)
 	}
 
-	if j.confidence < minConfidenceToChallenge {
+	if j.confidence < cal.MinConfidenceToChallenge {
 		reasons = append(reasons, Reason{
 			Code:   ReasonInsufficientEvidence,
 			Weight: 1 - j.confidence,
@@ -295,9 +247,9 @@ func pointerChannel(st feature.PointerState, weight float64) channel {
 	if st.Segments == 0 {
 		return c
 	}
-	c.score = ramp(st.Straightness, straightnessFloor, straightnessCeil)
-	c.confidence = clamp01(0.5*min1(float64(st.Segments)/confidenceSegments) +
-		0.5*min1(st.PathPx/confidencePathPx))
+	c.score = ramp(st.Straightness, cal.StraightnessFloor, cal.StraightnessCeil)
+	c.confidence = clamp01(0.5*min1(float64(st.Segments)/cal.ConfidenceSegments) +
+		0.5*min1(st.PathPx/cal.ConfidencePathPx))
 	if c.score > 0 {
 		c.reasons = append(c.reasons, Reason{ReasonPointerLinearity, c.score})
 	}
@@ -309,16 +261,16 @@ func keystrokeChannel(st feature.KeystrokeState, weight float64) channel {
 	if st.Intervals == 0 {
 		return c
 	}
-	c.confidence = min1(float64(st.Intervals) / confidenceIntervals)
+	c.confidence = min1(float64(st.Intervals) / cal.ConfidenceIntervals)
 
-	rhythm := ramp(st.FlightCV, flightCVFloor, flightCVCeil)
+	rhythm := ramp(st.FlightCV, cal.FlightCVFloor, cal.FlightCVCeil)
 	if rhythm > 0 {
 		c.reasons = append(c.reasons, Reason{ReasonKeyIntervalVarianceLow, rhythm})
 	}
 
 	dwell := 0.0
-	if st.MeanDwellMs > 0 && st.MeanDwellMs < dwellAbsentMs {
-		dwell = 1 - st.MeanDwellMs/dwellAbsentMs
+	if st.MeanDwellMs > 0 && st.MeanDwellMs < cal.DwellAbsentMs {
+		dwell = 1 - st.MeanDwellMs/cal.DwellAbsentMs
 		c.reasons = append(c.reasons, Reason{ReasonKeyDwellAbsent, dwell})
 	}
 
@@ -326,7 +278,7 @@ func keystrokeChannel(st feature.KeystrokeState, weight float64) channel {
 	// this saturates fast.
 	identical := 0.0
 	if st.ExactRepeatRatio > 0 {
-		identical = min1(st.ExactRepeatRatio / identicalIntervalRatio)
+		identical = min1(st.ExactRepeatRatio / cal.IdenticalIntervalRatio)
 		c.reasons = append(c.reasons, Reason{ReasonKeyIntervalsIdentical, identical})
 	}
 
@@ -405,10 +357,10 @@ func Apply(j Judgement, mode string) (Outcome, error) {
 // dimensions are separate fields rather than one number.
 func enforced(j Judgement) string {
 	switch {
-	case j.confidence >= minConfidenceToBlock && j.score >= scoreToBlock &&
-		j.contributing >= minChannelsToBlock:
+	case j.confidence >= cal.MinConfidenceToBlock && j.score >= cal.ScoreToBlock &&
+		j.contributing >= cal.MinChannelsToBlock:
 		return DecisionBlock
-	case j.confidence >= minConfidenceToChallenge && j.score >= scoreToChallenge:
+	case j.confidence >= cal.MinConfidenceToChallenge && j.score >= cal.ScoreToChallenge:
 		return DecisionChallenge
 	default:
 		return DecisionAllow

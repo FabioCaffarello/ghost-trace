@@ -1,0 +1,16 @@
+{
+  "straightness_floor": 0.90,
+  "straightness_ceil": 0.995,
+  "flight_cv_floor": 0.45,
+  "flight_cv_ceil": 0.12,
+  "dwell_absent_ms": 12.0,
+  "identical_interval_ratio": 0.25,
+  "confidence_segments": 6.0,
+  "confidence_path_px": 1500.0,
+  "confidence_intervals": 20.0,
+  "min_confidence_to_challenge": 0.40,
+  "min_confidence_to_block": 0.70,
+  "score_to_challenge": 0.50,
+  "score_to_block": 0.80,
+  "min_channels_to_block": 2
+}
