@@ -78,11 +78,22 @@ export function linearPath(from, to, steps) {
 export function summarize(cohort, rows) {
   const scored = rows.filter((r) => r.score !== undefined);
   if (scored.length === 0) {
-    console.log(`  ${cohort}: no sessions completed`);
+    // Fail loudly. The orchestrators key absence off the exit code, and
+    // per-session errors are caught inside the driver loop — so a tier
+    // whose every session failed would otherwise exit 0 and vanish from
+    // the results table as neither present nor absent. A tier that did
+    // not run is not a tier that found nothing.
+    console.error(`  ${cohort}: no sessions completed`);
+    process.exitCode = 1;
     return;
   }
   const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
-  const detected = scored.filter((r) => r.shadow_decision !== "allow" || r.decision !== "allow");
+  // Coalesce, matching analyze.flagged: in monitor mode the shadow is
+  // what enforce would have done; in enforce mode shadow_decision is
+  // omitted entirely (omitempty), so a disjunction over the missing key
+  // (`undefined !== "allow"`) would count every session as flagged and
+  // print 100% detection in exactly the mode that matters.
+  const detected = scored.filter((r) => (r.shadow_decision || r.decision) !== "allow");
   console.log(
     `  ${cohort.padEnd(26)} n=${String(scored.length).padStart(3)}  ` +
       `score=${mean(scored.map((r) => r.score)).toFixed(3)}  ` +

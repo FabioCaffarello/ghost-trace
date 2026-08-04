@@ -1,6 +1,12 @@
 # Code generation into the committed libs/genproto module. Generated
 # code is tracked so that consumers `go build` with no proto toolchain;
-# CI enforces sync with `buf generate && git diff --exit-code`.
+# CI enforces sync by deleting every *.pb.go, regenerating, and failing
+# on any `git status --porcelain` output — which catches stale, missing
+# (untracked), and orphaned bindings alike.
+#
+# `clean: true` is deliberately NOT used: it deletes the whole `out`
+# directory, and libs/genproto is a Go module whose go.mod/go.sum live
+# beside the generated tree (verified: clean removes them).
 version: v2
 plugins:
   - local: protoc-gen-go

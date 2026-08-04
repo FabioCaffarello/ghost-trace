@@ -89,6 +89,7 @@ func run() error {
 			BatchMs:   *batchMs,
 			Types:     []string{"pointer", "key", "scroll", "focus", "visibility", "form"},
 		},
+		SessionTTL: *ttl,
 	}, application, log)
 
 	mux := apiSrv.Routes()

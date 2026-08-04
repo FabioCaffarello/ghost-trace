@@ -91,9 +91,10 @@ cd services/ingestion && make run          # terminal 1
 cd experiments && python3 run.py && python3 analyze.py   # terminal 2
 ```
 
-A tier whose dependencies are missing is recorded in
-`results/absent_tiers.txt` and reported by `analyze.py` as **ABSENT**,
-never silently skipped. Six tiers listed and five run reads as "we
+A tier that does not run — missing dependencies, a dead endpoint, or a
+run where every session failed — exits non-zero and is recorded as
+**ABSENT** (`results/absent_tiers.txt` for `run.py`, `absent_tiers` in
+`numbers.json` for the canonical command), never silently skipped. Six tiers listed and five run reads as "we
 tested six things", and the missing one is always the one that would
 have found something.
 
@@ -194,8 +195,12 @@ which population it is looking at.
 
 ### What volunteers should be told
 
-- Only **how the pointer moves** is recorded. Not what is typed — M1
-  collects no key events at all.
+- **How** they interact is recorded, never **what** they type: pointer
+  movement, key *timing* with a coarse six-way class (letter, digit,
+  whitespace, navigation, modifier, other), scroll, focus changes, page
+  visibility, and form events (paste / autofill / submit). Key content
+  is never collected — the class preserves rhythm while making
+  reconstruction of typed text infeasible.
 - No canvas, WebGL, font or audio fingerprinting.
 - Nothing persistent is written to their browser.
 - The participant code is a pseudonym they can discard.

@@ -36,6 +36,12 @@ type Config struct {
 	// CollectPolicy is served to the SDK at session start and is
 	// remotely tunable without shipping a new SDK (contract §3).
 	CollectPolicy CollectPolicy
+
+	// SessionTTL is served to the SDK as expires_in. The composition
+	// root must pass the same value it gives the session store: a
+	// hardcoded number here once told every browser its token lived 30
+	// minutes while the store expired it on the -session-ttl flag.
+	SessionTTL time.Duration
 }
 
 // CollectPolicy is the server-driven collection configuration.
@@ -139,7 +145,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, sessionsResponse{
 		SessionToken: out.Token,
-		ExpiresIn:    1800,
+		ExpiresIn:    int(s.cfg.SessionTTL.Seconds()),
 		Collect:      s.cfg.CollectPolicy,
 	})
 }
@@ -328,9 +334,17 @@ func (s *Server) handleOutcomes(w http.ResponseWriter, r *http.Request) {
 		Outcome:      req.Outcome,
 	}
 	if req.ObservedAt != "" {
-		if t, err := time.Parse(time.RFC3339, req.ObservedAt); err == nil {
-			in.ObservedAt = t
+		t, err := time.Parse(time.RFC3339, req.ObservedAt)
+		if err != nil {
+			// Reject rather than fall back to the server clock:
+			// observed_at is the application's claim and recorded_at the
+			// server's observation, and the gap between them is itself a
+			// signal. Substituting "now" on a parse failure collapses
+			// that gap to zero and silently corrupts the labels channel.
+			writeError(w, http.StatusBadRequest, "observed_at must be RFC 3339")
+			return
 		}
+		in.ObservedAt = t
 	}
 
 	if err := s.app.RecordOutcome(r.Context(), in); err != nil {

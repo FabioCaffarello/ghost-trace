@@ -1,6 +1,6 @@
 module github.com/FabioCaffarello/ghost-trace/services/ingestion
 
-go 1.22
+go 1.26
 
 require (
 	google.golang.org/protobuf v1.36.0 // archive-format pin: canonical bytes are hashed for identity — upgrading is an archive-compatibility event, see internal/canonical

@@ -42,6 +42,7 @@ func newTestServer(t *testing.T, mode string) *httptest.Server {
 		CollectPolicy: CollectPolicy{
 			PointerHz: 20, BatchMs: 2000, Types: []string{"pointer"},
 		},
+		SessionTTL: 30 * time.Minute,
 	}, a, log)
 
 	srv := httptest.NewServer(s.Routes())
@@ -131,8 +132,8 @@ func TestSessionsReturnsTokenAndCollectPolicy(t *testing.T) {
 		"client":   map[string]any{"pointer": "fine", "viewport": []int{1440, 900}},
 	})
 
-	if _, ok := body["expires_in"]; !ok {
-		t.Error("response missing expires_in")
+	if got, _ := body["expires_in"].(float64); got != 1800 {
+		t.Errorf("expires_in = %v, want 1800 (the store TTL)", body["expires_in"])
 	}
 	collect, ok := body["collect"].(map[string]any)
 	if !ok {
@@ -143,6 +144,34 @@ func TestSessionsReturnsTokenAndCollectPolicy(t *testing.T) {
 		if _, ok := collect[k]; !ok {
 			t.Errorf("collect missing %q", k)
 		}
+	}
+}
+
+func TestExpiresInFollowsConfiguredTTL(t *testing.T) {
+	// expires_in was once hardcoded to 1800: running with a shorter
+	// -session-ttl told every browser its token lived 30 minutes while
+	// the store expired it earlier, and the SDK kept posting telemetry
+	// into a dropped session. The value must come from the same TTL the
+	// store enforces.
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ttl := 5 * time.Minute
+	a := app.New(app.Config{TenantID: "t_test", Mode: policy.ModeMonitor},
+		session.NewStore(ttl, time.Now), app.NullArchive{}, time.Now, log)
+	s := New(Config{
+		SiteKey:    testSiteKey,
+		SecretKey:  testSecretKey,
+		SessionTTL: ttl,
+	}, a, log)
+	srv := httptest.NewServer(s.Routes())
+	t.Cleanup(srv.Close)
+
+	_, body := post(t, srv, "/v1/sessions", "", map[string]any{
+		"site_key": testSiteKey,
+		"page":     map[string]any{"path": "/login"},
+		"client":   map[string]any{"pointer": "fine"},
+	})
+	if got, _ := body["expires_in"].(float64); got != 300 {
+		t.Errorf("expires_in = %v with a 5m TTL, want 300", body["expires_in"])
 	}
 }
 
@@ -419,6 +448,36 @@ func TestOutcomesRequiresEvaluationID(t *testing.T) {
 	})
 	if status != http.StatusBadRequest {
 		t.Errorf("status = %d without evaluation_id, want 400", status)
+	}
+}
+
+func TestOutcomesRejectsMalformedObservedAt(t *testing.T) {
+	// observed_at is the application's claim; recorded_at is the
+	// server's observation, and the gap between them is a signal.
+	// Before this guard a parse failure was silently replaced with the
+	// server clock — an untrustworthy value made indistinguishable from
+	// a trustworthy one, inside the labels channel calibration depends on.
+	srv := newTestServer(t, policy.ModeMonitor)
+	status, _ := post(t, srv, "/v1/outcomes", testSecretKey, map[string]any{
+		"evaluation_id": "ev_1", "outcome": "login_success",
+		"observed_at": "yesterday around noon",
+	})
+	if status != http.StatusBadRequest {
+		t.Errorf("status = %d for malformed observed_at, want 400", status)
+	}
+}
+
+func TestOutcomesAcceptsRFC3339ObservedAt(t *testing.T) {
+	// A well-formed timestamp must pass request validation. The test
+	// server has no archive, so 503 — not 400 — proves the request
+	// survived the parse and reached the use case.
+	srv := newTestServer(t, policy.ModeMonitor)
+	status, _ := post(t, srv, "/v1/outcomes", testSecretKey, map[string]any{
+		"evaluation_id": "ev_1", "outcome": "login_success",
+		"observed_at": "2026-08-03T12:00:00Z",
+	})
+	if status != http.StatusServiceUnavailable {
+		t.Errorf("status = %d for valid observed_at with no archive, want 503", status)
 	}
 }
 
