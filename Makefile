@@ -404,6 +404,18 @@ context-sync-check: ## Fail if CLAUDE.md has gone stale against .context/docs/RE
 #
 #   docker run --rm -d -p 4222:4222 --name gt-nats nats:alpine -js
 #   GT_NATS_URL=nats://127.0.0.1:4222 make parity
+# The snapshot shadow: a session judged through the KV store decides
+# exactly what the collector decides in process. Needs a real broker for
+# the same reason parity does, and refuses to run without one.
+.PHONY: shadow
+shadow: ## Snapshot-shadow equivalence against a real broker (needs GT_NATS_URL)
+	@if [ -z "$${GT_NATS_URL:-}" ]; then \
+		echo "GT_NATS_URL is not set — the shadow test would skip, which is not a pass."; \
+		echo "start a broker:  docker run --rm -d -p 4222:4222 --name gt-nats nats:alpine -js"; \
+		exit 1; \
+	fi
+	cd $(SERVICE) && go test -count=1 ./internal/app/ -run TestDecisionThroughTheSnapshotStore -v
+
 .PHONY: parity
 parity: ## Archive parity against a real broker (needs GT_NATS_URL)
 	@if [ -z "$${GT_NATS_URL:-}" ]; then \

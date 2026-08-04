@@ -186,7 +186,7 @@ jobs:
   # difference between "the archive holds everything the collector
   # wrote" being measured and being asserted.
   parity:
-    name: archive — parity against a real broker
+    name: broker — parity and snapshot shadow
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -211,6 +211,11 @@ jobs:
         env:
           GT_NATS_URL: nats://127.0.0.1:4222
         run: make parity
+
+      - name: Snapshot shadow
+        env:
+          GT_NATS_URL: nats://127.0.0.1:4222
+        run: make shadow
 
   quality:
     name: quality — lint + vulnerabilities

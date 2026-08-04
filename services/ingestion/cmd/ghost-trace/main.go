@@ -84,6 +84,7 @@ func run() error {
 	// it, so a slice can run entirely in memory. It exists so M2 can
 	// re-score recorded sessions when a threshold moves.
 	var archive app.EventArchive = app.NullArchive{}
+	var sessionStore app.SessionSnapshots
 	if *dataDir != "" {
 		sub, err := substrate.Open(ctx, *dataDir+"/events.db", *dataDir+"/blobs")
 		if err != nil {
@@ -117,6 +118,17 @@ func run() error {
 					"published", published, "dropped", dropped)
 			}()
 			log.Info("event stream mirror enabled", "nats", *natsURL)
+
+			// Session snapshots: what a decision engine reads instead of
+			// holding the session itself. Best effort — a bucket that is
+			// unreachable makes another process's view stale, which is
+			// that process's problem to detect, not a reason to reject
+			// telemetry here.
+			sessionStore, err = eventstream.OpenSessions(ctx, js, *ttl)
+			if err != nil {
+				return fmt.Errorf("open session snapshots: %w", err)
+			}
+			log.Info("session snapshots enabled", "bucket", eventstream.SessionBucket, "ttl", *ttl)
 		}
 	} else {
 		log.Warn("raw event archive disabled; sessions will not be replayable (-data to enable)")
@@ -128,6 +140,9 @@ func run() error {
 		TenantID: *tenantID,
 		Mode:     *mode,
 	}, sessions, archive, time.Now, log)
+	if sessionStore != nil {
+		application = application.WithSnapshots(sessionStore)
+	}
 
 	apiSrv := api.New(api.Config{
 		SiteKey:   *siteKey,
