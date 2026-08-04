@@ -10,8 +10,8 @@ scaffoldVersion: "2.0.0"
 ---
 ## What you own here
 
-`services/ingestion` — the Go service. Two modules stitched by a
-`replace` (`services/ingestion`, `libs/genproto`); no `go.work` yet.
+`services/collector` — the Go service. Two modules stitched by a
+`replace` (`services/collector`, `libs/genproto`); no `go.work` yet.
 
 ## Non-negotiables
 

@@ -11,7 +11,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
+	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/ingest"
 )
 
 // Archive implements app.EventArchive over an ingest.Ingester.

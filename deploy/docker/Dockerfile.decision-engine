@@ -7,7 +7,7 @@
 # base digests with all-zero defaults so an unpinned build fails fast,
 # CGO_ENABLED=0, distroless static, non-root.
 #
-# No /data here, unlike ingestion and archive. This service holds no
+# No /data here, unlike the collector and archive. This service holds no
 # session state and has no local store — it reads snapshots and
 # publishes evaluations, both over NATS. A volume would be a place for
 # state that is not supposed to exist.

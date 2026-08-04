@@ -19,7 +19,7 @@ version: 2
 
 updates:
   - package-ecosystem: gomod
-    directory: /services/ingestion
+    directory: /services/collector
     schedule:
       interval: weekly
       day: monday
@@ -35,7 +35,7 @@ updates:
       # Canonical bytes are hashed for content-addressed identity, so a
       # bump is an archive-compatibility event that needs the golden
       # hash fixture re-examined by a person — never an automatic merge.
-      # See services/ingestion/internal/canonical.
+      # See libs/canonical.
       - dependency-name: google.golang.org/protobuf
 
   - package-ecosystem: gomod

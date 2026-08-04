@@ -35,7 +35,7 @@ from schema import SCHEMA_VERSION, validate_numbers
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
-SVC = ROOT / "services" / "ingestion"
+SVC = ROOT / "services" / "collector"
 DEMO_SVC = ROOT / "services" / "demo-web"
 RESULTS = HERE / "results"
 
@@ -52,7 +52,7 @@ PORT = int(os.environ.get("GT_PORT", "18099"))
 DEMO_PORT = int(os.environ.get("GT_DEMO_PORT", str(PORT + 1)))
 
 # GT_BASE in the environment points the run at an ALREADY-RUNNING slice
-# — the compose experiments profile sets it to the ingestion container.
+# — the compose experiments profile sets it to the collector container.
 # In that mode nothing is built or started here, and the architecture
 # benchmark only runs if a Go toolchain is present (it is an in-process
 # measurement, not a client of the slice).

@@ -18,7 +18,7 @@ so is more useful than a response time nobody can honour.
 ## Project status
 
 Ghost Trace is a research project. The repository contains a running Go
-service (`services/ingestion`) exposing four HTTP endpoints plus a demo
+service (`services/collector`) exposing four HTTP endpoints plus a demo
 page, a browser SDK (`sdk.js`), protobuf schemas, and an adversarial
 experiment layer. Nothing here is deployed as a production service by
 this repository; anyone operating it does so at their own risk.

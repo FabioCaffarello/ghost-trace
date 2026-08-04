@@ -1,6 +1,6 @@
 # GENERATED FILE — DO NOT EDIT.
 #
-# Written by services/ingestion/cmd/gen-openapi from the Go types in
+# Written by services/collector/cmd/gen-openapi from the Go types in
 # libs/wire that the handlers actually decode into, plus the two
 # enumerations that live as Go values (policy.ReasonCodes and
 # decision.ValidOutcomes).
@@ -401,7 +401,7 @@ info:
     moves, how keys are timed, how a form is actually filled. Not
     fingerprinting: this API makes no claim about which browser is calling.
 
-    GENERATED FILE. Written by services/ingestion/cmd/gen-openapi from the
+    GENERATED FILE. Written by services/collector/cmd/gen-openapi from the
     Go types the handlers decode into; CI fails if it drifts from them. Edit
     the types, then run `make openapi`.
 

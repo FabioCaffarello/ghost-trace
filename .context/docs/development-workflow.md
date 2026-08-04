@@ -36,7 +36,7 @@ that would have caught the thing it fixes.
 Mostly generated-artifact drift, each with a fix command in the failure:
 `contract/openapi.yaml`, `libs/genproto`, `contract/fixtures` — all
 generated, committed and gated. Plus the byte-level goldens under
-`services/ingestion/internal/api/testdata/golden/`, which freeze the
+`services/collector/internal/api/testdata/golden/`, which freeze the
 bytes clients receive.
 
 See `CONTRIBUTING.md` for the full list; it is the canonical version.

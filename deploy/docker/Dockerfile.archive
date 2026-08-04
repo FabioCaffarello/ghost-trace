@@ -2,7 +2,7 @@
 #
 # Ghost Trace archive — the event-stream consumer, containerised.
 #
-# Same shape as the ingestion image and for the same reasons: pinned
+# Same shape as the collector image and for the same reasons: pinned
 # base digests with all-zero defaults so an unpinned build fails fast,
 # CGO_ENABLED=0 because modernc.org/sqlite is pure Go, distroless
 # static, non-root, and /data shipped in the image owned by nonroot so a

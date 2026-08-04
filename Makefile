@@ -20,8 +20,8 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 # --- layout ----------------------------------------------------------
-GO_MODULES  := services/ingestion services/archive services/decision-engine services/demo-web libs/archive libs/canonical libs/decision libs/eventstream libs/feature libs/genproto libs/id libs/middleware libs/policy libs/snapshot libs/substrate libs/wire
-SERVICE     := services/ingestion
+GO_MODULES  := services/collector services/archive services/decision-engine services/demo-web libs/archive libs/canonical libs/decision libs/eventstream libs/feature libs/genproto libs/id libs/middleware libs/policy libs/snapshot libs/substrate libs/wire
+SERVICE     := services/collector
 EXPERIMENTS := experiments
 COVER_DIR   := .coverage
 

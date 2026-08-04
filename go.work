@@ -28,5 +28,5 @@ use (
 	./services/archive
 	./services/decision-engine
 	./services/demo-web
-	./services/ingestion
+	./services/collector
 )

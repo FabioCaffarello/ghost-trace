@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# Ghost Trace ingestion — the all-in-one slice binary, containerised.
+# Ghost Trace collector — the all-in-one slice binary, containerised.
 #
 # Base images are ARG-parameterised to digests with deliberately
 # invalid all-zero defaults: a build that skips pinning fails fast
@@ -8,7 +8,7 @@
 # deploy/docker/pin-base-images.sh (writes .env), or pass a floating
 # tag explicitly for a throwaway local build:
 #
-#   docker build -f deploy/docker/Dockerfile.ingestion \
+#   docker build -f deploy/docker/Dockerfile.collector \
 #     --build-arg GOLANG_IMAGE=golang:1.26-alpine \
 #     --build-arg DISTROLESS_IMAGE=gcr.io/distroless/static-debian12:nonroot .
 #
@@ -45,15 +45,15 @@ COPY libs/wire/go.mod libs/wire/
 COPY libs/archive/go.mod libs/archive/go.sum libs/archive/
 COPY libs/id/go.mod libs/id/
 COPY libs/decision/go.mod libs/decision/go.sum libs/decision/
-COPY services/ingestion/go.mod services/ingestion/go.sum services/ingestion/
+COPY services/collector/go.mod services/collector/go.sum services/collector/
 RUN --mount=type=cache,target=/go/pkg/mod \
-    cd services/ingestion && go mod download
+    cd services/collector && go mod download
 
 COPY libs/ libs/
-COPY services/ingestion/ services/ingestion/
+COPY services/collector/ services/collector/
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    cd services/ingestion && \
+    cd services/collector && \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" \
       -o /out/ghost-trace ./cmd/ghost-trace && \
     test -x /out/ghost-trace && \

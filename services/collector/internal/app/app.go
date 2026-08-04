@@ -22,7 +22,7 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/libs/archive"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
 
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
+	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/session"
 )
 
 // SessionRepository is the port over per-session state.

@@ -1,7 +1,7 @@
 """
 Run the adversarial tiers against a running slice.
 
-    cd services/ingestion && make run          # terminal 1
+    cd services/collector && make run          # terminal 1
     python3 experiments/run.py                     # terminal 2
     python3 experiments/analyze.py
 
@@ -50,7 +50,7 @@ def slice_is_up():
 def main():
     if not slice_is_up():
         print(f"The slice is not reachable at {BASE}.")
-        print("Start it first:  cd services/ingestion && make run")
+        print("Start it first:  cd services/collector && make run")
         return 1
 
     RESULTS.mkdir(parents=True, exist_ok=True)

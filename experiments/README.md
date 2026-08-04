@@ -185,7 +185,7 @@ The two-terminal flow is still available for iterating on a single
 tier against a long-lived server:
 
 ```bash
-cd services/ingestion && make run          # terminal 1
+cd services/collector && make run          # terminal 1
 cd experiments && python3 run.py && python3 analyze.py   # terminal 2
 ```
 
