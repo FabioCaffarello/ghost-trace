@@ -22,7 +22,7 @@ reports success. Two things prevent that:
      corpus in testdata/ is run through this validator by
      `python3 -m schema --selftest`, and through
      santhosh-tekuri/jsonschema (Go) by numbers_schema_test.go in
-     services/ingestion. Both must reach the same verdict on every
+     services/collector. Both must reach the same verdict on every
      fixture. If this validator is wrong about a case that matters,
      that test is what says so.
 

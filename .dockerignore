@@ -1,5 +1,5 @@
-# Keep build contexts small and deterministic. The ingestion image
-# needs libs/ + services/ingestion/; the experiments image needs
+# Keep build contexts small and deterministic. The collector image
+# needs libs/ + services/collector/; the experiments image needs
 # experiments/ (minus its local state below).
 .git
 .github

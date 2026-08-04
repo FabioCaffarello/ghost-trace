@@ -10,7 +10,7 @@ scaffoldVersion: "2.0.0"
 ---
 ## What you own here
 
-`services/ingestion/internal/sdk/sdk.js` — the browser SDK, served by
+`services/collector/internal/sdk/sdk.js` — the browser SDK, served by
 the COLLECTOR because it is Ghost Trace's artefact and not the
 customer's — and `services/demo-web`, the stand-in customer site on its
 own origin. This is not a frontend practice: sdk.js is **the producer of

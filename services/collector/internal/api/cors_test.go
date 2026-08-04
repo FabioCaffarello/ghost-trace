@@ -12,9 +12,9 @@ import (
 
 	"github.com/FabioCaffarello/ghost-trace/libs/decision"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/livesessions"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
+	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/adapters/livesessions"
+	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/app"
+	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/session"
 )
 
 const demoOrigin = "https://demo.example"

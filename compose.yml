@@ -35,19 +35,19 @@ x-hardened: &hardened
       max-size: "10m"
       max-file: "3"
 
-x-ingestion-build: &ingestion-build
+x-collector-build: &collector-build
   context: .
-  dockerfile: deploy/docker/Dockerfile.ingestion
+  dockerfile: deploy/docker/Dockerfile.collector
   args:
     GOLANG_IMAGE: ${GOLANG_IMAGE:-golang:1.26-alpine}
     DISTROLESS_IMAGE: ${DISTROLESS_IMAGE:-gcr.io/distroless/static-debian12:nonroot}
 
 services:
-  ingestion:
+  collector:
     <<: *hardened
     profiles: [core, demo]
-    image: ghost-trace/ingestion:${IMAGE_TAG:-dev}
-    build: *ingestion-build
+    image: ghost-trace/collector:${IMAGE_TAG:-dev}
+    build: *collector-build
     command:
       - -addr=0.0.0.0:8080
       - -data=/data
@@ -244,7 +244,7 @@ services:
       args:
         PLAYWRIGHT_IMAGE: ${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.49.1-noble}
     environment:
-      GT_BASE: http://ingestion:8080
+      GT_BASE: http://collector:8080
       GT_DEMO_BASE: http://demo-web:8083
       GT_SITE_KEY: ${GT_SITE_KEY:-pk_demo}
       GT_SECRET_KEY: ${GT_SECRET_KEY:-sk_demo}
@@ -252,7 +252,7 @@ services:
       # Results land on the host so numbers.json survives the container.
       - ./experiments/results:/work/experiments/results
     depends_on:
-      ingestion:
+      collector:
         condition: service_healthy
       demo-web:
         condition: service_healthy

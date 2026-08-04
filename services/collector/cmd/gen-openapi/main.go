@@ -35,7 +35,7 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/libs/decision"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
 	"github.com/FabioCaffarello/ghost-trace/libs/wire"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
+	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/ingest"
 )
 
 // The spec version tracks the CONTRACT, not the build. It moves when
@@ -44,7 +44,7 @@ const specVersion = "1.0.0"
 
 // Where the wire types live, so their doc comments can be read. They
 // are a module of their own because more than one service serves this
-// contract; the generator runs from services/ingestion (see the openapi
+// contract; the generator runs from services/collector (see the openapi
 // make target), hence the relative path back out.
 const (
 	wireModulePath = "github.com/FabioCaffarello/ghost-trace/libs/wire"
@@ -98,7 +98,7 @@ Behavioural bot detection from interaction dynamics — how the pointer
 moves, how keys are timed, how a form is actually filled. Not
 fingerprinting: this API makes no claim about which browser is calling.
 
-GENERATED FILE. Written by services/ingestion/cmd/gen-openapi from the
+GENERATED FILE. Written by services/collector/cmd/gen-openapi from the
 Go types the handlers decode into; CI fails if it drifts from them. Edit
 the types, then run ` + "`make openapi`" + `.
 
@@ -629,7 +629,7 @@ func marshalYAML(doc map[string]any) ([]byte, error) {
 	header := strings.TrimSpace(`
 # GENERATED FILE — DO NOT EDIT.
 #
-# Written by services/ingestion/cmd/gen-openapi from the Go types in
+# Written by services/collector/cmd/gen-openapi from the Go types in
 # libs/wire that the handlers actually decode into, plus the two
 # enumerations that live as Go values (policy.ReasonCodes and
 # decision.ValidOutcomes).

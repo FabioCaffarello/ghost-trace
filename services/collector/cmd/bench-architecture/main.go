@@ -37,7 +37,7 @@ import (
 
 	"github.com/FabioCaffarello/ghost-trace/libs/feature"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
+	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/session"
 )
 
 type cell struct {

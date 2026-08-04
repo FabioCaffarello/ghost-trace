@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
+	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/session"
 )
 
 // StartSessionInput is the §3 POST /v1/sessions request, transport-free.

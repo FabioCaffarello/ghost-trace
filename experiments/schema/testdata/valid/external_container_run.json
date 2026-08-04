@@ -16,7 +16,7 @@
     },
     "run": {
       "mode": "external",
-      "base": "http://ingestion:8080",
+      "base": "http://collector:8080",
       "sample_sizes": {
         "tier1_playwright": 12,
         "tier4_synthetic_linear": 100

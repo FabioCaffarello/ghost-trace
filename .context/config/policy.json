@@ -30,7 +30,7 @@
       "effect": "require_approval",
       "when": {
         "paths": [
-          "services/ingestion/internal/sdk/sdk.js",
+          "services/collector/internal/sdk/sdk.js",
           "services/demo-web/internal/web/static/index.html",
           "experiments/README.md",
           "SECURITY.md"
@@ -54,7 +54,7 @@
       "effect": "require_approval",
       "when": {
         "paths": [
-          "services/ingestion/internal/api/testdata/golden/**"
+          "services/collector/internal/api/testdata/golden/**"
         ]
       },
       "reason": "These freeze the exact bytes clients receive. Regenerating them is a deliberate act (`-update`) and must be called out in the PR; an accidental regeneration hides a contract change."
@@ -64,7 +64,7 @@
       "effect": "require_approval",
       "when": {
         "paths": [
-          "services/ingestion/go.mod",
+          "services/collector/go.mod",
           "libs/genproto/go.mod"
         ]
       },

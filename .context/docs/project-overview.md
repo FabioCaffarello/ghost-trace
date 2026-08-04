@@ -14,7 +14,7 @@ dynamics alone: how the pointer moves, how keys are timed, how a form is
 actually filled. Explicitly NOT *which browser is this*; fingerprinting
 is out of scope and the tools that defeat it are freely available.
 
-Three Go services today — the collector (`services/ingestion`), the
+Three Go services today — the collector (`services/collector`), the
 decision engine, and the archive — serving four HTTP endpoints between
 them, plus a browser SDK, a protobuf archive, and an adversarial
 experiment layer that produces six published numbers. It was one binary

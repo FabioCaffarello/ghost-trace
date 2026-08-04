@@ -9,7 +9,7 @@
     "buildTools": ["make", "buf", "docker"],
     "testFrameworks": ["go test"],
     "packageManager": "npm",
-    "stackNote": "The bootstrap scan reported typescript as primary and found no Docker and no build tools. It had indexed experiments/ and the browser SDK only — the Go service under services/ingestion/internal was absent from its map entirely. Corrected by hand rather than preserved: a harness that describes the wrong repository is worse than none."
+    "stackNote": "The bootstrap scan reported typescript as primary and found no Docker and no build tools. It had indexed experiments/ and the browser SDK only — the Go service under services/collector/internal was absent from its map entirely. Corrected by hand rather than preserved: a harness that describes the wrong repository is worse than none."
   },
   "sensors": [
     {

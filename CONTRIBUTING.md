@@ -74,7 +74,7 @@ command in the failure message.
   change, and commit the result.
 - **`contract/fixtures` out of sync** — they are what the harness's wire
   modules produce. `make contract-fixtures`.
-- **A golden drifted** — `services/ingestion/internal/api/testdata/golden/`
+- **A golden drifted** — `services/collector/internal/api/testdata/golden/`
   freezes the bytes the server writes. If you meant to change the wire,
   regenerate with `go test ./internal/api -run Golden -update` and say
   so in the PR; if you did not, you have changed the contract by

@@ -14,9 +14,9 @@
 /bin/
 
 # Accidental binaries from `go build ./cmd/X/` (no `-o` flag) at
-# services/ingestion/ — the binary name matches the cmd subdir name.
-/services/ingestion/ghost-trace
-/services/ingestion/bench-architecture
+# services/collector/ — the binary name matches the cmd subdir name.
+/services/collector/ghost-trace
+/services/collector/bench-architecture
 
 # Node (anticipated for simulator/frontend)
 node_modules/
@@ -59,7 +59,7 @@ tmp/
 /site/
 
 # M1 local run data
-services/ingestion/.run-data/
+services/collector/.run-data/
 
 # Local agent-tooling state — recreated by tooling, never repo content
 .claude/

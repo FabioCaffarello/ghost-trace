@@ -9,7 +9,7 @@ import (
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
 	"github.com/FabioCaffarello/ghost-trace/libs/snapshot"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
+	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/session"
 )
 
 // TelemetryEnvelope is the §2 wire envelope, transport-free.

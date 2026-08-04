@@ -11,7 +11,7 @@ package app
 
 import (
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
+	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/session"
 )
 
 func buildSessionStart(st *session.State, c session.Client) *eventsv1.SessionStart {

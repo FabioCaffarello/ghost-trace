@@ -50,9 +50,9 @@ jobs:
           # Read from the module rather than restated here: a CI Go
           # version that can drift from go.mod is a defect waiting for
           # the day the two disagree.
-          go-version-file: services/ingestion/go.mod
+          go-version-file: services/collector/go.mod
           cache-dependency-path: |
-            services/ingestion/go.sum
+            services/collector/go.sum
             libs/genproto/go.sum
 
       - uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
@@ -98,8 +98,8 @@ jobs:
   # The job name is a required status check on main. Renaming it silently
   # removes the protection, so it stays as it is — even though this job
   # now covers every module in the workspace rather than one service.
-  ingestion:
-    name: services/ingestion — build + test
+  collector:
+    name: services/collector — build + test
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -107,9 +107,9 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: services/ingestion/go.mod
+          go-version-file: services/collector/go.mod
           cache-dependency-path: |
-            services/ingestion/go.sum
+            services/collector/go.sum
             libs/genproto/go.sum
 
       - name: Format
@@ -165,7 +165,7 @@ jobs:
           - services/archive
           - services/decision-engine
           - services/demo-web
-          - services/ingestion
+          - services/collector
     env:
       GOWORK: "off"
     steps:
@@ -232,9 +232,9 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: services/ingestion/go.mod
+          go-version-file: services/collector/go.mod
           cache-dependency-path: |
-            services/ingestion/go.sum
+            services/collector/go.sum
             libs/genproto/go.sum
 
       # Installs the version pinned in the Makefile, so a lint failure

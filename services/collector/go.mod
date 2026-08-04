@@ -1,4 +1,4 @@
-module github.com/FabioCaffarello/ghost-trace/services/ingestion
+module github.com/FabioCaffarello/ghost-trace/services/collector
 
 go 1.26
 
@@ -62,7 +62,7 @@ require (
 // Filesystem replaces, kept alongside go.work on purpose: the
 // workspace serves local development and CI, while these keep each
 // module buildable ON ITS OWN — which is what the container build does
-// (it copies libs/ and services/ingestion/ and never sees go.work).
+// (it copies libs/ and services/collector/ and never sees go.work).
 replace github.com/FabioCaffarello/ghost-trace/libs/archive => ../../libs/archive
 
 replace github.com/FabioCaffarello/ghost-trace/libs/canonical => ../../libs/canonical

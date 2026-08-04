@@ -8,7 +8,7 @@ Ghost Trace answers a different one, from interaction dynamics alone: how
 the pointer moves, how keys are timed, how a form is actually filled.
 
 ```bash
-cd services/ingestion && make run     # then open http://127.0.0.1:8080
+cd services/collector && make run     # then open http://127.0.0.1:8080
 ```
 
 ---
@@ -186,7 +186,7 @@ one browser from another.
 ## Layout
 
 ```
-  services/ingestion/          the collector: sessions, telemetry, demo page
+  services/collector/          the collector: sessions, telemetry, demo page
     internal/feature/          Category II: deterministic feature extraction
     internal/policy/           score / confidence / decision
     internal/session/          maintained state + the on-call comparison

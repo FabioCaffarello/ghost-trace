@@ -1,4 +1,4 @@
-# Ghost Trace ingestion — the targets specific to running this service.
+# Ghost Trace collector — the targets specific to running this service.
 #
 # Everything shared with the rest of the repository (build, test, vet,
 # lint, coverage, generate, the schema gates) now lives in the root
