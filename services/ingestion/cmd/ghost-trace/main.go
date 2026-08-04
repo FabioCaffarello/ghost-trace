@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -49,8 +50,13 @@ func run() error {
 		ttl        = flag.Duration("session-ttl", 30*time.Minute, "session token lifetime")
 		captureLog = flag.String("capture-log", "", "JSONL file of labelled human sessions for the M2 study; empty disables capture")
 		decisionTO = flag.Duration("decision-timeout", 250*time.Millisecond, "demo backend's client-side decision budget (contract §5: ~3x the p99 target)")
+		health     = flag.Bool("healthcheck", false, "probe /healthz on -addr and exit 0/1; the container health check execs the binary because distroless ships no shell or curl")
 	)
 	flag.Parse()
+
+	if *health {
+		return probeHealth(*addr)
+	}
 
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
@@ -162,6 +168,29 @@ func run() error {
 		defer cancel()
 		return srv.Shutdown(shutdownCtx)
 	}
+}
+
+// probeHealth GETs /healthz on the listen address. A wildcard listen
+// host is probed via loopback — inside the container the server binds
+// 0.0.0.0 but the probe runs in the same network namespace.
+func probeHealth(addr string) error {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("healthcheck: bad -addr %q: %w", addr, err)
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get("http://" + net.JoinHostPort(host, port) + "/healthz")
+	if err != nil {
+		return fmt.Errorf("healthcheck: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("healthcheck: /healthz returned %d", resp.StatusCode)
+	}
+	return nil
 }
 
 func sweepLoop(ctx context.Context, sessions *session.Store, log *slog.Logger) {

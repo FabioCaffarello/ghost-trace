@@ -1,0 +1,55 @@
+# syntax=docker/dockerfile:1
+#
+# Ghost Trace ingestion — the all-in-one slice binary, containerised.
+#
+# Base images are ARG-parameterised to digests with deliberately
+# invalid all-zero defaults: a build that skips pinning fails fast
+# instead of silently floating. Resolve real digests with
+# deploy/docker/pin-base-images.sh (writes .env), or pass a floating
+# tag explicitly for a throwaway local build:
+#
+#   docker build -f deploy/docker/Dockerfile.ingestion \
+#     --build-arg GOLANG_IMAGE=golang:1.26-alpine \
+#     --build-arg DISTROLESS_IMAGE=gcr.io/distroless/static-debian12:nonroot .
+#
+# CGO_ENABLED=0 is load-bearing, not an optimisation: modernc.org/sqlite
+# is pure Go, so the binary is fully static and the runtime image can be
+# distroless/static — no libc, no shell, no package manager. The
+# container health check execs the binary itself (-healthcheck) because
+# there is no curl to call.
+ARG GOLANG_IMAGE=golang@sha256:0000000000000000000000000000000000000000000000000000000000000000
+ARG DISTROLESS_IMAGE=gcr.io/distroless/static-debian12@sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+FROM ${GOLANG_IMAGE} AS build
+WORKDIR /src
+
+# Module graph first, so dependency downloads cache independently of
+# source edits. genproto's go.mod must be present before download: the
+# service go.mod carries a filesystem replace to it.
+COPY libs/genproto/go.mod libs/genproto/go.sum libs/genproto/
+COPY services/ingestion/go.mod services/ingestion/go.sum services/ingestion/
+RUN --mount=type=cache,target=/go/pkg/mod \
+    cd services/ingestion && go mod download
+
+COPY libs/ libs/
+COPY services/ingestion/ services/ingestion/
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    cd services/ingestion && \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" \
+      -o /out/ghost-trace ./cmd/ghost-trace && \
+    test -x /out/ghost-trace && \
+    mkdir -p /out/data
+
+FROM ${DISTROLESS_IMAGE}
+# distroless :nonroot variants already run as nonroot; USER makes the
+# requirement explicit and survives a variant change.
+USER nonroot
+COPY --from=build /out/ghost-trace /ghost-trace
+# /data ships in the image owned by nonroot so a fresh named volume
+# inherits that ownership on first mount — without it the volume is
+# created root-owned and the nonroot process cannot mkdir its blob dir.
+COPY --from=build --chown=nonroot:nonroot /out/data /data
+EXPOSE 8080
+ENTRYPOINT ["/ghost-trace"]
+CMD ["-addr", "0.0.0.0:8080", "-data", "/data"]

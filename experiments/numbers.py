@@ -35,7 +35,14 @@ SVC = ROOT / "services" / "ingestion"
 RESULTS = HERE / "results"
 
 PORT = int(os.environ.get("GT_PORT", "18099"))
-BASE = f"http://127.0.0.1:{PORT}"
+
+# GT_BASE in the environment points the run at an ALREADY-RUNNING slice
+# — the compose experiments profile sets it to the ingestion container.
+# In that mode nothing is built or started here, and the architecture
+# benchmark only runs if a Go toolchain is present (it is an in-process
+# measurement, not a client of the slice).
+EXTERNAL_BASE = os.environ.get("GT_BASE", "")
+BASE = EXTERNAL_BASE or f"http://127.0.0.1:{PORT}"
 
 # Sample sizes. Bot tiers are free, so they are generous; the browser
 # tiers cost about two seconds a session, so they are not. The defaults
@@ -98,20 +105,24 @@ def main():
 
     print("\nGhost Trace — producing the six numbers\n")
 
-    # ---- build + start ----
-    log("building")
-    b = subprocess.run(["go", "build", "-o", str(data_dir / "ghost-trace"),
-                        "./cmd/ghost-trace"], cwd=SVC, capture_output=True, text=True)
-    if b.returncode != 0:
-        print(b.stderr)
-        return 1
+    # ---- build + start (or target an external slice) ----
+    proc = None
+    if EXTERNAL_BASE:
+        log(f"targeting external slice at {BASE}")
+    else:
+        log("building")
+        b = subprocess.run(["go", "build", "-o", str(data_dir / "ghost-trace"),
+                            "./cmd/ghost-trace"], cwd=SVC, capture_output=True, text=True)
+        if b.returncode != 0:
+            print(b.stderr)
+            return 1
 
-    log(f"starting slice on {BASE}")
-    proc = subprocess.Popen(
-        [str(data_dir / "ghost-trace"), "-addr", f"127.0.0.1:{PORT}",
-         "-data", str(data_dir / "substrate")],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
+        log(f"starting slice on {BASE}")
+        proc = subprocess.Popen(
+            [str(data_dir / "ghost-trace"), "-addr", f"127.0.0.1:{PORT}",
+             "-data", str(data_dir / "substrate")],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
     try:
         if not wait_healthy():
             log("slice did not become healthy")
@@ -142,22 +153,30 @@ def main():
         if session_numbers is None:
             log(f"session measurement failed: {(r.stderr or '')[-300:]}")
     finally:
-        proc.send_signal(signal.SIGTERM)
-        try:
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+        if proc is not None:
+            proc.send_signal(signal.SIGTERM)
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
 
     # ---- 6. two-architecture benchmark ----
-    log("architecture benchmark (concurrency x duration)")
-    bench_out = RESULTS / "bench-architecture.json"
-    r = subprocess.run(
-        ["go", "run", "./cmd/bench-architecture",
-         "-sessions", "100,1000,10000", "-durations", "10,300,1800",
-         "-sample", "200", "-out", str(bench_out)],
-        cwd=SVC, capture_output=True, text=True, timeout=3600,
-    )
-    bench = json.loads(bench_out.read_text()) if bench_out.exists() else None
+    bench = None
+    if shutil.which("go"):
+        log("architecture benchmark (concurrency x duration)")
+        bench_out = RESULTS / "bench-architecture.json"
+        subprocess.run(
+            ["go", "run", "./cmd/bench-architecture",
+             "-sessions", "100,1000,10000", "-durations", "10,300,1800",
+             "-sample", "200", "-out", str(bench_out)],
+            cwd=SVC, capture_output=True, text=True, timeout=3600,
+        )
+        bench = json.loads(bench_out.read_text()) if bench_out.exists() else None
+    else:
+        # Absence must be explicit, never a silently thinner report: the
+        # containerised run has no Go toolchain, and number 6 is an
+        # in-process measurement that belongs to the local run.
+        log("architecture benchmark SKIPPED — no Go toolchain on PATH")
 
     # ---- assemble ----
     detection = summarize_tiers()
@@ -318,6 +337,9 @@ def report(nums):
 
     print("\n6. MEMORY AND LATENCY BY CONCURRENCY x DURATION\n")
     b = nums.get("architecture")
+    if not b:
+        print("   not measured in this run (requires the Go toolchain;")
+        print("   python3 experiments/numbers.py locally produces it)")
     if b:
         print(f"   {'architecture':<14} {'sessions':>9} {'duration':>9} {'heap MB':>10} "
               f"{'bytes/sess':>12} {'p99 ms':>8}")

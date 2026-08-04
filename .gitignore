@@ -57,3 +57,4 @@ services/ingestion/.run-data/
 
 # Local agent-tooling state — recreated by tooling, never repo content
 .claude/
+.mcp.json
