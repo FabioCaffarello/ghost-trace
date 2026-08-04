@@ -1,16 +1,19 @@
-package session
+package main
 
 import (
 	"sync"
 	"time"
 
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/feature"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
 )
 
 // OnCallStore is the alternative architecture: retain raw events and
 // compute features when the decision arrives.
 //
-// It exists to be measured against Store, not to be used. The whole
+// It exists to be measured against session.Store, not to be used —
+// which is why it lives in the benchmark binary rather than in
+// internal/session, where it used to link into the production build. The whole
 // project rests on the claim that maintained state is necessary, and a
 // claim with no measured alternative is an assertion. Contract §8.1
 // predicts where they diverge:
@@ -38,7 +41,7 @@ type OnCallState struct {
 	ID        string
 	TenantID  string
 	PagePath  string
-	Client    Client
+	Client    session.Client
 	StartedAt time.Time
 
 	HighestSeq  uint32
@@ -84,12 +87,12 @@ func NewOnCallStore(ttl time.Duration, now func() time.Time) *OnCallStore {
 }
 
 // Create issues a session.
-func (s *OnCallStore) Create(tenantID, pagePath string, c Client) (string, *OnCallState, error) {
-	token, err := NewID("st_")
+func (s *OnCallStore) Create(tenantID, pagePath string, c session.Client) (string, *OnCallState, error) {
+	token, err := session.NewID("st_")
 	if err != nil {
 		return "", nil, err
 	}
-	id, err := NewID("s_")
+	id, err := session.NewID("s_")
 	if err != nil {
 		return "", nil, err
 	}
@@ -110,12 +113,12 @@ func (s *OnCallStore) With(token string, fn func(*OnCallState)) error {
 	defer s.mu.Unlock()
 	st, ok := s.byToken[token]
 	if !ok {
-		return ErrNotFound
+		return session.ErrNotFound
 	}
 	if exp, ok := s.expires[token]; ok && s.now().After(exp) {
 		delete(s.byToken, token)
 		delete(s.expires, token)
-		return ErrNotFound
+		return session.ErrNotFound
 	}
 	fn(st)
 	return nil
