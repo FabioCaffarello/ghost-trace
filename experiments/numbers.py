@@ -123,14 +123,17 @@ def main():
             log(f"tier: {script} (n={n})")
             r = run(["node", str(HERE / "tiers" / script)], env={"GT_N": str(n)})
             if r.returncode != 0:
-                absent.append(f"{script}: {(r.stderr or '').strip().splitlines()[-1:] or 'failed'}")
+                lines = (r.stderr or "").strip().splitlines()
+                absent.append(f"{script}: {lines[-1] if lines else 'failed'}")
 
         n3 = _n(3, 8)
         log(f"tier: tier3_undetected_chromedriver (n={n3})")
         r = run([venv_python(), str(HERE / "tiers" / "tier3_undetected_chromedriver.py")],
                 env={"GT_N": str(n3)})
         if r.returncode != 0:
-            absent.append("tier3_undetected_chromedriver: dependencies missing")
+            lines = (r.stderr or "").strip().splitlines()
+            absent.append(
+                f"tier3_undetected_chromedriver.py: {lines[-1] if lines else 'failed'}")
 
         # ---- 3, 4, 5 ----
         log("latency, time-to-confident-decision, cold start")
@@ -157,8 +160,25 @@ def main():
     bench = json.loads(bench_out.read_text()) if bench_out.exists() else None
 
     # ---- assemble ----
+    detection = summarize_tiers()
+
+    # Absence is derived from the data, not only from exit codes. The
+    # tiers now exit non-zero when zero sessions complete, but that is
+    # the first line of defence; this is the second. A cohort with no
+    # rows in sessions.jsonl is recorded ABSENT — a tier reported as
+    # neither present nor absent would silently shrink the detection
+    # table, which is exactly the failure this layer exists to prevent.
+    for script in [*TIER_N, "tier3_undetected_chromedriver.py"]:
+        stem = script.rsplit(".", 1)[0]        # e.g. tier5_humanised
+        prefix = stem.split("_", 1)[0] + "_"   # e.g. tier5_ (cohort names may carry suffixes)
+        if any(c.startswith(prefix) for c in detection):
+            continue
+        if any(a.startswith(stem) for a in absent):
+            continue
+        absent.append(f"{script}: completed with zero sessions")
+
     numbers = {
-        "detection": summarize_tiers(),
+        "detection": detection,
         "false_positive_rate": human_fpr(),
         "session": session_numbers,
         "architecture": bench,

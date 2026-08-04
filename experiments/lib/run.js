@@ -78,7 +78,13 @@ export function linearPath(from, to, steps) {
 export function summarize(cohort, rows) {
   const scored = rows.filter((r) => r.score !== undefined);
   if (scored.length === 0) {
-    console.log(`  ${cohort}: no sessions completed`);
+    // Fail loudly. The orchestrators key absence off the exit code, and
+    // per-session errors are caught inside the driver loop — so a tier
+    // whose every session failed would otherwise exit 0 and vanish from
+    // the results table as neither present nor absent. A tier that did
+    // not run is not a tier that found nothing.
+    console.error(`  ${cohort}: no sessions completed`);
+    process.exitCode = 1;
     return;
   }
   const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
