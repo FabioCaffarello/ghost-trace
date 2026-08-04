@@ -36,6 +36,12 @@ type Config struct {
 	// CollectPolicy is served to the SDK at session start and is
 	// remotely tunable without shipping a new SDK (contract §3).
 	CollectPolicy CollectPolicy
+
+	// SessionTTL is served to the SDK as expires_in. The composition
+	// root must pass the same value it gives the session store: a
+	// hardcoded number here once told every browser its token lived 30
+	// minutes while the store expired it on the -session-ttl flag.
+	SessionTTL time.Duration
 }
 
 // CollectPolicy is the server-driven collection configuration.
@@ -139,7 +145,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, sessionsResponse{
 		SessionToken: out.Token,
-		ExpiresIn:    1800,
+		ExpiresIn:    int(s.cfg.SessionTTL.Seconds()),
 		Collect:      s.cfg.CollectPolicy,
 	})
 }
