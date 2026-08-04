@@ -328,9 +328,17 @@ func (s *Server) handleOutcomes(w http.ResponseWriter, r *http.Request) {
 		Outcome:      req.Outcome,
 	}
 	if req.ObservedAt != "" {
-		if t, err := time.Parse(time.RFC3339, req.ObservedAt); err == nil {
-			in.ObservedAt = t
+		t, err := time.Parse(time.RFC3339, req.ObservedAt)
+		if err != nil {
+			// Reject rather than fall back to the server clock:
+			// observed_at is the application's claim and recorded_at the
+			// server's observation, and the gap between them is itself a
+			// signal. Substituting "now" on a parse failure collapses
+			// that gap to zero and silently corrupts the labels channel.
+			writeError(w, http.StatusBadRequest, "observed_at must be RFC 3339")
+			return
 		}
+		in.ObservedAt = t
 	}
 
 	if err := s.app.RecordOutcome(r.Context(), in); err != nil {
