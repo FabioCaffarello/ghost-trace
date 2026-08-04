@@ -194,8 +194,12 @@ which population it is looking at.
 
 ### What volunteers should be told
 
-- Only **how the pointer moves** is recorded. Not what is typed — M1
-  collects no key events at all.
+- **How** they interact is recorded, never **what** they type: pointer
+  movement, key *timing* with a coarse six-way class (letter, digit,
+  whitespace, navigation, modifier, other), scroll, focus changes, page
+  visibility, and form events (paste / autofill / submit). Key content
+  is never collected — the class preserves rhythm while making
+  reconstruction of typed text infeasible.
 - No canvas, WebGL, font or audio fingerprinting.
 - Nothing persistent is written to their browser.
 - The participant code is a pseudonym they can discard.
