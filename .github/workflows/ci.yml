@@ -155,6 +155,7 @@ jobs:
           - libs/genproto
           - libs/middleware
           - libs/substrate
+          - services/archive
           - services/ingestion
     env:
       GOWORK: "off"
@@ -172,6 +173,41 @@ jobs:
       - name: Test
         run: go test ./...
         working-directory: ${{ matrix.module }}
+
+  # The parity test needs a real broker with JetStream. A `services:`
+  # container cannot take arguments, and the nats image needs `-js` — so
+  # it is started explicitly here rather than declared and silently run
+  # without the feature the test depends on.
+  #
+  # Without GT_NATS_URL the test SKIPS, so running it here is the
+  # difference between "the archive holds everything the collector
+  # wrote" being measured and being asserted.
+  parity:
+    name: archive — parity against a real broker
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: services/archive/go.mod
+
+      - name: Start the event stream
+        run: |
+          docker run -d --name gt-nats -p 4222:4222 \
+            nats:2.10-alpine@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927 \
+            -js
+          for _ in $(seq 1 30); do
+            if nc -z 127.0.0.1 4222; then echo "broker up"; exit 0; fi
+            sleep 1
+          done
+          echo "broker did not come up"; docker logs gt-nats; exit 1
+
+      - name: Parity
+        env:
+          GT_NATS_URL: nats://127.0.0.1:4222
+        run: make parity
 
   quality:
     name: quality — lint + vulnerabilities
