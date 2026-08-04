@@ -20,6 +20,7 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/substratearchive"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/api"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/httpmw"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/policy"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
@@ -114,9 +115,22 @@ func run() error {
 	// store grows for the life of the process.
 	go sweepLoop(ctx, sessions, log)
 
+	// Observability chain, outermost first: request-id so every layer
+	// can correlate, recovery so a panic is logged with its id, logging
+	// so the 500 a panic produces still gets its line, metrics
+	// innermost so it measures the handler rather than the logging.
+	metrics := httpmw.NewMetrics()
+	mux.Handle("GET /metrics", metrics.Handler())
+	handler := httpmw.Chain(mux,
+		httpmw.RequestID(),
+		httpmw.Recovery(log),
+		httpmw.Logging(log),
+		metrics.Collect(),
+	)
+
 	srv := &http.Server{
 		Addr:              *addr,
-		Handler:           mux,
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

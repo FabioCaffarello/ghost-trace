@@ -31,6 +31,8 @@ import (
 	"os"
 	"runtime"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/feature"
@@ -59,12 +61,20 @@ func main() {
 	)
 	flag.Parse()
 
-	sessionCounts := parseInts(*concurrency)
-	durationList := parseInts(*durations)
+	sessionCounts, err := parseInts(*concurrency)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "bench-architecture: -sessions: %v\n", err)
+		os.Exit(2)
+	}
+	durationList, err := parseInts(*durations)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "bench-architecture: -durations: %v\n", err)
+		os.Exit(2)
+	}
 
 	fmt.Printf("%-14s %9s %9s %10s %12s %9s %9s %9s\n",
 		"architecture", "sessions", "duration", "heap MB", "bytes/sess", "p50 ms", "p99 ms", "max ms")
-	fmt.Println(repeat('-', 90))
+	fmt.Println(strings.Repeat("-", 90))
 
 	var results []cell
 	for _, dur := range durationList {
@@ -169,7 +179,7 @@ func runCell(arch string, sessions, durationS, sample int) cell {
 		})
 
 	case "on-call":
-		store := session.NewOnCallStore(time.Hour, time.Now)
+		store := NewOnCallStore(time.Hour, time.Now)
 		tokens := make([]string, 0, sessions)
 		for i := 0; i < sessions; i++ {
 			tok, _, err := store.Create("t_bench", "/login", session.Client{})
@@ -182,7 +192,7 @@ func runCell(arch string, sessions, durationS, sample int) cell {
 			pts := makePoints(pointsPerBatch(b), rng)
 			startMs := uint32(1200 + b*2000)
 			for _, tok := range tokens {
-				_ = store.With(tok, func(st *session.OnCallState) {
+				_ = store.With(tok, func(st *OnCallState) {
 					st.AppendPointer(startMs, pts)
 					st.AppendKey(startMs+10, "down", "alpha", "f_1")
 					st.AppendKey(startMs+50, "up", "alpha", "f_1")
@@ -192,7 +202,7 @@ func runCell(arch string, sessions, durationS, sample int) cell {
 		}
 		keepalive = store
 		latencies = sampleLatency(sample, len(tokens), func(i int) {
-			_ = store.With(tokens[i], func(st *session.OnCallState) {
+			_ = store.With(tokens[i], func(st *OnCallState) {
 				p, k, in := st.Compute()
 				_ = policy.Judge(policy.State{Pointer: p, Keystroke: k, Interaction: in}, "login")
 			})
@@ -268,31 +278,18 @@ func pct(sorted []float64, p float64) float64 {
 	return sorted[i]
 }
 
-func parseInts(s string) []int {
+// parseInts parses a comma-separated list of counts. Malformed input
+// is an error, not a silent skip: a typo'd grid flag that quietly
+// dropped a cell would ship a benchmark that measured less than it
+// claimed.
+func parseInts(s string) ([]int, error) {
 	var out []int
-	cur := 0
-	has := false
-	for _, r := range s {
-		if r >= '0' && r <= '9' {
-			cur = cur*10 + int(r-'0')
-			has = true
-			continue
+	for _, f := range strings.Split(s, ",") {
+		n, err := strconv.Atoi(strings.TrimSpace(f))
+		if err != nil {
+			return nil, fmt.Errorf("%q is not an integer", f)
 		}
-		if has {
-			out = append(out, cur)
-		}
-		cur, has = 0, false
+		out = append(out, n)
 	}
-	if has {
-		out = append(out, cur)
-	}
-	return out
-}
-
-func repeat(r rune, n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = r
-	}
-	return string(b)
+	return out, nil
 }
