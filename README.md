@@ -21,6 +21,13 @@ Reproduce all of them with one command:
 python3 experiments/numbers.py
 ```
 
+Its output satisfies a published contract
+([`experiments/schema/numbers.schema.json`](experiments/schema/numbers.schema.json))
+and carries a provenance block — commit, machine, and the sample size
+used for every tier. Runs worth citing are committed under
+[`docs/results/`](docs/results/), so the numbers below can be traced to
+a specific execution rather than taken on trust.
+
 ### 1. Detection rate per adversarial tier
 
 | Tier | What it is | n | detected | 95% CI |
@@ -164,7 +171,9 @@ one browser from another.
   experiments/                 six adversarial tiers + the statistics
   schemas/events/v1/           protobuf archive schema
   contract/openapi.yaml        the published HTTP contract (generated)
+  experiments/schema/          the contract the six numbers satisfy
   docs/                        write-ups of work that has run
+  docs/results/                committed run manifests, with provenance
 ```
 
 `contract/` holds the published HTTP specification —

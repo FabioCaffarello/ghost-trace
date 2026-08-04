@@ -343,15 +343,27 @@ tool-vacuum:
 experiments-check: ## Syntax-check every tier and run the asserted statistics selftest
 	@echo "== python syntax"
 	@cd $(EXPERIMENTS) && python3 -m compileall -q analyze.py numbers.py run.py make_links.py \
+		publish_manifest.py schema/ \
 		tiers/tier3_undetected_chromedriver.py testdata/make_synthetic_human.py
 	@echo "== node syntax"
 	@cd $(EXPERIMENTS) && for f in tiers/*.js lib/*.js *.mjs; do node --check "$$f" || exit 1; done
 	@echo "== statistics selftest (asserted)"
 	@cd $(EXPERIMENTS) && python3 analyze.py --selftest
+	@echo "== numbers.json schema selftest"
+	@cd $(EXPERIMENTS) && python3 -m schema --selftest
 
 .PHONY: numbers
 numbers: ## Reproduce the six numbers (the invariant; needs browsers)
 	python3 $(EXPERIMENTS)/numbers.py
+
+# Promoting a run to docs/results/ is a deliberate act, not a side
+# effect of measuring: the manifest is the record someone else will
+# cite. It refuses a dirty tree, because a number produced from
+# uncommitted code cannot be reproduced by anyone, including its
+# author, and a manifest saying otherwise is worse than no manifest.
+.PHONY: numbers-manifest
+numbers-manifest: ## Publish the last run to docs/results/ (requires a clean tree)
+	cd $(EXPERIMENTS) && python3 publish_manifest.py
 
 ##@ Containers
 
