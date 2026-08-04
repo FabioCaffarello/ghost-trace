@@ -1,9 +1,14 @@
-// The parity test: what the collector wrote locally, the archive holds
-// too — byte for byte, by content hash.
+// The parity test: what went onto the stream, the archive holds — byte
+// for byte, by content hash.
 //
-// This is the evidence PR-2.5 needs before it removes the local write.
-// Without it, "the archive has everything" is a diagram rather than a
-// measurement.
+// It was written as the evidence for removing the collector's local
+// write, and that removal happened (ADR-0006). What it asserts now
+// matters MORE rather than less: the stream is the only path a record
+// takes to durable storage, so a record that reaches the stream and not
+// the substrate is simply lost.
+//
+// The reference store below is a stand-in for "what was published", not
+// a second production store — there is no local write left to mirror.
 //
 // It needs a real broker. GT_NATS_URL points at one; without it the
 // test SKIPS RATHER THAN PASSES, because a parity test that quietly
@@ -95,8 +100,8 @@ func TestArchiveHoldsEverythingTheCollectorWrote(t *testing.T) {
 	consumed := make(chan error, 1)
 	go func() { consumed <- eventstream.Consume(consumeCtx, js, cons.Handle) }()
 
-	// The collector side: commit locally, then mirror — the same order
-	// streamarchive.Append uses.
+	// The producer side: record what is published, and publish it. The
+	// reference store is the test's own bookkeeping.
 	pub := eventstream.NewPublisher(js)
 	want := map[string]string{}
 	for i, msg := range records(t, run) {

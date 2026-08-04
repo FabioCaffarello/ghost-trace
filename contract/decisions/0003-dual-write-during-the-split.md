@@ -1,6 +1,14 @@
 # 0003 — The local substrate stays authoritative during the split
 
-**Status:** accepted · **Date:** 2026-08-04 · **Milestone:** PR-2.2b
+> **SUPERSEDED by [0006 — The stream is the archive](0006-the-stream-is-the-archive.md)
+> on 2026-08-04.** The condition this record set for its own removal was
+> met: parity across a full experiment run, measured in
+> [`docs/results/parity-cutover-2026-08-04.md`](../../docs/results/parity-cutover-2026-08-04.md).
+> Everything below is left exactly as it was accepted — it is the
+> reasoning that made the cutover checkable, and rewriting it would
+> destroy the record of why the dual-write existed at all.
+
+**Status:** superseded by 0006 · **Date:** 2026-08-04 · **Milestone:** PR-2.2b
 
 ## Context
 

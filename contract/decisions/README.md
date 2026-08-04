@@ -14,6 +14,7 @@ reverse without knowing what it cost.
 | --- | --- | --- |
 | [0001](0001-go-workspace-and-module-boundaries.md) | A Go workspace, and when a library gets extracted | accepted |
 | [0002](0002-library-naming.md) | Libraries are named for what they are | accepted |
-| [0003](0003-dual-write-during-the-split.md) | The local substrate stays authoritative during the split | accepted |
+| [0003](0003-dual-write-during-the-split.md) | The local substrate stays authoritative during the split | superseded by [0006](0006-the-stream-is-the-archive.md) |
 | [0004](0004-session-snapshots-carry-feature-state.md) | Session snapshots carry feature state, not events | accepted |
 | [0005](0005-the-decision-endpoints-are-a-shared-module.md) | The decision endpoints are a shared module, handlers included | accepted |
+| [0006](0006-the-stream-is-the-archive.md) | The stream is the archive; `-nats` and `-data` are alternatives | accepted |
