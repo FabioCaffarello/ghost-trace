@@ -1,8 +1,10 @@
-// Package api implements the endpoints of docs/architecture.md §3.
+// Package api is the HTTP transport adapter for the endpoints of
+// docs/architecture.md §3.
 //
-// M1 ships three of the four: sessions, telemetry, decisions. Outcomes
-// is M4, because a label channel with nothing durable behind it stores
-// labels that cannot be joined to anything.
+// Handlers are deliberately thin: decode the wire shape, authenticate,
+// call the use case, encode the result. Orchestration lives in
+// internal/app; if a handler grows an if-statement about the domain,
+// it is in the wrong layer.
 //
 // Trust boundary, per contract §1: everything arriving from the browser
 // is hostile. `subject_id` and `action` are accepted only from the
@@ -20,30 +22,16 @@ import (
 	"strings"
 	"time"
 
-	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/feature"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/policy"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
 )
 
-func randomEvaluationID() (string, error) {
-	return session.NewID("ev_")
-}
-
-// Config holds the server's tenant credentials and operating mode.
-//
-// One tenant, supplied at startup. `tenant_id` is threaded through
-// every record from day one because adding the column later is a
-// migration of every store and index, while carrying it now costs
-// nothing (contract §8.4).
+// Config holds the transport-level configuration: the tenant's key
+// pair and the collect policy served to the SDK. Application concerns
+// (tenant id, operating mode) live in app.Config.
 type Config struct {
-	TenantID  string
 	SiteKey   string
 	SecretKey string
-
-	// Mode is monitor or enforce. Every integration starts in monitor.
-	Mode string
 
 	// CollectPolicy is served to the SDK at session start and is
 	// remotely tunable without shipping a new SDK (contract §3).
@@ -57,13 +45,11 @@ type CollectPolicy struct {
 	Types     []string `json:"types"`
 }
 
-// Server holds the API's dependencies.
+// Server adapts HTTP to the application layer.
 type Server struct {
-	cfg      Config
-	sessions *session.Store
-	archive  *ingest.Ingester
-	now      func() time.Time
-	log      *slog.Logger
+	cfg Config
+	app *app.App
+	log *slog.Logger
 
 	// maxBody caps request bodies. Telemetry batches are the only
 	// large payload and a 2s batch at 20Hz is a few KB; anything
@@ -71,23 +57,12 @@ type Server struct {
 	maxBody int64
 }
 
-// New constructs a Server. archive may be nil, in which case raw
-// observations are scored but not persisted.
-func New(cfg Config, sessions *session.Store, archive *ingest.Ingester, now func() time.Time, log *slog.Logger) *Server {
-	if now == nil {
-		now = time.Now
-	}
+// New constructs the HTTP adapter over a.
+func New(cfg Config, a *app.App, log *slog.Logger) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Server{
-		cfg:      cfg,
-		sessions: sessions,
-		archive:  archive,
-		now:      now,
-		log:      log,
-		maxBody:  1 << 20,
-	}
+	return &Server{cfg: cfg, app: a, log: log, maxBody: 1 << 20}
 }
 
 // Routes returns the API mux.
@@ -152,37 +127,18 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		c.Viewport = [2]int{req.Client.Viewport[0], req.Client.Viewport[1]}
 	}
 
-	token, st, err := s.sessions.Create(s.cfg.TenantID, req.Page.Path, c)
+	out, err := s.app.StartSession(r.Context(), app.StartSessionInput{
+		PagePath: req.Page.Path,
+		Client:   c,
+	})
 	if err != nil {
 		s.log.Error("session create failed", "err", err)
 		writeError(w, http.StatusInternalServerError, "could not create session")
 		return
 	}
 
-	if s.archive != nil {
-		start := &eventsv1.SessionStart{
-			TenantId:      st.TenantID,
-			SessionId:     st.ID,
-			StartedAt:     st.StartedAt.UnixNano(),
-			PagePath:      st.PagePath,
-			PointerType:   c.PointerType,
-			Touch:         c.Touch,
-			ViewportW:     uint32(c.Viewport[0]),
-			ViewportH:     uint32(c.Viewport[1]),
-			TzOffsetMin:   int32(c.TZOffsetMin),
-			ReducedMotion: c.ReducedMotion,
-		}
-		if _, err := s.archive.Append(r.Context(), start, st.StartedAt.UnixNano()); err != nil {
-			// Archival is not on the critical path. A session that
-			// cannot be archived can still be scored, and refusing to
-			// issue a token here would take down the host's page load
-			// over a storage problem.
-			s.log.Error("archive session start", "err", err, "session_id", st.ID)
-		}
-	}
-
 	writeJSON(w, http.StatusOK, sessionsResponse{
-		SessionToken: token,
+		SessionToken: out.Token,
 		ExpiresIn:    1800,
 		Collect:      s.cfg.CollectPolicy,
 	})
@@ -238,91 +194,37 @@ func (s *Server) handleTelemetry(w http.ResponseWriter, r *http.Request) {
 		token = env.SessionToken
 	}
 
-	batch := &eventsv1.TelemetryBatch{
-		Seq:        env.Seq,
-		SentAtMs:   env.SentAtMs,
-		PagePath:   env.Page.Path,
-		ReceivedAt: s.now().UnixNano(),
+	in := app.TelemetryEnvelope{
+		SessionToken: token,
+		Seq:          env.Seq,
+		SentAtMs:     env.SentAtMs,
+		PagePath:     env.Page.Path,
+		Events:       make([]app.TelemetryEvent, len(env.Events)),
 	}
 	if len(env.Page.Viewport) == 2 {
-		batch.ViewportW = uint32(env.Page.Viewport[0])
-		batch.ViewportH = uint32(env.Page.Viewport[1])
+		in.Viewport = [2]int{env.Page.Viewport[0], env.Page.Viewport[1]}
+	}
+	for i, ev := range env.Events {
+		in.Events[i] = app.TelemetryEvent{
+			Type: ev.Type, T: ev.T,
+			Src: ev.Src, Pts: ev.Pts,
+			Phase: ev.Phase, KeyClass: ev.KeyClass, Target: ev.Target,
+			Dy: ev.Dy, Mode: ev.Mode,
+			State:  ev.State,
+			Action: ev.Action,
+		}
 	}
 
-	err := s.sessions.With(token, func(st *session.State) {
-		batch.TenantId = st.TenantID
-		batch.SessionId = st.ID
-
-		st.ObserveBatch(env.Seq, env.SentAtMs)
-
-		for _, ev := range env.Events {
-			st.ObserveEventTime(ev.T)
-
-			// Unknown types are dropped silently rather than rejected:
-			// the collect policy is server-driven and may change at any
-			// time, so an SDK sending a type this build does not know is
-			// expected behaviour, not a client error (contract §7).
-			switch ev.Type {
-			case "pointer":
-				pts := make([]feature.Point, 0, len(ev.Pts))
-				pe := &eventsv1.PointerEvent{TMs: ev.T, Src: ev.Src}
-				for _, p := range ev.Pts {
-					pts = append(pts, feature.Point{X: p[0], Y: p[1], DtMs: uint32(p[2])})
-					pe.Pts = append(pe.Pts, &eventsv1.PointerPoint{
-						X: p[0], Y: p[1], DtMs: uint32(p[2]),
-					})
-				}
-				st.Pointer.Add(ev.T, pts)
-				batch.PointerEvents = append(batch.PointerEvents, pe)
-
-			case "key":
-				st.Keystroke.AddKey(ev.T, ev.Phase, ev.KeyClass, ev.Target)
-				batch.KeyEvents = append(batch.KeyEvents, &eventsv1.KeyEvent{
-					TMs: ev.T, Phase: ev.Phase, KeyClass: ev.KeyClass, Target: ev.Target,
-				})
-
-			case "scroll":
-				st.Interaction.AddScroll(ev.Mode)
-				batch.ScrollEvents = append(batch.ScrollEvents, &eventsv1.ScrollEvent{
-					TMs: ev.T, Dy: ev.Dy, Mode: ev.Mode,
-				})
-
-			case "focus":
-				st.Interaction.AddFocus(ev.Target)
-				batch.FocusEvents = append(batch.FocusEvents, &eventsv1.FocusEvent{
-					TMs: ev.T, State: ev.State, Target: ev.Target,
-				})
-
-			case "visibility":
-				st.Interaction.AddVisibility(ev.State)
-				batch.VisibilityEvents = append(batch.VisibilityEvents, &eventsv1.VisibilityEvent{
-					TMs: ev.T, State: ev.State,
-				})
-
-			case "form":
-				st.Interaction.AddForm(ev.Action, ev.Target)
-				batch.FormEvents = append(batch.FormEvents, &eventsv1.FormEvent{
-					TMs: ev.T, Target: ev.Target, Action: ev.Action,
-				})
-			}
-		}
-	})
-	if err != nil {
+	if err := s.app.IngestTelemetry(r.Context(), in); err != nil {
 		// An unknown token is not an error worth surfacing in detail.
 		// Telemetry is fire-and-forget and loss is expected (§5), so a
 		// 202 here keeps a stale SDK from retrying in a loop.
-		if errors.Is(err, session.ErrNotFound) {
+		if errors.Is(err, app.ErrSessionNotFound) {
 			w.WriteHeader(http.StatusAccepted)
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "telemetry failed")
 		return
-	}
-
-	if s.archive != nil && batchHasEvents(batch) {
-		if _, err := s.archive.Append(r.Context(), batch, batch.ReceivedAt); err != nil {
-			s.log.Error("archive telemetry", "err", err, "session_id", batch.SessionId)
-		}
 	}
 
 	w.WriteHeader(http.StatusAccepted)
@@ -340,14 +242,19 @@ type decisionsRequest struct {
 }
 
 type decisionsResponse struct {
-	EvaluationID   string          `json:"evaluation_id"`
-	Decision       string          `json:"decision"`
-	ShadowDecision string          `json:"shadow_decision,omitempty"`
-	Score          float64         `json:"score"`
-	Confidence     float64         `json:"confidence"`
-	Reasons        []policy.Reason `json:"reasons"`
-	Evidence       evidence        `json:"evidence"`
-	Mode           string          `json:"mode"`
+	EvaluationID   string         `json:"evaluation_id"`
+	Decision       string         `json:"decision"`
+	ShadowDecision string         `json:"shadow_decision,omitempty"`
+	Score          float64        `json:"score"`
+	Confidence     float64        `json:"confidence"`
+	Reasons        []policyReason `json:"reasons"`
+	Evidence       evidence       `json:"evidence"`
+	Mode           string         `json:"mode"`
+}
+
+type policyReason struct {
+	Code   string  `json:"code"`
+	Weight float64 `json:"weight"`
 }
 
 type evidence struct {
@@ -368,122 +275,31 @@ func (s *Server) handleDecisions(w http.ResponseWriter, r *http.Request) {
 	if !s.decode(w, r, &req) {
 		return
 	}
-	if req.Action == "" {
-		writeError(w, http.StatusBadRequest, "action is required")
-		return
-	}
 
-	// Everything needed after the callback is copied by value while the
-	// store lock is held. The *session.State pointer must not escape:
-	// concurrent telemetry batches keep mutating the state under the
-	// lock, and a read after With returns would race with them.
-	var (
-		st         policy.State
-		durationMs uint32
-		sessionID  string
-		found      = true
-	)
-	tenantID := s.cfg.TenantID
-	if err := s.sessions.With(req.SessionToken, func(sess *session.State) {
-		st = policy.State{
-			Pointer:     sess.Pointer.State(),
-			Keystroke:   sess.Keystroke.State(),
-			Interaction: sess.Interaction.State(),
-		}
-		durationMs = sess.LastEventMs
-		sessionID = sess.ID
-		tenantID = sess.TenantID
-	}); err != nil {
-		if !errors.Is(err, session.ErrNotFound) {
-			writeError(w, http.StatusInternalServerError, "decision failed")
-			return
-		}
-		// An unknown token yields a zero-evidence judgement rather than
-		// an error. The caller is at a risk moment and needs an answer;
-		// a missing session is a cold start, which the confidence
-		// dimension already models correctly.
-		found = false
-	}
-
-	// Per-action, per §8.6: state is per-session, scoring is per-action.
-	j := policy.Judge(st, req.Action)
-	outcome, err := policy.Apply(j, s.cfg.Mode)
-	if err != nil {
-		s.log.Error("policy apply", "err", err)
-		writeError(w, http.StatusInternalServerError, "decision failed")
-		return
-	}
-
-	evalID, err := randomEvaluationID()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "decision failed")
-		return
-	}
-
-	ev := evidence{Events: st.Pointer.Points + st.Keystroke.Keys}
-	if found {
-		ev.DurationMs = durationMs
-	}
-
-	if s.archive != nil {
-		rec := &eventsv1.Evaluation{
-			TenantId:           tenantID,
-			EvaluationId:       evalID,
-			SessionId:          sessionID,
-			Action:             req.Action,
-			SubjectId:          req.SubjectID,
-			DecidedAt:          s.now().UnixNano(),
-			Decision:           outcome.Decision,
-			ShadowDecision:     outcome.Shadow,
-			Mode:               s.cfg.Mode,
-			Score:              float32(j.Score()),
-			Confidence:         float32(j.Confidence()),
-			EvidenceEvents:     ev.Events,
-			EvidenceDurationMs: ev.DurationMs,
-			PolicyRef:          policy.Ref,
-			FeatureSetRef:      feature.SetRef,
-			Features: &eventsv1.FeatureState{
-				PointerStraightness:     float32(st.Pointer.Straightness),
-				PointerSegments:         st.Pointer.Segments,
-				PointerPathPx:           float32(st.Pointer.PathPx),
-				PointerPoints:           st.Pointer.Points,
-				KeyFlightCv:             float32(st.Keystroke.FlightCV),
-				KeyDwellCv:              float32(st.Keystroke.DwellCV),
-				KeyMeanDwellMs:          float32(st.Keystroke.MeanDwellMs),
-				KeyExactRepeatRatio:     float32(st.Keystroke.ExactRepeatRatio),
-				KeyIntervals:            st.Keystroke.Intervals,
-				ProgrammaticScrollRatio: float32(st.Interaction.ProgrammaticScrollRatio),
-				ScrollEvents:            st.Interaction.ScrollEvents,
-				FocusTransitions:        st.Interaction.FocusTransitions,
-				HiddenPeriods:           st.Interaction.HiddenPeriods,
-				Pastes:                  st.Interaction.Pastes,
-				Injections:              st.Interaction.Injections,
-				InjectedFields:          st.Interaction.InjectedFields,
-				Autofills:               st.Interaction.Autofills,
-				DistinctFocusTargets:    st.Interaction.DistinctFocusTargets,
-				KeyEvents:               st.Keystroke.Keys,
-			},
-		}
-		for _, rs := range j.Reasons() {
-			rec.Reasons = append(rec.Reasons, &eventsv1.Reason{
-				Code: rs.Code, Weight: float32(rs.Weight),
-			})
-		}
-		if _, err := s.archive.Append(r.Context(), rec, rec.DecidedAt); err != nil {
-			s.log.Error("archive evaluation", "err", err, "evaluation_id", evalID)
-		}
-	}
-
-	writeJSON(w, http.StatusOK, decisionsResponse{
-		EvaluationID:   evalID,
-		Decision:       outcome.Decision,
-		ShadowDecision: outcome.Shadow,
-		Score:          round3(j.Score()),
-		Confidence:     round3(j.Confidence()),
-		Reasons:        j.Reasons(),
-		Evidence:       ev,
-		Mode:           s.cfg.Mode,
+	out, err := s.app.Decide(r.Context(), app.DecideInput{
+		SessionToken: req.SessionToken,
+		Action:       req.Action,
+		SubjectID:    req.SubjectID,
 	})
+	if err != nil {
+		s.writeAppError(w, err, "decision failed")
+		return
+	}
+
+	resp := decisionsResponse{
+		EvaluationID:   out.EvaluationID,
+		Decision:       out.Decision,
+		ShadowDecision: out.ShadowDecision,
+		Score:          round3(out.Score),
+		Confidence:     round3(out.Confidence),
+		Reasons:        make([]policyReason, 0, len(out.Reasons)),
+		Evidence:       evidence{Events: out.EvidenceEvents, DurationMs: out.EvidenceMs},
+		Mode:           out.Mode,
+	}
+	for _, rs := range out.Reasons {
+		resp.Reasons = append(resp.Reasons, policyReason{Code: rs.Code, Weight: rs.Weight})
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // ---------------------------------------------------------------
@@ -496,20 +312,6 @@ type outcomesRequest struct {
 	ObservedAt   string `json:"observed_at"`
 }
 
-// validOutcomes is the enumeration from contract §3. An unknown value is
-// rejected rather than stored: a typo'd label is worse than a missing
-// one, because it silently degrades the calibration everything else
-// depends on.
-var validOutcomes = map[string]bool{
-	"login_success":    true,
-	"login_failure":    true,
-	"challenge_passed": true,
-	"challenge_failed": true,
-	"fraud_confirmed":  true,
-	"user_appealed":    true,
-	"abandoned":        true,
-}
-
 func (s *Server) handleOutcomes(w http.ResponseWriter, r *http.Request) {
 	if !s.authorizedSecret(r) {
 		writeError(w, http.StatusUnauthorized, "invalid secret_key")
@@ -520,39 +322,19 @@ func (s *Server) handleOutcomes(w http.ResponseWriter, r *http.Request) {
 	if !s.decode(w, r, &req) {
 		return
 	}
-	if req.EvaluationID == "" {
-		writeError(w, http.StatusBadRequest, "evaluation_id is required")
-		return
-	}
-	if !validOutcomes[req.Outcome] {
-		writeError(w, http.StatusBadRequest, "unknown outcome")
-		return
-	}
 
-	observedAt := s.now().UnixNano()
+	in := app.RecordOutcomeInput{
+		EvaluationID: req.EvaluationID,
+		Outcome:      req.Outcome,
+	}
 	if req.ObservedAt != "" {
 		if t, err := time.Parse(time.RFC3339, req.ObservedAt); err == nil {
-			observedAt = t.UnixNano()
+			in.ObservedAt = t
 		}
 	}
 
-	rec := &eventsv1.Outcome{
-		TenantId:     s.cfg.TenantID,
-		EvaluationId: req.EvaluationID,
-		Outcome:      req.Outcome,
-		ObservedAt:   observedAt,
-		RecordedAt:   s.now().UnixNano(),
-	}
-
-	if s.archive == nil {
-		// A label with nowhere durable to live is worse than a refusal:
-		// the caller would believe it had reported an outcome.
-		writeError(w, http.StatusServiceUnavailable, "outcome storage not configured")
-		return
-	}
-	if _, err := s.archive.Append(r.Context(), rec, rec.RecordedAt); err != nil {
-		s.log.Error("archive outcome", "err", err, "evaluation_id", req.EvaluationID)
-		writeError(w, http.StatusInternalServerError, "could not record outcome")
+	if err := s.app.RecordOutcome(r.Context(), in); err != nil {
+		s.writeAppError(w, err, "could not record outcome")
 		return
 	}
 
@@ -588,6 +370,28 @@ func (s *Server) authorizedSecret(r *http.Request) bool {
 	return subtle.ConstantTimeCompare([]byte(bearerToken(r)), []byte(s.cfg.SecretKey)) == 1
 }
 
+// writeAppError is the single translation from the application's error
+// vocabulary to HTTP. Handlers pass a fallback message for errors the
+// table does not name; per-endpoint improvisation is what this exists
+// to prevent.
+func (s *Server) writeAppError(w http.ResponseWriter, err error, fallback string) {
+	switch {
+	case errors.Is(err, app.ErrActionRequired):
+		writeError(w, http.StatusBadRequest, "action is required")
+	case errors.Is(err, app.ErrEvaluationIDRequired):
+		writeError(w, http.StatusBadRequest, "evaluation_id is required")
+	case errors.Is(err, app.ErrUnknownOutcome):
+		writeError(w, http.StatusBadRequest, "unknown outcome")
+	case errors.Is(err, app.ErrArchiveUnavailable):
+		// A label with nowhere durable to live is worse than a refusal:
+		// the caller would believe it had reported an outcome.
+		writeError(w, http.StatusServiceUnavailable, "outcome storage not configured")
+	default:
+		s.log.Error(fallback, "err", err)
+		writeError(w, http.StatusInternalServerError, fallback)
+	}
+}
+
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -596,15 +400,6 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
-}
-
-// batchHasEvents reports whether a batch carries anything worth
-// archiving. An empty batch still updates session counters but is not a
-// record.
-func batchHasEvents(b *eventsv1.TelemetryBatch) bool {
-	return len(b.PointerEvents) > 0 || len(b.KeyEvents) > 0 ||
-		len(b.ScrollEvents) > 0 || len(b.FocusEvents) > 0 ||
-		len(b.VisibilityEvents) > 0 || len(b.FormEvents) > 0
 }
 
 func round3(f float64) float64 {

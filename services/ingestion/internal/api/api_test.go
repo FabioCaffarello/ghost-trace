@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/policy"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
 )
@@ -31,18 +32,17 @@ const (
 
 func newTestServer(t *testing.T, mode string) *httptest.Server {
 	t.Helper()
-	cfg := Config{
-		TenantID:  "t_test",
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	// NullArchive: the decision path must not depend on storage.
+	a := app.New(app.Config{TenantID: "t_test", Mode: mode},
+		session.NewStore(30*time.Minute, time.Now), app.NullArchive{}, time.Now, log)
+	s := New(Config{
 		SiteKey:   testSiteKey,
 		SecretKey: testSecretKey,
-		Mode:      mode,
 		CollectPolicy: CollectPolicy{
 			PointerHz: 20, BatchMs: 2000, Types: []string{"pointer"},
 		},
-	}
-	// nil archive: the decision path must not depend on storage.
-	s := New(cfg, session.NewStore(30*time.Minute, time.Now), nil, time.Now,
-		slog.New(slog.NewTextHandler(io.Discard, nil)))
+	}, a, log)
 
 	srv := httptest.NewServer(s.Routes())
 	t.Cleanup(srv.Close)
@@ -443,7 +443,7 @@ func TestAllContractOutcomeLabelsAccepted(t *testing.T) {
 		"login_success", "login_failure", "challenge_passed",
 		"challenge_failed", "fraud_confirmed", "user_appealed", "abandoned",
 	} {
-		if !validOutcomes[label] {
+		if !app.ValidOutcomes[label] {
 			t.Errorf("contract outcome %q is not accepted", label)
 		}
 	}
