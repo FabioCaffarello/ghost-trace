@@ -42,6 +42,9 @@ COPY libs/feature/go.mod libs/feature/
 COPY libs/policy/go.mod libs/policy/
 COPY libs/snapshot/go.mod libs/snapshot/go.sum libs/snapshot/
 COPY libs/wire/go.mod libs/wire/
+COPY libs/archive/go.mod libs/archive/go.sum libs/archive/
+COPY libs/id/go.mod libs/id/
+COPY libs/decision/go.mod libs/decision/go.sum libs/decision/
 COPY services/ingestion/go.mod services/ingestion/go.sum services/ingestion/
 RUN --mount=type=cache,target=/go/pkg/mod \
     cd services/ingestion && go mod download

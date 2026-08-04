@@ -199,7 +199,8 @@ one browser from another.
                                the generated OpenAPI surface, the fixtures
                                the harness actually sends, the target design,
                                and the decision records
-  libs/                        shared modules — the wire contract, genproto,
+  libs/                        shared modules — the wire contract, the decision
+                               endpoints both services mount, genproto,
                                middleware, the event stream
   .context/                    agent harness: playbooks, skills, sensors, policy
   experiments/schema/          the contract the six numbers satisfy

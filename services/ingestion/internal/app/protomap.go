@@ -1,16 +1,16 @@
-// protomap.go is the single anti-corruption boundary between domain
-// values and the durable proto records. Every proto literal the
-// application archives is built here and nowhere else — the M3 drift
-// (a feature scored but never persisted) happened precisely because
-// this mapping was inlined at a call site, and
-// TestFeatureStateProtoCoversFeatureVector guards the FeatureState
-// half of it permanently.
+// protomap.go is the anti-corruption boundary between domain values and
+// the durable proto records this package archives. Every proto literal
+// it writes is built here and nowhere else — the M3 drift (a feature
+// scored but never persisted) happened precisely because this mapping
+// was inlined at a call site.
+//
+// The feature vector itself is NOT built here. It has one builder,
+// snapshot.FromState, shared with the evaluation record libs/decision
+// writes; a second copy is what this file's own history warns about.
 package app
 
 import (
-	"github.com/FabioCaffarello/ghost-trace/libs/feature"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
-	"github.com/FabioCaffarello/ghost-trace/libs/policy"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
 )
 
@@ -84,56 +84,4 @@ func batchHasEvents(b *eventsv1.TelemetryBatch) bool {
 	return len(b.PointerEvents) > 0 || len(b.KeyEvents) > 0 ||
 		len(b.ScrollEvents) > 0 || len(b.FocusEvents) > 0 ||
 		len(b.VisibilityEvents) > 0 || len(b.FormEvents) > 0
-}
-
-func buildEvaluation(tenantID, sessionID string, in DecideInput, out DecideOutput,
-	st policy.State, j policy.Judgement, decidedAt int64) *eventsv1.Evaluation {
-	rec := &eventsv1.Evaluation{
-		TenantId:           tenantID,
-		EvaluationId:       out.EvaluationID,
-		SessionId:          sessionID,
-		Action:             in.Action,
-		SubjectId:          in.SubjectID,
-		DecidedAt:          decidedAt,
-		Decision:           out.Decision,
-		ShadowDecision:     out.ShadowDecision,
-		Mode:               out.Mode,
-		Score:              float32(j.Score()),
-		Confidence:         float32(j.Confidence()),
-		EvidenceEvents:     out.EvidenceEvents,
-		EvidenceDurationMs: out.EvidenceMs,
-		PolicyRef:          policy.Ref,
-		FeatureSetRef:      feature.SetRef,
-		Features:           buildFeatureState(st),
-	}
-	for _, rs := range j.Reasons() {
-		rec.Reasons = append(rec.Reasons, &eventsv1.Reason{
-			Code: rs.Code, Weight: float32(rs.Weight),
-		})
-	}
-	return rec
-}
-
-func buildFeatureState(st policy.State) *eventsv1.FeatureState {
-	return &eventsv1.FeatureState{
-		PointerStraightness:     float32(st.Pointer.Straightness),
-		PointerSegments:         st.Pointer.Segments,
-		PointerPathPx:           float32(st.Pointer.PathPx),
-		PointerPoints:           st.Pointer.Points,
-		KeyFlightCv:             float32(st.Keystroke.FlightCV),
-		KeyDwellCv:              float32(st.Keystroke.DwellCV),
-		KeyMeanDwellMs:          float32(st.Keystroke.MeanDwellMs),
-		KeyExactRepeatRatio:     float32(st.Keystroke.ExactRepeatRatio),
-		KeyIntervals:            st.Keystroke.Intervals,
-		ProgrammaticScrollRatio: float32(st.Interaction.ProgrammaticScrollRatio),
-		ScrollEvents:            st.Interaction.ScrollEvents,
-		FocusTransitions:        st.Interaction.FocusTransitions,
-		HiddenPeriods:           st.Interaction.HiddenPeriods,
-		Pastes:                  st.Interaction.Pastes,
-		Injections:              st.Interaction.Injections,
-		InjectedFields:          st.Interaction.InjectedFields,
-		Autofills:               st.Interaction.Autofills,
-		DistinctFocusTargets:    st.Interaction.DistinctFocusTargets,
-		KeyEvents:               st.Keystroke.Keys,
-	}
 }

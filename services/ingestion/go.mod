@@ -5,12 +5,13 @@ go 1.26
 toolchain go1.26.5
 
 require (
-	google.golang.org/protobuf v1.36.0 // archive-format pin: canonical bytes are hashed for identity — upgrading is an archive-compatibility event, see internal/canonical
+	google.golang.org/protobuf v1.36.10 // archive-format pin: canonical bytes are hashed for identity — upgrading is an archive-compatibility event, see internal/canonical
 	lukechampine.com/blake3 v1.3.0 // indirect
 	modernc.org/sqlite v1.34.4 // indirect
 )
 
 require (
+	github.com/FabioCaffarello/ghost-trace/libs/archive v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/canonical v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/eventstream v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/feature v0.0.0
@@ -37,6 +38,8 @@ require (
 )
 
 require (
+	github.com/FabioCaffarello/ghost-trace/libs/decision v0.0.0-00010101000000-000000000000
+	github.com/FabioCaffarello/ghost-trace/libs/id v0.0.0
 	github.com/invopop/jsonschema v0.14.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	sigs.k8s.io/yaml v1.6.0
@@ -60,7 +63,13 @@ require (
 // workspace serves local development and CI, while these keep each
 // module buildable ON ITS OWN — which is what the container build does
 // (it copies libs/ and services/ingestion/ and never sees go.work).
+replace github.com/FabioCaffarello/ghost-trace/libs/archive => ../../libs/archive
+
 replace github.com/FabioCaffarello/ghost-trace/libs/canonical => ../../libs/canonical
+
+replace github.com/FabioCaffarello/ghost-trace/libs/decision => ../../libs/decision
+
+replace github.com/FabioCaffarello/ghost-trace/libs/id => ../../libs/id
 
 replace github.com/FabioCaffarello/ghost-trace/libs/eventstream => ../../libs/eventstream
 

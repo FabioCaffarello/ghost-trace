@@ -15,13 +15,12 @@
 package session
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"sync"
 	"time"
 
 	"github.com/FabioCaffarello/ghost-trace/libs/feature"
+	"github.com/FabioCaffarello/ghost-trace/libs/id"
 )
 
 // ErrNotFound is returned for an unknown or expired token.
@@ -197,14 +196,9 @@ func (s *Store) Sweep() int {
 	return n
 }
 
-// NewID returns a prefixed, URL-safe, 144-bit random identifier. It is
-// the single implementation for every identifier the system mints —
-// session tokens, session ids, evaluation ids — so entropy and format
-// decisions live in one place.
-func NewID(prefix string) (string, error) {
-	b := make([]byte, 18)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return prefix + base64.RawURLEncoding.EncodeToString(b), nil
-}
+// NewID mints a prefixed identifier. The implementation is libs/id,
+// which the decision engine also mints from: session tokens, session ids
+// and evaluation ids are one identifier space, and it stopped being
+// possible to keep that true inside one package when a second service
+// started minting.
+func NewID(prefix string) (string, error) { return id.New(prefix) }

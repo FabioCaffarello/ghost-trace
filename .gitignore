@@ -74,3 +74,10 @@ services/ingestion/.run-data/
 .context/runtime/
 .context/**/archive/
 
+
+# go.work is committed; go.work.sum is not. CI builds every module with
+# GOWORK=off and the container build never sees the workspace at all
+# (ADR-0001), so nothing that gates this repository reads this file —
+# its contents depend on which modules a given developer has resolved,
+# which is churn no check would catch going wrong.
+go.work.sum

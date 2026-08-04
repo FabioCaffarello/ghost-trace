@@ -30,7 +30,7 @@ checklist; it is short because the guards do most of the work now.
      lost that way.
    - **Never put an enumeration in a struct tag.** Enumerations live as
      Go values (`policy.ReasonCodes`, `ingest.KeyClasses`,
-     `app.ValidOutcomes`) and the generator injects them. Three
+     `decision.ValidOutcomes`) and the generator injects them. Three
      retyped enums were published wrong before this rule existed.
 2. **If it is a telemetry vocabulary**, edit
    `internal/ingest/vocabulary.go` AND `sdk.js`. `vocabulary_test.go`

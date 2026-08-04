@@ -14,25 +14,24 @@
 package api
 
 import (
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"github.com/FabioCaffarello/ghost-trace/libs/wire"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/FabioCaffarello/ghost-trace/libs/wire"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
 )
 
-// Config holds the transport-level configuration: the tenant's key
-// pair and the collect policy served to the SDK. Application concerns
-// (tenant id, operating mode) live in app.Config.
+// Config holds the transport-level configuration for the endpoints this
+// adapter serves: the public site key and the collect policy handed to
+// the SDK. The secret key is NOT here — it authenticates /v1/decisions
+// and /v1/outcomes, which libs/decision serves, and a credential kept
+// where nothing reads it is a credential that outlives its purpose.
 type Config struct {
-	SiteKey   string
-	SecretKey string
+	SiteKey string
 
 	// CollectPolicy is served to the SDK at session start and is
 	// remotely tunable without shipping a new SDK (contract §3).
@@ -65,13 +64,17 @@ func New(cfg Config, a *app.App, log *slog.Logger) *Server {
 	return &Server{cfg: cfg, app: a, log: log, maxBody: 1 << 20}
 }
 
-// Routes returns the API mux.
+// Routes returns the mux carrying the browser-facing endpoints and the
+// health probe.
+//
+// /v1/decisions and /v1/outcomes are NOT here: libs/decision serves
+// them, and the composition root mounts it on this mux. They are the
+// two endpoints a second service also serves, so a copy of them in this
+// adapter would be a copy of the contract.
 func (s *Server) Routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/sessions", s.handleSessions)
 	mux.HandleFunc("POST /v1/telemetry", s.handleTelemetry)
-	mux.HandleFunc("POST /v1/decisions", s.handleDecisions)
-	mux.HandleFunc("POST /v1/outcomes", s.handleOutcomes)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
@@ -176,91 +179,6 @@ func (s *Server) handleTelemetry(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------------------------------------------------------------
-// POST /v1/decisions — application server
-// ---------------------------------------------------------------
-
-func (s *Server) handleDecisions(w http.ResponseWriter, r *http.Request) {
-	// secret_key authenticates the application server. This is the only
-	// endpoint that accepts subject_id and action, and it is the reason
-	// they are never read from a browser.
-	if !s.authorizedSecret(r) {
-		writeError(w, http.StatusUnauthorized, "invalid secret_key")
-		return
-	}
-
-	var req wire.DecisionsRequest
-	if !s.decode(w, r, &req) {
-		return
-	}
-
-	out, err := s.app.Decide(r.Context(), app.DecideInput{
-		SessionToken: req.SessionToken,
-		Action:       req.Action,
-		SubjectID:    req.SubjectID,
-	})
-	if err != nil {
-		s.writeAppError(w, err, "decision failed")
-		return
-	}
-
-	resp := wire.DecisionsResponse{
-		EvaluationID:   out.EvaluationID,
-		Decision:       out.Decision,
-		ShadowDecision: out.ShadowDecision,
-		Score:          round3(out.Score),
-		Confidence:     round3(out.Confidence),
-		Reasons:        make([]wire.DecisionReason, 0, len(out.Reasons)),
-		Evidence:       wire.DecisionEvidence{Events: out.EvidenceEvents, DurationMs: out.EvidenceMs},
-		Mode:           out.Mode,
-	}
-	for _, rs := range out.Reasons {
-		resp.Reasons = append(resp.Reasons, wire.DecisionReason{Code: rs.Code, Weight: rs.Weight})
-	}
-	writeJSON(w, http.StatusOK, resp)
-}
-
-// ---------------------------------------------------------------
-// POST /v1/outcomes — application server
-// ---------------------------------------------------------------
-
-func (s *Server) handleOutcomes(w http.ResponseWriter, r *http.Request) {
-	if !s.authorizedSecret(r) {
-		writeError(w, http.StatusUnauthorized, "invalid secret_key")
-		return
-	}
-
-	var req wire.OutcomesRequest
-	if !s.decode(w, r, &req) {
-		return
-	}
-
-	in := app.RecordOutcomeInput{
-		EvaluationID: req.EvaluationID,
-		Outcome:      req.Outcome,
-	}
-	if req.ObservedAt != "" {
-		t, err := time.Parse(time.RFC3339, req.ObservedAt)
-		if err != nil {
-			// Reject rather than fall back to the server clock:
-			// observed_at is the application's claim and recorded_at the
-			// server's observation, and the gap between them is itself a
-			// signal. Substituting "now" on a parse failure collapses
-			// that gap to zero and silently corrupts the labels channel.
-			writeError(w, http.StatusBadRequest, "observed_at must be RFC 3339")
-			return
-		}
-		in.ObservedAt = t
-	}
-
-	if err := s.app.RecordOutcome(r.Context(), in); err != nil {
-		s.writeAppError(w, err, "could not record outcome")
-		return
-	}
-
-	w.WriteHeader(http.StatusAccepted)
-}
-
-// ---------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------
 
@@ -281,36 +199,6 @@ func bearerToken(r *http.Request) string {
 	return ""
 }
 
-// authorizedSecret reports whether the request carries the secret_key.
-// The comparison is constant-time: the secret authenticates the
-// application server on an internet-facing endpoint, and a byte-wise
-// == would leak prefix length through response timing.
-func (s *Server) authorizedSecret(r *http.Request) bool {
-	return subtle.ConstantTimeCompare([]byte(bearerToken(r)), []byte(s.cfg.SecretKey)) == 1
-}
-
-// writeAppError is the single translation from the application's error
-// vocabulary to HTTP. Handlers pass a fallback message for errors the
-// table does not name; per-endpoint improvisation is what this exists
-// to prevent.
-func (s *Server) writeAppError(w http.ResponseWriter, err error, fallback string) {
-	switch {
-	case errors.Is(err, app.ErrActionRequired):
-		writeError(w, http.StatusBadRequest, "action is required")
-	case errors.Is(err, app.ErrEvaluationIDRequired):
-		writeError(w, http.StatusBadRequest, "evaluation_id is required")
-	case errors.Is(err, app.ErrUnknownOutcome):
-		writeError(w, http.StatusBadRequest, "unknown outcome")
-	case errors.Is(err, app.ErrArchiveUnavailable):
-		// A label with nowhere durable to live is worse than a refusal:
-		// the caller would believe it had reported an outcome.
-		writeError(w, http.StatusServiceUnavailable, "outcome storage not configured")
-	default:
-		s.log.Error(fallback, "err", err)
-		writeError(w, http.StatusInternalServerError, fallback)
-	}
-}
-
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -319,8 +207,4 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, wire.ErrorResponse{Error: msg})
-}
-
-func round3(f float64) float64 {
-	return float64(int(f*1000+0.5)) / 1000
 }

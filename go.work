@@ -21,6 +21,9 @@ use (
 	./libs/policy
 	./libs/snapshot
 	./libs/substrate
+	./libs/archive
+	./libs/decision
+	./libs/id
 	./libs/wire
 	./services/archive
 	./services/ingestion

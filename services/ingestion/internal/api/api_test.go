@@ -21,7 +21,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FabioCaffarello/ghost-trace/libs/decision"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/livesessions"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
 )
@@ -34,19 +36,28 @@ const (
 func newTestServer(t *testing.T, mode string) *httptest.Server {
 	t.Helper()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	// NullArchive: the decision path must not depend on storage.
-	a := app.New(app.Config{TenantID: "t_test", Mode: mode},
-		session.NewStore(30*time.Minute, time.Now), app.NullArchive{}, time.Now, log)
+	// One store, shared: a session created through /v1/sessions must be
+	// the session /v1/decisions judges. NullArchive because the decision
+	// path must not depend on storage.
+	store := session.NewStore(30*time.Minute, time.Now)
+	a := app.New(app.Config{TenantID: "t_test"}, store, app.NullArchive{}, time.Now, log)
 	s := New(Config{
-		SiteKey:   testSiteKey,
-		SecretKey: testSecretKey,
+		SiteKey: testSiteKey,
 		CollectPolicy: wire.CollectPolicy{
 			PointerHz: 20, BatchMs: 2000, Types: []string{"pointer"},
 		},
 		SessionTTL: 30 * time.Minute,
 	}, a, log)
 
-	srv := httptest.NewServer(s.Routes())
+	// Mounted exactly as the composition root mounts it, so these tests
+	// drive the endpoints a client reaches and not a rehearsal of them.
+	decisions := decision.New(decision.Config{
+		TenantID: "t_test", Mode: mode, SecretKey: testSecretKey,
+	}, livesessions.New(store), app.NullArchive{}, time.Now, log)
+
+	mux := s.Routes()
+	decisions.Mount(mux)
+	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv
 }
@@ -156,11 +167,10 @@ func TestExpiresInFollowsConfiguredTTL(t *testing.T) {
 	// store enforces.
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ttl := 5 * time.Minute
-	a := app.New(app.Config{TenantID: "t_test", Mode: policy.ModeMonitor},
+	a := app.New(app.Config{TenantID: "t_test"},
 		session.NewStore(ttl, time.Now), app.NullArchive{}, time.Now, log)
 	s := New(Config{
 		SiteKey:    testSiteKey,
-		SecretKey:  testSecretKey,
 		SessionTTL: ttl,
 	}, a, log)
 	srv := httptest.NewServer(s.Routes())
@@ -503,7 +513,7 @@ func TestAllContractOutcomeLabelsAccepted(t *testing.T) {
 		"login_success", "login_failure", "challenge_passed",
 		"challenge_failed", "fraud_confirmed", "user_appealed", "abandoned",
 	} {
-		if !app.ValidOutcomes[label] {
+		if !decision.ValidOutcomes[label] {
 			t.Errorf("contract outcome %q is not accepted", label)
 		}
 	}
