@@ -38,6 +38,12 @@ venv/
 /out/
 /target/
 
+# Coverage output (make coverage); CI keeps it as a run artifact
+/.coverage/
+
+# Per-developer lefthook overrides (lefthook.yml itself is committed)
+lefthook-local.yml
+
 # Logs and local state
 *.log
 .local/

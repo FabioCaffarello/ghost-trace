@@ -217,62 +217,88 @@ def report_humans(rows):
         report_arm_a(arm_a)
 
 
-def report_arm_b(rows):
-    """Arm B — breadth. Many people, few sessions each. The FPR arm."""
-    print("\n  ARM B — false-positive breadth (many people, few sessions each)")
-    print("  " + "-" * 70)
+def arm_b_stats(rows):
+    """Every quantity Arm B reports, computed once.
 
+    Split out from the printing so the selftest can assert against the
+    numbers the report actually prints. A selftest that recomputes what
+    it is checking tests nothing — it agrees with itself."""
     by_person = defaultdict(list)
     for r in rows:
         by_person[r["participant"]].append(r)
 
     people = len(by_person)
     sessions = len(rows)
+    binary = {p: [1 if flagged(r) else 0 for r in rs] for p, rs in by_person.items()}
 
     # ---- primary figure: the person is the unit of analysis ----
     #
     # This sidesteps the clustering problem instead of correcting for
     # it, is directly interpretable, and cannot be inflated by running
     # more sessions per person.
-    people_flagged = sum(1 for rs in by_person.values() if any(flagged(r) for r in rs))
-    lo, hi = wilson(people_flagged, people)
+    people_flagged = sum(1 for v in binary.values() if any(v))
+    sess_flagged = sum(sum(v) for v in binary.values())
 
-    print(f"\n  PRIMARY  {people_flagged} of {people} people were falsely flagged at least once")
+    # ---- secondary: session-level, cluster-adjusted ----
+    rho = icc_anova(binary)
+    if rho is None:
+        deff, n_eff = None, people
+    else:
+        deff = design_effect(rho, sessions / people if people else 0.0)
+        n_eff = sessions / deff if deff > 0 else people
+
+    eff_succ = sess_flagged * (n_eff / sessions) if sessions else 0
+    return {
+        "people": people,
+        "sessions": sessions,
+        "people_flagged": people_flagged,
+        "flagged_people": sorted(p for p, v in binary.items() if any(v)),
+        "person_ci": wilson(people_flagged, people),
+        "sessions_flagged": sess_flagged,
+        "rho": rho,
+        "design_effect": deff,
+        "n_eff": n_eff,
+        "session_ci_adjusted": wilson(eff_succ, n_eff),
+        "session_ci_naive": wilson(sess_flagged, sessions),
+    }
+
+
+def report_arm_b(rows):
+    """Arm B — breadth. Many people, few sessions each. The FPR arm."""
+    print("\n  ARM B — false-positive breadth (many people, few sessions each)")
+    print("  " + "-" * 70)
+
+    s = arm_b_stats(rows)
+    people, sessions = s["people"], s["sessions"]
+    lo, hi = s["person_ci"]
+
+    print(f"\n  PRIMARY  {s['people_flagged']} of {people} people were falsely flagged at least once")
     print(f"           95% CI on the proportion of people: [{lo:.1%}, {hi:.1%}]")
     print(f"           ({sessions} sessions, {sessions/people:.1f} per person)")
 
-    # ---- secondary: session-level, cluster-adjusted ----
-    binary = {p: [1 if flagged(r) else 0 for r in rs] for p, rs in by_person.items()}
-    rho = icc_anova(binary)
-    mean_m = sessions / people
-
-    sess_flagged = sum(1 for r in rows if flagged(r))
-
     print("\n  SECONDARY  session-level, adjusted for clustering within people")
-    if rho is None:
+    if s["rho"] is None:
         print("             rho not estimable (need >= 2 people)")
-        n_eff = people
     else:
-        deff = design_effect(rho, mean_m)
-        n_eff = sessions / deff if deff > 0 else people
-        print(f"             rho (estimated from data) = {rho:.3f}")
-        print(f"             design effect = {deff:.2f}   effective n = {n_eff:.1f} of {sessions}")
+        print(f"             rho (estimated from data) = {s['rho']:.3f}")
+        print(f"             design effect = {s['design_effect']:.2f}"
+              f"   effective n = {s['n_eff']:.1f} of {sessions}")
 
-    eff_succ = sess_flagged * (n_eff / sessions) if sessions else 0
-    lo, hi = wilson(eff_succ, n_eff)
-    print(f"             {sess_flagged}/{sessions} sessions flagged")
+    lo, hi = s["session_ci_adjusted"]
+    print(f"             {s['sessions_flagged']}/{sessions} sessions flagged")
     print(f"             95% CI, cluster-adjusted: [{lo:.1%}, {hi:.1%}]")
 
-    naive_lo, naive_hi = wilson(sess_flagged, sessions)
+    naive_lo, naive_hi = s["session_ci_naive"]
     print(f"             (unadjusted would report [{naive_lo:.1%}, {naive_hi:.1%}] — too narrow)")
 
-    if sess_flagged == 0:
-        print(f"\n  ZERO EVENTS OBSERVED")
+    if s["sessions_flagged"] == 0:
+        n_eff = s["n_eff"]
+        print("\n  ZERO EVENTS OBSERVED")
         print(f"             exact 95% upper bound on FPR: {zero_event_upper(n_eff):.1%}")
-        print(f"             rule-of-three approximation (3/n_eff): {3/n_eff:.1%}"
-              if n_eff > 0 else "")
-        print(f"             a production anti-bot system needs ~0.1%, which needs")
-        print(f"             roughly 3,000 independent sessions. This is not that.")
+        if n_eff > 0:
+            print(f"             rule-of-three approximation (3/n_eff): {3/n_eff:.1%}")
+        print("             a production anti-bot system needs ~0.1%, which needs")
+        print("             roughly 3,000 independent sessions. This is not that.")
 
 
 def report_arm_a(rows):
@@ -360,20 +386,189 @@ def caveats():
 """)
 
 
+# ---------------------------------------------------------------------
+# selftest
+# ---------------------------------------------------------------------
+#
+# Until R1.13 this ran the report over the fixture, printed it, and
+# returned 0 unconditionally — it proved the code did not crash and
+# nothing more. Every number below could have been wrong and CI would
+# have been green. What follows asserts.
+#
+# Two layers. The estimator checks pin closed-form properties that hold
+# for any input and would survive rewriting the fixture. The fixture
+# checks pin what the committed, seeded sample must produce — including
+# the planted structure the ICC estimator exists to recover.
+
+def _check(out, label, ok, detail=""):
+    out.append((label, bool(ok), detail))
+
+
+def _close(got, want, tol=1e-9):
+    return abs(got - want) <= tol
+
+
+def _estimator_checks(out):
+    """Closed-form properties of the interval and clustering maths."""
+    # No observations means no claim, not a claim of zero.
+    _check(out, "wilson(0, 0) spans the whole interval", wilson(0, 0) == (0.0, 1.0))
+
+    # Symmetric data gives a symmetric interval centred on 1/2.
+    lo, hi = wilson(50, 100)
+    _check(out, "wilson(50, 100) is symmetric about 0.5",
+           _close(lo + hi, 1.0, 1e-12), f"[{lo:.6f}, {hi:.6f}]")
+
+    # The reason this is Wilson and not the normal approximation: at
+    # zero events the normal interval collapses to zero width and
+    # asserts an impossible certainty.
+    lo, hi = wilson(0, 30)
+    _check(out, "wilson at zero events has a positive upper bound",
+           lo == 0.0 and hi > 0.0, f"[{lo:.6f}, {hi:.6f}]")
+
+    # More data must narrow the interval, never widen it.
+    _check(out, "wilson narrows as n grows", wilson(0, 300)[1] < wilson(0, 30)[1])
+
+    # zero_event_upper is exact; 3/n is its large-n approximation. Both
+    # are printed, so the relationship between them is worth pinning:
+    # they converge, and they disagree where the study actually lives.
+    _check(out, "rule of three converges to the exact bound at large n",
+           abs(zero_event_upper(1000) - 3 / 1000) / (3 / 1000) < 0.01,
+           f"exact={zero_event_upper(1000):.6f} 3/n={3/1000:.6f}")
+    _check(out, "rule of three is wrong at small n",
+           abs(zero_event_upper(10) - 3 / 10) / (3 / 10) > 0.10,
+           f"exact={zero_event_upper(10):.6f} 3/n={3/10:.6f}")
+
+    # ICC: the outcome is entirely a property of the cluster.
+    rho = icc_anova({"a": [1, 1, 1, 1], "b": [0, 0, 0, 0],
+                     "c": [1, 1, 1, 1], "d": [0, 0, 0, 0]})
+    _check(out, "icc = 1 when the outcome is a property of the cluster",
+           rho is not None and _close(rho, 1.0, 1e-9), f"rho={rho}")
+
+    # ICC: the same mix inside every cluster carries no clustering.
+    rho = icc_anova({k: [1, 0, 1, 0] for k in "abcd"})
+    _check(out, "icc = 0 when clusters are interchangeable",
+           rho is not None and _close(rho, 0.0, 1e-9), f"rho={rho}")
+
+    # Not estimable is None, never a number. Reporting 0.0 here would
+    # silently claim independence that was never observed.
+    _check(out, "icc is None below two clusters", icc_anova({"a": [1, 0]}) is None)
+
+    # The design effect is the whole argument of caveat 2: at rho = 1,
+    # effective n collapses to the number of PEOPLE regardless of how
+    # many sessions each contributes.
+    _check(out, "design effect is 1 without clustering", _close(design_effect(0.0, 40), 1.0))
+    _check(out, "design effect equals cluster size at rho = 1",
+           _close(design_effect(1.0, 1000), 1000.0),
+           "8 people x 1000 sessions still gives n_eff ~ 8")
+
+    # flagged() reads the shadow first: in monitor mode the returned
+    # decision is always allow, so keying off `decision` would report a
+    # 0% detection rate for every tier (ARB H9).
+    _check(out, "flagged prefers the shadow decision in monitor mode",
+           flagged({"decision": "allow", "shadow_decision": "challenge"}))
+    _check(out, "flagged falls through to the decision in enforce mode",
+           flagged({"decision": "block"}),
+           "enforce omits shadow_decision entirely")
+    _check(out, "flagged is false when both say allow",
+           not flagged({"decision": "allow", "shadow_decision": "allow"}))
+
+
+def _fixture_checks(out, rows):
+    """What the committed, seeded fixture must produce.
+
+    make_synthetic_human.py plants three 'atypical' people who flag on
+    roughly three sessions in four, against a 2% base rate for everyone
+    else. That planted structure is the ground truth: the estimator's
+    job is to recover it, and these assertions are how we know it did."""
+    arm_b = [r for r in rows if r.get("arm") == "B"]
+    arm_a = [r for r in rows if r.get("arm") == "A"]
+
+    _check(out, "fixture shape unchanged",
+           (len(rows), len(arm_b), len(arm_a)) == (170, 80, 90),
+           f"{len(rows)} rows, {len(arm_b)} arm B, {len(arm_a)} arm A")
+
+    s = arm_b_stats(arm_b)
+
+    _check(out, "arm B cohort unchanged",
+           (s["people"], s["sessions"]) == (20, 80),
+           f"{s['people']} people, {s['sessions']} sessions")
+    _check(out, "flag counts unchanged",
+           (s["people_flagged"], s["sessions_flagged"]) == (5, 9),
+           f"{s['people_flagged']} people, {s['sessions_flagged']} sessions flagged")
+
+    # The three planted people must all be caught. If a change to
+    # flagged() or to the fixture loses one of them, the person-level
+    # path is no longer measuring what it claims to.
+    planted = {"p03", "p11", "p17"}
+    _check(out, "every planted atypical person is flagged",
+           planted <= set(s["flagged_people"]),
+           f"flagged: {s['flagged_people']}  planted: {sorted(planted)}")
+
+    # The estimator must recover concentration, not report independence.
+    _check(out, "icc recovers the planted person-level structure",
+           s["rho"] is not None and s["rho"] > 0.25, f"rho={s['rho']:.3f}")
+    _check(out, "clustering costs effective sample size",
+           s["design_effect"] > 1.5 and s["n_eff"] < s["sessions"],
+           f"deff={s['design_effect']:.2f}  n_eff={s['n_eff']:.1f} of {s['sessions']}")
+
+    # The correction must go in the widening direction. Printing the
+    # unadjusted interval as if it were honest is the single failure
+    # this module exists to prevent, so it gets an assertion.
+    adj_lo, adj_hi = s["session_ci_adjusted"]
+    nai_lo, nai_hi = s["session_ci_naive"]
+    _check(out, "cluster adjustment widens the interval",
+           (adj_hi - adj_lo) > (nai_hi - nai_lo),
+           f"adjusted {adj_hi-adj_lo:.4f} wide vs naive {nai_hi-nai_lo:.4f}")
+
+    # Arm A reports effect sizes only; three people cannot support a
+    # rate. Guard the shape the habituation report depends on.
+    people_a = {r["participant"] for r in arm_a}
+    _check(out, "arm A is three people with thirty visits each",
+           len(people_a) == 3 and len(arm_a) == 90 and
+           all(r.get("visit") is not None for r in arm_a),
+           f"{sorted(people_a)}")
+
+
 def selftest():
-    """Run the statistics against the synthetic fixture.
+    """Assert the statistics against the synthetic fixture.
 
     The fixture is NOT data. It exists so the person-level path, the ICC
     estimator and the design-effect adjustment are exercised before
     twenty real people spend five minutes each — shipping untested
-    statistics to a study you can only run once would be careless."""
+    statistics to a study you can only run once would be careless.
+
+    Returns 0 if every assertion holds, 1 otherwise. Run by CI and by
+    `make experiments-check`."""
+    print("\n*** SELF-TEST on SYNTHETIC data — these are not measurements ***")
+
+    checks = []
+    _estimator_checks(checks)
+
     path = pathlib.Path(__file__).resolve().parent / "testdata" / "synthetic_human_sessions.jsonl"
     if not path.exists():
         print("fixture missing; run: python3 testdata/make_synthetic_human.py")
         return 1
     rows = [json.loads(l) for l in path.read_text().splitlines() if l.strip()]
-    print("\n*** SELF-TEST on SYNTHETIC data — these are not measurements ***")
+    _fixture_checks(checks, rows)
+
+    # Printing the report is itself a check: a formatting or key error
+    # in the path an operator reads should fail here, not in front of
+    # participants.
     report_humans(rows)
+
+    print("\n" + "=" * 74)
+    print("SELF-TEST")
+    print("=" * 74)
+    for label, ok, detail in checks:
+        mark = "ok  " if ok else "FAIL"
+        suffix = f"   ({detail})" if detail and not ok else ""
+        print(f"  {mark}  {label}{suffix}")
+
+    failed = [c for c in checks if not c[1]]
+    print(f"\n  {len(checks) - len(failed)}/{len(checks)} assertions hold")
+    if failed:
+        print("\n  the statistics are wrong, or the fixture moved. Do not run the study.")
+        return 1
     return 0
 
 

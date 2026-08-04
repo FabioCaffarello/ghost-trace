@@ -1,0 +1,38 @@
+# Editor defaults, so whitespace never becomes a diff.
+# https://editorconfig.org — supported natively or by plugin in every
+# editor this repository is likely to be opened in.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.go]
+indent_style = tab
+indent_size = 4
+
+[Makefile]
+indent_style = tab
+
+[*.sh]
+indent_size = 4
+
+[*.{yml,yaml,json,js,mjs,ts,html,css}]
+indent_size = 2
+
+[*.proto]
+indent_size = 2
+
+[*.md]
+# Two trailing spaces are a hard line break in Markdown.
+trim_trailing_whitespace = false
+
+[*.jsonl]
+# Session fixtures are machine-written; nothing should reformat them.
+trim_trailing_whitespace = false
+insert_final_newline = false

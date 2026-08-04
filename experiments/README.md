@@ -55,6 +55,22 @@ right unit of analysis, and why the sample is biased.
 false-positive rate. Everything is an interval, and the clustering
 correlation is **estimated from the data**, never assumed.
 
+Those statistics are tested before anyone runs them on people:
+
+```bash
+make experiments-check      # or: python3 experiments/analyze.py --selftest
+```
+
+The selftest pins closed-form properties of the estimators (Wilson at
+zero events, the design effect collapsing effective n to the number of
+people at ρ=1, the shadow-decision precedence that makes monitor-mode
+detection rates non-zero) and then asserts that the committed synthetic
+fixture — which plants three atypical people among twenty — is recovered
+as the high-ρ structure it is. It exits non-zero when it isn't, and CI
+runs it on every push. The fixture is **not data**: it exists so the
+study, which can only be run once, is not the first execution of this
+code.
+
 ---
 
 ## Running it

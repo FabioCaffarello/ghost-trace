@@ -1,0 +1,52 @@
+# Ghost Trace — the commit message contract.
+#
+# Pull requests here are squash-merged, so the commit that lands on main
+# is the PULL REQUEST TITLE, not any of the commits written on the
+# branch. Release automation reads the log, which means the title is the
+# thing that decides the next version — and it is the one field a
+# reviewer can change after everything else has gone green.
+#
+# That is why this is its own workflow rather than a job in ci.yml:
+# `on: pull_request` defaults to opened/synchronize/reopened, so a title
+# edited after CI passed would never be re-checked. Listing `edited`
+# here re-runs this check (seconds, no toolchain) without re-running the
+# build on every typo fixed in a PR description.
+#
+# The rule itself lives in scripts/check-commit-message.sh, which the
+# lefthook commit-msg hook also calls — one definition, two callers.
+
+name: commit
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conventional:
+    name: commits — conventional
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Prove the rule accepts and rejects the right set before judging
+      # anything with it. A regular expression is exactly the kind of
+      # thing that looks correct and matches the wrong language.
+      - name: Rule selftest
+        run: make lint-commit-selftest
+
+      # Through the environment, never interpolated into the run block:
+      # a pull request title is attacker-controlled text on a fork PR,
+      # and `run: make lint-commit TITLE=${{ ... }}` is a shell
+      # injection with write access to this checkout.
+      - name: Conventional PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: make lint-commit

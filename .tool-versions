@@ -1,0 +1,14 @@
+# Optional. If you use asdf or mise, these are the exact versions CI
+# runs, so `mise install` reproduces the pipeline's toolchain. If you
+# don't, ignore this file — `make bootstrap` asserts the minimums that
+# actually matter and names what to install.
+#
+# Keep in step with: Makefile (BUF_VER, GOLANGCI_VER), the `toolchain`
+# directive in both go.mod files, and .github/workflows/ci.yml.
+
+golang 1.26.5
+nodejs 22.14.0
+python 3.12.9
+buf 1.68.4
+golangci-lint 2.12.2
+lefthook 2.1.8

@@ -1,0 +1,80 @@
+# Git hooks. Opt-in: `make hooks` installs them, nothing does it for you.
+#
+# The rule these follow is that a hook must be fast and must be right.
+# A slow hook gets bypassed with --no-verify, and once that becomes a
+# habit every hook is off, including the one that would have caught
+# something. So pre-commit only runs checks that are near-instant on the
+# files you actually touched, and the expensive gate waits for push.
+#
+# Every failure names the command that fixes it.
+
+pre-commit:
+  parallel: true
+  commands:
+    gofmt:
+      glob: '*.go'
+      run: |
+        out=$(gofmt -s -l {staged_files})
+        if [ -n "$out" ]; then
+          echo "not gofmt-clean:"
+          echo "$out"
+          echo "fix: make fmt"
+          exit 1
+        fi
+
+    python-syntax:
+      glob: '*.py'
+      run: python3 -m compileall -q {staged_files}
+      fail_text: 'python syntax error — fix the file, or: make experiments-check'
+
+    node-syntax:
+      glob: '*.{js,mjs}'
+      exclude:
+        - 'experiments/node_modules/**'
+      run: |
+        for f in {staged_files}; do node --check "$f"; done
+      fail_text: 'node syntax error — fix: make experiments-check'
+
+    golangci-config:
+      glob: '.golangci.yml'
+      run: golangci-lint config verify
+      fail_text: '.golangci.yml is not valid for the pinned golangci-lint'
+
+    compose-config:
+      glob: 'compose.yml'
+      run: docker compose config --quiet
+      fail_text: 'compose.yml does not parse — fix before committing'
+
+    # The experiment results directory holds session dumps and browser
+    # profiles, and it is one `git add -A` away from the index. The
+    # .gitignore covers what exists today; this covers what does not.
+    large-files:
+      run: |
+        git diff --cached --name-only --diff-filter=ACM -z |
+        while IFS= read -r -d '' f; do
+          [ -f "$f" ] || continue
+          size=$(wc -c < "$f" | tr -d ' ')
+          if [ "$size" -gt 1048576 ]; then
+            echo "$f is $((size / 1024)) KiB — over the 1 MiB limit"
+            echo "if this really belongs in the repository: git commit --no-verify"
+            exit 1
+          fi
+        done
+
+# Conventional Commits, so semantic-release can derive versions from the
+# log. Note what this hook does NOT protect: pull requests are
+# squash-merged, so the message that lands on main is the PR TITLE, and
+# that is checked in CI by the same script. This one keeps the local log
+# readable and catches the mistake before it reaches the PR form.
+commit-msg:
+  commands:
+    conventional:
+      run: scripts/check-commit-message.sh --file {1}
+
+# The real gate. Same target a human runs before pushing and the same
+# checks CI will run, so a red pipeline should be a surprise.
+pre-push:
+  commands:
+    verify:
+      run: make verify
+      fail_text: 'make verify failed — see above; CI would have failed too'

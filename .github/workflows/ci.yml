@@ -1,0 +1,158 @@
+# Ghost Trace — the quality gate.
+#
+# Every step is `make <target>`. This file decides WHEN things run and
+# on what machine; the root Makefile decides WHAT they do. That split is
+# the point: `make ci` locally and a green run here are the same
+# statement, and a gate cannot be strengthened in one place and quietly
+# left behind in the other.
+#
+# Actions are pinned by commit SHA with the tag in a trailing comment. A
+# tag is mutable — `@v7` is a promise from a third party that today's
+# code is what runs tomorrow, and that promise is exactly what supply
+# chain attacks break. Dependabot proposes the SHA bumps.
+#
+# The v1 workflow made every step conditional on a `hashFiles` probe for
+# a file that had been deleted, so all steps skipped and a vacuous green
+# was reported on a required status check. Nothing here is conditional
+# on a file existing: if it does not build, the check fails.
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A superseded run on a branch is wasted compute. On main every commit
+# is a state someone may ship from, so those runs are never cancelled.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  schemas:
+    name: schemas — lint + breaking + genproto sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # buf breaking compares against the base branch
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          # Read from the module rather than restated here: a CI Go
+          # version that can drift from go.mod is a defect waiting for
+          # the day the two disagree.
+          go-version-file: services/ingestion/go.mod
+          cache-dependency-path: |
+            services/ingestion/go.sum
+            libs/genproto/go.sum
+
+      - uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
+        with:
+          version: '1.68.4' # keep in step with BUF_VER in the Makefile
+          # Raises the API rate limit while resolving the release. The
+          # workflow token is read-only (permissions, above).
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: buf lint
+        run: make buf-lint
+
+      - name: buf breaking (against the base branch)
+        if: github.event_name == 'pull_request'
+        run: make buf-breaking BASE_REF=${{ github.base_ref }}
+
+      - name: genproto in sync
+        run: make genproto-sync
+
+  # The job name is a required status check on main. Renaming it silently
+  # removes the protection, so it stays as it is.
+  ingestion:
+    name: services/ingestion — build + test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: services/ingestion/go.mod
+          cache-dependency-path: |
+            services/ingestion/go.sum
+            libs/genproto/go.sum
+
+      - name: Format
+        run: make fmt-check
+
+      - name: Modules tidy
+        run: make tidy-check
+
+      - name: Build
+        run: make build
+
+      - name: Vet
+        run: make vet
+
+      - name: Test (-race)
+        run: make test-race
+
+      - name: Coverage
+        run: make coverage
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage
+          path: .coverage/coverage.out
+          retention-days: 14
+
+  quality:
+    name: quality — lint + vulnerabilities
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: services/ingestion/go.mod
+          cache-dependency-path: |
+            services/ingestion/go.sum
+            libs/genproto/go.sum
+
+      # Installs the version pinned in the Makefile, so a lint failure
+      # here is reproducible with `make lint` and not an artefact of
+      # whichever release the runner happened to fetch.
+      - name: Lint
+        run: make lint
+
+      # SECURITY.md promises dependencies are checked against the Go
+      # vulnerability database. Until now nothing did that.
+      - name: Vulnerabilities
+        run: make vuln
+
+  experiments:
+    name: experiments — syntax + selftest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      # Syntax-checks every tier and runs the statistics selftest, which
+      # now asserts rather than merely printing. No browsers, no network,
+      # no dependencies: this is the part of the experiment harness that
+      # can be checked on every push, and it was unchecked entirely.
+      - name: Syntax + asserted selftest
+        run: make experiments-check
