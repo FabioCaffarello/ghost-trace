@@ -422,6 +422,36 @@ func TestOutcomesRequiresEvaluationID(t *testing.T) {
 	}
 }
 
+func TestOutcomesRejectsMalformedObservedAt(t *testing.T) {
+	// observed_at is the application's claim; recorded_at is the
+	// server's observation, and the gap between them is a signal.
+	// Before this guard a parse failure was silently replaced with the
+	// server clock — an untrustworthy value made indistinguishable from
+	// a trustworthy one, inside the labels channel calibration depends on.
+	srv := newTestServer(t, policy.ModeMonitor)
+	status, _ := post(t, srv, "/v1/outcomes", testSecretKey, map[string]any{
+		"evaluation_id": "ev_1", "outcome": "login_success",
+		"observed_at": "yesterday around noon",
+	})
+	if status != http.StatusBadRequest {
+		t.Errorf("status = %d for malformed observed_at, want 400", status)
+	}
+}
+
+func TestOutcomesAcceptsRFC3339ObservedAt(t *testing.T) {
+	// A well-formed timestamp must pass request validation. The test
+	// server has no archive, so 503 — not 400 — proves the request
+	// survived the parse and reached the use case.
+	srv := newTestServer(t, policy.ModeMonitor)
+	status, _ := post(t, srv, "/v1/outcomes", testSecretKey, map[string]any{
+		"evaluation_id": "ev_1", "outcome": "login_success",
+		"observed_at": "2026-08-03T12:00:00Z",
+	})
+	if status != http.StatusServiceUnavailable {
+		t.Errorf("status = %d for valid observed_at with no archive, want 503", status)
+	}
+}
+
 func TestOutcomesWithoutStorageIsRefused(t *testing.T) {
 	// The test server has no archive. A label with nowhere durable to
 	// live must not be accepted: the caller would believe it had
