@@ -105,7 +105,7 @@
     {
       "id": "numbers-reproduce",
       "name": "the six numbers",
-      "description": "THE project invariant, and deliberately outside `make ci`: it needs real browsers and takes about seven minutes. Required after any change touching services/, experiments/ or schemas/. Detection rates must sit inside the Wilson intervals of the last manifest in docs/results/, p99 inside the 80ms budget, cold start still never blocking. Tiers 5 and 6 are seeded (GT_SEED), so their figures are repeatable; a moved number with no explanation is indistinguishable from a broken detector.",
+      "description": "THE project invariant, and deliberately outside `make ci`: it needs real browsers and takes about seven minutes. Required after any change touching services/, experiments/ or schemas/. The target now MEASURES AND CHECKS: it compares the run against the newest manifest in docs/results/ and fails on a rate outside the baseline's Wilson interval in either direction, a tier that has gone missing, p99 over the 80ms budget, a cold start that blocks, a false-positive rate that lost its value, or a >10% memory regression. The comparison logic is itself asserted by experiments-check, inside `make ci`, where it needs no browsers. Tiers 5 and 6 are seeded (GT_SEED), so their figures are repeatable; a moved number with no explanation is indistinguishable from a broken detector.",
       "command": "make numbers",
       "severity": "critical",
       "blocking": true,
