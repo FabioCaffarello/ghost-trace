@@ -40,7 +40,7 @@ linters:
       # contextcheck cannot see that a deferred recover closure has
       # nothing context-shaped left to pass: the log call already uses
       # ErrorContext, and http.Error has no context-taking form.
-      - path: internal/httpmw/logging\.go
+      - path: logging\.go
         linters:
           - contextcheck
 

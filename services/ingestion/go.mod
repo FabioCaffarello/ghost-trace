@@ -12,6 +12,7 @@ require (
 
 require (
 	github.com/FabioCaffarello/ghost-trace/libs/genproto v0.0.0
+	github.com/FabioCaffarello/ghost-trace/libs/middleware v0.0.0
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
@@ -43,4 +44,10 @@ require (
 	golang.org/x/text v0.14.0 // indirect
 )
 
+// Filesystem replaces, kept alongside go.work on purpose: the
+// workspace serves local development and CI, while these keep each
+// module buildable ON ITS OWN — which is what the container build does
+// (it copies libs/ and services/ingestion/ and never sees go.work).
 replace github.com/FabioCaffarello/ghost-trace/libs/genproto => ../../libs/genproto
+
+replace github.com/FabioCaffarello/ghost-trace/libs/middleware => ../../libs/middleware

@@ -1,17 +1,15 @@
-// Package httpmw is the transport middleware chain: request-id,
-// recovery, structured request logging, and metrics.
+// Package middleware is the HTTP middleware chain every Ghost Trace
+// service shares: request id, panic recovery, structured request
+// logging, and Prometheus-style metrics.
 //
-// Stdlib-only, like the rest of the service. The chain order is fixed
-// by what each layer needs from the ones outside it: request-id first
-// so every later layer (and the handler) can correlate, recovery
-// inside that so a panic is logged with its id, logging inside
-// recovery so the 500 a panic produces is still logged, metrics
-// innermost so it measures handler time rather than logging time.
+// It is its own module rather than a package inside one service because
+// Phase 2 splits the binary into four (collector, decision-engine,
+// archive, demo-web) and every one of them serves HTTP. Extracting it
+// here keeps the service PRs about their service.
 //
-// Restored from the v1 tree (see docs/v1-retrospective.md) with the
-// same wire behavior: X-Request-Id accepted verbatim from upstream or
-// generated as 32 hex chars, Prometheus text exposition on /metrics.
-package httpmw
+// Stdlib only, deliberately. A shared library that drags dependencies
+// into four services is a coupling nobody asked for.
+package middleware
 
 import (
 	"context"

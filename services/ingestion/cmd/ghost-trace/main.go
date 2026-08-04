@@ -18,10 +18,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/FabioCaffarello/ghost-trace/libs/middleware"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/substratearchive"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/api"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/httpmw"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/policy"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
@@ -135,12 +135,12 @@ func run() error {
 	// can correlate, recovery so a panic is logged with its id, logging
 	// so the 500 a panic produces still gets its line, metrics
 	// innermost so it measures the handler rather than the logging.
-	metrics := httpmw.NewMetrics()
+	metrics := middleware.NewMetrics()
 	mux.Handle("GET /metrics", metrics.Handler())
-	handler := httpmw.Chain(mux,
-		httpmw.RequestID(),
-		httpmw.Recovery(log),
-		httpmw.Logging(log),
+	handler := middleware.Chain(mux,
+		middleware.RequestID(),
+		middleware.Recovery(log),
+		middleware.Logging(log),
 		metrics.Collect(),
 	)
 
