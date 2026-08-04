@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FabioCaffarello/ghost-trace/libs/canonical"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/canonical"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
+	"github.com/FabioCaffarello/ghost-trace/libs/substrate"
 )
 
 func openSubstrate(t *testing.T) *substrate.Substrate {

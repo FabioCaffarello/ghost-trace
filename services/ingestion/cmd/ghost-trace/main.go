@@ -19,13 +19,13 @@ import (
 	"time"
 
 	"github.com/FabioCaffarello/ghost-trace/libs/middleware"
+	"github.com/FabioCaffarello/ghost-trace/libs/substrate"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/substratearchive"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/api"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/policy"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/substrate"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/web"
 )
 

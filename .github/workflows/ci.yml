@@ -150,9 +150,12 @@ jobs:
       fail-fast: false
       matrix:
         module:
-          - services/ingestion
+          - libs/canonical
+          - libs/eventstream
           - libs/genproto
           - libs/middleware
+          - libs/substrate
+          - services/ingestion
     env:
       GOWORK: "off"
     steps:

@@ -13,7 +13,10 @@ go 1.26
 toolchain go1.26.5
 
 use (
+	./libs/canonical
+	./libs/eventstream
 	./libs/genproto
 	./libs/middleware
+	./libs/substrate
 	./services/ingestion
 )

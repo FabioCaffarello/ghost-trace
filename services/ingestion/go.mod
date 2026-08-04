@@ -6,13 +6,15 @@ toolchain go1.26.5
 
 require (
 	google.golang.org/protobuf v1.36.0 // archive-format pin: canonical bytes are hashed for identity — upgrading is an archive-compatibility event, see internal/canonical
-	lukechampine.com/blake3 v1.3.0
-	modernc.org/sqlite v1.34.4
+	lukechampine.com/blake3 v1.3.0 // indirect
+	modernc.org/sqlite v1.34.4 // indirect
 )
 
 require (
+	github.com/FabioCaffarello/ghost-trace/libs/canonical v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/genproto v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/middleware v0.0.0
+	github.com/FabioCaffarello/ghost-trace/libs/substrate v0.0.0
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
@@ -48,6 +50,10 @@ require (
 // workspace serves local development and CI, while these keep each
 // module buildable ON ITS OWN — which is what the container build does
 // (it copies libs/ and services/ingestion/ and never sees go.work).
+replace github.com/FabioCaffarello/ghost-trace/libs/canonical => ../../libs/canonical
+
 replace github.com/FabioCaffarello/ghost-trace/libs/genproto => ../../libs/genproto
+
+replace github.com/FabioCaffarello/ghost-trace/libs/substrate => ../../libs/substrate
 
 replace github.com/FabioCaffarello/ghost-trace/libs/middleware => ../../libs/middleware
