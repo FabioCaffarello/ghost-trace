@@ -5,9 +5,8 @@
 # cannot drift into meaning two different things: to know what CI will
 # do, run `make ci`.
 #
-# Two Go modules are stitched by a `replace` (no go.work yet — PR-2.1);
-# the per-module targets loop over $(GO_MODULES) so neither can be
-# quietly left out of a gate.
+# Three Go modules under a go.work workspace. The per-module targets
+# loop over $(GO_MODULES) so none can be quietly left out of a gate.
 
 SHELL := /bin/bash
 
@@ -21,7 +20,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 # --- layout ----------------------------------------------------------
-GO_MODULES  := services/ingestion libs/genproto
+GO_MODULES  := services/ingestion libs/genproto libs/middleware
 SERVICE     := services/ingestion
 EXPERIMENTS := experiments
 COVER_DIR   := .coverage

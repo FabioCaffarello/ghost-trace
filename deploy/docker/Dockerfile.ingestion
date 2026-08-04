@@ -24,9 +24,17 @@ FROM ${GOLANG_IMAGE} AS build
 WORKDIR /src
 
 # Module graph first, so dependency downloads cache independently of
-# source edits. genproto's go.mod must be present before download: the
-# service go.mod carries a filesystem replace to it.
+# source edits.
+#
+# Every module the service `replace`s must have its go.mod here before
+# `go mod download` runs, and the list is explicit rather than a glob so
+# a missing one fails at build time — which is how libs/middleware
+# announced itself when Phase 2 split it out. ADD A LINE PER NEW LIB.
+#
+# Note this build never sees go.work: it builds each module standalone
+# through the replaces, which is why those stay in go.mod.
 COPY libs/genproto/go.mod libs/genproto/go.sum libs/genproto/
+COPY libs/middleware/go.mod libs/middleware/
 COPY services/ingestion/go.mod services/ingestion/go.sum services/ingestion/
 RUN --mount=type=cache,target=/go/pkg/mod \
     cd services/ingestion && go mod download

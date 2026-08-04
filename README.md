@@ -197,7 +197,9 @@ one browser from another.
   schemas/events/v1/           protobuf archive schema
   contract/                    what must be true: the architecture contract,
                                the generated OpenAPI surface, the fixtures
-                               the harness actually sends, the target design
+                               the harness actually sends, the target design,
+                               and the decision records
+  libs/                        shared modules — genproto, middleware
   .context/                    agent harness: playbooks, skills, sensors, policy
   experiments/schema/          the contract the six numbers satisfy
   docs/                        write-ups of work that has run

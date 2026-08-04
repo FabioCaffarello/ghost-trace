@@ -1,0 +1,19 @@
+// The Go workspace. Closes audit finding M18: before this, the modules
+// were stitched only by filesystem `replace` directives, which drift as
+// services multiply — and Phase 2 multiplies them to four.
+//
+// The `replace` directives stay in each go.mod on purpose. This
+// workspace serves local development and CI; the replaces keep every
+// module buildable ON ITS OWN, which is exactly what the container
+// build does — it copies libs/ and services/ingestion/ and never sees
+// this file.
+
+go 1.26
+
+toolchain go1.26.5
+
+use (
+	./libs/genproto
+	./libs/middleware
+	./services/ingestion
+)
