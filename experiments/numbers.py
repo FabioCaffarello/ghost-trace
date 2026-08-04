@@ -18,9 +18,11 @@ derived from synthetic sessions. A blank in that row is the honest
 state of the project; a fabricated value there would invalidate the
 other five.
 """
+import datetime
 import json
 import os
 import pathlib
+import platform
 import shutil
 import signal
 import subprocess
@@ -28,6 +30,8 @@ import sys
 import time
 import urllib.error
 import urllib.request
+
+from schema import SCHEMA_VERSION, validate_numbers
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -59,6 +63,13 @@ TIER_N = {
     "tier5_humanised.js": _n(5, 10),
     "tier6_value_injection.js": _n(6, 10),
 }
+
+# Tier 3 is the Python one and is driven separately, so it lives
+# outside TIER_N — which is exactly why the first published manifest
+# omitted it from sample_sizes. It is named here so the record of what
+# was measured cannot leave a tier out.
+TIER3_SCRIPT = "tier3_undetected_chromedriver.py"
+TIER3_N = _n(3, 8)
 
 
 def log(msg):
@@ -137,10 +148,9 @@ def main():
                 lines = (r.stderr or "").strip().splitlines()
                 absent.append(f"{script}: {lines[-1] if lines else 'failed'}")
 
-        n3 = _n(3, 8)
-        log(f"tier: tier3_undetected_chromedriver (n={n3})")
-        r = run([venv_python(), str(HERE / "tiers" / "tier3_undetected_chromedriver.py")],
-                env={"GT_N": str(n3)})
+        log(f"tier: {TIER3_SCRIPT} (n={TIER3_N})")
+        r = run([venv_python(), str(HERE / "tiers" / TIER3_SCRIPT)],
+                env={"GT_N": str(TIER3_N)})
         if r.returncode != 0:
             lines = (r.stderr or "").strip().splitlines()
             absent.append(
@@ -187,7 +197,7 @@ def main():
     # rows in sessions.jsonl is recorded ABSENT — a tier reported as
     # neither present nor absent would silently shrink the detection
     # table, which is exactly the failure this layer exists to prevent.
-    for script in [*TIER_N, "tier3_undetected_chromedriver.py"]:
+    for script in [*TIER_N, TIER3_SCRIPT]:
         stem = script.rsplit(".", 1)[0]        # e.g. tier5_humanised
         prefix = stem.split("_", 1)[0] + "_"   # e.g. tier5_ (cohort names may carry suffixes)
         if any(c.startswith(prefix) for c in detection):
@@ -197,15 +207,85 @@ def main():
         absent.append(f"{script}: completed with zero sessions")
 
     numbers = {
+        "schema_version": SCHEMA_VERSION,
+        "provenance": provenance(),
         "detection": detection,
         "false_positive_rate": human_fpr(),
         "session": session_numbers,
         "architecture": bench,
         "absent_tiers": absent,
     }
+
+    # Validate before writing. A measurement that costs browsers and
+    # minutes to reproduce should not be published in a shape nothing
+    # can read; and the six numbers are quoted in a README, so a
+    # malformed run is a malformed claim.
+    errors = validate_numbers(numbers)
+    if errors:
+        print("\nnumbers.json does NOT satisfy experiments/schema/numbers.schema.json:\n",
+              file=sys.stderr)
+        for e in errors:
+            print(f"  {e}", file=sys.stderr)
+        print("\nrefusing to write it — the run's data is in results/ and the "
+              "schema or the producer is wrong.", file=sys.stderr)
+        return 1
+
     (RESULTS / "numbers.json").write_text(json.dumps(numbers, indent=2))
     report(numbers)
     return 0
+
+
+def provenance():
+    """Who measured what, where, and when.
+
+    Six numbers with no provenance are six numbers nobody can check.
+    This block is what makes a committed run manifest a record rather
+    than an assertion — in particular `sample_sizes`, because
+    GT_N_TIER<k> silently changes what was measured, and `git.dirty`,
+    because a number produced from uncommitted code cannot be
+    reproduced by anyone including its author."""
+    def cmd(args):
+        try:
+            r = subprocess.run(args, capture_output=True, text=True, timeout=10)
+            return r.stdout.strip() if r.returncode == 0 else None
+        except (OSError, subprocess.SubprocessError):
+            return None
+
+    sha = cmd(["git", "-C", str(ROOT), "rev-parse", "HEAD"])
+    status = cmd(["git", "-C", str(ROOT), "status", "--porcelain"])
+
+    return {
+        # Timezone-aware and UTC: a naive local timestamp in a run
+        # manifest is ambiguous the moment it leaves this machine.
+        "generated_at": datetime.datetime.now(datetime.timezone.utc)
+                                .replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "git": {
+            "commit": sha,
+            "dirty": bool(status) if status is not None else None,
+        },
+        "machine": {
+            "platform": platform.system(),
+            "arch": platform.machine(),
+            "cpus": os.cpu_count(),
+            "python": platform.python_version(),
+            "node": (cmd(["node", "--version"]) or "").lstrip("v") or None,
+            # Asked from inside the service module, so it reports the
+            # toolchain that actually builds the binary and the
+            # benchmark — go.mod pins one, and the version on PATH may
+            # be older.
+            "go": (cmd(["go", "-C", str(SVC), "env", "GOVERSION"]) or "").lstrip("go") or None,
+        },
+        "run": {
+            # External mode measures a slice this process did not start,
+            # which is a different claim about what was under test.
+            "mode": "external" if EXTERNAL_BASE else "local",
+            "base": BASE,
+            "sample_sizes": {
+                **{k.rsplit(".", 1)[0]: v for k, v in TIER_N.items()},
+                TIER3_SCRIPT.rsplit(".", 1)[0]: TIER3_N,
+            },
+        },
+    }
 
 
 def summarize_tiers():

@@ -81,6 +81,32 @@ The canonical entry point is one command from the repository root:
 python3 experiments/numbers.py
 ```
 
+Its output has a contract:
+[`schema/numbers.schema.json`](schema/numbers.schema.json). `numbers.py`
+validates against it **before writing** — a measurement that costs
+browsers and minutes to reproduce should not be published in a shape
+nothing can read, and the six numbers are quoted in the root README, so
+a malformed run is a malformed claim.
+
+The validator is stdlib (`schema/__init__.py`), because `numbers.py`
+being runnable with nothing installed is the point of the one-command
+promise. A hand-written validator that quietly accepts what it does not
+understand would be worse than none, so two things constrain it: any
+JSON Schema keyword outside its implemented subset **raises** rather
+than being skipped, and the fixture corpus in `schema/testdata/` is run
+through a real JSON Schema implementation in Go by
+`numbers_schema_test.go`, which fails if the two disagree.
+
+```bash
+make experiments-check   # includes the schema fixture selftest
+make numbers-manifest    # validate the last run and publish it to docs/results/
+```
+
+Every run carries a `provenance` block — commit, dirty flag, machine,
+cpu count, run mode and the sample size actually used per tier, because
+`GT_N_TIER<k>` silently changes what was measured. Published manifests
+live in [`docs/results/`](../docs/results/).
+
 It builds the service binary, starts it on a private port with a
 private data directory, runs every tier, measures latency /
 time-to-confident-decision / cold start, runs the two-architecture
