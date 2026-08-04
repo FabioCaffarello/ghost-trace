@@ -8,6 +8,7 @@ package api
 
 import (
 	"context"
+	"github.com/FabioCaffarello/ghost-trace/libs/wire"
 	"io"
 	"log/slog"
 	"net/http"
@@ -101,7 +102,7 @@ func TestEvaluationRecordCarriesFullFeatureState(t *testing.T) {
 		substratearchive.New(ingest.New(sub, time.Now)), time.Now, log)
 	s := New(Config{
 		SiteKey: testSiteKey, SecretKey: testSecretKey,
-		CollectPolicy: CollectPolicy{PointerHz: 20, BatchMs: 2000, Types: []string{"pointer"}},
+		CollectPolicy: wire.CollectPolicy{PointerHz: 20, BatchMs: 2000, Types: []string{"pointer"}},
 	}, a, log)
 	srv := httptest.NewServer(s.Routes())
 	t.Cleanup(srv.Close)

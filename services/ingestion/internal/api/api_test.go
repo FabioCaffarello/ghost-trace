@@ -12,6 +12,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/FabioCaffarello/ghost-trace/libs/wire"
 	"io"
 	"log/slog"
 	"net/http"
@@ -39,7 +40,7 @@ func newTestServer(t *testing.T, mode string) *httptest.Server {
 	s := New(Config{
 		SiteKey:   testSiteKey,
 		SecretKey: testSecretKey,
-		CollectPolicy: CollectPolicy{
+		CollectPolicy: wire.CollectPolicy{
 			PointerHz: 20, BatchMs: 2000, Types: []string{"pointer"},
 		},
 		SessionTTL: 30 * time.Minute,

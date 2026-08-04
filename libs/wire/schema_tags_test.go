@@ -12,7 +12,7 @@
 // generator runs, and the specification simply says less than it was
 // written to say. This test is the only thing standing between that
 // and a published contract.
-package api
+package wire
 
 import (
 	"go/ast"

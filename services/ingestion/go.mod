@@ -19,6 +19,7 @@ require (
 	github.com/FabioCaffarello/ghost-trace/libs/policy v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/snapshot v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/substrate v0.0.0
+	github.com/FabioCaffarello/ghost-trace/libs/wire v0.0.0
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
@@ -72,5 +73,7 @@ replace github.com/FabioCaffarello/ghost-trace/libs/snapshot => ../../libs/snaps
 replace github.com/FabioCaffarello/ghost-trace/libs/genproto => ../../libs/genproto
 
 replace github.com/FabioCaffarello/ghost-trace/libs/substrate => ../../libs/substrate
+
+replace github.com/FabioCaffarello/ghost-trace/libs/wire => ../../libs/wire
 
 replace github.com/FabioCaffarello/ghost-trace/libs/middleware => ../../libs/middleware

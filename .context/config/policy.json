@@ -13,7 +13,7 @@
           "contract/fixtures/**"
         ]
       },
-      "reason": "Generated, committed and drift-gated. Change the source instead: schemas/ then `make generate`; the Go wire types in internal/api then `make openapi`; the harness wire modules then `make contract-fixtures`. A hand edit is reverted by the next regeneration and fails CI in the meantime."
+      "reason": "Generated, committed and drift-gated. Change the source instead: schemas/ then `make generate`; the Go wire types in libs/wire then `make openapi`; the harness wire modules then `make contract-fixtures`. A hand edit is reverted by the next regeneration and fails CI in the meantime."
     },
     {
       "id": "contract-section-numbering-is-stable",

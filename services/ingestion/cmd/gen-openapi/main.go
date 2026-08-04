@@ -5,7 +5,7 @@
 // a second description of the wire, free to drift from the first the
 // moment anyone edits a struct — and nothing fails when it does. So
 // every SHAPE here is reflected: field names, types, optionality,
-// nesting, all of it derived from internal/api. Two enumerations that
+// nesting, all of it derived from libs/wire. Two enumerations that
 // exist as Go values (policy.ReasonCodes, app.ValidOutcomes) are read
 // from those values for the same reason.
 //
@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/api"
+	"github.com/FabioCaffarello/ghost-trace/libs/wire"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 )
@@ -42,11 +42,13 @@ import (
 // the wire changes, which is what a client pins against.
 const specVersion = "1.0.0"
 
-// Where the wire types live, so their doc comments can be read. The
-// generator runs from the module root (see the openapi make target).
+// Where the wire types live, so their doc comments can be read. They
+// are a module of their own because more than one service serves this
+// contract; the generator runs from services/ingestion (see the openapi
+// make target), hence the relative path back out.
 const (
-	modulePath   = "github.com/FabioCaffarello/ghost-trace/services/ingestion"
-	apiSourceDir = "./internal/api"
+	wireModulePath = "github.com/FabioCaffarello/ghost-trace/libs/wire"
+	wireSourceDir  = "../../libs/wire"
 )
 
 func main() {
@@ -363,13 +365,13 @@ func responses(m map[string]any) map[string]any { return m }
 // wireTypes is every type that appears on the wire. A type reachable
 // from one of these is pulled in automatically as a $ref.
 var wireTypes = []any{
-	&api.SessionsRequest{},
-	&api.SessionsResponse{},
-	&api.TelemetryBatch{},
-	&api.DecisionsRequest{},
-	&api.DecisionsResponse{},
-	&api.OutcomesRequest{},
-	&api.ErrorResponse{},
+	&wire.SessionsRequest{},
+	&wire.SessionsResponse{},
+	&wire.TelemetryBatch{},
+	&wire.DecisionsRequest{},
+	&wire.DecisionsResponse{},
+	&wire.OutcomesRequest{},
+	&wire.ErrorResponse{},
 }
 
 // reflectSchemas turns the wire types into OpenAPI component schemas.
@@ -386,8 +388,8 @@ func reflectSchemas() (map[string]any, refFunc) {
 	// whoever reads the code and once for whoever reads the contract —
 	// and the second copy is the one that goes stale, because nothing
 	// is looking at it.
-	if err := r.AddGoComments(modulePath, apiSourceDir); err != nil {
-		fatal("read Go doc comments from %s: %v", apiSourceDir, err)
+	if err := r.AddGoComments(wireModulePath, wireSourceDir); err != nil {
+		fatal("read Go doc comments from %s: %v", wireSourceDir, err)
 	}
 
 	schemas := map[string]any{}
@@ -577,7 +579,7 @@ func marshalYAML(doc map[string]any) ([]byte, error) {
 # GENERATED FILE — DO NOT EDIT.
 #
 # Written by services/ingestion/cmd/gen-openapi from the Go types in
-# internal/api that the handlers actually decode into, plus the two
+# libs/wire that the handlers actually decode into, plus the two
 # enumerations that live as Go values (policy.ReasonCodes and
 # app.ValidOutcomes).
 #
