@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0.0",
+  "provenance": {
+    "generated_at": "2026-08-04T09:15:00Z",
+    "git": {
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dirty": false
+    },
+    "machine": {
+      "platform": "Darwin",
+      "arch": "arm64",
+      "cpus": 12,
+      "python": "3.14.3",
+      "node": "26.3.0",
+      "go": "1.26.5"
+    },
+    "run": {
+      "mode": "local",
+      "base": "http://127.0.0.1:18099",
+      "sample_sizes": {
+        "tier1_playwright": 12,
+        "tier4_synthetic_linear": 100
+      }
+    }
+  },
+  "detection": {},
+  "false_positive_rate": null,
+  "session": null,
+  "architecture": null,
+  "absent_tiers": [
+    "tier3_undetected_chromedriver.py: no Chrome on this platform"
+  ]
+}

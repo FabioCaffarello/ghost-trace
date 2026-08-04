@@ -1,0 +1,537 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/FabioCaffarello/ghost-trace/experiments/schema/numbers.schema.json",
+  "title": "Ghost Trace \u2014 the six numbers",
+  "description": "The output of `python3 experiments/numbers.py`. Six numbers with no provenance are six numbers nobody can check, so the provenance block is required and a run manifest committed under docs/results/ is a record rather than an assertion.\n\nAbsence is expressed as null, never as zero and never by omission: `false_positive_rate: null` means no human capture exists, which is the honest state of the project, while `0` would be a claim nobody has earned.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "provenance",
+    "detection",
+    "false_positive_rate",
+    "session",
+    "architecture",
+    "absent_tiers"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Version of this schema the document claims to satisfy.",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "provenance": {
+      "$ref": "#/$defs/provenance"
+    },
+    "detection": {
+      "type": "object",
+      "description": "Number 1 \u2014 detection rate per adversarial tier, keyed by cohort. An EMPTY object means no bot session was recorded at all; a tier that ran and produced nothing appears in absent_tiers instead.",
+      "additionalProperties": {
+        "$ref": "#/$defs/cohort"
+      }
+    },
+    "false_positive_rate": {
+      "description": "Number 2 \u2014 the governing number, and null until real people have been captured. It is deliberately person-level: sessions cluster within people, so the number of PEOPLE is the effective sample size.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/falsePositiveRate"
+        }
+      ]
+    },
+    "session": {
+      "description": "Numbers 3, 4 and 5 \u2014 p99 decision latency, time to confident decision, cold-start behaviour. Null when the session measurement failed.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/session"
+        }
+      ]
+    },
+    "architecture": {
+      "description": "Number 6 \u2014 the two-architecture benchmark. Null when no Go toolchain was present, which is the case inside the experiments container. Null here means NOT MEASURED, and the report says so out loud.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/benchCell"
+          }
+        }
+      ]
+    },
+    "absent_tiers": {
+      "type": "array",
+      "description": "Tiers that did not produce data, with the reason. A tier that did not run is not a tier that found nothing, and an empty detection row without an entry here would silently shrink the table.",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "provenance": {
+      "type": "object",
+      "required": [
+        "generated_at",
+        "git",
+        "machine",
+        "run"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "generated_at": {
+          "type": "string",
+          "description": "UTC, RFC 3339. A naive local timestamp is ambiguous the moment it leaves the machine that wrote it.",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "git": {
+          "type": "object",
+          "required": [
+            "commit",
+            "dirty"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "commit": {
+              "description": "Full commit SHA, or null outside a git checkout.",
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                }
+              ]
+            },
+            "dirty": {
+              "description": "Whether the tree had uncommitted changes. A number produced from uncommitted code cannot be reproduced by anyone, including its author.",
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            }
+          }
+        },
+        "machine": {
+          "type": "object",
+          "required": [
+            "platform",
+            "arch",
+            "cpus",
+            "python"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "platform": {
+              "type": "string"
+            },
+            "arch": {
+              "type": "string"
+            },
+            "cpus": {
+              "description": "Load-bearing for number 6, which is a concurrency benchmark.",
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              ]
+            },
+            "python": {
+              "type": "string"
+            },
+            "node": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "go": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        "run": {
+          "type": "object",
+          "required": [
+            "mode",
+            "base",
+            "sample_sizes"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "description": "local starts its own slice; external measures one it did not start, which is a different claim about what was under test.",
+              "type": "string",
+              "enum": [
+                "local",
+                "external"
+              ]
+            },
+            "base": {
+              "type": "string"
+            },
+            "sample_sizes": {
+              "type": "object",
+              "description": "What was actually measured. GT_N_TIER<k> silently changes this, so a manifest without it cannot be compared to another.",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "cohort": {
+      "type": "object",
+      "required": [
+        "n",
+        "detected",
+        "rate",
+        "ci_low",
+        "ci_high",
+        "mean_score",
+        "mean_confidence"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "n": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "detected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "ci_low": {
+          "type": "number",
+          "description": "Wilson score interval. Reported always: a bare rate without an interval is the false precision this project exists to avoid.",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "ci_high": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "mean_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "mean_confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "falsePositiveRate": {
+      "type": "object",
+      "required": [
+        "people",
+        "sessions",
+        "people_flagged",
+        "person_ci_low",
+        "person_ci_high",
+        "rho",
+        "design_effect",
+        "effective_n"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "people": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sessions": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "people_flagged": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "person_ci_low": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "person_ci_high": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "rho": {
+          "description": "Intraclass correlation, ESTIMATED from the data rather than assumed. Null when there is too little structure to estimate it \u2014 never 0, which would claim independence nobody observed.",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          ]
+        },
+        "design_effect": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number",
+              "minimum": 1
+            }
+          ]
+        },
+        "effective_n": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "required": [
+        "cold_start",
+        "ttcd",
+        "latency"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "cold_start": {
+          "type": "object",
+          "required": [
+            "n",
+            "score",
+            "confidence",
+            "decisions",
+            "reasons",
+            "never_blocks"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "n": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "decisions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "reasons": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "never_blocks": {
+              "type": "boolean",
+              "description": "Number 5. A first visit carries no history, so blocking one is blocking a stranger for being new."
+            }
+          }
+        },
+        "ttcd": {
+          "type": "object",
+          "description": "Number 4 \u2014 how much interaction it takes before a decision is worth acting on. Two thresholds, reported separately: `challenge` is the confidence floor for asking, `block` the floor for refusing. Either is null when no session reached that floor, which is a result rather than a failure.",
+          "required": [
+            "challenge",
+            "block"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "challenge": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/ttcdReach"
+                }
+              ]
+            },
+            "block": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/ttcdReach"
+                }
+              ]
+            }
+          }
+        },
+        "latency": {
+          "type": "object",
+          "description": "Number 3. Measured on an idle system against a single session \u2014 the friendliest possible conditions, and therefore a floor rather than a production figure.",
+          "required": [
+            "n",
+            "p50",
+            "p95",
+            "p99",
+            "max",
+            "budget_ms"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "n": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "p50": {
+              "type": "number",
+              "minimum": 0
+            },
+            "p95": {
+              "type": "number",
+              "minimum": 0
+            },
+            "p99": {
+              "type": "number",
+              "minimum": 0
+            },
+            "max": {
+              "type": "number",
+              "minimum": 0
+            },
+            "budget_ms": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "benchCell": {
+      "type": "object",
+      "required": [
+        "architecture",
+        "sessions",
+        "duration_s",
+        "batches_per_session",
+        "heap_mb",
+        "bytes_per_session",
+        "decide_p50_ms",
+        "decide_p99_ms",
+        "decide_max_ms"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "architecture": {
+          "type": "string"
+        },
+        "sessions": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "duration_s": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "batches_per_session": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "heap_mb": {
+          "type": "number",
+          "minimum": 0
+        },
+        "bytes_per_session": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "decide_p50_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "decide_p99_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "decide_max_ms": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "ttcdReach": {
+      "type": "object",
+      "required": [
+        "reached",
+        "of",
+        "batches",
+        "events",
+        "seconds"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "reached": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "of": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "batches": {
+          "type": "number",
+          "minimum": 0
+        },
+        "events": {
+          "type": "number",
+          "minimum": 0
+        },
+        "seconds": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}
