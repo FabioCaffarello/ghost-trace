@@ -370,6 +370,33 @@ openapi-lint: tool-vacuum ## Lint the specification (structure, descriptions, op
 tool-vacuum:
 	@$(call ensure_tool,vacuum,github.com/daveshanley/vacuum@$(VACUUM_VER))
 
+##@ Agent harness
+
+# .context/ is the versioned source of agent knowledge; CLAUDE.md and
+# .claude/ are generated exports of it (the latter gitignored). Same
+# discipline as every other generated artifact here: edit the source,
+# regenerate, and let a gate catch the drift.
+.PHONY: context-sync
+context-sync: ## Regenerate CLAUDE.md and .claude/ from .context/
+	npx -y @dotcontext/cli@1.1.1 sync --preset claude --force
+
+.PHONY: context-sync-check
+context-sync-check: ## Fail if CLAUDE.md has gone stale against .context/docs/README.md
+	@# Checked in Python, not shell. The first version reconstructed the
+	@# exporter's output format with sed and compared byte-wise: it was
+	@# a second definition of what the exporter does, and it relied on
+	@# GNU sed semantics, so it passed on macOS and failed on the
+	@# runner. Third portability trap in this Makefile after
+	@# .SHELLFLAGS and `mktemp -t`.
+	@#
+	@# The invariant that actually matters is containment: whatever else
+	@# the export adds, the current source must be inside it.
+	@python3 -c "import pathlib, sys; \
+	src = pathlib.Path('.context/docs/README.md').read_text().strip(); \
+	out = pathlib.Path('CLAUDE.md').read_text(); \
+	sys.exit(0) if src in out else sys.exit('CLAUDE.md is stale against .context/docs/README.md\nfix: make context-sync && git add CLAUDE.md')"
+	@echo "CLAUDE.md in sync"
+
 ##@ Experiments
 
 .PHONY: experiments-check
@@ -433,7 +460,7 @@ verify: fmt-check vet lint test-race ## Pre-push gate: format, vet, lint, race t
 # ci: the whole gate. `make ci` green locally and a green CI run are the
 # same statement — that equivalence is the reason this file exists.
 .PHONY: ci
-ci: fmt-check tidy-check lint-commit-selftest buf-lint genproto-sync openapi-sync openapi-lint contract-fixtures-sync vet lint test-race coverage experiments-check vuln ## Everything CI runs
+ci: fmt-check tidy-check lint-commit-selftest buf-lint genproto-sync openapi-sync openapi-lint contract-fixtures-sync context-sync-check vet lint test-race coverage experiments-check vuln ## Everything CI runs
 
 ##@ Housekeeping
 

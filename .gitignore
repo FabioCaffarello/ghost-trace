@@ -64,3 +64,13 @@ services/ingestion/.run-data/
 # Local agent-tooling state — recreated by tooling, never repo content
 .claude/
 .mcp.json
+
+# dotcontext runtime state. CLAUDE.md is NOT here: it is a generated
+# export of .context/docs/README.md, committed and drift-gated like
+# every other generated artifact. .claude/ stays local — it is a
+# per-tool rendering, not repository content.
+.context/plans/
+.context/cache/semantic/
+.context/runtime/
+.context/**/archive/
+

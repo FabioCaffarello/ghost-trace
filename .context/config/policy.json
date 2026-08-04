@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "defaultEffect": "allow",
+  "note": "Rules this repository learned the hard way. Each one exists because the thing it forbids already happened once, silently.",
+  "rules": [
+    {
+      "id": "generated-artifacts-never-hand-edited",
+      "effect": "deny",
+      "when": {
+        "paths": [
+          "libs/genproto/**",
+          "contract/openapi.yaml",
+          "contract/fixtures/**"
+        ]
+      },
+      "reason": "Generated, committed and drift-gated. Change the source instead: schemas/ then `make generate`; the Go wire types in internal/api then `make openapi`; the harness wire modules then `make contract-fixtures`. A hand edit is reverted by the next regeneration and fails CI in the meantime."
+    },
+    {
+      "id": "contract-section-numbering-is-stable",
+      "effect": "require_approval",
+      "when": {
+        "paths": [
+          "contract/architecture.md"
+        ]
+      },
+      "reason": "\u00a70-\u00a79 are cited from code, schemas and tests. Renumbering silently breaks every `contract \u00a7N` citation in the tree."
+    },
+    {
+      "id": "consent-and-collection-surface",
+      "effect": "require_approval",
+      "when": {
+        "paths": [
+          "services/ingestion/internal/web/static/sdk.js",
+          "experiments/README.md",
+          "SECURITY.md"
+        ]
+      },
+      "reason": "This is the boundary of what is collected from real people. The keystroke channel carries timing and a coarse class only \u2014 never the key, never the field value. A widening here is a change to what the project is, and the consent text was false once already."
+    },
+    {
+      "id": "published-numbers",
+      "effect": "require_approval",
+      "when": {
+        "paths": [
+          "README.md",
+          "docs/results/**"
+        ]
+      },
+      "reason": "The six numbers are the project's central claim. Moving one requires a fresh manifest AND re-reading the prose around it \u2014 a re-baselined figure with stale prose is a document that now lies."
+    },
+    {
+      "id": "goldens-are-the-wire",
+      "effect": "require_approval",
+      "when": {
+        "paths": [
+          "services/ingestion/internal/api/testdata/golden/**"
+        ]
+      },
+      "reason": "These freeze the exact bytes clients receive. Regenerating them is a deliberate act (`-update`) and must be called out in the PR; an accidental regeneration hides a contract change."
+    },
+    {
+      "id": "archive-format-pin",
+      "effect": "require_approval",
+      "when": {
+        "paths": [
+          "services/ingestion/go.mod",
+          "libs/genproto/go.mod"
+        ]
+      },
+      "reason": "google.golang.org/protobuf is an archive-format pin, not a dependency: canonical bytes are hashed for content-addressed identity, so a bump is an archive-compatibility event. Dependabot is configured to leave it alone."
+    },
+    {
+      "id": "ci-and-build-contract",
+      "effect": "require_approval",
+      "when": {
+        "paths": [
+          ".github/workflows/**",
+          "Makefile",
+          "deploy/**"
+        ],
+        "risk": "high"
+      },
+      "reason": "Every CI step must stay `run: make <target>`. Job names are required status checks \u2014 renaming one silently removes the protection. No sync gate may use `git status`."
+    },
+    {
+      "id": "block-secrets",
+      "effect": "deny",
+      "when": {
+        "paths": [
+          "**/.env*",
+          "**/*.pem",
+          "**/*.key",
+          "**/*secret*",
+          "**/.npmrc"
+        ]
+      },
+      "reason": "Secret-bearing files. Reading one into a transcript leaks it; ~/.npmrc is on this list because that has happened."
+    }
+  ]
+}

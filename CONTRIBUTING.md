@@ -74,6 +74,21 @@ command in the failure message.
   the telemetry vocabularies and a test holds `sdk.js` to them in both
   directions. Adding a value to one means adding it to the other.
 
+## Agent context
+
+`.context/` is the versioned source of what an AI agent working here is
+told: playbooks, on-demand skills, the sensor catalog and the policy
+rules. `CLAUDE.md` and `.claude/` are **generated exports** of it —
+`make context-sync` regenerates them, and `make context-sync-check`
+fails if `CLAUDE.md` drifts.
+
+Two skills there are worth reading even if you never use an agent,
+because they are the two disciplines this repository has repeatedly got
+wrong: `wire-contract-change` and `numbers-invariant`.
+
+Every sensor in `.context/config/sensors.json` is a `make` target, so
+humans, CI and agents share one vocabulary.
+
 ## The invariant
 
 **The six numbers must reproduce.** After any change touching
