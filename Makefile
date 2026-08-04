@@ -523,6 +523,17 @@ shadow-http: ## A/B the collector against the engine, and check the demo is wire
 		GT_DEMO_URL="$${GT_DEMO_URL:-http://127.0.0.1:8083}" \
 		go test -count=1 ./internal/shadow/ -v
 
+# The kill-test: take one service away and check what the rest
+# promises. Each scenario is a degradation an ADR asserts, and until
+# this existed all of them were prose. It needs the composed topology
+# and REFUSES without it, for the reason parity and shadow do.
+#
+#   docker compose --profile core up -d
+#   make kill-test
+.PHONY: kill-test
+kill-test: ## Take each service away and check the degradation promises (needs the topology up)
+	@python3 deploy/kill-test.py
+
 .PHONY: parity
 parity: ## Archive parity against a real broker (needs GT_NATS_URL)
 	@if [ -z "$${GT_NATS_URL:-}" ]; then \

@@ -33,10 +33,12 @@ is green and CI is not, that is a bug in the split and worth reporting.
 
 Two checks need infrastructure and so sit outside `make ci`, refusing to
 run rather than skipping: `make parity` and `make shadow` want a broker
-(`GT_NATS_URL`), and `make shadow-http` wants the composed topology up —
-it asks the collector and the decision engine the same question and
-compares their answers, and separately checks that the demo host can
-actually reach the engine. That second one exists because fail-open
+(`GT_NATS_URL`), and `make shadow-http` and `make kill-test` want the composed topology
+up. The first asks the collector and the decision engine the same
+question and compares their answers, and separately checks that the demo
+host can actually reach the engine. The second takes one service away at
+a time and checks what the rest promises — it is where the degradation
+claims in the decision records stop being prose. That second one exists because fail-open
 (§5) means a demo wired to an unreachable engine answers "allow"
 forever and looks perfectly healthy.
 
