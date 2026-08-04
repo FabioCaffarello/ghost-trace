@@ -81,6 +81,34 @@ The canonical entry point is one command from the repository root:
 python3 experiments/numbers.py
 ```
 
+### What the harness sends
+
+Every request body the harness builds comes from one module per
+language — [`lib/wire.js`](lib/wire.js) and [`wire.py`](wire.py). Before
+R1.15 there were five hand-rolled producers, and because the service
+tolerates unknown fields by design (§5, §7), renaming a wire field would
+have left them all sending the old name, the server zero-filling the new
+one, and every measurement quietly degrading with the suite green. That
+is audit finding M22.
+
+```bash
+make contract-fixtures        # emit what those modules produce
+make contract-fixtures-sync   # fail if the fixtures drift from them
+```
+
+The fixtures in [`contract/fixtures/requests/`](../contract/fixtures/requests/)
+are not hand-written — they are what the wire modules produce, which is
+also how the emitter can assert that the **JavaScript and Python halves
+of the harness agree byte for byte**. If they disagree about the wire,
+one of them is measuring something else, and no server-side test would
+show it.
+
+A Go test then checks each fixture twice: against the published OpenAPI
+request schema (`additionalProperties: false`, so a renamed field fails
+from either direction) and by **replaying it against a real server**,
+because satisfying a schema is not the same as being accepted. Those
+same fixtures are the request examples published in the contract.
+
 Its output has a contract:
 [`schema/numbers.schema.json`](schema/numbers.schema.json). `numbers.py`
 validates against it **before writing** — a measurement that costs

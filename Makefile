@@ -326,6 +326,34 @@ openapi-sync: ## Fail if contract/openapi.yaml differs from a fresh generation
 	fi; \
 	echo "contract/openapi.yaml in sync"
 
+# The request fixtures are what the harness's wire modules produce —
+# not hand-written, because a hand-written fixture is a third
+# description of the wire, free to drift from both the clients and the
+# server. Emitting them also asserts the JavaScript and Python halves
+# of the harness agree byte for byte.
+.PHONY: contract-fixtures
+contract-fixtures: ## Regenerate contract/fixtures/ from the harness wire modules
+	cd $(EXPERIMENTS) && python3 emit_fixtures.py
+
+.PHONY: contract-fixtures-sync
+contract-fixtures-sync: ## Fail if contract/fixtures/ drifts from the wire modules
+	@# Emitted to a temporary directory and diffed, for the reason
+	@# openapi-sync learned the hard way: git calls a newly added path
+	@# untracked, and a git-based check reads that as drift on the very
+	@# commit that introduces it.
+	@tmp=$$(mktemp -d "$${TMPDIR:-/tmp}/gtfixtures.XXXXXX"); \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	(cd $(EXPERIMENTS) && python3 emit_fixtures.py "$$tmp") >/dev/null || \
+		{ echo "emitting fixtures failed — run: make contract-fixtures"; exit 1; }; \
+	if ! diff -ru contract/fixtures/requests "$$tmp" >/dev/null 2>&1; then \
+		diff -ru contract/fixtures/requests "$$tmp" | head -40; \
+		echo ""; \
+		echo "contract/fixtures is out of sync with the harness wire modules"; \
+		echo "fix: make contract-fixtures && git add contract/fixtures"; \
+		exit 1; \
+	fi; \
+	echo "contract/fixtures in sync"
+
 .PHONY: openapi-lint
 openapi-lint: tool-vacuum ## Lint the specification (structure, descriptions, operation ids)
 	@# --fail-severity warn, because the ruleset is curated: anything it
@@ -400,7 +428,7 @@ verify: fmt-check vet lint test-race ## Pre-push gate: format, vet, lint, race t
 # ci: the whole gate. `make ci` green locally and a green CI run are the
 # same statement — that equivalence is the reason this file exists.
 .PHONY: ci
-ci: fmt-check tidy-check lint-commit-selftest buf-lint genproto-sync openapi-sync openapi-lint vet lint test-race coverage experiments-check vuln ## Everything CI runs
+ci: fmt-check tidy-check lint-commit-selftest buf-lint genproto-sync openapi-sync openapi-lint contract-fixtures-sync vet lint test-race coverage experiments-check vuln ## Everything CI runs
 
 ##@ Housekeeping
 

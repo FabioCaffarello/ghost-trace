@@ -1,0 +1,16 @@
+{
+  "site_key": "pk_demo",
+  "page": {
+    "path": "/login"
+  },
+  "client": {
+    "pointer": "fine",
+    "touch": false,
+    "viewport": [
+      1440,
+      900
+    ],
+    "tz_offset": -180,
+    "reduced_motion": false
+  }
+}

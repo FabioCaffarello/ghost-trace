@@ -171,6 +171,7 @@ one browser from another.
   experiments/                 six adversarial tiers + the statistics
   schemas/events/v1/           protobuf archive schema
   contract/openapi.yaml        the published HTTP contract (generated)
+  contract/fixtures/           what the harness sends, emitted by its wire modules
   experiments/schema/          the contract the six numbers satisfy
   docs/                        write-ups of work that has run
   docs/results/                committed run manifests, with provenance

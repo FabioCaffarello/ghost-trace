@@ -34,6 +34,7 @@ import (
 
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/api"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/policy"
 )
 
@@ -171,15 +172,7 @@ func opSessions(ref refFunc) map[string]any {
 		"security": []any{},
 		"requestBody": body(ref("SessionsRequest"),
 			"The tenant's public key plus what the browser reports about itself.",
-			map[string]any{
-				"site_key": "pk_demo",
-				"page":     map[string]any{"path": "/login"},
-				"client": map[string]any{
-					"pointer": "mouse", "touch": false,
-					"viewport": []any{1440, 900}, "tz_offset": -180,
-					"reduced_motion": false,
-				},
-			}),
+			readFixture("sessions.json")),
 		"responses": responses(map[string]any{
 			"200": jsonResponseFromGolden("Session opened", ref("SessionsResponse"), "sessions_200.json"),
 			"400": errorResponseFromGolden(ref, "Malformed JSON body, or a body over 1 MiB", "error_400_malformed.json"),
@@ -201,16 +194,7 @@ func opTelemetry(ref refFunc) map[string]any {
 		"security": []any{map[string]any{"sessionToken": []any{}}, map[string]any{}},
 		"requestBody": body(ref("TelemetryBatch"),
 			"One flush of interaction events. The pts triples are [x, y, milliseconds since the previous sample].",
-			map[string]any{
-				"session_token": "st_AufHcXG3MEt9x5F3hzVf03ZS",
-				"seq":           1,
-				"sent_at_ms":    2840,
-				"page":          map[string]any{"path": "/login", "viewport": []any{1440, 900}},
-				"events": []any{map[string]any{
-					"type": "pointer", "t": 1200, "src": "mouse",
-					"pts": []any{[]any{412, 300, 0}, []any{418, 305, 16}, []any{427, 311, 17}},
-				}},
-			}),
+			readFixture("telemetry_pointer_and_keys.json")),
 		"responses": responses(map[string]any{
 			"202": map[string]any{"description": "Accepted. No body — including for an unknown session."},
 			"400": errorResponseFromGolden(ref, "Malformed JSON body, or a body over 1 MiB", "error_400_telemetry_malformed.json"),
@@ -232,11 +216,7 @@ func opDecisions(ref refFunc) map[string]any {
 		"security": []any{map[string]any{"secretKey": []any{}}},
 		"requestBody": body(ref("DecisionsRequest"),
 			"Which session, and what it is trying to do.",
-			map[string]any{
-				"session_token": "st_AufHcXG3MEt9x5F3hzVf03ZS",
-				"action":        "login",
-				"subject_id":    "user_8f21",
-			}),
+			readFixture("decisions.json")),
 		"responses": responses(map[string]any{
 			"200": jsonResponseFromGolden("A judgement", ref("DecisionsResponse"), "decisions_200.json"),
 			"400": errorResponseFromGolden(ref, "Malformed JSON body, or action missing", "error_400_action_required.json"),
@@ -260,11 +240,7 @@ func opOutcomes(ref refFunc) map[string]any {
 		"security": []any{map[string]any{"secretKey": []any{}}},
 		"requestBody": body(ref("OutcomesRequest"),
 			"What actually happened to a past evaluation.",
-			map[string]any{
-				"evaluation_id": "ev_5Kq2mXbT9vHs",
-				"outcome":       "login_success",
-				"observed_at":   "2026-08-04T09:15:00Z",
-			}),
+			readFixture("outcomes_with_observed_at.json")),
 		"responses": responses(map[string]any{
 			"202": map[string]any{"description": "Outcome recorded. No body."},
 			"400": errorResponseFromGolden(ref, "Malformed body, missing evaluation_id, unknown outcome, or observed_at that is not RFC 3339", "error_400_unknown_outcome.json"),
@@ -334,8 +310,29 @@ func jsonResponseFromGolden(desc string, schema map[string]any, golden string) m
 	return resp
 }
 
-// goldenDir is relative to the module root, where the generator runs.
-const goldenDir = "internal/api/testdata/golden"
+// Both relative to the module root, where the generator runs.
+const (
+	goldenDir  = "internal/api/testdata/golden"
+	fixtureDir = "../../contract/fixtures/requests"
+)
+
+// readFixture returns a committed request fixture — what the harness's
+// wire modules actually produce. Using it as the published example
+// means the request examples are as real as the response ones: a
+// hand-written example is a claim, and the first version of this file
+// made three of them that the wire vocabulary did not allow.
+func readFixture(name string) any {
+	raw, err := os.ReadFile(filepath.Join(fixtureDir, name))
+	if err != nil {
+		fatal("read fixture %s for the published example "+
+			"(generate with `make contract-fixtures`): %v", name, err)
+	}
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		fatal("fixture %s is not JSON: %v", name, err)
+	}
+	return v
+}
 
 func readGolden(name string) any {
 	raw, err := os.ReadFile(filepath.Join(goldenDir, name))
@@ -454,6 +451,30 @@ func rewriteRefs(node any) {
 // generator exists to make impossible.
 func injectEnums(schemas map[string]any) {
 	setEnum(schemas, "DecisionReason", "code", policy.ReasonCodes)
+	setEnum(schemas, "DecisionsResponse", "decision", policy.Decisions)
+	setEnum(schemas, "DecisionsResponse", "shadow_decision", policy.Decisions)
+	setEnum(schemas, "DecisionsResponse", "mode", policy.Modes)
+
+	// The telemetry vocabularies. Every one of these was retyped into a
+	// struct tag in R1.14 and three of them were WRONG — `char` and
+	// `edit` as key classes that nothing sends, pointer types invented
+	// as mouse/touch/pen when the SDK reports the CSS media query
+	// values, and form actions that omitted `paste`. The server
+	// tolerates unknown values, so the specification was free to be
+	// wrong about the wire until something checked. Reading them from
+	// internal/ingest, which ingest/vocabulary_test.go holds sdk.js to,
+	// is what makes that impossible.
+	setEnum(schemas, "ClientHints", "pointer", ingest.PointerTypes)
+	setEnum(schemas, "TelemetryEvent", "type", ingest.EventTypes)
+	setEnum(schemas, "TelemetryEvent", "phase", ingest.KeyPhases)
+	setEnum(schemas, "TelemetryEvent", "class", ingest.KeyClasses)
+	setEnum(schemas, "TelemetryEvent", "mode", ingest.ScrollModes)
+	setEnum(schemas, "TelemetryEvent", "action", ingest.FormActions)
+
+	// `state` is shared by two event families in the flat union, so its
+	// vocabulary is the union of both.
+	setEnum(schemas, "TelemetryEvent", "state",
+		append(append([]string{}, ingest.FocusStates...), ingest.VisibilityStates...))
 
 	outcomes := make([]string, 0, len(app.ValidOutcomes))
 	for name := range app.ValidOutcomes {

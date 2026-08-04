@@ -11,6 +11,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { decisionBody } from "./wire.js";
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const RESULTS_DIR = path.join(HERE, "..", "results");
 
@@ -45,11 +47,7 @@ export async function decide(sessionToken, { action = "login", subjectId = "harn
       "Content-Type": "application/json",
       Authorization: "Bearer " + SECRET_KEY,
     },
-    body: JSON.stringify({
-      session_token: sessionToken,
-      action,
-      subject_id: subjectId,
-    }),
+    body: JSON.stringify(decisionBody({ sessionToken, action, subjectId })),
   });
   if (!res.ok) throw new Error(`/v1/decisions -> HTTP ${res.status}`);
   return res.json();
