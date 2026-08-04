@@ -26,7 +26,6 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/libs/substrate"
 	"github.com/FabioCaffarello/ghost-trace/libs/wire"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/adapters/livesessions"
-	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/adapters/streamarchive"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/adapters/substratearchive"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/api"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/app"
@@ -84,65 +83,72 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Raw event archive. Optional: the decision path does not read from
-	// it, so a slice can run entirely in memory. It exists so M2 can
-	// re-score recorded sessions when a threshold moves.
-	var archive app.EventArchive = app.NullArchive{}
+	// THE ARCHIVE IS ONE STORE, NOT TWO (ADR-0006).
+	//
+	// -nats and -data are alternatives now, and giving both is an error
+	// rather than a precedence rule nobody would remember. Until PR-2.5b
+	// the collector wrote locally AND mirrored onto the stream, with the
+	// local write authoritative; parity across a full experiment run
+	// (3419 records, nothing missing either way) retired that.
+	//
+	//   -nats   the stream is the archive; the archive service stores it
+	//   -data   a local substrate, for the all-in-one development binary
+	//           and for the six-numbers run, which needs no broker
+	//
+	// Either way the archive is optional to the DECISION path: nothing
+	// reads from it to judge a session. It exists so a recorded session
+	// can be re-scored when a threshold moves.
+	var eventArchive app.EventArchive = app.NullArchive{}
 	var sessionStore app.SessionSnapshots
-	if *dataDir != "" {
+
+	switch {
+	case *natsURL != "" && *dataDir != "":
+		return fmt.Errorf("-nats and -data are alternatives: the stream is the archive " +
+			"when a broker is configured, and writing both was the transitional " +
+			"dual-write that ADR-0006 retired")
+
+	case *natsURL != "":
+		nc, js, err := eventstream.Connect(*natsURL, "ghost-trace-collector")
+		if err != nil {
+			return fmt.Errorf("connect event stream: %w", err)
+		}
+		defer nc.Close()
+		if err := eventstream.EnsureStream(ctx, js); err != nil {
+			return fmt.Errorf("ensure event stream: %w", err)
+		}
+		eventArchive = eventstream.NewArchive(eventstream.NewPublisher(js), *tenantID)
+		log.Info("event stream is the archive", "nats", *natsURL)
+
+		// Session snapshots: what the decision engine reads instead of
+		// holding the session itself. Best effort — a bucket that is
+		// unreachable makes another process's view stale, which is that
+		// process's problem to detect, not a reason to reject telemetry
+		// here.
+		sessionStore, err = eventstream.OpenSessions(ctx, js, *ttl)
+		if err != nil {
+			return fmt.Errorf("open session snapshots: %w", err)
+		}
+		log.Info("session snapshots enabled", "bucket", eventstream.SessionBucket, "ttl", *ttl)
+
+	case *dataDir != "":
 		sub, err := substrate.Open(ctx, *dataDir+"/events.db", *dataDir+"/blobs")
 		if err != nil {
 			return fmt.Errorf("open substrate: %w", err)
 		}
 		defer func() { _ = sub.Close() }()
-		archive = substratearchive.New(ingest.New(sub, time.Now))
-		log.Info("raw event archive enabled", "dir", *dataDir)
+		eventArchive = substratearchive.New(ingest.New(sub, time.Now))
+		log.Info("local substrate is the archive", "dir", *dataDir)
 
-		// Transitional dual-write. With -nats set, every record still
-		// goes to the local substrate AND is mirrored onto the event
-		// stream for the archive service. The local write stays
-		// authoritative: a broker outage is logged and counted, never
-		// returned, because adding a broker must not make this service
-		// less reliable than it was without one. PR-2.5 removes the
-		// local write once parity is demonstrated.
-		if *natsURL != "" {
-			nc, js, err := eventstream.Connect(*natsURL, "ghost-trace-collector")
-			if err != nil {
-				return fmt.Errorf("connect event stream: %w", err)
-			}
-			defer nc.Close()
-			if err := eventstream.EnsureStream(ctx, js); err != nil {
-				return fmt.Errorf("ensure event stream: %w", err)
-			}
-			mirror := streamarchive.New(archive, eventstream.NewPublisher(js), *tenantID, log)
-			archive = mirror
-			defer func() {
-				appended, published, dropped := mirror.Counts()
-				log.Info("event stream mirror", "appended", appended,
-					"published", published, "dropped", dropped)
-			}()
-			log.Info("event stream mirror enabled", "nats", *natsURL)
-
-			// Session snapshots: what a decision engine reads instead of
-			// holding the session itself. Best effort — a bucket that is
-			// unreachable makes another process's view stale, which is
-			// that process's problem to detect, not a reason to reject
-			// telemetry here.
-			sessionStore, err = eventstream.OpenSessions(ctx, js, *ttl)
-			if err != nil {
-				return fmt.Errorf("open session snapshots: %w", err)
-			}
-			log.Info("session snapshots enabled", "bucket", eventstream.SessionBucket, "ttl", *ttl)
-		}
-	} else {
-		log.Warn("raw event archive disabled; sessions will not be replayable (-data to enable)")
+	default:
+		log.Warn("no archive configured; sessions will not be replayable " +
+			"(-data for a local substrate, -nats for the event stream)")
 	}
 
 	sessions := session.NewStore(*ttl, time.Now)
 
 	application := app.New(app.Config{
 		TenantID: *tenantID,
-	}, sessions, archive, time.Now, log)
+	}, sessions, eventArchive, time.Now, log)
 	if sessionStore != nil {
 		application = application.WithSnapshots(sessionStore)
 	}
@@ -155,7 +161,7 @@ func run() error {
 		TenantID:  *tenantID,
 		Mode:      *mode,
 		SecretKey: *secretKey,
-	}, livesessions.New(sessions), archive, time.Now, log)
+	}, livesessions.New(sessions), eventArchive, time.Now, log)
 
 	apiSrv := api.New(api.Config{
 		SiteKey:        *siteKey,

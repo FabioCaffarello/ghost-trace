@@ -57,7 +57,6 @@ services:
     build: *collector-build
     command:
       - -addr=0.0.0.0:8080
-      - -data=/data
       - -mode=${GT_MODE:-monitor}
       - -site-key=${GT_SITE_KEY:-pk_demo}
       - -secret-key=${GT_SECRET_KEY:-sk_demo}
@@ -68,15 +67,13 @@ services:
       # /v1/sessions and /v1/telemetry only: the secret-key endpoints
       # are server-to-server and a page must never reach them.
       - -cors-origin=${GT_DEMO_ORIGIN:-http://127.0.0.1:8083},${GT_DEMO_ORIGIN_INTERNAL:-http://demo-web-internal:8083}
-      # Transitional dual-write: records still land in the local
-      # substrate, and a copy is mirrored to the archive service. The
-      # local write stays authoritative — a broker outage is counted,
-      # never surfaced.
+      # The stream IS the archive here (ADR-0006) — there is no -data,
+      # and passing both is an error. The archive service is the only
+      # durable store; parity across a full experiment run is what
+      # earned the local write's removal, and docs/results/ holds it.
       - -nats=nats://nats:4222
     ports:
       - "127.0.0.1:8080:8080"
-    volumes:
-      - gt-data:/data
     depends_on:
       nats:
         condition: service_healthy
@@ -304,7 +301,7 @@ services:
     restart: unless-stopped
 
 volumes:
-  gt-data:
+  # No gt-data: the collector holds no durable store since ADR-0006.
   gt-archive-data:
   nats-data:
   prom-data:
