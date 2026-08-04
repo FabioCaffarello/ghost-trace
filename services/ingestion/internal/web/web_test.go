@@ -2,7 +2,9 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -45,10 +47,42 @@ func startAPI(t *testing.T) *httptest.Server {
 
 func startDemo(t *testing.T, apiBase, captureLog string) *httptest.Server {
 	t.Helper()
-	h, err := New(Config{
-		APIBase: apiBase, SiteKey: testSiteKey, SecretKey: testSecretKey,
-		CaptureLog: captureLog,
-	}, discard())
+	var sink CaptureSink = NoCapture{}
+	if captureLog != "" {
+		sink = NewFileCaptureSink(captureLog)
+	}
+	h, err := New(Config{SiteKey: testSiteKey},
+		NewHTTPDecisionClient(apiBase, testSecretKey, 0), sink, discard())
+	if err != nil {
+		t.Fatalf("web.New: %v", err)
+	}
+	mux := http.NewServeMux()
+	h.Register(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// stubDecisions substitutes the engine without a network — what the
+// DecisionClient port exists to allow.
+type stubDecisions struct {
+	out map[string]any
+	err error
+}
+
+func (s stubDecisions) Decide(context.Context, []byte) (map[string]any, error) {
+	return s.out, s.err
+}
+
+// failingSink proves a capture failure costs a log line, not the
+// volunteer's session.
+type failingSink struct{}
+
+func (failingSink) Append(CaptureRow) error { return errors.New("disk full") }
+
+func startDemoWithPorts(t *testing.T, d DecisionClient, c CaptureSink) *httptest.Server {
+	t.Helper()
+	h, err := New(Config{SiteKey: testSiteKey}, d, c, discard())
 	if err != nil {
 		t.Fatalf("web.New: %v", err)
 	}
@@ -181,6 +215,51 @@ func TestLoginFailsOpenWhenAPIUnreachable(t *testing.T) {
 	}
 	if out["mode"] != "fail-open" {
 		t.Errorf("mode = %v, want fail-open", out["mode"])
+	}
+}
+
+func TestLoginPassesStubbedDecisionThrough(t *testing.T) {
+	// The port in action: no API server anywhere, the decision comes
+	// from the stub, and the handler serves it untouched.
+	demo := startDemoWithPorts(t, stubDecisions{out: map[string]any{
+		"evaluation_id": "ev_stub", "decision": "challenge",
+		"score": 0.9, "confidence": 0.8, "mode": "enforce",
+	}}, NoCapture{})
+
+	status, out := postLogin(t, demo, map[string]any{
+		"session_token": "st_x", "username": "alice",
+	})
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	if out["decision"] != "challenge" || out["evaluation_id"] != "ev_stub" {
+		t.Errorf("decision not passed through: %v", out)
+	}
+}
+
+func TestLoginFailsOpenOnPortError(t *testing.T) {
+	demo := startDemoWithPorts(t, stubDecisions{err: errors.New("engine down")}, NoCapture{})
+	status, out := postLogin(t, demo, map[string]any{
+		"session_token": "st_x", "username": "alice",
+	})
+	if status != http.StatusOK || out["mode"] != "fail-open" {
+		t.Errorf("status = %d, mode = %v; want 200 + fail-open", status, out["mode"])
+	}
+}
+
+func TestCaptureFailureDoesNotCostTheSession(t *testing.T) {
+	// A volunteer's five minutes must not be wasted on a full disk:
+	// the sink error is logged and swallowed, the decision still lands.
+	demo := startDemoWithPorts(t, stubDecisions{out: map[string]any{
+		"evaluation_id": "ev_1", "decision": "allow",
+	}}, failingSink{})
+
+	status, out := postLogin(t, demo, map[string]any{
+		"session_token": "st_x", "username": "x",
+		"participant": "p01", "arm": "B", "condition": "c", "visit": 1,
+	})
+	if status != http.StatusOK || out["decision"] != "allow" {
+		t.Errorf("status = %d, out = %v; capture failure leaked to the volunteer", status, out)
 	}
 }
 

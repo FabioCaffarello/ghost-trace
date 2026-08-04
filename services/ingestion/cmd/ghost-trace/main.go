@@ -46,6 +46,7 @@ func run() error {
 		batchMs    = flag.Int("batch-ms", 2000, "collect policy: telemetry batch interval")
 		ttl        = flag.Duration("session-ttl", 30*time.Minute, "session token lifetime")
 		captureLog = flag.String("capture-log", "", "JSONL file of labelled human sessions for the M2 study; empty disables capture")
+		decisionTO = flag.Duration("decision-timeout", 250*time.Millisecond, "demo backend's client-side decision budget (contract §5: ~3x the p99 target)")
 	)
 	flag.Parse()
 
@@ -94,20 +95,20 @@ func run() error {
 
 	mux := apiSrv.Routes()
 
-	demo, err := web.New(web.Config{
-		APIBase:         "http://" + *addr,
-		SiteKey:         *siteKey,
-		SecretKey:       *secretKey,
-		DecisionTimeout: 250 * time.Millisecond,
-		CaptureLog:      *captureLog,
-	}, log)
+	// The demo host reaches the engine through its ports. Loopback is a
+	// choice this composition root makes for the all-in-one binary, not
+	// an assumption baked into the client.
+	decisions := web.NewHTTPDecisionClient("http://"+*addr, *secretKey, *decisionTO)
+	var capture web.CaptureSink = web.NoCapture{}
+	if *captureLog != "" {
+		capture = web.NewFileCaptureSink(*captureLog)
+		log.Info("human capture enabled", "log", *captureLog)
+	}
+	demo, err := web.New(web.Config{SiteKey: *siteKey}, decisions, capture, log)
 	if err != nil {
 		return fmt.Errorf("demo handler: %w", err)
 	}
 	demo.Register(mux)
-	if *captureLog != "" {
-		log.Info("human capture enabled", "log", *captureLog)
-	}
 
 	// Expired sessions are never otherwise removed, so without this the
 	// store grows for the life of the process.
