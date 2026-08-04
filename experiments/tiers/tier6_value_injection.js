@@ -22,6 +22,7 @@
 import { chromium } from "playwright";
 import { BASE, CHROME, appendResult, decide, summarize, sleep } from "../lib/run.js";
 import { moveHuman, thinkMs } from "../lib/human_mouse.js";
+import { sessionLabel, sessionRand } from "../lib/prng.js";
 
 const BOW = Number(process.env.GT_BOW || 3.0);
 const COHORT = "tier6_value_injection";
@@ -39,24 +40,29 @@ async function once(browser, i) {
     return [Math.round(b.x + b.width / 2), Math.round(b.y + b.height / 2)];
   };
 
-  let at = [90 + Math.random() * 300, 70 + Math.random() * 200];
-  at = await moveHuman(page.mouse, at, [620 + Math.random() * 180, 310 + Math.random() * 140],
-    { bowScale: BOW });
-  await sleep(thinkMs());
+  // One generator per session, derived from the run seed and the
+  // session index — so session 7 draws the same numbers whether it ran
+  // alone or after six others, and a flagged session can be replayed.
+  const rand = sessionRand(COHORT, i);
+
+  let at = [90 + rand() * 300, 70 + rand() * 200];
+  at = await moveHuman(page.mouse, at, [620 + rand() * 180, 310 + rand() * 140],
+    { bowScale: BOW, rand });
+  await sleep(thinkMs(rand));
 
   // Move like a person, then fill like a script.
   const u = await box("#u");
-  at = await moveHuman(page.mouse, at, u, { targetWidth: 300, bowScale: BOW });
+  at = await moveHuman(page.mouse, at, u, { targetWidth: 300, bowScale: BOW, rand });
   await page.fill("#u", `user${i}@example.com`);
-  await sleep(thinkMs());
+  await sleep(thinkMs(rand));
 
   const p = await box("#p");
-  at = await moveHuman(page.mouse, at, p, { targetWidth: 300, bowScale: BOW });
+  at = await moveHuman(page.mouse, at, p, { targetWidth: 300, bowScale: BOW, rand });
   await page.fill("#p", "hunter2");
-  await sleep(thinkMs());
+  await sleep(thinkMs(rand));
 
   const btn = await box("button[type=submit]");
-  at = await moveHuman(page.mouse, at, btn, { targetWidth: 90, bowScale: BOW });
+  at = await moveHuman(page.mouse, at, btn, { targetWidth: 90, bowScale: BOW, rand });
 
   await sleep(2500);
   const token = await page.evaluate(() => window.GhostTrace.token());
@@ -66,7 +72,13 @@ async function once(browser, i) {
   const d = await decide(token, { subjectId: `${COHORT}_${i}` });
   await context.close();
   return {
-    i, score: d.score, confidence: d.confidence,
+    i,
+    // The seed this session drew from. Recorded per row because a
+    // seeded run nobody wrote down is exactly as unreproducible as an
+    // unseeded one — and because it is what lets one flagged session be
+    // replayed on its own.
+    seed: sessionLabel(COHORT, i),
+    score: d.score, confidence: d.confidence,
     decision: d.decision, shadow_decision: d.shadow_decision,
     events: d.evidence.events, duration_ms: d.evidence.duration_ms,
     reasons: d.reasons.map((r) => r.code),

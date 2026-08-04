@@ -48,6 +48,12 @@ PORT = int(os.environ.get("GT_PORT", "18099"))
 EXTERNAL_BASE = os.environ.get("GT_BASE", "")
 BASE = EXTERNAL_BASE or f"http://127.0.0.1:{PORT}"
 
+# The adversary's seed. Tiers 5 and 6 derive every random draw from it
+# (lib/prng.js); the others are deterministic already. Recorded in the
+# manifest because a seeded run nobody wrote down is exactly as
+# unreproducible as an unseeded one. Keep in step with RUN_SEED there.
+SEED = os.environ.get("GT_SEED", "ghost-trace-v1")
+
 # Sample sizes. Bot tiers are free, so they are generous; the browser
 # tiers cost about two seconds a session, so they are not. The defaults
 # are the published run; GT_N_TIER<k> overrides one tier for smoke runs
@@ -92,6 +98,10 @@ def run(cmd, env=None, cwd=None, timeout=2400):
     e = dict(os.environ)
     e.setdefault("SETUPTOOLS_USE_DISTUTILS", "local")
     e["GT_BASE"] = BASE
+    # Passed explicitly rather than inherited: the seed recorded in the
+    # manifest must be the seed the tiers actually drew from, and a
+    # default agreed in two places is a default that can disagree.
+    e["GT_SEED"] = SEED
     if env:
         e.update(env)
     return subprocess.run(cmd, cwd=cwd or HERE, env=e, capture_output=True,
@@ -280,6 +290,7 @@ def provenance():
             # which is a different claim about what was under test.
             "mode": "external" if EXTERNAL_BASE else "local",
             "base": BASE,
+            "seed": SEED,
             "sample_sizes": {
                 **{k.rsplit(".", 1)[0]: v for k, v in TIER_N.items()},
                 TIER3_SCRIPT.rsplit(".", 1)[0]: TIER3_N,

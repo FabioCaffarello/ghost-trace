@@ -37,16 +37,34 @@ a specific execution rather than taken on trust.
 | 3 | `undetected-chromedriver` | 8 | 100.0% | [67.6%, 100%] |
 | 4 | Synthetic linear, no browser | 100 | 100.0% | [96.3%, 100%] |
 | 5 | Humanised mouse (Bézier, minimum-jerk, overshoot, tremor) | 10 | 100.0% | [72.2%, 100%] |
-| 6 | Humanised mouse **+** value injection | 10 | **70.0%** | [39.7%, 89.2%] |
+| 6 | Humanised mouse **+** value injection | 10 | **100.0%** | [72.2%, 100%] |
+
+Tiers 5 and 6 are **seeded** (`GT_SEED`, default `ghost-trace-v1`, and
+recorded in every run manifest). Until R1.16 they drew from
+`Math.random`, and tier 6 was observed at 70%, 90%, 80% and 100% across
+four runs of *unchanged* code — a published rate nobody could reproduce,
+including its author. The figure above is now repeatable; the 70.0% it
+replaces was never re-measured after the detector changed.
 
 Tier 2 is the result the project was built to test: the standard
 anti-detection plugin gives **no protection at all**, because every
 evasion it implements answers *which browser is this* and none of them
 touch the mouse.
 
-Tier 6 is the current frontier. It is the only tier that attacks two
-channels at once, and it does so by *declining to produce evidence* on
-each rather than faking either.
+Tier 6 is the most sophisticated adversary here — the only one attacking
+two channels at once, and doing it by *declining to produce evidence* on
+each rather than faking either. It is nonetheless caught, for the reason
+the tier's own source names: declining to type is itself observable. A
+field whose contents change with no keystroke and no paste behind them
+was not filled by a person.
+
+**That is a weaker result than 100% makes it look.** The catch rests on
+`VALUE_INJECTED`, which is the one signal the policy explicitly refuses
+to treat as categorical: dictation, IME composition and some assistive
+input devices reach the same code path with no preceding keydown. Tier 6
+is caught by the detector's least safe signal. And at n=10 the interval
+still reaches down to 72%, while a different seed produced 9 of 10 — so
+the point estimate is seed-sensitive at this sample size.
 
 ### 2. False-positive rate on human traffic
 

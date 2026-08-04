@@ -47,6 +47,7 @@ SUPPORTED = {
     "properties", "required", "additionalProperties",
     "items", "minItems", "maxItems",
     "minimum", "maximum",
+    "minLength", "maxLength",
     "pattern",
     "oneOf",
 }
@@ -147,9 +148,15 @@ def _validate(value, schema, root, path, errors):
     if "enum" in schema and value not in schema["enum"]:
         errors.append(f"{where}: {value!r} is not one of {schema['enum']}")
 
-    if isinstance(value, str) and "pattern" in schema:
-        if not re.search(schema["pattern"], value):
+    if isinstance(value, str):
+        if "pattern" in schema and not re.search(schema["pattern"], value):
             errors.append(f"{where}: {value!r} does not match {schema['pattern']}")
+        if "minLength" in schema and len(value) < schema["minLength"]:
+            errors.append(
+                f"{where}: is {len(value)} characters, minimum {schema['minLength']}")
+        if "maxLength" in schema and len(value) > schema["maxLength"]:
+            errors.append(
+                f"{where}: is {len(value)} characters, maximum {schema['maxLength']}")
 
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         if "minimum" in schema and value < schema["minimum"]:
