@@ -186,13 +186,16 @@ one browser from another.
 ## Layout
 
 ```
-  services/ingestion/          one Go binary
+  services/ingestion/          the collector: sessions, telemetry, demo page
     internal/feature/          Category II: deterministic feature extraction
     internal/policy/           score / confidence / decision
     internal/session/          maintained state + the on-call comparison
-    internal/api/              the four contract endpoints
+    internal/api/              the browser-facing endpoints
     internal/web/              demo page and SDK
     cmd/bench-architecture/    the concurrency x duration grid
+  services/decision-engine/    /v1/decisions and /v1/outcomes, answered from
+                               snapshots rather than observed sessions
+  services/archive/            consumes the event stream, stores records
   experiments/                 six adversarial tiers + the statistics
   schemas/events/v1/           protobuf archive schema
   contract/                    what must be true: the architecture contract,

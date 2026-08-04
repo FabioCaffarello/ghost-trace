@@ -14,9 +14,12 @@ dynamics alone: how the pointer moves, how keys are timed, how a form is
 actually filled. Explicitly NOT *which browser is this*; fingerprinting
 is out of scope and the tools that defeat it are freely available.
 
-One Go binary today (`services/ingestion`), four HTTP endpoints, a
-browser SDK, a protobuf archive, and an adversarial experiment layer
-that produces six published numbers.
+Three Go services today — the collector (`services/ingestion`), the
+decision engine, and the archive — serving four HTTP endpoints between
+them, plus a browser SDK, a protobuf archive, and an adversarial
+experiment layer that produces six published numbers. It was one binary
+through M5; Phase 2 is splitting it, and `make shadow-http` is what
+holds the split honest.
 
 ## The thing to understand first
 

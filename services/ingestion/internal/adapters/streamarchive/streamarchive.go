@@ -23,7 +23,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/FabioCaffarello/ghost-trace/libs/canonical"
 	"github.com/FabioCaffarello/ghost-trace/libs/eventstream"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
 )
@@ -74,22 +73,15 @@ func (a *Archive) Append(ctx context.Context, msg proto.Message, eventTime int64
 	}
 	a.appended.Add(1)
 
-	// Canonicalized here rather than downstream, because these are the
-	// bytes that were just committed locally and the stream must carry
-	// the same ones. Re-deriving them anywhere else risks a different
-	// encoding and therefore a different identity.
-	payload, hash, err := canonical.MarshalAndHash(msg)
+	// The envelope is built by eventstream.Record, which the decision
+	// engine's stream-only archive also uses. Only the POLICY differs
+	// between the two — that one reports a publish failure and this one
+	// counts it — and a second copy of the envelope construction would
+	// have made the two records differ in more than policy.
+	rec, err := eventstream.Record(msg, eventTime, a.tenant)
 	if err != nil {
 		a.drop(ctx, "canonicalize", err, "")
 		return nil
-	}
-
-	rec := &eventsv1.ArchiveRecord{
-		CanonicalPayload: payload,
-		EventHash:        canonical.HashHex(hash),
-		EventTime:        eventTime,
-		MessageType:      string(msg.ProtoReflect().Descriptor().FullName()),
-		Tenant:           a.tenant,
 	}
 	if err := a.pub.Publish(ctx, rec); err != nil {
 		a.drop(ctx, "publish", err, rec.EventHash)
@@ -113,5 +105,3 @@ func (a *Archive) drop(ctx context.Context, stage string, err error, hash string
 func (a *Archive) Counts() (appended, published, dropped int64) {
 	return a.appended.Load(), a.published.Load(), a.dropped.Load()
 }
-
-var _ = eventstream.Stream // keep the contract module an explicit dependency

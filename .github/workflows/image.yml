@@ -29,10 +29,18 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  ingestion:
-    name: image — ingestion build + scan
+  # A matrix over the Go services rather than a job per image. The
+  # archive shipped in PR-2.2b with a Dockerfile that nothing here ever
+  # built, which is how a third image would have arrived too: copying a
+  # job is a decision, extending a list is not.
+  service:
+    name: image — ${{ matrix.service }} build + scan
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [ingestion, archive, decision-engine]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -47,11 +55,11 @@ jobs:
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
-          file: deploy/docker/Dockerfile.ingestion
+          file: deploy/docker/Dockerfile.${{ matrix.service }}
           build-args: |
             GOLANG_IMAGE=${{ env.GOLANG_IMAGE }}
             DISTROLESS_IMAGE=${{ env.DISTROLESS_IMAGE }}
-          tags: ghost-trace/ingestion:ci
+          tags: ghost-trace/${{ matrix.service }}:ci
           load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -62,7 +70,7 @@ jobs:
       - name: Scan for known vulnerabilities
         uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
-          image-ref: ghost-trace/ingestion:ci
+          image-ref: ghost-trace/${{ matrix.service }}:ci
           format: table
           exit-code: '1'
           severity: HIGH,CRITICAL
@@ -74,10 +82,10 @@ jobs:
       - name: Generate SBOM
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
-          image: ghost-trace/ingestion:ci
+          image: ghost-trace/${{ matrix.service }}:ci
           format: spdx-json
-          artifact-name: sbom-ingestion.spdx.json
-          output-file: sbom-ingestion.spdx.json
+          artifact-name: sbom-${{ matrix.service }}.spdx.json
+          output-file: sbom-${{ matrix.service }}.spdx.json
 
   # The experiments image sits on the official Playwright base — a
   # multi-gigabyte pull that would dominate the run for little signal.
@@ -95,12 +103,16 @@ jobs:
       - name: Resolve base image tags from .env.example
         run: grep -E '^(GOLANG|DISTROLESS|PLAYWRIGHT)_IMAGE=' .env.example >> "$GITHUB_ENV"
 
-      - name: Check Dockerfile.ingestion
+      # Every Go image, not just the one that happened to be first.
+      - name: Check the Go service Dockerfiles
         run: |
-          docker buildx build --check \
-            --build-arg GOLANG_IMAGE="$GOLANG_IMAGE" \
-            --build-arg DISTROLESS_IMAGE="$DISTROLESS_IMAGE" \
-            -f deploy/docker/Dockerfile.ingestion .
+          for svc in ingestion archive decision-engine; do
+            echo "== Dockerfile.$svc"
+            docker buildx build --check \
+              --build-arg GOLANG_IMAGE="$GOLANG_IMAGE" \
+              --build-arg DISTROLESS_IMAGE="$DISTROLESS_IMAGE" \
+              -f "deploy/docker/Dockerfile.$svc" . || exit 1
+          done
 
       - name: Check Dockerfile.experiments
         run: |

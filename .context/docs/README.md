@@ -1,9 +1,9 @@
 # Ghost Trace — agent context
 
 **Does this session behave like a human?** — answered from interaction
-dynamics alone. One Go binary, four HTTP endpoints, a browser SDK, an
-append-only archive, and an adversarial experiment layer that produces
-six published numbers.
+dynamics alone. Four HTTP endpoints across three Go services, a browser
+SDK, an append-only archive, and an adversarial experiment layer that
+produces six published numbers.
 
 This is a **measurement project**. Its central claim is that those six
 numbers reproduce, and almost every convention here exists so the claim
