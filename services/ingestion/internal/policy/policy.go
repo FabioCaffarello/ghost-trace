@@ -91,6 +91,15 @@ const (
 // reason_codes_test.go parses this file and asserts that this slice
 // and the constants are the same set, in both directions. There is
 // deliberately no exception list.
+// Decisions and Modes, as data, for the same reason ReasonCodes is:
+// a constant is something no generator and no client can enumerate,
+// and every enumeration retyped into a schema by hand in R1.14 that
+// was NOT read from a Go value turned out to be wrong.
+var (
+	Decisions = []string{DecisionAllow, DecisionChallenge, DecisionBlock}
+	Modes     = []string{ModeMonitor, ModeEnforce}
+)
+
 var ReasonCodes = []string{
 	ReasonPointerLinearity,
 	ReasonKeyIntervalVarianceLow,

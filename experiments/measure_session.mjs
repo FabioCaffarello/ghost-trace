@@ -5,6 +5,7 @@
  * Numbers 3, 4 and 5 of the six. Emits JSON on stdout for numbers.py.
  */
 import { BASE, decide } from "./lib/run.js";
+import { keyEvent, pointerEvent, sessionBody, telemetryBody } from "./lib/wire.js";
 
 const CHALLENGE_FLOOR = 0.40;
 const BLOCK_FLOOR = 0.70;
@@ -12,8 +13,7 @@ const BLOCK_FLOOR = 0.70;
 async function startSession() {
   const r = await fetch(BASE + "/v1/sessions", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ site_key: "pk_demo", page: { path: "/login" },
-      client: { pointer: "fine", viewport: [1440, 900] } }),
+    body: JSON.stringify(sessionBody({ siteKey: "pk_demo" })),
   });
   return (await r.json()).session_token;
 }
@@ -22,18 +22,17 @@ async function sendBatch(token, seq) {
   const start = 1200 + seq * 2000;
   const pts = [];
   for (let j = 0; j < 20; j++) pts.push([100 + j * 12, 120 + j * 5, j === 0 ? 0 : 50]);
-  const events = [{ type: "pointer", t: start, src: "mouse", pts }];
+  const events = [pointerEvent({ t: start, pts })];
   let t = start + 100;
   for (let k = 0; k < 4; k++) {
-    events.push({ type: "key", t, phase: "down", class: "alpha", target: "f_1" });
-    events.push({ type: "key", t: t + 30, phase: "up", class: "alpha", target: "f_1" });
+    events.push(keyEvent({ t, phase: "down", keyClass: "alpha", target: "f_1" }));
+    events.push(keyEvent({ t: t + 30, phase: "up", keyClass: "alpha", target: "f_1" }));
     t += 90;
   }
   await fetch(BASE + "/v1/telemetry", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-    body: JSON.stringify({ session_token: token, seq, sent_at_ms: t,
-      page: { path: "/login", viewport: [1440, 900] }, events }),
+    body: JSON.stringify(telemetryBody({ sessionToken: token, seq, sentAtMs: t, events })),
   });
   return t;
 }

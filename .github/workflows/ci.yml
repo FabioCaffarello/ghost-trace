@@ -83,6 +83,12 @@ jobs:
       - name: openapi lint
         run: make openapi-lint
 
+      # The harness's request fixtures are emitted by its wire modules,
+      # so this also catches the two halves of the harness disagreeing
+      # about the wire — which no server-side test would show.
+      - name: contract fixtures in sync
+        run: make contract-fixtures-sync
+
   # The job name is a required status check on main. Renaming it silently
   # removes the protection, so it stays as it is.
   ingestion:

@@ -20,11 +20,11 @@ components:
       description: ClientHints are self-reported environment properties.
       properties:
         pointer:
-          description: Primary pointing device the browser reports
+          description: Primary pointing device — the CSS pointer media query as the
+            browser reports it
           enum:
-          - mouse
-          - touch
-          - pen
+          - fine
+          - coarse
           - none
           type: string
         reduced_motion:
@@ -135,7 +135,7 @@ components:
           type: number
         decision:
           description: The decision actually returned. In monitor mode this is always
-            allow.
+            allow
           enum:
           - allow
           - challenge
@@ -166,7 +166,7 @@ components:
           type: number
         shadow_decision:
           description: 'In monitor mode: what enforce mode WOULD have returned. Absent
-            in enforce mode.'
+            in enforce mode'
           enum:
           - allow
           - challenge
@@ -293,36 +293,39 @@ components:
       description: TelemetryEvent is one interaction event.
       properties:
         action:
-          description: 'form: what happened to the field. The value ''injected'' is
-            the strongest single bot signal — a field value that appeared with no
-            keystrokes behind it.'
+          description: 'form: what happened to the field. ''injected'' is the strongest
+            single bot signal — a value that appeared with no keystroke and no paste
+            behind it; ''paste'' exists so a human pasting is not mistaken for one'
           enum:
-          - focus
-          - blur
-          - input
+          - paste
           - autofill
           - injected
           - submit
           type: string
         class:
           description: 'key: COARSE key class. Never the key itself — no keylogging
-            (§2 and §6).'
+            (§2 and §6)'
           enum:
-          - char
+          - alpha
           - digit
           - nav
-          - edit
           - mod
+          - whitespace
           - other
           type: string
         dy:
           description: 'scroll: vertical delta in CSS pixels'
           type: integer
         mode:
-          description: 'scroll: scrolling mode reported by the browser'
+          description: 'scroll: whether a real wheel gesture produced it or the page
+            scrolled itself'
+          enum:
+          - wheel
+          - programmatic
           type: string
         phase:
-          description: 'key: keystroke phase'
+          description: 'key: keystroke phase. Dwell is down to up on one key; flight
+            is up to down between keys'
           enum:
           - down
           - up
@@ -340,7 +343,13 @@ components:
           description: 'pointer: input source that produced the samples'
           type: string
         state:
-          description: 'focus or visibility: the state entered'
+          description: 'focus or visibility: the state entered. focus and blur for
+            focus events; visible and hidden for visibility'
+          enum:
+          - focus
+          - blur
+          - visible
+          - hidden
           type: string
         t:
           description: Milliseconds since session start
@@ -512,7 +521,7 @@ paths:
             example:
               evaluation_id: ev_5Kq2mXbT9vHs
               observed_at: "2026-08-04T09:15:00Z"
-              outcome: login_success
+              outcome: fraud_confirmed
             schema:
               $ref: '#/components/schemas/OutcomesRequest'
         description: What actually happened to a past evaluation.
@@ -570,7 +579,7 @@ paths:
           application/json:
             example:
               client:
-                pointer: mouse
+                pointer: fine
                 reduced_motion: false
                 touch: false
                 tz_offset: -180
@@ -650,12 +659,22 @@ paths:
                 src: mouse
                 t: 1200
                 type: pointer
+              - class: alpha
+                phase: down
+                t: 1500
+                target: f_1
+                type: key
+              - class: alpha
+                phase: up
+                t: 1530
+                target: f_1
+                type: key
               page:
                 path: /login
                 viewport:
                 - 1440
                 - 900
-              sent_at_ms: 2840
+              sent_at_ms: 4200
               seq: 1
               session_token: st_AufHcXG3MEt9x5F3hzVf03ZS
             schema:

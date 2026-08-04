@@ -16,6 +16,7 @@
  * people will give up five minutes.
  */
 import { BASE, appendResult, decide, summarize } from "../lib/run.js";
+import { pointerEvent, sessionBody, telemetryBody } from "../lib/wire.js";
 
 const COHORT = "tier4_synthetic_linear";
 const N = Number(process.env.GT_N || 200);
@@ -25,17 +26,7 @@ async function startSession() {
   const res = await fetch(BASE + "/v1/sessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      site_key: SITE_KEY,
-      page: { path: "/login" },
-      client: {
-        pointer: "fine",
-        touch: false,
-        viewport: [1440, 900],
-        tz_offset: -180,
-        reduced_motion: false,
-      },
-    }),
+    body: JSON.stringify(sessionBody({ siteKey: SITE_KEY })),
   });
   if (!res.ok) throw new Error(`/v1/sessions -> HTTP ${res.status}`);
   return (await res.json()).session_token;
@@ -52,13 +43,14 @@ async function sendBatch(token, seq) {
   await fetch(BASE + "/v1/telemetry", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-    body: JSON.stringify({
-      session_token: token,
-      seq,
-      sent_at_ms: start + 60 * 16,
-      page: { path: "/login", viewport: [1440, 900] },
-      events: [{ type: "pointer", t: start, src: "mouse", pts }],
-    }),
+    body: JSON.stringify(
+      telemetryBody({
+        sessionToken: token,
+        seq,
+        sentAtMs: start + 60 * 16,
+        events: [pointerEvent({ t: start, pts })],
+      })
+    ),
   });
 }
 

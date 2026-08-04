@@ -34,19 +34,19 @@ SECRET_KEY = os.environ.get("GT_SECRET_KEY", "sk_demo")
 COHORT = "tier3_undetected_chromedriver"
 N = int(os.environ.get("GT_N", "15"))
 
-RESULTS = pathlib.Path(__file__).resolve().parent.parent / "results"
+HERE = pathlib.Path(__file__).resolve().parent
+RESULTS = HERE.parent / "results"
+
+# The wire shapes live one level up, in the single module that defines
+# them for the Python side of the harness (R1.15 / audit M22).
+sys.path.insert(0, str(HERE.parent))
+from wire import decision_body  # noqa: E402
 
 
 def decide(token, subject):
     req = urllib.request.Request(
         BASE + "/v1/decisions",
-        data=json.dumps(
-            {
-                "session_token": token,
-                "action": "login",
-                "subject_id": subject,
-            }
-        ).encode(),
+        data=json.dumps(decision_body(token, subject_id=subject)).encode(),
         headers={
             "Content-Type": "application/json",
             "Authorization": "Bearer " + SECRET_KEY,

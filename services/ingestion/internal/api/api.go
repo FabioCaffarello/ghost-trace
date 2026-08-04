@@ -107,7 +107,7 @@ type PageRef struct {
 // ClientHints are self-reported environment properties. They are
 // context for interpreting interaction dynamics, never identity.
 type ClientHints struct {
-	Pointer       string `json:"pointer" jsonschema:"description=Primary pointing device the browser reports,enum=mouse,enum=touch,enum=pen,enum=none"`
+	Pointer       string `json:"pointer" jsonschema:"description=Primary pointing device — the CSS pointer media query as the browser reports it"`
 	Touch         bool   `json:"touch" jsonschema:"description=Whether the device exposes a touchscreen"`
 	Viewport      []int  `json:"viewport" jsonschema:"description=Viewport as [width height] in CSS pixels,minItems=2,maxItems=2"`
 	TZOffset      int    `json:"tz_offset" jsonschema:"description=Timezone offset in minutes from UTC"`
@@ -196,7 +196,7 @@ type TelemetryPage struct {
 // per-type variant would be a SECOND definition of the wire, free to
 // drift from the one the server actually parses.
 type TelemetryEvent struct {
-	Type string `json:"type" jsonschema:"description=Event family; selects which of the fields below apply,enum=pointer,enum=key,enum=scroll,enum=focus,enum=visibility,enum=form"`
+	Type string `json:"type" jsonschema:"description=Event family; selects which of the fields below apply"`
 	T    uint32 `json:"t" jsonschema:"description=Milliseconds since session start"`
 
 	// pointer
@@ -204,19 +204,19 @@ type TelemetryEvent struct {
 	Pts [][3]int32 `json:"pts" jsonschema:"description=pointer: samples as [x y t_offset_ms] triples"`
 
 	// key — timing and coarse class only, never content (§2, §6)
-	Phase    string `json:"phase" jsonschema:"description=key: keystroke phase,enum=down,enum=up"`
-	KeyClass string `json:"class" jsonschema:"description=key: COARSE key class. Never the key itself — no keylogging (§2 and §6).,enum=char,enum=digit,enum=nav,enum=edit,enum=mod,enum=other"`
+	Phase    string `json:"phase" jsonschema:"description=key: keystroke phase. Dwell is down to up on one key; flight is up to down between keys"`
+	KeyClass string `json:"class" jsonschema:"description=key: COARSE key class. Never the key itself — no keylogging (§2 and §6)"`
 	Target   string `json:"target" jsonschema:"description=key or form: coarse field role — never the field value"`
 
 	// scroll
 	Dy   int32  `json:"dy" jsonschema:"description=scroll: vertical delta in CSS pixels"`
-	Mode string `json:"mode" jsonschema:"description=scroll: scrolling mode reported by the browser"`
+	Mode string `json:"mode" jsonschema:"description=scroll: whether a real wheel gesture produced it or the page scrolled itself"`
 
 	// focus / visibility
-	State string `json:"state" jsonschema:"description=focus or visibility: the state entered"`
+	State string `json:"state" jsonschema:"description=focus or visibility: the state entered. focus and blur for focus events; visible and hidden for visibility"`
 
 	// form
-	Action string `json:"action" jsonschema:"description=form: what happened to the field. The value 'injected' is the strongest single bot signal — a field value that appeared with no keystrokes behind it.,enum=focus,enum=blur,enum=input,enum=autofill,enum=injected,enum=submit"`
+	Action string `json:"action" jsonschema:"description=form: what happened to the field. 'injected' is the strongest single bot signal — a value that appeared with no keystroke and no paste behind it; 'paste' exists so a human pasting is not mistaken for one"`
 }
 
 func (s *Server) handleTelemetry(w http.ResponseWriter, r *http.Request) {
@@ -294,18 +294,18 @@ type DecisionsRequest struct {
 // same claim as "this looks human" (§3).
 type DecisionsResponse struct {
 	EvaluationID   string           `json:"evaluation_id" jsonschema:"description=Identifier of this evaluation. Pass it to POST /v1/outcomes to label the decision later."`
-	Decision       string           `json:"decision" jsonschema:"description=The decision actually returned. In monitor mode this is always allow.,enum=allow,enum=challenge,enum=block"`
-	ShadowDecision string           `json:"shadow_decision,omitempty" jsonschema:"description=In monitor mode: what enforce mode WOULD have returned. Absent in enforce mode.,enum=allow,enum=challenge,enum=block"`
+	Decision       string           `json:"decision" jsonschema:"description=The decision actually returned. In monitor mode this is always allow"`
+	ShadowDecision string           `json:"shadow_decision,omitempty" jsonschema:"description=In monitor mode: what enforce mode WOULD have returned. Absent in enforce mode"`
 	Score          float64          `json:"score" jsonschema:"description=How bot-like the interaction looks. Rounded to three decimals.,minimum=0,maximum=1"`
 	Confidence     float64          `json:"confidence" jsonschema:"description=How much evidence backs the score. Low confidence gates blocking (§3).,minimum=0,maximum=1"`
 	Reasons        []DecisionReason `json:"reasons" jsonschema:"description=Contributing factors. Present so a decision can be explained and contested."`
 	Evidence       DecisionEvidence `json:"evidence"`
-	Mode           string           `json:"mode" jsonschema:"description=Operating mode of the service,enum=monitor,enum=enforce"`
+	Mode           string           `json:"mode" jsonschema:"description=Operating mode of the service"`
 }
 
 // DecisionReason is one contributing factor.
 type DecisionReason struct {
-	// The enum is injected by cmd/gen-openapi from policy.ReasonCodes:
+	// Injected by cmd/gen-openapi from policy.ReasonCodes:
 	// restating it here would be a second list free to drift from the
 	// one the service actually emits.
 	Code   string  `json:"code" jsonschema:"description=Stable reason code. Adding a code is non-breaking; changing what an existing code means is not (§7)."`
