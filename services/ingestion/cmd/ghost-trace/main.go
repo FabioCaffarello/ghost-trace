@@ -18,11 +18,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/FabioCaffarello/ghost-trace/libs/decision"
 	"github.com/FabioCaffarello/ghost-trace/libs/eventstream"
 	"github.com/FabioCaffarello/ghost-trace/libs/middleware"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
 	"github.com/FabioCaffarello/ghost-trace/libs/substrate"
 	"github.com/FabioCaffarello/ghost-trace/libs/wire"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/livesessions"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/streamarchive"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/substratearchive"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/api"
@@ -139,15 +141,23 @@ func run() error {
 
 	application := app.New(app.Config{
 		TenantID: *tenantID,
-		Mode:     *mode,
 	}, sessions, archive, time.Now, log)
 	if sessionStore != nil {
 		application = application.WithSnapshots(sessionStore)
 	}
 
-	apiSrv := api.New(api.Config{
-		SiteKey:   *siteKey,
+	// The two server-to-server endpoints, served from the state this
+	// process is maintaining. The decision engine mounts the same
+	// package over the snapshots that state is published as; the only
+	// difference between the two services is the port below.
+	decisions := decision.New(decision.Config{
+		TenantID:  *tenantID,
+		Mode:      *mode,
 		SecretKey: *secretKey,
+	}, livesessions.New(sessions), archive, time.Now, log)
+
+	apiSrv := api.New(api.Config{
+		SiteKey: *siteKey,
 		CollectPolicy: wire.CollectPolicy{
 			PointerHz: *pointerHz,
 			BatchMs:   *batchMs,
@@ -157,17 +167,18 @@ func run() error {
 	}, application, log)
 
 	mux := apiSrv.Routes()
+	decisions.Mount(mux)
 
 	// The demo host reaches the engine through its ports. Loopback is a
 	// choice this composition root makes for the all-in-one binary, not
 	// an assumption baked into the client.
-	decisions := web.NewHTTPDecisionClient("http://"+*addr, *secretKey, *decisionTO)
+	decisionClient := web.NewHTTPDecisionClient("http://"+*addr, *secretKey, *decisionTO)
 	var capture web.CaptureSink = web.NoCapture{}
 	if *captureLog != "" {
 		capture = web.NewFileCaptureSink(*captureLog)
 		log.Info("human capture enabled", "log", *captureLog)
 	}
-	demo, err := web.New(web.Config{SiteKey: *siteKey}, decisions, capture, log)
+	demo, err := web.New(web.Config{SiteKey: *siteKey}, decisionClient, capture, log)
 	if err != nil {
 		return fmt.Errorf("demo handler: %w", err)
 	}

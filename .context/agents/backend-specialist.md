@@ -20,7 +20,7 @@ scaffoldVersion: "2.0.0"
 - **Never hand-edit `contract/openapi.yaml`.** It is reflected from the
   Go wire types in `libs/wire`. Change the types, run `make openapi`.
 - Enumerations live as **Go values** (`policy.ReasonCodes`,
-  `ingest.KeyClasses`, `app.ValidOutcomes`) and are injected into the
+  `ingest.KeyClasses`, `decision.ValidOutcomes`) and are injected into the
   schema. Retyping one into a struct tag is how three fabricated enums
   got published; guards now prevent it.
 - Wire-facing struct tags: **no commas inside a `jsonschema` description**

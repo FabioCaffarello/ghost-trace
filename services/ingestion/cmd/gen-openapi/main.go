@@ -6,7 +6,7 @@
 // moment anyone edits a struct — and nothing fails when it does. So
 // every SHAPE here is reflected: field names, types, optionality,
 // nesting, all of it derived from libs/wire. Two enumerations that
-// exist as Go values (policy.ReasonCodes, app.ValidOutcomes) are read
+// exist as Go values (policy.ReasonCodes, decision.ValidOutcomes) are read
 // from those values for the same reason.
 //
 // What reflection cannot know is SEMANTICS: which endpoint needs which
@@ -32,9 +32,9 @@ import (
 	"github.com/invopop/jsonschema"
 	"sigs.k8s.io/yaml"
 
+	"github.com/FabioCaffarello/ghost-trace/libs/decision"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
 	"github.com/FabioCaffarello/ghost-trace/libs/wire"
-	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
 )
 
@@ -478,8 +478,8 @@ func injectEnums(schemas map[string]any) {
 	setEnum(schemas, "TelemetryEvent", "state",
 		append(append([]string{}, ingest.FocusStates...), ingest.VisibilityStates...))
 
-	outcomes := make([]string, 0, len(app.ValidOutcomes))
-	for name := range app.ValidOutcomes {
+	outcomes := make([]string, 0, len(decision.ValidOutcomes))
+	for name := range decision.ValidOutcomes {
 		outcomes = append(outcomes, name)
 	}
 	sort.Strings(outcomes) // a map has no order; the file must have one
@@ -581,7 +581,7 @@ func marshalYAML(doc map[string]any) ([]byte, error) {
 # Written by services/ingestion/cmd/gen-openapi from the Go types in
 # libs/wire that the handlers actually decode into, plus the two
 # enumerations that live as Go values (policy.ReasonCodes and
-# app.ValidOutcomes).
+# decision.ValidOutcomes).
 #
 # To change this file, change those types and run:
 #

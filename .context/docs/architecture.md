@@ -15,9 +15,11 @@ this file will not repeat it.
 ## The shape, in one screen
 
 ```
-browser ──sdk.js──> /v1/sessions, /v1/telemetry ─┐
-                                                 ├─> internal/api (thin transport)
-app server ────────> /v1/decisions, /v1/outcomes ┘        │
+browser ──sdk.js──> /v1/sessions, /v1/telemetry ──> internal/api (thin transport)
+                                                          │
+app server ────────> /v1/decisions, /v1/outcomes ──> libs/decision (shared: both
+                                                     services mount it — ADR-0005)
+                                                          │
                                                           v
                                             internal/app (use cases, ports)
                                                           │
@@ -37,8 +39,10 @@ domain, it is in the wrong layer.
 ## Two things that surprise people
 
 - **`internal/app/protomap.go` lives in `app`, not `adapters`.** It maps
-  domain values into the durable record type the port speaks. Its own
-  doc comment argues this; extract it when a second consumer exists.
+  domain values into the durable record type the port speaks. Its
+  evaluation half has already left for `libs/decision`, which is what
+  ADR-0001 said would happen once a second consumer existed; the
+  telemetry half stayed.
 - **The service is fail-open.** Telemetry loss is expected, unknown
   sessions get 202, and a decision is a judgement under uncertainty.
   `score` and `confidence` are separate fields precisely so "nothing

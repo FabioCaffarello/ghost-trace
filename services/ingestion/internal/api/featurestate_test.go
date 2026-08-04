@@ -17,10 +17,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FabioCaffarello/ghost-trace/libs/decision"
 	"github.com/FabioCaffarello/ghost-trace/libs/feature"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
 	"github.com/FabioCaffarello/ghost-trace/libs/substrate"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/livesessions"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/substratearchive"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/ingest"
@@ -97,14 +99,20 @@ func TestEvaluationRecordCarriesFullFeatureState(t *testing.T) {
 	t.Cleanup(func() { _ = sub.Close() })
 
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	a := app.New(app.Config{TenantID: "t_test", Mode: policy.ModeMonitor},
-		session.NewStore(30*time.Minute, time.Now),
-		substratearchive.New(ingest.New(sub, time.Now)), time.Now, log)
+	store := session.NewStore(30*time.Minute, time.Now)
+	arch := substratearchive.New(ingest.New(sub, time.Now))
+	a := app.New(app.Config{TenantID: "t_test"}, store, arch, time.Now, log)
 	s := New(Config{
-		SiteKey: testSiteKey, SecretKey: testSecretKey,
+		SiteKey:       testSiteKey,
 		CollectPolicy: wire.CollectPolicy{PointerHz: 20, BatchMs: 2000, Types: []string{"pointer"}},
 	}, a, log)
-	srv := httptest.NewServer(s.Routes())
+	decisions := decision.New(decision.Config{
+		TenantID: "t_test", Mode: policy.ModeMonitor, SecretKey: testSecretKey,
+	}, livesessions.New(store), arch, time.Now, log)
+
+	mux := s.Routes()
+	decisions.Mount(mux)
+	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	token := startSession(t, srv)
 

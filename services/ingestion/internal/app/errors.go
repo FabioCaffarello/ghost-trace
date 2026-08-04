@@ -1,6 +1,10 @@
 package app
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/FabioCaffarello/ghost-trace/libs/archive"
+)
 
 // Typed errors are the use cases' entire failure vocabulary; the
 // transport adapter owns the single table that maps them to status
@@ -8,17 +12,11 @@ import "errors"
 // the same error came to mean different things at different endpoints.
 var (
 	// ErrSessionNotFound: unknown or expired session token. Telemetry
-	// treats it as expected loss; decisions treat it as cold start.
+	// treats it as expected loss.
 	ErrSessionNotFound = errors.New("app: session not found")
 
-	// ErrArchiveUnavailable: the run has no durable archive configured.
-	// Best-effort archival ignores it; outcomes refuse on it, because a
-	// label the caller believes recorded but is not would silently
-	// poison calibration.
-	ErrArchiveUnavailable = errors.New("app: event archive unavailable")
-
-	// Validation failures, surfaced as 400s by the transport.
-	ErrActionRequired       = errors.New("app: action is required")
-	ErrEvaluationIDRequired = errors.New("app: evaluation_id is required")
-	ErrUnknownOutcome       = errors.New("app: unknown outcome")
+	// ErrArchiveUnavailable is libs/archive's sentinel, re-exported so
+	// this package's callers need not import it. It is the SAME value —
+	// errors.Is has to hold across the boundary.
+	ErrArchiveUnavailable = archive.ErrUnavailable
 )

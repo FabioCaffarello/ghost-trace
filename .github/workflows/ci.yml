@@ -150,10 +150,13 @@ jobs:
       fail-fast: false
       matrix:
         module:
+          - libs/archive
           - libs/canonical
+          - libs/decision
           - libs/eventstream
           - libs/feature
           - libs/genproto
+          - libs/id
           - libs/middleware
           - libs/policy
           - libs/snapshot

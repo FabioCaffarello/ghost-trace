@@ -1,4 +1,4 @@
-package app
+package decision
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/FabioCaffarello/ghost-trace/libs/archive"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
 )
 
@@ -23,9 +24,9 @@ var ValidOutcomes = map[string]bool{
 	"abandoned":        true,
 }
 
-// RecordOutcomeInput is the §3 POST /v1/outcomes request,
-// transport-free. A zero ObservedAt means "now".
-type RecordOutcomeInput struct {
+// OutcomeInput is the §3 POST /v1/outcomes request, transport-free.
+// A zero ObservedAt means "now".
+type OutcomeInput struct {
 	EvaluationID string
 	Outcome      string
 	ObservedAt   time.Time
@@ -35,9 +36,9 @@ type RecordOutcomeInput struct {
 //
 // Unlike every other archive write, this one is not best-effort:
 // returning success for a label that was not stored would silently
-// poison the calibration loop, so ErrArchiveUnavailable and write
-// failures surface to the caller.
-func (a *App) RecordOutcome(ctx context.Context, in RecordOutcomeInput) error {
+// poison the calibration loop, so ErrUnavailable and write failures
+// surface to the caller.
+func (s *Service) RecordOutcome(ctx context.Context, in OutcomeInput) error {
 	if in.EvaluationID == "" {
 		return ErrEvaluationIDRequired
 	}
@@ -47,19 +48,19 @@ func (a *App) RecordOutcome(ctx context.Context, in RecordOutcomeInput) error {
 
 	observedAt := in.ObservedAt
 	if observedAt.IsZero() {
-		observedAt = a.now()
+		observedAt = s.now()
 	}
 
 	rec := &eventsv1.Outcome{
-		TenantId:     a.cfg.TenantID,
+		TenantId:     s.cfg.TenantID,
 		EvaluationId: in.EvaluationID,
 		Outcome:      in.Outcome,
 		ObservedAt:   observedAt.UnixNano(),
-		RecordedAt:   a.now().UnixNano(),
+		RecordedAt:   s.now().UnixNano(),
 	}
 
-	if err := a.archive.Append(ctx, rec, rec.RecordedAt); err != nil {
-		if errors.Is(err, ErrArchiveUnavailable) {
+	if err := s.archive.Append(ctx, rec, rec.RecordedAt); err != nil {
+		if errors.Is(err, archive.ErrUnavailable) {
 			return ErrArchiveUnavailable
 		}
 		return fmt.Errorf("record outcome: %w", err)

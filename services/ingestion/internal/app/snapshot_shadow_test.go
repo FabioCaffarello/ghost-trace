@@ -20,9 +20,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FabioCaffarello/ghost-trace/libs/decision"
 	"github.com/FabioCaffarello/ghost-trace/libs/eventstream"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
 	"github.com/FabioCaffarello/ghost-trace/libs/snapshot"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/livesessions"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
 )
@@ -78,9 +80,16 @@ func TestDecisionThroughTheSnapshotStoreMatchesInProcess(t *testing.T) {
 	}
 
 	log := quiet()
-	application := app.New(app.Config{TenantID: "t_shadow", Mode: policy.ModeMonitor},
-		session.NewStore(30*time.Minute, time.Now), app.NullArchive{}, time.Now, log).
+	sessions := session.NewStore(30*time.Minute, time.Now)
+	application := app.New(app.Config{TenantID: "t_shadow"},
+		sessions, app.NullArchive{}, time.Now, log).
 		WithSnapshots(store)
+
+	// The collector's own decision path, mounted over the live store —
+	// the same package the decision engine will mount over snapshots.
+	decisions := decision.New(decision.Config{
+		TenantID: "t_shadow", Mode: policy.ModeMonitor,
+	}, livesessions.New(sessions), app.NullArchive{}, time.Now, log)
 
 	out, err := application.StartSession(ctx, app.StartSessionInput{PagePath: "/login"})
 	if err != nil {
@@ -93,7 +102,7 @@ func TestDecisionThroughTheSnapshotStoreMatchesInProcess(t *testing.T) {
 	}
 
 	// What the collector decides, holding the state in memory.
-	inProcess, err := application.Decide(ctx, app.DecideInput{
+	inProcess, err := decisions.Decide(ctx, decision.Input{
 		SessionToken: out.Token, Action: "login", SubjectID: "u_shadow",
 	})
 	if err != nil {

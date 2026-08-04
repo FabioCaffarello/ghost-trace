@@ -15,7 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FabioCaffarello/ghost-trace/libs/decision"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
+	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/livesessions"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/api"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/app"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
@@ -35,13 +37,19 @@ func discard() *slog.Logger {
 // tests do too.
 func startAPI(t *testing.T) *httptest.Server {
 	t.Helper()
-	a := app.New(app.Config{TenantID: "t_test", Mode: policy.ModeMonitor},
-		session.NewStore(30*time.Minute, time.Now), app.NullArchive{}, time.Now, discard())
+	store := session.NewStore(30*time.Minute, time.Now)
+	a := app.New(app.Config{TenantID: "t_test"}, store, app.NullArchive{}, time.Now, discard())
 	s := api.New(api.Config{
-		SiteKey: testSiteKey, SecretKey: testSecretKey,
+		SiteKey:       testSiteKey,
 		CollectPolicy: wire.CollectPolicy{PointerHz: 20, BatchMs: 2000, Types: []string{"pointer"}},
 	}, a, discard())
-	srv := httptest.NewServer(s.Routes())
+	decisions := decision.New(decision.Config{
+		TenantID: "t_test", Mode: policy.ModeMonitor, SecretKey: testSecretKey,
+	}, livesessions.New(store), app.NullArchive{}, time.Now, discard())
+
+	mux := s.Routes()
+	decisions.Mount(mux)
+	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv
 }

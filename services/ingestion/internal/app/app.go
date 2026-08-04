@@ -19,6 +19,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/FabioCaffarello/ghost-trace/libs/archive"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
 
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/session"
@@ -36,16 +37,14 @@ type SessionRepository interface {
 	Sweep() int
 }
 
-// EventArchive is the port over the durable, append-only record store.
-//
-// Everything appended is a Category I record: canonical bytes,
-// content-addressed, idempotent on retry. NullArchive implements the
-// port for archive-less runs and reports ErrArchiveUnavailable, which
-// best-effort call sites ignore and durability-requiring call sites
-// surface.
-type EventArchive interface {
-	Append(ctx context.Context, msg proto.Message, eventTime int64) error
-}
+// EventArchive is libs/archive's port, aliased so this package's
+// callers keep one name for it. Everything appended is a Category I
+// record: canonical bytes, content-addressed, idempotent on retry.
+type EventArchive = archive.Store
+
+// NullArchive is the archive-less implementation, aliased for the same
+// reason. It reports ErrArchiveUnavailable rather than succeeding.
+type NullArchive = archive.Null
 
 // SessionSnapshots publishes the state a decision is computed from, so
 // a process that did not observe the session can still judge it.
@@ -69,14 +68,12 @@ type NullSnapshots struct{}
 // Put discards the snapshot.
 func (NullSnapshots) Put(context.Context, string, *eventsv1.SessionSnapshot) error { return nil }
 
-// Config is the application-level configuration: who the tenant is and
-// how decisions operate. Transport credentials (site_key, secret_key)
-// deliberately live with the transport adapter, not here.
+// Config is the application-level configuration: who the tenant is.
+// Transport credentials (site_key, secret_key) deliberately live with
+// the transport adapter, and the decision-side configuration lives with
+// libs/decision.
 type Config struct {
 	TenantID string
-
-	// Mode is monitor or enforce (§4).
-	Mode string
 }
 
 // App wires the use cases to their ports.
@@ -115,15 +112,12 @@ func (a *App) WithSnapshots(store SessionSnapshots) *App {
 	return &b
 }
 
-// Mode reports the operating mode decisions run under.
-func (a *App) Mode() string { return a.cfg.Mode }
-
 // archiveBestEffort appends a record, logging failures instead of
 // surfacing them. Archival off the decision path must never take a
 // user-facing request down with it; a missing archive is not a failure
 // at these call sites, so ErrArchiveUnavailable is not even logged.
 func (a *App) archiveBestEffort(ctx context.Context, msg proto.Message, eventTime int64, what string, args ...any) {
-	if err := a.archive.Append(ctx, msg, eventTime); err != nil && !errors.Is(err, ErrArchiveUnavailable) {
+	if err := a.archive.Append(ctx, msg, eventTime); err != nil && !errors.Is(err, archive.ErrUnavailable) {
 		a.log.Error("archive "+what, append([]any{"err", err}, args...)...)
 	}
 }
