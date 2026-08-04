@@ -1,0 +1,330 @@
+{
+  "schema_version": "1.0.0",
+  "provenance": {
+    "generated_at": "2026-08-04T22:36:42Z",
+    "git": {
+      "commit": "d5f66dd97831c80d9762cf467c29668cf9bcedfa",
+      "dirty": false
+    },
+    "machine": {
+      "platform": "Darwin",
+      "arch": "arm64",
+      "cpus": 10,
+      "python": "3.14.3",
+      "node": "26.3.0",
+      "go": "1.26.5"
+    },
+    "run": {
+      "mode": "external",
+      "topology": "composed",
+      "base": "http://127.0.0.1:8080",
+      "demo_base": "http://127.0.0.1:8083",
+      "seed": "ghost-trace-v1",
+      "sample_sizes": {
+        "tier1_playwright": 12,
+        "tier2_puppeteer_stealth": 12,
+        "tier4_synthetic_linear": 100,
+        "tier5_humanised": 10,
+        "tier6_value_injection": 10,
+        "tier3_undetected_chromedriver": 8
+      }
+    }
+  },
+  "detection": {
+    "tier1_playwright_naive": {
+      "n": 12,
+      "detected": 12,
+      "rate": 1.0,
+      "ci_low": 0.7575059933447592,
+      "ci_high": 1.0,
+      "mean_score": 0.8725833333333334,
+      "mean_confidence": 0.7694166666666667
+    },
+    "tier2_puppeteer_stealth": {
+      "n": 12,
+      "detected": 12,
+      "rate": 1.0,
+      "ci_low": 0.7575059933447592,
+      "ci_high": 1.0,
+      "mean_score": 0.87525,
+      "mean_confidence": 1.0
+    },
+    "tier4_synthetic_linear": {
+      "n": 100,
+      "detected": 100,
+      "rate": 1.0,
+      "ci_low": 0.9630065017930143,
+      "ci_high": 1.0,
+      "mean_score": 1.0,
+      "mean_confidence": 0.7
+    },
+    "tier5_humanised_bow1.0": {
+      "n": 10,
+      "detected": 10,
+      "rate": 1.0,
+      "ci_low": 0.7224672001371107,
+      "ci_high": 0.9999999999999999,
+      "mean_score": 0.8874000000000001,
+      "mean_confidence": 1.0
+    },
+    "tier6_value_injection": {
+      "n": 10,
+      "detected": 10,
+      "rate": 1.0,
+      "ci_low": 0.7224672001371107,
+      "ci_high": 0.9999999999999999,
+      "mean_score": 0.7682,
+      "mean_confidence": 0.8007
+    },
+    "tier3_undetected_chromedriver": {
+      "n": 8,
+      "detected": 8,
+      "rate": 1.0,
+      "ci_low": 0.6755924351161198,
+      "ci_high": 1.0,
+      "mean_score": 0.8,
+      "mean_confidence": 1.0
+    }
+  },
+  "false_positive_rate": null,
+  "session": {
+    "cold_start": {
+      "n": 30,
+      "score": 0,
+      "confidence": 0,
+      "decisions": [
+        "allow"
+      ],
+      "reasons": [
+        "INSUFFICIENT_EVIDENCE"
+      ],
+      "never_blocks": true
+    },
+    "ttcd": {
+      "challenge": {
+        "reached": 30,
+        "of": 30,
+        "batches": 2,
+        "events": 56,
+        "seconds": 3.7
+      },
+      "block": {
+        "reached": 30,
+        "of": 30,
+        "batches": 3,
+        "events": 84,
+        "seconds": 5.7
+      }
+    },
+    "latency": {
+      "engine_base": "separate-service",
+      "n": 500,
+      "p50": 0.383,
+      "p95": 0.855,
+      "p99": 1.515,
+      "max": 4.026,
+      "budget_ms": 80
+    }
+  },
+  "architecture": [
+    {
+      "architecture": "maintained",
+      "sessions": 100,
+      "duration_s": 10,
+      "batches_per_session": 5,
+      "heap_mb": 0.27950286865234375,
+      "bytes_per_session": 744,
+      "decide_p50_ms": 0.000208,
+      "decide_p99_ms": 0.001416,
+      "decide_max_ms": 0.013875
+    },
+    {
+      "architecture": "on-call",
+      "sessions": 100,
+      "duration_s": 10,
+      "batches_per_session": 5,
+      "heap_mb": 0.599029541015625,
+      "bytes_per_session": 4059,
+      "decide_p50_ms": 0.003625,
+      "decide_p99_ms": 0.004959,
+      "decide_max_ms": 0.005875
+    },
+    {
+      "architecture": "maintained",
+      "sessions": 1000,
+      "duration_s": 10,
+      "batches_per_session": 5,
+      "heap_mb": 0.9659500122070312,
+      "bytes_per_session": 785,
+      "decide_p50_ms": 0.000209,
+      "decide_p99_ms": 0.00125,
+      "decide_max_ms": 0.001333
+    },
+    {
+      "architecture": "on-call",
+      "sessions": 1000,
+      "duration_s": 10,
+      "batches_per_session": 5,
+      "heap_mb": 4.203300476074219,
+      "bytes_per_session": 4179,
+      "decide_p50_ms": 0.003708,
+      "decide_p99_ms": 0.004959,
+      "decide_max_ms": 0.006875
+    },
+    {
+      "architecture": "maintained",
+      "sessions": 10000,
+      "duration_s": 10,
+      "batches_per_session": 5,
+      "heap_mb": 7.668174743652344,
+      "bytes_per_session": 781,
+      "decide_p50_ms": 0.0005,
+      "decide_p99_ms": 0.003083,
+      "decide_max_ms": 0.0445
+    },
+    {
+      "architecture": "on-call",
+      "sessions": 10000,
+      "duration_s": 10,
+      "batches_per_session": 5,
+      "heap_mb": 39.857421875,
+      "bytes_per_session": 4154,
+      "decide_p50_ms": 0.004209,
+      "decide_p99_ms": 0.005833,
+      "decide_max_ms": 0.010208
+    },
+    {
+      "architecture": "maintained",
+      "sessions": 100,
+      "duration_s": 300,
+      "batches_per_session": 150,
+      "heap_mb": 0.31064605712890625,
+      "bytes_per_session": 709,
+      "decide_p50_ms": 0.000292,
+      "decide_p99_ms": 0.000667,
+      "decide_max_ms": 0.001792
+    },
+    {
+      "architecture": "on-call",
+      "sessions": 100,
+      "duration_s": 300,
+      "batches_per_session": 150,
+      "heap_mb": 5.8670196533203125,
+      "bytes_per_session": 58971,
+      "decide_p50_ms": 0.033375,
+      "decide_p99_ms": 0.0385,
+      "decide_max_ms": 0.040125
+    },
+    {
+      "architecture": "maintained",
+      "sessions": 1000,
+      "duration_s": 300,
+      "batches_per_session": 150,
+      "heap_mb": 0.9919586181640625,
+      "bytes_per_session": 785,
+      "decide_p50_ms": 0.000209,
+      "decide_p99_ms": 0.0005,
+      "decide_max_ms": 0.002291
+    },
+    {
+      "architecture": "on-call",
+      "sessions": 1000,
+      "duration_s": 300,
+      "batches_per_session": 150,
+      "heap_mb": 56.59831237792969,
+      "bytes_per_session": 59092,
+      "decide_p50_ms": 0.034291,
+      "decide_p99_ms": 0.045459,
+      "decide_max_ms": 0.049625
+    },
+    {
+      "architecture": "maintained",
+      "sessions": 10000,
+      "duration_s": 300,
+      "batches_per_session": 150,
+      "heap_mb": 7.67486572265625,
+      "bytes_per_session": 779,
+      "decide_p50_ms": 0.000583,
+      "decide_p99_ms": 0.010834,
+      "decide_max_ms": 0.091833
+    },
+    {
+      "architecture": "on-call",
+      "sessions": 10000,
+      "duration_s": 300,
+      "batches_per_session": 150,
+      "heap_mb": 563.5403900146484,
+      "bytes_per_session": 59065,
+      "decide_p50_ms": 0.0345,
+      "decide_p99_ms": 0.041708,
+      "decide_max_ms": 0.053
+    },
+    {
+      "architecture": "maintained",
+      "sessions": 100,
+      "duration_s": 1800,
+      "batches_per_session": 900,
+      "heap_mb": 0.31208038330078125,
+      "bytes_per_session": 709,
+      "decide_p50_ms": 0.00025,
+      "decide_p99_ms": 0.002583,
+      "decide_max_ms": 0.004042
+    },
+    {
+      "architecture": "on-call",
+      "sessions": 100,
+      "duration_s": 1800,
+      "batches_per_session": 900,
+      "heap_mb": 27.05999755859375,
+      "bytes_per_session": 281181,
+      "decide_p50_ms": 0.185833,
+      "decide_p99_ms": 0.204833,
+      "decide_max_ms": 0.206708
+    },
+    {
+      "architecture": "maintained",
+      "sessions": 1000,
+      "duration_s": 1800,
+      "batches_per_session": 900,
+      "heap_mb": 0.9937744140625,
+      "bytes_per_session": 785,
+      "decide_p50_ms": 0.00025,
+      "decide_p99_ms": 0.000625,
+      "decide_max_ms": 0.003625
+    },
+    {
+      "architecture": "on-call",
+      "sessions": 1000,
+      "duration_s": 1800,
+      "batches_per_session": 900,
+      "heap_mb": 268.5135192871094,
+      "bytes_per_session": 281300,
+      "decide_p50_ms": 0.179292,
+      "decide_p99_ms": 0.233667,
+      "decide_max_ms": 0.299125
+    },
+    {
+      "architecture": "maintained",
+      "sessions": 10000,
+      "duration_s": 1800,
+      "batches_per_session": 900,
+      "heap_mb": 7.67633056640625,
+      "bytes_per_session": 779,
+      "decide_p50_ms": 0.000292,
+      "decide_p99_ms": 0.000667,
+      "decide_max_ms": 0.004375
+    },
+    {
+      "architecture": "on-call",
+      "sessions": 10000,
+      "duration_s": 1800,
+      "batches_per_session": 900,
+      "heap_mb": 2682.682601928711,
+      "bytes_per_session": 281273,
+      "decide_p50_ms": 0.210792,
+      "decide_p99_ms": 0.240209,
+      "decide_max_ms": 0.29925
+    }
+  ],
+  "absent_tiers": []
+}

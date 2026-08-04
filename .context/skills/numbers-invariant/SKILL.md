@@ -37,8 +37,10 @@ enforces:
 Read the printed table anyway. The check enforces the rules; it does not
 tell you whether the run **meant** anything.
 
-The baseline is the manifest with the newest `provenance.generated_at`,
-not the last filename — manifest names carry a content hash, so sorting
+The baseline is the newest manifest **of the same topology** —
+`GT_ENGINE_BASE` set makes a run `composed`, unset makes it `monolith`,
+and the two are not comparable. Within that, it is the one with the
+newest `provenance.generated_at`, not the last filename — manifest names carry a content hash, so sorting
 them by name picks an arbitrary one. That mistake was made twice by
 hand before the check existed, which is why it exists.
 
