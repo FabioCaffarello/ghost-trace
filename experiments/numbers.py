@@ -61,6 +61,13 @@ BASE = EXTERNAL_BASE or f"http://127.0.0.1:{PORT}"
 DEMO_BASE = (os.environ.get("GT_DEMO_BASE", "") or
              (BASE if EXTERNAL_BASE else f"http://127.0.0.1:{DEMO_PORT}"))
 
+# Who answers /v1/decisions. Unset means the same host that takes
+# telemetry — the all-in-one binary. Pointing it at a decision engine is
+# what turns this into a COMPOSED measurement, and the difference
+# between the two p99s is the phase gate.
+ENGINE_BASE = os.environ.get("GT_ENGINE_BASE", "") or BASE
+TOPOLOGY = "composed" if ENGINE_BASE != BASE else "monolith"
+
 # The adversary's seed. Tiers 5 and 6 derive every random draw from it
 # (lib/prng.js); the others are deterministic already. Recorded in the
 # manifest because a seeded run nobody wrote down is exactly as
@@ -112,6 +119,7 @@ def run(cmd, env=None, cwd=None, timeout=2400):
     e.setdefault("SETUPTOOLS_USE_DISTUTILS", "local")
     e["GT_BASE"] = BASE
     e["GT_DEMO_BASE"] = DEMO_BASE
+    e["GT_ENGINE_BASE"] = ENGINE_BASE
     # Passed explicitly rather than inherited: the seed recorded in the
     # manifest must be the seed the tiers actually drew from, and a
     # default agreed in two places is a default that can disagree.
@@ -144,6 +152,7 @@ def main():
     procs = []
     if EXTERNAL_BASE:
         log(f"targeting external slice at {BASE} (demo page at {DEMO_BASE})")
+        log(f"topology: {TOPOLOGY} — decisions answered by {ENGINE_BASE}")
     else:
         log("building")
         for svc, cmd_path, out in ((SVC, "./cmd/ghost-trace", "ghost-trace"),
@@ -317,6 +326,7 @@ def provenance():
             # External mode measures a slice this process did not start,
             # which is a different claim about what was under test.
             "mode": "external" if EXTERNAL_BASE else "local",
+            "topology": TOPOLOGY,
             "base": BASE,
             "demo_base": DEMO_BASE,
             "seed": SEED,

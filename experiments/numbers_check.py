@@ -128,6 +128,25 @@ def check_absent_tiers(base: dict, run: dict, rep: Report) -> None:
         rep.note(f"{tier}: absent in the baseline, present here")
 
 
+def topology(d: dict) -> str:
+    """Manifests from before the split recorded no topology; there was
+    only one thing they could have been."""
+    return (d.get("provenance", {}).get("run", {}) or {}).get("topology", "monolith")
+
+
+def check_topology(base: dict, run: dict, rep: Report) -> None:
+    b, n = topology(base), topology(run)
+    if b != n:
+        rep.fail(
+            f"this run is {n} and the baseline is {b}. A decision answered in "
+            f"process and one answered across a network hop and a KV read are "
+            f"different measurements wearing the same name; comparing them "
+            f"would report a topology change as a regression, or hide one. "
+            f"Publish a baseline for {n} (`make numbers-manifest`) and compare "
+            f"against that."
+        )
+
+
 def check_session(base: dict, run: dict, rep: Report) -> None:
     lat = run["session"]["latency"]
     budget = lat["budget_ms"]
@@ -201,6 +220,7 @@ def no_baseline() -> int:
 def verdict(base: dict, run: dict) -> Report:
     """Every rule CONTRIBUTING states, applied to two runs."""
     rep = Report()
+    check_topology(base, run, rep)
     check_detection(base, run, rep)
     check_absent_tiers(base, run, rep)
     check_session(base, run, rep)
@@ -240,7 +260,8 @@ def _baseline() -> dict:
         "architecture": [{"architecture": "maintained", "sessions": 100,
                           "duration_s": 10, "bytes_per_session": 700}],
         "provenance": {"generated_at": "2026-01-01T00:00:00Z",
-                       "run": {"seed": "s"}, "git": {"commit": "0" * 40}},
+                       "run": {"seed": "s", "topology": "monolith"},
+                       "git": {"commit": "0" * 40}},
     }
 
 
@@ -260,6 +281,10 @@ def selftest() -> int:
     cases: list[tuple[str, dict, bool]] = []
 
     cases.append(("an identical run", _mutate(), True))
+
+    composed = _mutate()
+    composed["provenance"]["run"]["topology"] = "composed"
+    cases.append(("a composed run against a monolith baseline", composed, False))
 
     # Both directions. A detector that suddenly catches MORE is as much
     # a change to explain as one that catches less — and 10/10 against a
@@ -383,6 +408,7 @@ def main() -> int:
     print(f"               generated {prov['generated_at']}, "
           f"seed {prov['run'].get('seed', '(none recorded)')}, "
           f"commit {prov['git']['commit'][:12]}")
+    print(f"               topology {topology(base)} -> {topology(run)}")
     print()
 
     for tier in sorted(run["detection"]):

@@ -194,6 +194,14 @@
                 "external"
               ]
             },
+            "topology": {
+              "type": "string",
+              "enum": [
+                "monolith",
+                "composed"
+              ],
+              "description": "monolith is one process answering everything; composed is the split topology, where a decision crosses a network hop and a KV read. Optional because manifests published before the split had only one topology to be; where it is absent, read monolith."
+            },
             "base": {
               "type": "string"
             },
@@ -430,6 +438,14 @@
           ],
           "additionalProperties": false,
           "properties": {
+            "engine_base": {
+              "type": "string",
+              "enum": [
+                "same-process",
+                "separate-service"
+              ],
+              "description": "What answered the decisions this figure times. same-process is the all-in-one binary reading the session from memory; separate-service is the decision engine reading its snapshot out of the KV store. A p99 from one is not comparable to a p99 from the other, and the phase gate is precisely the difference between them."
+            },
             "n": {
               "type": "integer",
               "minimum": 1

@@ -29,6 +29,16 @@ export const BASE = process.env.GT_BASE || "http://127.0.0.1:8080";
 //
 // Defaulting to BASE keeps a same-origin deployment working unchanged.
 export const DEMO_BASE = process.env.GT_DEMO_BASE || BASE;
+
+// GT_ENGINE_BASE is who answers /v1/decisions. In the all-in-one binary
+// that is the collector itself, holding the session in memory; in the
+// composed topology it is the decision engine, which reads the session's
+// snapshot out of the KV store first.
+//
+// The difference between those two is exactly what the phase gate
+// measures, and it is why this is a separate variable rather than an
+// assumption: the same harness has to be able to ask either one.
+export const ENGINE_BASE = process.env.GT_ENGINE_BASE || BASE;
 export const SECRET_KEY = process.env.GT_SECRET_KEY || "sk_demo";
 
 // The installed browser. puppeteer-core and playwright both drive real
@@ -53,7 +63,7 @@ export function appendResult(cohort, row) {
  * would: server-to-server, authenticated with secret_key.
  */
 export async function decide(sessionToken, { action = "login", subjectId = "harness" } = {}) {
-  const res = await fetch(BASE + "/v1/decisions", {
+  const res = await fetch(ENGINE_BASE + "/v1/decisions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
