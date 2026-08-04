@@ -1,7 +1,7 @@
 ---
 type: skill
 name: Wire Contract Change
-description: Change anything that crosses the HTTP wire. Use when renaming or adding a field, changing an enumeration, or touching sdk.js, schemas/ or internal/api
+description: Change anything that crosses the HTTP wire. Use when renaming or adding a field, changing an enumeration, or touching sdk.js, schemas/ or libs/wire
 skillSlug: wire-contract-change
 phases: [P, E, V]
 generated: 2026-08-04
@@ -22,7 +22,8 @@ checklist; it is short because the guards do most of the work now.
 
 ## The checklist
 
-1. **Change the Go type** in `services/ingestion/internal/api/api.go`.
+1. **Change the Go type** in `libs/wire/wire.go`. It is a module of
+   its own because more than one service serves this contract.
    That is the source of truth — the specification is reflected from it.
    - No commas inside a `jsonschema:"description=..."`. The library
      splits on them and silently truncates. Nine clause endings were

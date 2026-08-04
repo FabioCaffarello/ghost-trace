@@ -18,7 +18,7 @@ scaffoldVersion: "2.0.0"
 - **Never hand-edit `libs/genproto`.** Change `schemas/`, run
   `make generate`, commit the result.
 - **Never hand-edit `contract/openapi.yaml`.** It is reflected from the
-  Go wire types in `internal/api`. Change the types, run `make openapi`.
+  Go wire types in `libs/wire`. Change the types, run `make openapi`.
 - Enumerations live as **Go values** (`policy.ReasonCodes`,
   `ingest.KeyClasses`, `app.ValidOutcomes`) and are injected into the
   schema. Retyping one into a struct tag is how three fabricated enums

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/FabioCaffarello/ghost-trace/libs/wire"
 	"io"
 	"log/slog"
 	"net/http"
@@ -38,7 +39,7 @@ func startAPI(t *testing.T) *httptest.Server {
 		session.NewStore(30*time.Minute, time.Now), app.NullArchive{}, time.Now, discard())
 	s := api.New(api.Config{
 		SiteKey: testSiteKey, SecretKey: testSecretKey,
-		CollectPolicy: api.CollectPolicy{PointerHz: 20, BatchMs: 2000, Types: []string{"pointer"}},
+		CollectPolicy: wire.CollectPolicy{PointerHz: 20, BatchMs: 2000, Types: []string{"pointer"}},
 	}, a, discard())
 	srv := httptest.NewServer(s.Routes())
 	t.Cleanup(srv.Close)

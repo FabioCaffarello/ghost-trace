@@ -1,7 +1,7 @@
 # GENERATED FILE — DO NOT EDIT.
 #
 # Written by services/ingestion/cmd/gen-openapi from the Go types in
-# internal/api that the handlers actually decode into, plus the two
+# libs/wire that the handlers actually decode into, plus the two
 # enumerations that live as Go values (policy.ReasonCodes and
 # app.ValidOutcomes).
 #

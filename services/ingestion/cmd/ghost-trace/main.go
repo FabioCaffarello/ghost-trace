@@ -22,6 +22,7 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/libs/middleware"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
 	"github.com/FabioCaffarello/ghost-trace/libs/substrate"
+	"github.com/FabioCaffarello/ghost-trace/libs/wire"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/streamarchive"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/adapters/substratearchive"
 	"github.com/FabioCaffarello/ghost-trace/services/ingestion/internal/api"
@@ -147,7 +148,7 @@ func run() error {
 	apiSrv := api.New(api.Config{
 		SiteKey:   *siteKey,
 		SecretKey: *secretKey,
-		CollectPolicy: api.CollectPolicy{
+		CollectPolicy: wire.CollectPolicy{
 			PointerHz: *pointerHz,
 			BatchMs:   *batchMs,
 			Types:     []string{"pointer", "key", "scroll", "focus", "visibility", "form"},

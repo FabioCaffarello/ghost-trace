@@ -158,6 +158,7 @@ jobs:
           - libs/policy
           - libs/snapshot
           - libs/substrate
+          - libs/wire
           - services/archive
           - services/ingestion
     env:
