@@ -29,6 +29,14 @@ hash), **demo-web** (a customer's site on its own origin, a pure HTTP
 client of the public contract). Written up in
 [`../docs/the-split.md`](../docs/the-split.md).
 
+**Phase 3 — the system can account for what it loses.** Three loss
+paths made countable, an archive that writes its own position into its
+own database in the same transaction as the record, and `make
+loss-audit` as the gate. The measurement 3.4 proved could not be taken
+from the broker was taken from that position instead. Written up in
+[`../docs/counting-what-is-lost.md`](../docs/counting-what-is-lost.md);
+the model is [ADR-0008](decisions/0008-what-a-zero-is-allowed-to-mean.md).
+
 ### Where the plan and the result differ
 
 Recorded rather than quietly reconciled, because the difference is the
@@ -72,12 +80,24 @@ For a repository whose first rule is **absence is never zero**, this is
 the largest standing contradiction: three known loss paths, none of them
 addable.
 
+> **Discharged by Phase 3.** All three are counted, every series is
+> declared at zero before serving, and `make loss-audit` reconciles
+> against a durable position rather than against process counters. The
+> third path — age-out — could not be counted from broker state at all;
+> see [ADR-0008](decisions/0008-what-a-zero-is-allowed-to-mean.md) rule
+> 4, and the run at
+> [`../docs/results/loss-audit-2026-08-05.md`](../docs/results/loss-audit-2026-08-05.md).
+
 ### Cross-service invariants held by comments
 
 - `-session-ttl` must be identical in the collector and the decision
   engine — it is the KV bucket's TTL, and whichever service starts last
   silently rewrites it. `compose.yml` says "must match". Nothing checks.
 - The tenant registry must be identical in both. Nothing checks.
+
+> **Discharged by 3.5.** The engine reads the bucket's actual TTL and
+> refuses a mismatch instead of rewriting it; both services log a
+> registry fingerprint that `make shadow-http` compares.
 
 ### State durability
 
@@ -91,7 +111,11 @@ written down anywhere but here.
 
 - **Nothing has run under load.** Every published latency is one session
   on an idle system, which the schema itself calls a floor. The split's
-  cost is the kind that grows with contention.
+  cost is the kind that grows with contention. Phase 3 removed the
+  reason to keep deferring it — a load test can now report what it
+  dropped — and added nothing to the evidence: `make loss-audit` drives
+  twenty-five records per scenario, which proves the accounting is sound
+  and says nothing about rate. **This is now the largest standing gap.**
 - **Calibration is global.** Per-tenant calibration needs `libs/policy`
   to stop being a package global (13 uses of a package-level `cal`), and
   `policy.Ref` then stops being one value per run — which the manifest
@@ -113,6 +137,22 @@ written down anywhere but here.
   twice in one session and was found by hand both times.
 - Tier 3 records itself absent in a container: `undetected-chromedriver`
   needs real Chrome, which has no linux/arm64 build.
+
+> **First three discharged by 3.7.** `main` requires three summary
+> contexts — `ci — all checks`, `image — all checks`, `commits —
+> conventional` — each of which fails unless every job beneath it
+> succeeded, so a job added to a workflow is required the moment it
+> exists. Releases are derived from the commit log by
+> `scripts/next-release.py`; `v0.1.0` and `v0.2.0` were tagged and
+> published without a hand touching them. The composed topology is
+> gated by a `topology` job running `make shadow-http` and `make
+> kill-test`.
+>
+> The summary jobs are themselves guarded: they count the results they
+> read, because an expression that fails to evaluate yields an empty
+> string and a loop over nothing succeeds. That is not theoretical — it
+> happened, and `scripts/check-workflows.py` now asserts statically that
+> every job is required. Tier 3's arm64 gap stands.
 
 ### Not-yet-true product claims
 
@@ -148,6 +188,13 @@ where the local write no longer exists to compare against.
 Ordered mitigation if it fails: count at whichever boundary is losing →
 make that loss synchronous where the budget allows → widen the bound →
 reintroduce a local spool as an explicit, ADR'd retreat.
+
+**Met, 2026-08-05.** No mitigation was needed. The reconciliation is
+stronger than the wording asked for: it is not "in the archive or in a
+counter" but *in the archive, or refused on purpose, or named as
+unaccounted* — with a fourth number, `stream_skipped`, for records that
+left the stream above the archive's mark and would otherwise fall
+outside the subtraction entirely.
 
 ### Pull requests
 
