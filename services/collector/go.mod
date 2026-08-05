@@ -43,6 +43,7 @@ require (
 	github.com/FabioCaffarello/ghost-trace/libs/metrics v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/tenant v0.0.0
 	github.com/invopop/jsonschema v0.14.0
+	github.com/prometheus/client_golang v1.24.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	sigs.k8s.io/yaml v1.6.0
 )
@@ -58,7 +59,6 @@ require (
 	github.com/nats-io/nkeys v0.4.15 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
-	github.com/prometheus/client_golang v1.24.1 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.70.1 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect

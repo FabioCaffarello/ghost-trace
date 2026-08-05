@@ -33,7 +33,7 @@ func (a *App) StartSession(ctx context.Context, in StartSessionInput) (StartSess
 	}
 
 	a.archiveBestEffort(ctx, buildSessionStart(st, in.Client), st.StartedAt.UnixNano(),
-		"session start", "session_id", st.ID)
+		KindSessionStart, "session_id", st.ID)
 
 	return StartSessionOutput{Token: token}, nil
 }

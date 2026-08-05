@@ -28,6 +28,7 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/libs/tenant"
 	"github.com/FabioCaffarello/ghost-trace/libs/wire"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/adapters/livesessions"
+	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/adapters/lossmeter"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/adapters/substratearchive"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/api"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/app"
@@ -158,7 +159,15 @@ func run() error {
 
 	sessions := session.NewStore(*ttl, time.Now)
 
-	application := app.New(app.Config{}, sessions, eventArchive, time.Now, log)
+	// One registry per process: the HTTP series and every domain counter
+	// are exposed together, because two registries behind one endpoint
+	// would need two encoders and would drop whichever the handler
+	// forgot. Built here rather than with the rest of the observability
+	// chain because the application counts into it too.
+	reg := metrics.New()
+
+	application := app.New(app.Config{}, sessions, eventArchive, time.Now, log).
+		WithLossMeter(lossmeter.New(reg))
 	if sessionStore != nil {
 		application = application.WithSnapshots(sessionStore)
 	}
@@ -194,11 +203,6 @@ func run() error {
 	// can correlate, recovery so a panic is logged with its id, logging
 	// so the 500 a panic produces still gets its line, metrics
 	// innermost so it measures the handler rather than the logging.
-	// One registry per process: the HTTP series and every domain
-	// counter are exposed together, because two registries behind one
-	// endpoint would need two encoders and would drop whichever the
-	// handler forgot.
-	reg := metrics.New()
 	httpMetrics := middleware.NewMetrics(reg)
 	mux.Handle("GET /metrics", reg.Handler())
 	handler := middleware.Chain(mux,

@@ -140,14 +140,19 @@ func (a *App) IngestTelemetry(ctx context.Context, env TelemetryEnvelope) error 
 		LastEventMs: snapshotMs,
 		WrittenAt:   a.now().UnixNano(),
 		Features:    snapshot.FromState(snapshotState),
-	}); err != nil {
+	}); err == nil {
+		a.loss.Written(KindSnapshot)
+	} else if !errors.Is(err, ErrNoSnapshotStore) {
+		// No store to publish to is not a loss, exactly as it is not
+		// one for the archive.
+		a.loss.Dropped(KindSnapshot, reasonFor(err))
 		a.log.WarnContext(ctx, "session snapshot not published",
 			"err", err, "session_id", sessionID)
 	}
 
 	batch := buildTelemetryBatch(env, tenantID, sessionID, a.now().UnixNano())
 	if batchHasEvents(batch) {
-		a.archiveBestEffort(ctx, batch, batch.ReceivedAt, "telemetry", "session_id", sessionID)
+		a.archiveBestEffort(ctx, batch, batch.ReceivedAt, KindTelemetry, "session_id", sessionID)
 	}
 	return nil
 }
