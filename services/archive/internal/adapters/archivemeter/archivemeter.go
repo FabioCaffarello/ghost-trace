@@ -28,8 +28,8 @@
 // pending, so archive_stream_pending goes DOWN at the moment of loss. A
 // backlog that vanished looks exactly like a backlog that drained.
 //
-// IT CANNOT BE COUNTED AFTER THE FACT with what the broker retains.
-// Two ways were built and both were deleted after measurement:
+// IT COULD NOT BE COUNTED FROM WHAT THE BROKER RETAINS. Two ways were
+// built and both were deleted after measurement:
 //
 //   - stream first sequence against consumer ack floor. The broker
 //     advances the ack floor when messages are removed from under a
@@ -41,28 +41,35 @@
 //     purge. The case it would catch — a consumer far enough behind
 //     that discard overtakes it — needs load nobody here has built.
 //
-// Neither ships. A counter that reads zero through real loss is worse
-// than no counter, which is the principle this phase rests on.
+// THE THIRD WAY WORKS, and the reason is worth stating plainly: it
+// stopped asking the broker where this consumer had got to. Both failed
+// attempts read a number the broker maintains, and the broker rewrites
+// exactly those numbers when it discards records — the evidence is
+// destroyed by the event it would evidence.
 //
-// WHAT SHIPS IS THE EARLY WARNING, which is the half of the requirement
-// that can be honestly met: archive_stream_oldest_message_age_seconds
-// against archive_stream_max_age_seconds says how close the stream's
-// oldest content is to the retention edge, while there is still time to
-// act. Read with archive_stream_pending it answers the question age-out
-// poses, before rather than after.
+// The archive now writes its own position down, in its own database, in
+// the same transaction as the record. archive_stream_skipped is the
+// stream's first surviving sequence minus that position: sequences the
+// archive walked past that the stream no longer holds and this consumer
+// never took in. Nothing outside this process can move that mark.
 //
-// Closing the after-the-fact half needs the archive to remember its own
-// high-water mark durably and compare on startup. That is a design with
-// a hot-path cost and belongs with 3.6, which needs a durable position
-// for reconciliation anyway.
+// It is a GAUGE and not a counter, and it is the archive's current
+// arrears rather than a running total: it is derived by subtraction on
+// every poll, not accumulated. A counter would double-count the same
+// skipped records on every reading.
+//
+// THE EARLY WARNING STAYS, because after-the-fact is the worse half of
+// the answer: archive_stream_oldest_message_age_seconds against
+// archive_stream_max_age_seconds says how close the stream's oldest
+// content is to the retention edge while there is still time to act.
 //
 // COUNTERS ARE PROCESS-LOCAL AND RESET ON RESTART. That is ordinary
-// Prometheus semantics and a scraper handles it, but it matters for the
-// reconciliation this phase is building: "committed" answers what THIS
+// Prometheus semantics and a scraper handles it, but it is why the
+// reconciliation does not use them: "committed" answers what THIS
 // process committed, not what the archive holds. Restarting the archive
 // mid-backlog was observed to take committed from 5 to 10 while fifteen
-// records had in fact arrived. The reconciliation in 3.6 must read the
-// substrate, or read counters over a window with no restart in it.
+// records had in fact arrived. archive_position_* below is read from the
+// substrate and survives, which is what `make loss-audit` reconciles.
 package archivemeter
 
 import (
@@ -72,6 +79,7 @@ import (
 
 	"github.com/FabioCaffarello/ghost-trace/libs/eventstream"
 	"github.com/FabioCaffarello/ghost-trace/libs/metrics"
+	"github.com/FabioCaffarello/ghost-trace/libs/substrate"
 	"github.com/FabioCaffarello/ghost-trace/services/archive/internal/consumer"
 )
 
@@ -88,6 +96,30 @@ type Meter struct {
 
 	oldestAge prometheus.Gauge
 	maxAge    prometheus.Gauge
+
+	firstSeq prometheus.Gauge
+	lastSeq  prometheus.Gauge
+
+	// UNDECLARED ON PURPOSE, and the only series here that are.
+	//
+	// Every counter in this file is declared at zero at construction,
+	// because a counter that has never fired is indistinguishable from a
+	// counter nobody wired up. For these gauges the same move produces
+	// the opposite of honesty: an archive that has just started has no
+	// position, and publishing `position_unaccounted 0` would say it
+	// walked a stream and lost nothing when it has walked nothing at all.
+	//
+	// So they are GaugeVecs held unmaterialised, and a series only exists
+	// once there is a reading behind it. An absent series here means "not
+	// known yet"; a zero means measured.
+	skipped      *prometheus.GaugeVec
+	posFirst     *prometheus.GaugeVec
+	posHighest   *prometheus.GaugeVec
+	posCommitted *prometheus.GaugeVec
+	posRejected  *prometheus.GaugeVec
+	posUnaccount *prometheus.GaugeVec
+	posRows      *prometheus.GaugeVec
+	posReadFail  prometheus.Counter
 
 	now func() time.Time
 }
@@ -126,6 +158,37 @@ func New(reg *metrics.Registry, now func() time.Time) *Meter {
 		maxAge: reg.Gauge("archive_stream_max_age_seconds",
 			"The stream's retention window, so the ratio that matters can be computed "+
 				"rather than hardcoded into a dashboard.").WithLabelValues(),
+		firstSeq: reg.Gauge("archive_stream_first_sequence",
+			"The lowest sequence the stream still holds. Rises as records are "+
+				"discarded for age.").WithLabelValues(),
+		lastSeq: reg.Gauge("archive_stream_last_sequence",
+			"The highest sequence the stream has accepted.").WithLabelValues(),
+		skipped: reg.Gauge("archive_stream_skipped",
+			"Records that left the stream before this archive took them in: the "+
+				"stream's first surviving sequence minus the archive's own durable "+
+				"position. Arrears rather than a running total. Absent until there "+
+				"is a position to subtract from."),
+
+		posFirst: reg.Gauge("archive_position_first_sequence",
+			"The lowest stream sequence this archive has ever recorded. Durable; "+
+				"survives restart. Absent on an archive that has consumed nothing."),
+		posHighest: reg.Gauge("archive_position_highest_sequence",
+			"The highest stream sequence this archive has recorded."),
+		posCommitted: reg.Gauge("archive_position_committed",
+			"Commit operations this archive has performed across its whole life, "+
+				"read from the substrate rather than from a process counter. Exceeds "+
+				"the row count by the number of deduplicated redeliveries."),
+		posRejected: reg.Gauge("archive_position_rejected",
+			"Records this archive refused on purpose, durably. Subtracted from the "+
+				"span so a deliberate refusal is not reported as transport loss."),
+		posUnaccount: reg.Gauge("archive_position_unaccounted",
+			"Sequences inside the range this archive has walked that it neither "+
+				"committed nor refused. Records in flight count here, so it is read "+
+				"after traffic drains, not during."),
+		posRows: reg.Gauge("archive_position_rows",
+			"Records the substrate actually holds."),
+		posReadFail: reg.Counter("archive_position_read_failures_total",
+			"Reads of the durable position that did not return one.").WithLabelValues(),
 		now: now,
 	}
 
@@ -165,6 +228,51 @@ func (m *Meter) Observe(s eventstream.Stats, err error) {
 	m.redelivered.Set(float64(s.Redelivered))
 	m.oldestAge.Set(s.OldestAge.Seconds())
 	m.maxAge.Set(s.MaxAge.Seconds())
+	m.firstSeq.Set(float64(s.FirstSeq))
+	m.lastSeq.Set(float64(s.LastSeq))
 
 	m.observed.Set(float64(m.now().Unix()))
+}
+
+// ObservePosition publishes the archive's durable position and what it
+// implies.
+//
+// The bool says whether a position exists at all. A fresh archive has
+// none, and reporting one full of zeros would make "never consumed
+// anything" indistinguishable from "consumed everything perfectly" — the
+// two readings this repository refuses to collapse. So nothing is
+// published until there is something to publish.
+func (m *Meter) ObservePosition(p substrate.Position, rows int64, ok bool, err error) {
+	if err != nil {
+		m.posReadFail.Inc()
+		return
+	}
+	if !ok {
+		return
+	}
+	m.posFirst.WithLabelValues().Set(float64(p.FirstSeq))
+	m.posHighest.WithLabelValues().Set(float64(p.HighestSeq))
+	m.posCommitted.WithLabelValues().Set(float64(p.Committed))
+	m.posRejected.WithLabelValues().Set(float64(p.Rejected))
+	m.posUnaccount.WithLabelValues().Set(float64(p.Unaccounted()))
+	m.posRows.WithLabelValues().Set(float64(rows))
+}
+
+// ObserveSkipped publishes how far the stream's surviving content has
+// moved past this archive.
+//
+// Positive means records left the stream that this archive never took
+// in. Reported only when a position exists: without one there is nothing
+// to subtract, and a bare zero would read as "nothing was skipped".
+func (m *Meter) ObserveSkipped(streamFirst uint64, p substrate.Position, ok bool) {
+	if !ok || streamFirst == 0 {
+		return
+	}
+	// The archive has walked past HighestSeq. Anything the stream has
+	// already discarded above that was never delivered here.
+	if streamFirst > p.HighestSeq+1 {
+		m.skipped.WithLabelValues().Set(float64(streamFirst - p.HighestSeq - 1))
+		return
+	}
+	m.skipped.WithLabelValues().Set(0)
 }

@@ -149,6 +149,23 @@ type Stats struct {
 	// that matters can be computed rather than hardcoded into whatever
 	// dashboard happens to be reading.
 	MaxAge time.Duration
+
+	// FirstSeq is the lowest sequence still IN the stream.
+	//
+	// It is the number that makes age-out countable after the fact, but
+	// only against a position the broker does not control. Compared to a
+	// consumer's ack floor it reveals nothing — the broker advances that
+	// floor when records are removed, so the evidence is destroyed by the
+	// event it would evidence. Compared to a position the archive wrote
+	// down itself, the subtraction is sound: sequences between what the
+	// archive has walked past and what the stream still holds left
+	// without ever being delivered.
+	FirstSeq uint64
+
+	// LastSeq is the highest sequence the stream has accepted, so a
+	// consumer's own position can be read as a distance from the head
+	// rather than as a bare number.
+	LastSeq uint64
 }
 
 // StatsFunc receives each reading, or the error that prevented one.
@@ -159,9 +176,28 @@ type Stats struct {
 // the broker stopped answering.
 type StatsFunc func(Stats, error)
 
+// Delivery is what the BROKER says about one message, as opposed to
+// what the message says about itself.
+//
+// Sequence is the stream sequence: a monotonic number the broker assigns
+// at publish, stable across redelivery of the same message. It is the
+// only identifier that lets a consumer say what it has walked PAST as
+// well as what it has taken in — and therefore the only basis on which
+// records that entered the stream and never arrived can be counted at
+// all. A consumer that sees only payloads can count what it received and
+// never learn what it did not.
+type Delivery struct {
+	Sequence    uint64
+	Redelivered bool
+}
+
+// Handler commits one delivered record.
+type Handler func(context.Context, *eventsv1.ArchiveRecord, Delivery) error
+
 type consumeOptions struct {
-	statsEvery time.Duration
-	stats      StatsFunc
+	statsEvery  time.Duration
+	stats       StatsFunc
+	undecodable func(Delivery)
 }
 
 // ConsumeOption configures Consume.
@@ -175,8 +211,21 @@ func WithStats(every time.Duration, fn StatsFunc) ConsumeOption {
 	}
 }
 
-func Consume(ctx context.Context, js jetstream.JetStream,
-	fn func(context.Context, *eventsv1.ArchiveRecord) error,
+// WithUndecodable reports messages this library drops without ever
+// calling the handler.
+//
+// Without it those messages are an accounting hole: the sequence is
+// consumed, the handler never hears about it, and a reconciliation built
+// on sequences reports the record as unexplained loss. It is not
+// unexplained — this library terminated it on purpose — and the
+// difference between "the transport lost a record" and "the archive
+// refused a corrupt one" is the difference the whole audit exists to
+// draw.
+func WithUndecodable(fn func(Delivery)) ConsumeOption {
+	return func(o *consumeOptions) { o.undecodable = fn }
+}
+
+func Consume(ctx context.Context, js jetstream.JetStream, fn Handler,
 	opts ...ConsumeOption) error {
 
 	var o consumeOptions
@@ -198,16 +247,32 @@ func Consume(ctx context.Context, js jetstream.JetStream,
 	}
 
 	sub, err := cons.Consume(func(msg jetstream.Msg) {
+		// The broker's view of this delivery, read before anything can
+		// fail. A message whose metadata cannot be read is one whose
+		// sequence is unknown, and a zero sequence is refused downstream
+		// rather than silently recorded as the beginning of the stream.
+		var d Delivery
+		if md, err := msg.Metadata(); err == nil {
+			d = Delivery{Sequence: md.Sequence.Stream, Redelivered: md.NumDelivered > 1}
+		}
+
 		var rec eventsv1.ArchiveRecord
 		if err := proto.Unmarshal(msg.Data(), &rec); err != nil {
 			// Undecodable: redelivering forever would wedge the
 			// consumer on one bad message, and this cannot become
 			// decodable later. Terminate drops it from redelivery and
 			// leaves it in the stream for a human.
+			//
+			// Reported first. The sequence is consumed either way, and a
+			// consumed sequence nobody accounts for is indistinguishable
+			// from a record the transport lost.
+			if o.undecodable != nil {
+				o.undecodable(d)
+			}
 			_ = msg.Term()
 			return
 		}
-		if err := fn(ctx, &rec); err != nil {
+		if err := fn(ctx, &rec, d); err != nil {
 			// Nak rather than drop: a commit that failed is a record
 			// the archive does not have, and the whole point is that it
 			// ends up having it.
@@ -271,7 +336,9 @@ func pollStats(ctx context.Context, js jetstream.JetStream, cons jetstream.Consu
 
 		// TWO WAYS OF COUNTING AGE-OUT AFTER THE FACT WERE BUILT HERE
 		// AND BOTH WERE DELETED, because both were measured and neither
-		// fires when it matters.
+		// fires when it matters. A third now works, and it works because
+		// it stopped asking the broker where the consumer had got to —
+		// see FirstSeq above and the archive's startup check.
 		//
 		// Comparing the stream's first sequence to the consumer's ack
 		// floor should reveal records that left unacknowledged, and
@@ -290,14 +357,17 @@ func pollStats(ctx context.Context, js jetstream.JetStream, cons jetstream.Consu
 		// which needs load this repository has not built.
 		//
 		// Publishing a counter that reads zero through real loss would
-		// be worse than publishing none, so neither ships. What ships
-		// is the early warning below; see the archive's meter.
+		// be worse than publishing none, so neither ships. What ships is
+		// the early warning, plus FirstSeq for the archive to subtract
+		// its own durable position from.
 		report(Stats{
 			Pending:     info.NumPending,
 			AckPending:  info.NumAckPending,
 			Redelivered: info.NumRedelivered,
 			OldestAge:   oldest,
 			MaxAge:      si.Config.MaxAge,
+			FirstSeq:    si.State.FirstSeq,
+			LastSeq:     si.State.LastSeq,
 		}, nil)
 	}
 

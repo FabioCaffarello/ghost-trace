@@ -534,6 +534,17 @@ shadow-http: ## A/B the collector against the engine, and check the demo is wire
 kill-test: ## Take each service away and check the degradation promises (needs the topology up)
 	@python3 deploy/kill-test.py
 
+# The accounting phase's gate. Deliberately outside `make ci`: it stops
+# and starts containers, which a pull-request runner should not be doing
+# to a shared daemon, and it takes minutes rather than seconds.
+#
+# It refuses when the topology is down. A gate that skips is the exact
+# failure this phase was opened to remove — `make shadow` skipping
+# without GT_NATS_URL is how a broken tenant lookup reached CI.
+.PHONY: loss-audit
+loss-audit: ## Drive traffic, break things, and make the archive's books balance (needs the topology up)
+	@python3 deploy/loss-audit.py
+
 .PHONY: parity
 parity: ## Archive parity against a real broker (needs GT_NATS_URL)
 	@if [ -z "$${GT_NATS_URL:-}" ]; then \

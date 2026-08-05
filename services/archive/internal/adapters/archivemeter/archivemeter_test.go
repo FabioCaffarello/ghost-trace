@@ -7,6 +7,7 @@ import (
 
 	"github.com/FabioCaffarello/ghost-trace/libs/eventstream"
 	"github.com/FabioCaffarello/ghost-trace/libs/metrics"
+	"github.com/FabioCaffarello/ghost-trace/libs/substrate"
 	"github.com/FabioCaffarello/ghost-trace/services/archive/internal/adapters/archivemeter"
 	"github.com/FabioCaffarello/ghost-trace/services/archive/internal/consumer"
 )
@@ -192,5 +193,121 @@ func TestAFailedReadLeavesTheAgeGaugesAlone(t *testing.T) {
 
 	if v, _ := value(t, reg, "ghosttrace_archive_stream_oldest_message_age_seconds", nil); v != (3 * time.Hour).Seconds() {
 		t.Errorf("oldest age = %v after a failed read, want the last real reading held", v)
+	}
+}
+
+func TestAFreshArchivePublishesNoPositionAtAll(t *testing.T) {
+	// The distinction the whole phase turns on. An archive that has
+	// never consumed anything must not publish "committed 0, unaccounted
+	// 0" — that reads as a perfect run, and is indistinguishable from
+	// one. Absence is not zero.
+	reg := metrics.New()
+	m := archivemeter.New(reg, time.Now)
+
+	m.ObservePosition(substrate.Position{}, 0, false, nil)
+
+	for _, name := range []string{
+		"ghosttrace_archive_position_committed",
+		"ghosttrace_archive_position_unaccounted",
+		"ghosttrace_archive_position_highest_sequence",
+	} {
+		if _, ok := value(t, reg, name, nil); ok {
+			t.Errorf("%s is published by an archive with no position", name)
+		}
+	}
+}
+
+func TestThePositionAndWhatItImpliesArePublished(t *testing.T) {
+	reg := metrics.New()
+	m := archivemeter.New(reg, time.Now)
+
+	// Walked 10..20 — eleven sequences. Nine committed, one refused, so
+	// one is unaccounted for.
+	m.ObservePosition(substrate.Position{
+		FirstSeq: 10, HighestSeq: 20, Committed: 9, Rejected: 1,
+	}, 9, true, nil)
+
+	for _, tc := range []struct {
+		name string
+		want float64
+	}{
+		{"ghosttrace_archive_position_first_sequence", 10},
+		{"ghosttrace_archive_position_highest_sequence", 20},
+		{"ghosttrace_archive_position_committed", 9},
+		{"ghosttrace_archive_position_rejected", 1},
+		{"ghosttrace_archive_position_unaccounted", 1},
+		{"ghosttrace_archive_position_rows", 9},
+	} {
+		got, ok := value(t, reg, tc.name, nil)
+		if !ok {
+			t.Errorf("%s is absent", tc.name)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("%s = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestAFailedPositionReadIsCountedRatherThanPublishedAsZero(t *testing.T) {
+	reg := metrics.New()
+	m := archivemeter.New(reg, time.Now)
+	m.ObservePosition(substrate.Position{
+		FirstSeq: 1, HighestSeq: 5, Committed: 5,
+	}, 5, true, nil)
+
+	m.ObservePosition(substrate.Position{}, 0, false, errors.New("database is locked"))
+
+	if v, _ := value(t, reg, "ghosttrace_archive_position_committed", nil); v != 5 {
+		t.Errorf("committed = %v after a failed read, want the last real reading (5)", v)
+	}
+	if v, _ := value(t, reg, "ghosttrace_archive_position_read_failures_total", nil); v != 1 {
+		t.Errorf("read failures = %v, want 1", v)
+	}
+}
+
+func TestSkippedCountsWhatLeftTheStreamAheadOfTheArchive(t *testing.T) {
+	// The measurement 3.4 could not build. Two attempts failed because
+	// both read a number the broker rewrites when it discards records.
+	// This one subtracts the archive's OWN durable mark, which nothing
+	// outside the process can move.
+	reg := metrics.New()
+	m := archivemeter.New(reg, time.Now)
+	pos := substrate.Position{FirstSeq: 1, HighestSeq: 100, Committed: 100}
+
+	// The stream now begins at 106: sequences 101–105 were discarded
+	// before this archive ever saw them.
+	m.ObserveSkipped(106, pos, true)
+
+	if v, ok := value(t, reg, "ghosttrace_archive_stream_skipped", nil); !ok || v != 5 {
+		t.Errorf("skipped = %v (present=%v), want 5", v, ok)
+	}
+}
+
+func TestAnArchiveKeepingUpReportsNothingSkipped(t *testing.T) {
+	// A measured zero, and it must be reportable. The archive is at 100
+	// and the stream still holds everything from 1, so nothing left
+	// without being seen.
+	reg := metrics.New()
+	m := archivemeter.New(reg, time.Now)
+
+	m.ObserveSkipped(1, substrate.Position{FirstSeq: 1, HighestSeq: 100, Committed: 100}, true)
+
+	if v, ok := value(t, reg, "ghosttrace_archive_stream_skipped", nil); !ok || v != 0 {
+		t.Errorf("skipped = %v (present=%v), want a measured 0", v, ok)
+	}
+}
+
+func TestSkippedIsNotPublishedWithoutAPositionToSubtractFrom(t *testing.T) {
+	// Without a durable mark there is nothing to subtract, and a bare
+	// zero would read as "nothing was skipped" rather than "nobody
+	// knows".
+	reg := metrics.New()
+	m := archivemeter.New(reg, time.Now)
+
+	m.ObserveSkipped(500, substrate.Position{}, false)
+
+	if _, ok := value(t, reg, "ghosttrace_archive_stream_skipped", nil); ok {
+		t.Error("skipped is published by an archive that has no position")
 	}
 }
