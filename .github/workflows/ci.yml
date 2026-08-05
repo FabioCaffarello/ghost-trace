@@ -271,3 +271,84 @@ jobs:
       # can be checked on every push, and it was unchecked entirely.
       - name: Syntax + asserted selftest
         run: make experiments-check
+
+  # The composed topology, brought up and interrogated.
+  #
+  # Nothing gated it before, and it broke twice without anything
+  # noticing: a demo page naming an origin no in-network browser could
+  # reach, and a stale image running a harness from before a variable
+  # existed. Both were found by hand, days later.
+  #
+  # It runs shadow-http and kill-test rather than the full experiments
+  # profile. The tier run needs browsers and about seven minutes, and it
+  # re-measures detection rates that `make numbers` already measures
+  # locally; what was actually broken both times was WIRING, which these
+  # two check in a fraction of the time.
+  topology:
+    name: topology — shadow and kill-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: services/decision-engine/go.mod
+          cache-dependency-path: services/decision-engine/go.sum
+
+      - name: Base image tags
+        run: grep -E '^(GOLANG|DISTROLESS)_IMAGE=' .env.example >> "$GITHUB_ENV"
+
+      - name: Bring the topology up
+        run: |
+          cp .env.example .env
+          docker compose --profile core up -d --build
+          for svc in collector decision-engine demo-web; do
+            for i in $(seq 1 60); do
+              state=$(docker inspect -f '{{.State.Health.Status}}' "ghost-trace-$svc-1" 2>/dev/null || echo starting)
+              [ "$state" = healthy ] && break
+              sleep 2
+            done
+            [ "$state" = healthy ] || { echo "::error::$svc never became healthy"; docker compose --profile core logs "$svc"; exit 1; }
+          done
+
+      - name: A/B the collector against the engine
+        run: make shadow-http
+
+      - name: Take each service away
+        run: make kill-test
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose --profile core logs --tail=100
+
+  # A single context for branch protection to require, instead of one
+  # per job and one per matrix cell.
+  #
+  # Listing matrix contexts literally is the trap that already bit this
+  # repository once: renaming a job silently removed its protection,
+  # and every new module would need a settings change nobody would
+  # remember to make. This name does not move when the matrix grows.
+  #
+  # `if: always()` plus an explicit result check is not decoration. A
+  # summary job that simply `needs` others is SKIPPED when any of them
+  # fails, and a skipped required check leaves a pull request waiting
+  # forever — or worse, on some configurations, counts as success. It
+  # has to run regardless and then decide.
+  required:
+    name: ci — all checks
+    if: always()
+    needs: [schemas, collector, modules, parity, quality, experiments, topology]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job must have succeeded
+        run: |
+          results='${{ join(needs.*.result, " ") }}'
+          echo "results: $results"
+          for r in $results; do
+            if [ "$r" != "success" ]; then
+              echo "::error::a required job did not succeed ($r)"
+              exit 1
+            fi
+          done
+          echo "all required jobs succeeded"

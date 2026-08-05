@@ -125,3 +125,34 @@ jobs:
       # someone tries to run it.
       - name: Validate compose topology
         run: docker compose --profile core --profile demo --profile experiments --profile observability config --quiet
+
+  # A single context for branch protection to require, instead of one
+  # per job and one per matrix cell.
+  #
+  # Listing matrix contexts literally is the trap that already bit this
+  # repository once: renaming a job silently removed its protection,
+  # and every new module would need a settings change nobody would
+  # remember to make. This name does not move when the matrix grows.
+  #
+  # `if: always()` plus an explicit result check is not decoration. A
+  # summary job that simply `needs` others is SKIPPED when any of them
+  # fails, and a skipped required check leaves a pull request waiting
+  # forever — or worse, on some configurations, counts as success. It
+  # has to run regardless and then decide.
+  required:
+    name: image — all checks
+    if: always()
+    needs: [service, dockerfiles]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job must have succeeded
+        run: |
+          results='${{ join(needs.*.result, " ") }}'
+          echo "results: $results"
+          for r in $results; do
+            if [ "$r" != "success" ]; then
+              echo "::error::a required job did not succeed ($r)"
+              exit 1
+            fi
+          done
+          echo "all required jobs succeeded"

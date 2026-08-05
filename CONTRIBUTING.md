@@ -27,6 +27,14 @@ make verify      # format, vet, lint, race tests — before pushing
 make ci          # everything CI runs, in the order CI runs it
 ```
 
+**Branch protection requires three checks, and they are summaries.**
+`ci — all checks`, `image — all checks` and `commits — conventional`.
+Each summary fails unless every job in its workflow succeeded, so
+everything blocks a merge without protection having to list a context
+per job and per matrix cell. Listing them literally is how protection
+was silently lost once already: renaming a job removed its requirement,
+and every new module would need a settings change nobody would remember.
+
 **Every CI step is a `make` target and nothing else.** The workflows
 decide when things run; the Makefile decides what they do. If `make ci`
 is green and CI is not, that is a bug in the split and worth reporting.
@@ -58,7 +66,23 @@ refactor(session)!: ports take a context
 ```
 
 `feat` releases a minor, `fix` and `perf` a patch, `!` a major, and
-everything else releases nothing.
+everything else releases nothing. That is not aspirational any more:
+`scripts/next-release.py` derives the version and the changelog from the
+log, and a push to `main` tags and publishes. Run it to see what your
+merge will cut:
+
+```bash
+python3 scripts/next-release.py
+```
+
+It reads the header rule FROM `scripts/check-commit-message.sh` rather
+than restating it, so the release cannot disagree with the check that
+let the commit in. Headers it cannot parse are listed in the changelog
+under "Not classified" rather than dropped — a changelog that hides what
+it could not read is claiming a completeness it does not have.
+
+Releases tag and write notes. They do not publish images; that was
+declined in R1.12 for want of a consumer.
 
 Pull requests are **squash-merged**, so the PR **title** is the commit
 that lands — it, not the branch's commits, is what release automation

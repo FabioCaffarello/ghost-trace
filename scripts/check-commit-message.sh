@@ -18,6 +18,7 @@
 #   check-commit-message.sh --file .git/COMMIT_EDITMSG
 #   check-commit-message.sh --text "feat(api): add the thing"
 #   check-commit-message.sh --selftest
+#   check-commit-message.sh --header-re   (for release automation)
 
 set -euo pipefail
 
@@ -176,6 +177,14 @@ main() {
             ;;
         --selftest)
             selftest
+            ;;
+        --header-re)
+            # Printed so release automation parses headers with THIS
+            # definition rather than a second one that drifts from it.
+            printf '%s\n' "$HEADER_RE"
+            ;;
+        --types)
+            printf '%s\n' "$TYPES"
             ;;
         *)
             sed -n '2,20p' "$0"
