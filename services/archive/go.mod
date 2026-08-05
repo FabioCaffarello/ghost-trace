@@ -11,6 +11,7 @@ require (
 	github.com/FabioCaffarello/ghost-trace/libs/metrics v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/middleware v0.0.0-00010101000000-000000000000
 	github.com/FabioCaffarello/ghost-trace/libs/substrate v0.0.0
+	github.com/prometheus/client_golang v1.24.1
 	google.golang.org/protobuf v1.36.11
 )
 
@@ -28,7 +29,6 @@ require (
 	github.com/nats-io/nkeys v0.4.15 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
-	github.com/prometheus/client_golang v1.24.1 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.70.1 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect

@@ -95,7 +95,7 @@ func TestArchiveHoldsEverythingTheCollectorWrote(t *testing.T) {
 	remote := openStore(t, "archive")
 
 	// The archive side, running as it does in production.
-	cons := consumer.New(remote, time.Now, nil)
+	cons := consumer.New(remote, consumer.NoMeter{}, time.Now, nil)
 	consumeCtx, stopConsume := context.WithCancel(ctx)
 	consumed := make(chan error, 1)
 	go func() { consumed <- eventstream.Consume(consumeCtx, js, cons.Handle) }()
@@ -180,7 +180,7 @@ func TestArchiveHoldsEverythingTheCollectorWrote(t *testing.T) {
 // describe it, and every later verification would fail on it.
 func TestCorruptedPayloadIsRefused(t *testing.T) {
 	store := openStore(t, "archive")
-	cons := consumer.New(store, time.Now, nil)
+	cons := consumer.New(store, consumer.NoMeter{}, time.Now, nil)
 
 	msg := &eventsv1.Outcome{EvaluationId: "ev_x", Outcome: "login_success"}
 	payload, hash, err := canonical.MarshalAndHash(msg)

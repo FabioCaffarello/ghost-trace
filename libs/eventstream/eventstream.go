@@ -13,6 +13,7 @@ package eventstream
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
@@ -51,6 +52,23 @@ var kindByMessageType = map[string]Kind{
 	"ghosttrace.events.v1.TelemetryBatch": KindTelemetry,
 	"ghosttrace.events.v1.Evaluation":     KindEvaluation,
 	"ghosttrace.events.v1.Outcome":        KindOutcome,
+}
+
+// MessageTypes returns every protobuf name a record can carry, in a
+// stable order.
+//
+// Exposed so a consumer can declare a per-type counter for each of them
+// AT ZERO before serving. A counter that appears only when its first
+// record arrives cannot distinguish "none of this type yet" from "this
+// type is not being counted", and the second is a bug that hides for as
+// long as traffic is quiet.
+func MessageTypes() []string {
+	out := make([]string, 0, len(kindByMessageType))
+	for t := range kindByMessageType {
+		out = append(out, t)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // KindFor returns the subject kind for a protobuf message name.
