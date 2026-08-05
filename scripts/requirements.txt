@@ -1,0 +1,15 @@
+# Dependencies for repository TOOLING, which is a different promise from
+# experiments/requirements.txt.
+#
+# The statistics are stdlib-only on purpose: numbers.py, analyze.py and
+# their kin must run wherever a Python interpreter exists, so that the
+# six numbers can be reproduced with nothing installed. That rule is
+# about the CLAIM, not about the repository's own scaffolding.
+#
+# check-workflows.py reads the CI workflows and must parse YAML the way
+# GitHub does rather than the way a regex guesses, because the thing it
+# guards is precisely a workflow that parsed one way and evaluated
+# another.
+#
+#   python3 -m pip install -r scripts/requirements.txt
+pyyaml

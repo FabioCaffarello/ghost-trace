@@ -559,6 +559,12 @@ experiments-check: ## Syntax-check every tier and run the asserted statistics se
 	@cd $(EXPERIMENTS) && python3 -m schema --selftest
 	@echo "== numbers-check selftest (asserted)"
 	@python3 $(EXPERIMENTS)/numbers_check.py --selftest
+	@echo "== release-derivation selftest (asserted)"
+	@python3 scripts/next-release.py --selftest
+	@echo "== workflow-guard selftest (asserted)"
+	@python3 scripts/check-workflows.py --selftest
+	@echo "== the required checks actually require every job"
+	@python3 scripts/check-workflows.py
 
 # Measuring and CHECKING are one target, because they were two habits
 # and the second one kept being skipped. The run prints the six numbers
