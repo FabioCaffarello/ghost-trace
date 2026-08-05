@@ -40,6 +40,32 @@ CREATE TABLE IF NOT EXISTS events (
 ) WITHOUT ROWID;
 `
 
+// positionSchemaDDL — where the archive is in the stream, durably.
+//
+// WHY THIS IS IN THE SUBSTRATE AND NOT A COUNTER. Process-local counters
+// reset on restart, so "committed" answers what one process did rather
+// than what the archive holds; restarting mid-backlog was observed to
+// take a committed counter from 5 to 10 while fifteen records had in
+// fact arrived. And the broker cannot be asked either: it advances a
+// consumer's ack floor when records are removed from under it, so the
+// bookkeeping that would reveal loss is destroyed by the loss.
+//
+// A durable position is the only remaining place to stand. It lives in
+// the same database as the events and is written in the same
+// transaction, so "the archive committed record N" and "the archive
+// reached sequence N" cannot disagree across a crash.
+//
+// One row, enforced by the CHECK. There is one stream and one archive.
+const positionSchemaDDL = `
+CREATE TABLE IF NOT EXISTS stream_position (
+    id           INTEGER PRIMARY KEY CHECK (id = 1),
+    first_seq    INTEGER NOT NULL,
+    highest_seq  INTEGER NOT NULL,
+    committed    INTEGER NOT NULL,
+    rejected     INTEGER NOT NULL
+);
+`
+
 // canonicalPragmas — applied at Open. journal_mode=WAL for concurrent-reader
 // + single-writer semantics; synchronous=FULL for §2.1 durability
 // guarantee under power loss.
@@ -92,6 +118,11 @@ func Open(ctx context.Context, dbPath, blobDir string) (*Substrate, error) {
 	if _, err := db.ExecContext(ctx, eventsSchemaDDL); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("substrate.Open: create events table: %w", err)
+	}
+
+	if _, err := db.ExecContext(ctx, positionSchemaDDL); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("substrate.Open: create stream_position table: %w", err)
 	}
 
 	return &Substrate{db: db, blobDir: blobDir}, nil
@@ -448,4 +479,163 @@ func (s *Substrate) AppendCanonical(ctx context.Context, payload []byte, eventHa
 		PayloadRef:  hexed[:2] + "/" + hexed[2:],
 		CommittedAt: committedAt,
 	}, payload)
+}
+
+// ---------------------------------------------------------------
+// The durable position
+// ---------------------------------------------------------------
+
+// ErrNoSequence rejects a position update that carries no sequence.
+//
+// JetStream numbers stream sequences from 1, so a zero is a caller that
+// did not plumb one through rather than a record that genuinely sits at
+// the beginning. Recording it would silently drag first_seq to zero and
+// make every audit afterwards report a span far larger than the traffic,
+// which reads as catastrophic loss. Refusing is the cheaper failure.
+var ErrNoSequence = errors.New("substrate: stream sequence is zero")
+
+// Position is what the archive durably knows about its own progress.
+//
+// The four numbers exist to make one subtraction possible:
+//
+//	span        = HighestSeq - FirstSeq + 1
+//	accounted   = Committed + Rejected
+//	unaccounted = span - accounted
+//
+// Unaccounted is the number this whole phase was opened to produce:
+// records that entered the stream within the range this archive has
+// walked, and are not in it, and were not refused. Records still in
+// flight count as unaccounted, which is correct — they are genuinely not
+// in the archive yet — so the figure is read after traffic has drained,
+// not during.
+//
+// Committed counts COMMIT OPERATIONS, not rows. A record delivered twice
+// commits twice and dedups to one row, so Committed minus the row count
+// is the duplicate volume rather than a discrepancy. Counting rows here
+// instead would have made every deduplicated redelivery look like a
+// record that entered the stream and vanished.
+type Position struct {
+	FirstSeq   uint64
+	HighestSeq uint64
+	Committed  int64
+	Rejected   int64
+}
+
+// Span is the number of stream sequences this archive has walked past.
+func (p Position) Span() int64 {
+	if p.HighestSeq == 0 {
+		return 0
+	}
+	return int64(p.HighestSeq-p.FirstSeq) + 1
+}
+
+// Unaccounted is the span minus everything the archive can explain.
+func (p Position) Unaccounted() int64 { return p.Span() - p.Committed - p.Rejected }
+
+// positionUpsert folds one observation into the single row. MIN and MAX
+// keep first_seq and highest_seq monotonic in their own directions, so
+// out-of-order delivery — which JetStream permits — cannot walk either
+// backwards.
+const positionUpsert = `
+INSERT INTO stream_position (id, first_seq, highest_seq, committed, rejected)
+VALUES (1, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+    first_seq   = MIN(first_seq,   excluded.first_seq),
+    highest_seq = MAX(highest_seq, excluded.highest_seq),
+    committed   = committed + excluded.committed,
+    rejected    = rejected  + excluded.rejected`
+
+// Position reads the durable position. The bool is false when nothing
+// has ever been recorded, which is a fresh archive rather than an
+// archive at zero — the distinction this repository does not collapse.
+func (s *Substrate) Position(ctx context.Context) (Position, bool, error) {
+	var p Position
+	err := s.db.QueryRowContext(ctx,
+		`SELECT first_seq, highest_seq, committed, rejected FROM stream_position WHERE id = 1`).
+		Scan(&p.FirstSeq, &p.HighestSeq, &p.Committed, &p.Rejected)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Position{}, false, nil
+	}
+	if err != nil {
+		return Position{}, false, fmt.Errorf("substrate.Position: %w", err)
+	}
+	return p, true, nil
+}
+
+// AppendCanonicalAt commits a record and advances the position in ONE
+// transaction.
+//
+// That is the point of the method existing beside AppendCanonical. If
+// the two were separate writes, a crash between them would leave an
+// archive holding a record it does not believe it holds, or believing it
+// holds one it does not — and the audit built on top would report a gap
+// that is an artefact of when the power failed.
+//
+// The blob is written first and outside the transaction. A blob with no
+// row is already possible and already harmless: it is content-addressed,
+// so it is either garbage-collected or rewritten identically. A row with
+// no blob would not be.
+func (s *Substrate) AppendCanonicalAt(ctx context.Context, payload []byte, eventHash [32]byte,
+	eventTime int64, messageType string, committedAt int64, seq uint64) error {
+
+	if seq == 0 {
+		return ErrNoSequence
+	}
+	if got := canonical.Hash(payload); got != eventHash {
+		return fmt.Errorf("%w: payload hashes to %s, record claims %s",
+			ErrHashMismatch, canonical.HashHex(got), canonical.HashHex(eventHash))
+	}
+
+	hexed := canonical.HashHex(eventHash)
+	payloadRef := hexed[:2] + "/" + hexed[2:]
+
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	if err := s.writeBlob(eventHash, payload); err != nil {
+		return fmt.Errorf("substrate.AppendCanonicalAt: blob write: %w", err)
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("substrate.AppendCanonicalAt: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx,
+		`INSERT OR IGNORE INTO events
+		   (event_hash, event_time, message_type, payload_ref, committed_at)
+		 VALUES (?, ?, ?, ?, ?)`,
+		eventHash[:], eventTime, messageType, payloadRef, committedAt,
+	); err != nil {
+		return fmt.Errorf("substrate.AppendCanonicalAt: insert: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, positionUpsert, seq, seq, 1, 0); err != nil {
+		return fmt.Errorf("substrate.AppendCanonicalAt: position: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("substrate.AppendCanonicalAt: commit: %w", err)
+	}
+	return nil
+}
+
+// RecordRejected advances the position for a record the archive refused.
+//
+// A refusal is an ACCOUNTED outcome, not a loss. Without this the
+// sequence would still be walked past — highest_seq comes from whatever
+// arrives last — and the record would surface as unaccounted, blaming
+// the stream for a decision the archive made deliberately and logged.
+func (s *Substrate) RecordRejected(ctx context.Context, seq uint64) error {
+	if seq == 0 {
+		return ErrNoSequence
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	if _, err := s.db.ExecContext(ctx, positionUpsert, seq, seq, 0, 1); err != nil {
+		return fmt.Errorf("substrate.RecordRejected: %w", err)
+	}
+	return nil
 }

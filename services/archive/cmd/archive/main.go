@@ -110,13 +110,48 @@ func main() {
 	// timer. Local counters cannot see it: they go up while a thousand
 	// records queue behind them, and the lag stays invisible until
 	// records age out of the stream.
+	//
+	// The durable position is read on the same tick, and the two are
+	// reported together on purpose. Age-out is the subtraction between
+	// them — what the stream still holds, minus where this archive got to
+	// — and reading them a poll apart would compare a fresh number with a
+	// stale one at exactly the moment they diverge.
+	onStats := func(st eventstream.Stats, err error) {
+		meter.Observe(st, err)
+
+		pos, ok, perr := sub.Position(ctx)
+		var rows int64
+		if perr == nil {
+			rows, perr = sub.Count(ctx)
+		}
+		meter.ObservePosition(pos, rows, ok, perr)
+		if perr != nil {
+			log.Error("read durable position", "err", perr)
+			return
+		}
+		if err == nil {
+			meter.ObserveSkipped(st.FirstSeq, pos, ok)
+		}
+	}
+
 	if err := eventstream.Consume(ctx, js, cons.Handle,
-		eventstream.WithStats(*statsEvery, meter.Observe)); err != nil {
+		eventstream.WithStats(*statsEvery, onStats),
+		eventstream.WithUndecodable(cons.Undecodable)); err != nil {
 		log.Error("consume", "err", err)
 	}
 
 	committed, rejected := cons.Counts()
-	log.Info("archive stopping", "committed", committed, "rejected", rejected)
+	fields := []any{"committed", committed, "rejected", rejected}
+	if pos, ok, err := sub.Position(context.Background()); err == nil && ok {
+		// The durable figures, not the process ones. This line is the
+		// last thing a stopping archive says, and it is the one an
+		// operator reads after an incident.
+		fields = append(fields,
+			"position_first", pos.FirstSeq, "position_highest", pos.HighestSeq,
+			"position_committed", pos.Committed, "position_rejected", pos.Rejected,
+			"unaccounted", pos.Unaccounted())
+	}
+	log.Info("archive stopping", fields...)
 
 	shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

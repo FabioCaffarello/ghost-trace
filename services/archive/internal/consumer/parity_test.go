@@ -113,8 +113,8 @@ func TestArchiveHoldsEverythingTheCollectorWrote(t *testing.T) {
 		messageType := string(msg.ProtoReflect().Descriptor().FullName())
 		eventTime := int64(1_700_000_000_000_000_000 + i)
 
-		if err := local.AppendCanonical(ctx, payload, hash, eventTime,
-			messageType, time.Now().UnixNano()); err != nil {
+		if err := local.AppendCanonicalAt(ctx, payload, hash, eventTime,
+			messageType, time.Now().UnixNano(), uint64(i+1)); err != nil {
 			t.Fatalf("local commit: %v", err)
 		}
 		want[hexed] = messageType
@@ -194,7 +194,7 @@ func TestCorruptedPayloadIsRefused(t *testing.T) {
 		CanonicalPayload: corrupted,
 		EventHash:        canonical.HashHex(hash),
 		MessageType:      "ghosttrace.events.v1.Outcome",
-	})
+	}, eventstream.Delivery{Sequence: 1})
 	if err != nil {
 		t.Fatalf("a corrupted record should be dropped, not retried forever: %v", err)
 	}
