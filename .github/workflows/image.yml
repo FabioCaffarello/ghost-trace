@@ -149,10 +149,25 @@ jobs:
         run: |
           results='${{ join(needs.*.result, ' ') }}'
           echo "results: $results"
+
+          # An expression that fails to evaluate yields an EMPTY string,
+          # and a loop over nothing succeeds — the required check would
+          # go green having verified nothing. That is not hypothetical:
+          # join(needs.*.result, " ") with double quotes is a syntax
+          # error, and it took both workflows down before this counted.
+          #
+          # The count is written out rather than derived, so adding a job
+          # to `needs` and forgetting this line fails CLOSED.
+          count=$(echo $results | wc -w | tr -d ' ')
+          if [ "$count" != "2" ]; then
+            echo "::error::expected 2 job results, read $count — the summary is not seeing what it guards"
+            exit 1
+          fi
+
           for r in $results; do
             if [ "$r" != "success" ]; then
               echo "::error::a required job did not succeed ($r)"
               exit 1
             fi
           done
-          echo "all required jobs succeeded"
+          echo "all 2 required jobs succeeded"
