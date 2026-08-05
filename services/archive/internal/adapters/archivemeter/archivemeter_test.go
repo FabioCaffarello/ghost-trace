@@ -154,3 +154,43 @@ func TestCommitsAndRejectsCountSeparately(t *testing.T) {
 		}
 	}
 }
+
+func TestAgeOutProximityIsReadable(t *testing.T) {
+	// The condition the roadmap asked to be detectable before seven days
+	// pass. Pending alone cannot see age-out — a discarded record stops
+	// being pending, so the backlog gauge IMPROVES at the moment of
+	// loss.
+	reg := metrics.New()
+	m := archivemeter.New(reg, time.Now)
+
+	m.Observe(eventstream.Stats{
+		Pending:   500,
+		OldestAge: 6 * 24 * time.Hour,
+		MaxAge:    7 * 24 * time.Hour,
+	}, nil)
+
+	oldest, ok := value(t, reg, "ghosttrace_archive_stream_oldest_message_age_seconds", nil)
+	if !ok {
+		t.Fatal("oldest message age is absent")
+	}
+	maxAge, ok := value(t, reg, "ghosttrace_archive_stream_max_age_seconds", nil)
+	if !ok {
+		t.Fatal("max age is absent; the ratio cannot be computed without it")
+	}
+	if oldest/maxAge < 0.85 {
+		t.Errorf("oldest/max = %v; a backlog one day from the retention edge must "+
+			"read as close to it", oldest/maxAge)
+	}
+}
+
+func TestAFailedReadLeavesTheAgeGaugesAlone(t *testing.T) {
+	reg := metrics.New()
+	m := archivemeter.New(reg, time.Now)
+	m.Observe(eventstream.Stats{OldestAge: 3 * time.Hour, MaxAge: 7 * 24 * time.Hour}, nil)
+
+	m.Observe(eventstream.Stats{}, errors.New("broker unreachable"))
+
+	if v, _ := value(t, reg, "ghosttrace_archive_stream_oldest_message_age_seconds", nil); v != (3 * time.Hour).Seconds() {
+		t.Errorf("oldest age = %v after a failed read, want the last real reading held", v)
+	}
+}
