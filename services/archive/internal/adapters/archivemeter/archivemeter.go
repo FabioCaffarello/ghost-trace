@@ -23,6 +23,39 @@
 // fresh one. `stream_read_failures_total` counts the failed polls, so
 // the condition is visible without arithmetic too.
 //
+// AGE-OUT IS THE THIRD LOSS PATH, and it is the one that improves the
+// other numbers as it happens: a record discarded for age stops being
+// pending, so archive_stream_pending goes DOWN at the moment of loss. A
+// backlog that vanished looks exactly like a backlog that drained.
+//
+// IT CANNOT BE COUNTED AFTER THE FACT with what the broker retains.
+// Two ways were built and both were deleted after measurement:
+//
+//   - stream first sequence against consumer ack floor. The broker
+//     advances the ack floor when messages are removed from under a
+//     consumer, because there is nothing left to acknowledge. Purging
+//     four unconsumed records left first_seq=15, ack_floor=14.
+//   - jumps in delivered sequence. A jump needs records to leave
+//     without being delivered, and a keeping-up consumer never sees
+//     one; a test built to force it delivered everything before the
+//     purge. The case it would catch — a consumer far enough behind
+//     that discard overtakes it — needs load nobody here has built.
+//
+// Neither ships. A counter that reads zero through real loss is worse
+// than no counter, which is the principle this phase rests on.
+//
+// WHAT SHIPS IS THE EARLY WARNING, which is the half of the requirement
+// that can be honestly met: archive_stream_oldest_message_age_seconds
+// against archive_stream_max_age_seconds says how close the stream's
+// oldest content is to the retention edge, while there is still time to
+// act. Read with archive_stream_pending it answers the question age-out
+// poses, before rather than after.
+//
+// Closing the after-the-fact half needs the archive to remember its own
+// high-water mark durably and compare on startup. That is a design with
+// a hot-path cost and belongs with 3.6, which needs a durable position
+// for reconciliation anyway.
+//
 // COUNTERS ARE PROCESS-LOCAL AND RESET ON RESTART. That is ordinary
 // Prometheus semantics and a scraper handles it, but it matters for the
 // reconciliation this phase is building: "committed" answers what THIS
@@ -53,6 +86,9 @@ type Meter struct {
 	observed    prometheus.Gauge
 	readFailed  prometheus.Counter
 
+	oldestAge prometheus.Gauge
+	maxAge    prometheus.Gauge
+
 	now func() time.Time
 }
 
@@ -82,6 +118,14 @@ func New(reg *metrics.Registry, now func() time.Time) *Meter {
 				"unreachable.").WithLabelValues(),
 		readFailed: reg.Counter("archive_stream_read_failures_total",
 			"Polls of the broker that did not return a reading.").WithLabelValues(),
+		oldestAge: reg.Gauge("archive_stream_oldest_message_age_seconds",
+			"Age of the oldest message still in the stream. An upper bound on the age "+
+				"of the oldest record this consumer has not acknowledged; read with "+
+				"archive_stream_pending and archive_stream_max_age_seconds to see how "+
+				"close a backlog is to being discarded.").WithLabelValues(),
+		maxAge: reg.Gauge("archive_stream_max_age_seconds",
+			"The stream's retention window, so the ratio that matters can be computed "+
+				"rather than hardcoded into a dashboard.").WithLabelValues(),
 		now: now,
 	}
 
@@ -119,5 +163,8 @@ func (m *Meter) Observe(s eventstream.Stats, err error) {
 	m.pending.Set(float64(s.Pending))
 	m.ackPending.Set(float64(s.AckPending))
 	m.redelivered.Set(float64(s.Redelivered))
+	m.oldestAge.Set(s.OldestAge.Seconds())
+	m.maxAge.Set(s.MaxAge.Seconds())
+
 	m.observed.Set(float64(m.now().Unix()))
 }

@@ -132,6 +132,23 @@ type Stats struct {
 	// redelivery is the mechanism, not the exception — but a growing
 	// one says commits are failing.
 	Redelivered int
+
+	// OldestAge is how old the oldest message still in the stream is.
+	//
+	// Not the oldest UNACKED one, which would need a fetch per poll;
+	// this bounds it from above, because the oldest unacked cannot be
+	// older than the oldest present. An upper bound is the right
+	// direction for a safety signal: it warns early rather than late.
+	//
+	// Read together with Pending and MaxAge, it answers the question
+	// age-out actually poses — how close is the backlog to being
+	// discarded — while there is still time to act on the answer.
+	OldestAge time.Duration
+
+	// MaxAge is the stream's retention window, exposed so the ratio
+	// that matters can be computed rather than hardcoded into whatever
+	// dashboard happens to be reading.
+	MaxAge time.Duration
 }
 
 // StatsFunc receives each reading, or the error that prevented one.
@@ -205,7 +222,7 @@ func Consume(ctx context.Context, js jetstream.JetStream,
 	defer sub.Stop()
 
 	if o.stats != nil && o.statsEvery > 0 {
-		go pollStats(ctx, cons, o.statsEvery, o.stats)
+		go pollStats(ctx, js, cons, o.statsEvery, o.stats)
 	}
 
 	<-ctx.Done()
@@ -220,17 +237,67 @@ func Consume(ctx context.Context, js jetstream.JetStream,
 // The first reading is taken immediately rather than after one
 // interval, so a process that starts behind says so at once instead of
 // looking healthy for its first tick.
-func pollStats(ctx context.Context, cons jetstream.Consumer, every time.Duration, report StatsFunc) {
+func pollStats(ctx context.Context, js jetstream.JetStream, cons jetstream.Consumer,
+	every time.Duration, report StatsFunc) {
+
 	read := func() {
 		info, err := cons.Info(ctx)
 		if err != nil {
 			report(Stats{}, err)
 			return
 		}
+
+		// The stream's own state, for the retention window and the age
+		// of what is still in it. A failure here fails the whole
+		// reading rather than filling half of it: a Stats with a real
+		// Pending and a zero OldestAge would be read as a healthy
+		// backlog, which is the opposite of what a missing answer
+		// means.
+		st, err := js.Stream(ctx, Stream)
+		if err != nil {
+			report(Stats{}, err)
+			return
+		}
+		si, err := st.Info(ctx)
+		if err != nil {
+			report(Stats{}, err)
+			return
+		}
+
+		var oldest time.Duration
+		if !si.State.FirstTime.IsZero() && si.State.Msgs > 0 {
+			oldest = time.Since(si.State.FirstTime)
+		}
+
+		// TWO WAYS OF COUNTING AGE-OUT AFTER THE FACT WERE BUILT HERE
+		// AND BOTH WERE DELETED, because both were measured and neither
+		// fires when it matters.
+		//
+		// Comparing the stream's first sequence to the consumer's ack
+		// floor should reveal records that left unacknowledged, and
+		// would survive a restart. It cannot: the broker ADVANCES the
+		// ack floor when messages are removed from under a consumer,
+		// since there is nothing left to acknowledge. Purging four
+		// unconsumed records left first_seq=15 and ack_floor=14.
+		//
+		// Counting jumps in delivered sequence should reveal the same
+		// thing from this side. It does not either: a gap requires
+		// records to leave the stream without being delivered, and this
+		// consumer is dispatched concurrently and keeps up — in a test
+		// built to force it, the messages were delivered before the
+		// purge and no jump existed. The case it would catch is a
+		// consumer running far enough behind that discard overtakes it,
+		// which needs load this repository has not built.
+		//
+		// Publishing a counter that reads zero through real loss would
+		// be worse than publishing none, so neither ships. What ships
+		// is the early warning below; see the archive's meter.
 		report(Stats{
 			Pending:     info.NumPending,
 			AckPending:  info.NumAckPending,
 			Redelivered: info.NumRedelivered,
+			OldestAge:   oldest,
+			MaxAge:      si.Config.MaxAge,
 		}, nil)
 	}
 
