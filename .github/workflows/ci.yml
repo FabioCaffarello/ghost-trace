@@ -168,6 +168,7 @@ jobs:
           - services/decision-engine
           - services/demo-web
           - services/collector
+          - tools/loadgen
     env:
       GOWORK: "off"
     steps:
