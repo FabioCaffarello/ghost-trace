@@ -222,3 +222,76 @@ feature sitting behind a refactor of `libs/policy`. The third is
 calendar-bound and should be started **in parallel** rather than
 scheduled afterwards — the longer it waits, the longer number 1 stays
 unfalsifiable.
+
+---
+
+## Phase 4 — the numbers survive contention
+
+Every latency this repository publishes is **one session on an idle
+system**. The schema already says so about number 3, and
+[`../docs/results/latency-gate-2026-08-04.md`](../docs/results/latency-gate-2026-08-04.md)
+says it again: *a floor, not a production figure*. Phase 2 measured a
+split whose cost is precisely the kind that grows with contention, and
+then measured it without any.
+
+Phase 3 is what makes this phase honest rather than merely possible. A
+load test on the old system would have reported throughput while
+dropping records — measuring the wrong thing, confidently. It can now
+report what it dropped, which is the only reason the result will mean
+anything.
+
+### The gate, which blocks the phase
+
+> Under sustained concurrency, **the accounting still balances** —
+> `unaccounted` at zero, every drop counted, every refusal explained —
+> and every latency number the repository publishes is either
+> **reproduced** at load or **replaced by a curve that says where it
+> bends**.
+
+Both halves are load-bearing. A run that stays fast by dropping records
+fails the first; a run that stays balanced by getting slower fails the
+second. Passing by degradation is not passing, it is renaming.
+
+Ordered mitigation if it fails: find the serialization point → widen it
+where the concurrency model allows → bound the queue and count the
+refusals → publish the curve with the bend in it rather than a number
+that hides it.
+
+### Pull requests
+
+| | | size |
+| --- | --- | --- |
+| **4.1** | An **open-loop** load driver. Coordinated omission is the trap this whole phase can fall into: a closed-loop generator waits for each response before sending the next, so when the server slows the generator slows with it and the latency never appears in the numbers. The driver issues on a schedule and records intended-versus-actual send times, so queueing is visible rather than absorbed. | M |
+| **4.2** | The collector under contention — where the floor stops being a floor. **The hypothesis is already on record, and not by us.** `session.Store` says in its own comment: *"One mutex guards the whole map. At M1 volume that is correct and boring; sharding it before there is a measurement showing contention would be optimising against a guess."* This is that measurement. The prediction is sharper than the comment: `Store.With` holds the process-global mutex across its whole callback, and the callback performs the full per-event feature update for every event in a telemetry batch — so telemetry throughput should be bounded by batch feature-computation time and should barely improve with cores. If the bend is somewhere else, that is the more interesting result and it gets written down as such. | M |
+| **4.3** | Fix what the curve found. Deliberately unspecified here — naming the fix before taking the measurement is how a phase ends up with a well-tested fix for the wrong thing. | M |
+| **4.4** | The archive under a real backlog. SQLite serializes writes through a single `writeMu`, and this is the first chance to reach the age-out path by **load** rather than by purging the stream by hand. | M |
+| **4.5** | The decision path at concurrency, against the 80ms budget it has only ever been measured against while idle. Includes what the KV lookup does when it is not the only reader. | S |
+| **4.6** | **`make load-gate`** — the phase gate as a repeatable target. Refuses when the topology is down, like every other topology check. | M |
+| **4.7** | Republish what moved, and teach `numbers-check` the difference. It already compares the architecture **grid** cell by cell, so a curve is not new to it; session latency is the scalar — one `p99` against a budget, measured idle. The precedent to extend is `check_topology`, which already refuses to compare an in-process decision against one crossing a network hop because they are *different measurements wearing the same name*. An idle p99 and a loaded p99 are exactly that, and nothing currently stops them being compared. | M |
+| **4.8** | An ADR for what the numbers now claim, and the write-up. | S |
+
+**Dependencies.** 4.1 gates everything else. 4.2, 4.4 and 4.5 are
+independent of one another. 4.3 depends on what 4.2 finds and cannot be
+scheduled before it. 4.7 depends on whatever actually moved.
+
+### The parallel track — the false-positive rate
+
+Not part of the phase, and deliberately not scheduled after it. The
+false-positive rate is **calendar-bound rather than effort-bound**: it
+needs recruited participants, and no amount of engineering shortens the
+recruiting. It governs every other number and it is `null`.
+
+| | | size |
+| --- | --- | --- |
+| **4.P1** | `experiments/PARTICIPANTS.md` — the consent script in its own reviewable file, and **a test that what volunteers are told matches what the SDK collects**. The ARB's C1 finding had two halves: the wording was false (fixed) and it lived buried in a 300-line README, so a change to what is collected produced no volunteer-facing diff (not fixed). The repository already compares the SDK and contract vocabularies in both directions; the disclosure is the third party to that comparison. | S |
+| **4.P2** | The capture protocol end to end, dry-run against synthetic participants, so that recruiting is the only thing left that needs a human. | M |
+
+### What Phase 4 is explicitly not
+
+- **State durability.** Session state is a map in the collector's
+  memory and a restart loses every live session. Load will make that
+  more visible, not less, and it is a product decision as much as a
+  technical one.
+- **Per-tenant calibration.** Still sitting behind a refactor of
+  `libs/policy`.
+- **Telemetry replay.** Still a stated limitation.
