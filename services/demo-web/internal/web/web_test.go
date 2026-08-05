@@ -17,6 +17,7 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/libs/archive"
 	"github.com/FabioCaffarello/ghost-trace/libs/decision"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
+	"github.com/FabioCaffarello/ghost-trace/libs/tenant"
 )
 
 const (
@@ -28,6 +29,15 @@ const (
 	testAPIBase = "https://collector.example"
 )
 
+func testTenants(t *testing.T) *tenant.Registry {
+	t.Helper()
+	r, err := tenant.New(tenant.Tenant{ID: "t_test", SiteKey: testSiteKey, SecretKey: testSecretKey})
+	if err != nil {
+		t.Fatalf("tenant registry: %v", err)
+	}
+	return r
+}
+
 func discard() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
@@ -37,7 +47,7 @@ func discard() *slog.Logger {
 // collector — which it must not, now that they are separate services.
 type fixedSessions struct{}
 
-func (fixedSessions) Lookup(context.Context, string) (decision.Session, bool, error) {
+func (fixedSessions) Lookup(context.Context, string, string) (decision.Session, bool, error) {
 	return decision.Session{ID: "s_webtest", TenantID: "t_test"}, true, nil
 }
 
@@ -52,7 +62,7 @@ func startEngine(t *testing.T) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
 	decision.New(decision.Config{
-		TenantID: "t_test", Mode: policy.ModeMonitor, SecretKey: testSecretKey,
+		Mode: policy.ModeMonitor, Tenants: testTenants(t),
 	}, fixedSessions{}, archive.Null{}, time.Now, discard()).Mount(mux)
 
 	srv := httptest.NewServer(mux)

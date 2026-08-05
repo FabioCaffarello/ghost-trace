@@ -22,7 +22,17 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/libs/decision"
 	"github.com/FabioCaffarello/ghost-trace/libs/feature"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
+	"github.com/FabioCaffarello/ghost-trace/libs/tenant"
 )
+
+func testTenants(t *testing.T) *tenant.Registry {
+	t.Helper()
+	r, err := tenant.New(tenant.Tenant{ID: "t_test", SiteKey: "pk_test", SecretKey: "sk_test"})
+	if err != nil {
+		t.Fatalf("tenant registry: %v", err)
+	}
+	return r
+}
 
 func quiet() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
 
@@ -30,22 +40,28 @@ func quiet() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)
 // miss, which is the cold-start path and not an error.
 type fakeSessions map[string]decision.Session
 
-func (f fakeSessions) Lookup(_ context.Context, token string) (decision.Session, bool, error) {
+func (f fakeSessions) Lookup(_ context.Context, tenantID, token string) (decision.Session, bool, error) {
 	s, ok := f[token]
+	// Someone else's session is no session at all, never an error: the
+	// answer must not tell a caller whether a token they do not own
+	// exists.
+	if ok && s.TenantID != tenantID {
+		return decision.Session{}, false, nil
+	}
 	return s, ok, nil
 }
 
 // brokenSessions is the other kind of miss: the lookup itself failed.
 type brokenSessions struct{ err error }
 
-func (b brokenSessions) Lookup(context.Context, string) (decision.Session, bool, error) {
+func (b brokenSessions) Lookup(context.Context, string, string) (decision.Session, bool, error) {
 	return decision.Session{}, false, b.err
 }
 
 func newService(t *testing.T, sessions decision.Sessions, store archive.Store) *decision.Service {
 	t.Helper()
 	return decision.New(decision.Config{
-		TenantID: "t_test", Mode: policy.ModeMonitor, SecretKey: "sk_test",
+		Mode: policy.ModeMonitor, Tenants: testTenants(t),
 	}, sessions, store, time.Now, quiet())
 }
 
@@ -56,7 +72,7 @@ func TestUnknownTokenIsAColdStartAndNotAnError(t *testing.T) {
 	svc := newService(t, fakeSessions{}, archive.Null{})
 
 	out, err := svc.Decide(context.Background(), decision.Input{
-		SessionToken: "st_nope", Action: "login",
+		TenantID: "t_test", SessionToken: "st_nope", Action: "login",
 	})
 	if err != nil {
 		t.Fatalf("unknown token returned an error: %v", err)
@@ -80,16 +96,38 @@ func TestBrokenLookupIsAnErrorAndNotAColdStart(t *testing.T) {
 	svc := newService(t, brokenSessions{err: boom}, archive.Null{})
 
 	if _, err := svc.Decide(context.Background(), decision.Input{
-		SessionToken: "st_x", Action: "login",
+		TenantID: "t_test", SessionToken: "st_x", Action: "login",
 	}); !errors.Is(err, boom) {
 		t.Errorf("a failed lookup produced %v, want the store's error", err)
+	}
+}
+
+func TestAMissingTenantIsAnErrorAndNotAColdStart(t *testing.T) {
+	// A caller of the library that forgets the tenant would otherwise
+	// scope every lookup to "" and get a cold start for every session —
+	// a silent wrong answer. The HTTP path cannot produce this, since
+	// the handlers only pass a tenant they resolved from a presented
+	// secret; the guard is for everything else, and it exists because
+	// the shadow test dropped the field and spent a CI run comparing a
+	// cold start against a real judgement.
+	svc := newService(t, fakeSessions{}, archive.Null{})
+
+	if _, err := svc.Decide(context.Background(), decision.Input{
+		SessionToken: "st_x", Action: "login",
+	}); !errors.Is(err, decision.ErrTenantRequired) {
+		t.Errorf("Decide err = %v, want ErrTenantRequired", err)
+	}
+	if err := svc.RecordOutcome(context.Background(), decision.OutcomeInput{
+		EvaluationID: "ev_1", Outcome: "login_success",
+	}); !errors.Is(err, decision.ErrTenantRequired) {
+		t.Errorf("RecordOutcome err = %v, want ErrTenantRequired", err)
 	}
 }
 
 func TestDecideRequiresAnAction(t *testing.T) {
 	svc := newService(t, fakeSessions{}, archive.Null{})
 	if _, err := svc.Decide(context.Background(), decision.Input{
-		SessionToken: "st_x",
+		TenantID: "t_test", SessionToken: "st_x",
 	}); !errors.Is(err, decision.ErrActionRequired) {
 		t.Errorf("err = %v, want ErrActionRequired", err)
 	}
@@ -97,7 +135,7 @@ func TestDecideRequiresAnAction(t *testing.T) {
 
 func TestEvidenceCountsPointerAndKeyEvents(t *testing.T) {
 	svc := newService(t, fakeSessions{"st_live": {
-		ID: "s_1", TenantID: "t_live", LastEventMs: 4200,
+		ID: "s_1", TenantID: "t_test", LastEventMs: 4200,
 		State: policy.State{
 			Pointer:   feature.PointerState{Points: 30},
 			Keystroke: feature.KeystrokeState{Keys: 12},
@@ -105,7 +143,7 @@ func TestEvidenceCountsPointerAndKeyEvents(t *testing.T) {
 	}}, archive.Null{})
 
 	out, err := svc.Decide(context.Background(), decision.Input{
-		SessionToken: "st_live", Action: "login",
+		TenantID: "t_test", SessionToken: "st_live", Action: "login",
 	})
 	if err != nil {
 		t.Fatalf("decide: %v", err)
@@ -118,10 +156,40 @@ func TestEvidenceCountsPointerAndKeyEvents(t *testing.T) {
 	}
 }
 
+func TestASessionBelongingToAnotherTenantIsNotVisible(t *testing.T) {
+	// The isolation property. Tokens are 144 bits of randomness, so
+	// nobody guesses one — but a token can be handed over, logged, or
+	// copied out of a page, and presenting it with a DIFFERENT tenant's
+	// secret used to return a real decision about a session the caller
+	// had no claim to. Both halves authenticated on their own, which is
+	// why nothing caught it.
+	svc := newService(t, fakeSessions{"st_theirs": {
+		ID: "s_theirs", TenantID: "t_somebody_else", LastEventMs: 9999,
+		State: policy.State{
+			Pointer:   feature.PointerState{Points: 30},
+			Keystroke: feature.KeystrokeState{Keys: 12},
+		},
+	}}, archive.Null{})
+
+	out, err := svc.Decide(context.Background(), decision.Input{
+		TenantID: "t_test", SessionToken: "st_theirs", Action: "login",
+	})
+	if err != nil {
+		t.Fatalf("decide: %v", err)
+	}
+	// Answered as a cold start, not refused: refusing would confirm the
+	// token exists. The caller learns nothing about a session that is
+	// not theirs.
+	if out.EvidenceEvents != 0 || out.EvidenceMs != 0 {
+		t.Errorf("another tenant's session leaked: events=%d duration=%d",
+			out.EvidenceEvents, out.EvidenceMs)
+	}
+}
+
 func TestOutcomeRejectsUnknownLabels(t *testing.T) {
 	svc := newService(t, fakeSessions{}, archive.Null{})
 	if err := svc.RecordOutcome(context.Background(), decision.OutcomeInput{
-		EvaluationID: "ev_1", Outcome: "login_sucess", // sic
+		TenantID: "t_test", EvaluationID: "ev_1", Outcome: "login_sucess", // sic
 	}); !errors.Is(err, decision.ErrUnknownOutcome) {
 		t.Errorf("err = %v, want ErrUnknownOutcome — a typo'd label is worse "+
 			"than a missing one, because it degrades calibration silently", err)
@@ -138,7 +206,7 @@ func TestOutcomeRefusesWhenThereIsNowhereDurableToPutIt(t *testing.T) {
 	svc := newService(t, fakeSessions{}, archive.Null{})
 
 	err := svc.RecordOutcome(context.Background(), decision.OutcomeInput{
-		EvaluationID: "ev_1", Outcome: "login_success",
+		TenantID: "t_test", EvaluationID: "ev_1", Outcome: "login_success",
 	})
 	if !errors.Is(err, decision.ErrArchiveUnavailable) {
 		t.Fatalf("err = %v, want ErrArchiveUnavailable", err)

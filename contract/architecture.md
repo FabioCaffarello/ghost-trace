@@ -59,6 +59,22 @@ a genuine human session, replay its event stream under a fresh token.
 Partial mitigations raise the cost; none close it. This is stated as a
 limitation, not solved.
 
+**Which customer.** `site_key` decides whose session is being opened
+and `secret_key` decides whose question is being answered. Both are
+resolved against a registry rather than configured per process, so one
+deployment serves several customers.
+
+Authenticating and identifying are one act on the server-to-server
+endpoints: a caller cannot name a tenant it has no secret for, because
+the secret is the only thing that names one. There is no tenant field on
+any request.
+
+A session belongs to the tenant whose `site_key` opened it, and a
+decision is only ever answered from a session belonging to the tenant
+whose `secret_key` asked. Presenting somebody else's token reads as a
+**cold start**, never as a refusal — refusing would confirm that the
+token exists.
+
 **Origins.** The page is on the customer's domain and the collector is
 not, so `/v1/sessions` and `/v1/telemetry` answer cross-origin requests
 from a configured **allowlist** — never a wildcard, and never with

@@ -11,6 +11,7 @@ require (
 	github.com/FabioCaffarello/ghost-trace/libs/middleware v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/policy v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/snapshot v0.0.0
+	github.com/FabioCaffarello/ghost-trace/libs/tenant v0.0.0
 )
 
 require (
@@ -49,5 +50,7 @@ replace github.com/FabioCaffarello/ghost-trace/libs/middleware => ../../libs/mid
 replace github.com/FabioCaffarello/ghost-trace/libs/policy => ../../libs/policy
 
 replace github.com/FabioCaffarello/ghost-trace/libs/snapshot => ../../libs/snapshot
+
+replace github.com/FabioCaffarello/ghost-trace/libs/tenant => ../../libs/tenant
 
 replace github.com/FabioCaffarello/ghost-trace/libs/wire => ../../libs/wire

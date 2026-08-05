@@ -30,6 +30,7 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/libs/eventstream"
 	"github.com/FabioCaffarello/ghost-trace/libs/middleware"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
+	"github.com/FabioCaffarello/ghost-trace/libs/tenant"
 	"github.com/FabioCaffarello/ghost-trace/services/decision-engine/internal/snapshotsessions"
 )
 
@@ -45,11 +46,19 @@ func run() error {
 		addr    = flag.String("addr", "127.0.0.1:8082", "listen address")
 		natsURL = flag.String("nats", os.Getenv("GT_NATS_URL"),
 			"NATS URL carrying the session snapshots and the event stream")
-		mode       = flag.String("mode", policy.ModeMonitor, "monitor | enforce")
-		policyFile = flag.String("policy", "", "calibration JSON; empty uses the embedded default")
-		tenantID   = flag.String("tenant", "t_demo", "tenant id")
-		secretKey  = flag.String("secret-key", "sk_demo", "secret key for server-to-server calls")
-		ttl        = flag.Duration("session-ttl", 30*time.Minute,
+		mode        = flag.String("mode", policy.ModeMonitor, "monitor | enforce")
+		policyFile  = flag.String("policy", "", "calibration JSON; empty uses the embedded default")
+		tenantsFile = flag.String("tenants", os.Getenv("GT_TENANTS"),
+			"JSON registry of tenants (id, site_key, secret_key); empty uses the "+
+				"single-tenant flags below")
+		tenantID  = flag.String("tenant", "t_demo", "tenant id, when -tenants is not given")
+		secretKey = flag.String("secret-key", "sk_demo",
+			"secret key for server-to-server calls, when -tenants is not given")
+		siteKey = flag.String("site-key", "pk_demo",
+			"public site key, when -tenants is not given. This service never resolves a "+
+				"tenant BY site_key — only the collector does — but a tenant HAS one, and "+
+				"the single-tenant fallback builds a whole tenant rather than a partial one")
+		ttl = flag.Duration("session-ttl", 30*time.Minute,
 			"snapshot bucket TTL; must match the collector's -session-ttl")
 		health = flag.Bool("healthcheck", false,
 			"probe /healthz on -addr and exit 0/1; the container health check execs the binary because distroless ships no shell or curl")
@@ -92,6 +101,13 @@ func run() error {
 			"and publishes evaluations, and has no local store to fall back to")
 	}
 
+	registry, err := tenants(*tenantsFile, *tenantID, *siteKey, *secretKey)
+	if err != nil {
+		return err
+	}
+	log.Info("serving tenants", "ids", registry.IDs(),
+		"source", map[bool]string{true: *tenantsFile, false: "flags"}[*tenantsFile != ""])
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -115,10 +131,9 @@ func run() error {
 	archive := eventstream.NewArchive(eventstream.NewPublisher(js), *tenantID)
 
 	decisions := decision.New(decision.Config{
-		TenantID:  *tenantID,
-		Mode:      *mode,
-		SecretKey: *secretKey,
-	}, snapshotsessions.New(snapshots, *tenantID), archive, time.Now, log)
+		Mode:    *mode,
+		Tenants: registry,
+	}, snapshotsessions.New(snapshots), archive, time.Now, log)
 
 	mux := http.NewServeMux()
 	decisions.Mount(mux)
@@ -149,7 +164,7 @@ func run() error {
 	errCh := make(chan error, 1)
 	go func() {
 		log.Info("listening", "addr", *addr, "mode", *mode, "policy", policy.Ref,
-			"tenant", *tenantID, "snapshots", eventstream.SessionBucket)
+			"tenants", registry.IDs(), "snapshots", eventstream.SessionBucket)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errCh <- err
 		}
@@ -164,6 +179,20 @@ func run() error {
 		defer cancel()
 		return srv.Shutdown(shutdownCtx)
 	}
+}
+
+// tenants builds the registry a service serves.
+//
+// A file is the multi-tenant path; without one the three single-tenant
+// flags become a registry of exactly one, which keeps the all-in-one
+// development binary, the compose defaults and the six-numbers run
+// working without a new file to remember. One tenant is a registry with
+// one row, not a different mode.
+func tenants(path, id, siteKey, secretKey string) (*tenant.Registry, error) {
+	if path != "" {
+		return tenant.Load(path)
+	}
+	return tenant.New(tenant.Tenant{ID: id, SiteKey: siteKey, SecretKey: secretKey})
 }
 
 // probeHealth GETs /healthz on the listen address. A wildcard listen

@@ -68,13 +68,15 @@ type NullSnapshots struct{}
 // Put discards the snapshot.
 func (NullSnapshots) Put(context.Context, string, *eventsv1.SessionSnapshot) error { return nil }
 
-// Config is the application-level configuration: who the tenant is.
-// Transport credentials (site_key, secret_key) deliberately live with
-// the transport adapter, and the decision-side configuration lives with
-// libs/decision.
-type Config struct {
-	TenantID string
-}
+// Config is the application-level configuration.
+//
+// It is empty: the tenant used to live here, and it now arrives with
+// each request because one collector serves several. Credentials live
+// with the transport adapter and the decision-side configuration with
+// libs/decision, as they always did. Kept as a type so the composition
+// root still reads as configuration being passed, and so the next thing
+// that genuinely IS process-wide has somewhere to go.
+type Config struct{}
 
 // App wires the use cases to their ports.
 type App struct {

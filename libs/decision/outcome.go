@@ -27,6 +27,11 @@ var ValidOutcomes = map[string]bool{
 // OutcomeInput is the §3 POST /v1/outcomes request, transport-free.
 // A zero ObservedAt means "now".
 type OutcomeInput struct {
+	// TenantID is who the caller proved to be. A label filed against
+	// another tenant's evaluation would poison THAT tenant's
+	// calibration, which is the quietest cross-tenant damage available.
+	TenantID string
+
 	EvaluationID string
 	Outcome      string
 	ObservedAt   time.Time
@@ -39,6 +44,9 @@ type OutcomeInput struct {
 // poison the calibration loop, so ErrUnavailable and write failures
 // surface to the caller.
 func (s *Service) RecordOutcome(ctx context.Context, in OutcomeInput) error {
+	if in.TenantID == "" {
+		return ErrTenantRequired
+	}
 	if in.EvaluationID == "" {
 		return ErrEvaluationIDRequired
 	}
@@ -52,7 +60,7 @@ func (s *Service) RecordOutcome(ctx context.Context, in OutcomeInput) error {
 	}
 
 	rec := &eventsv1.Outcome{
-		TenantId:     s.cfg.TenantID,
+		TenantId:     in.TenantID,
 		EvaluationId: in.EvaluationID,
 		Outcome:      in.Outcome,
 		ObservedAt:   observedAt.UnixNano(),

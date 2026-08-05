@@ -1,13 +1,13 @@
 package decision
 
 import (
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/FabioCaffarello/ghost-trace/libs/tenant"
 	"github.com/FabioCaffarello/ghost-trace/libs/wire"
 )
 
@@ -29,7 +29,8 @@ func (s *Service) handleDecisions(w http.ResponseWriter, r *http.Request) {
 	// secret_key authenticates the application server. This is the only
 	// endpoint that accepts subject_id and action, and it is the reason
 	// they are never read from a browser.
-	if !s.authorizedSecret(r) {
+	who := s.caller(r)
+	if who == nil {
 		writeError(w, http.StatusUnauthorized, "invalid secret_key")
 		return
 	}
@@ -40,6 +41,7 @@ func (s *Service) handleDecisions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	out, err := s.Decide(r.Context(), Input{
+		TenantID:     who.ID,
 		SessionToken: req.SessionToken,
 		Action:       req.Action,
 		SubjectID:    req.SubjectID,
@@ -70,7 +72,8 @@ func (s *Service) handleDecisions(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------
 
 func (s *Service) handleOutcomes(w http.ResponseWriter, r *http.Request) {
-	if !s.authorizedSecret(r) {
+	who := s.caller(r)
+	if who == nil {
 		writeError(w, http.StatusUnauthorized, "invalid secret_key")
 		return
 	}
@@ -81,6 +84,7 @@ func (s *Service) handleOutcomes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	in := OutcomeInput{
+		TenantID:     who.ID,
 		EvaluationID: req.EvaluationID,
 		Outcome:      req.Outcome,
 	}
@@ -127,12 +131,19 @@ func bearerToken(r *http.Request) string {
 	return ""
 }
 
-// authorizedSecret reports whether the request carries the secret_key.
-// The comparison is constant-time: the secret authenticates the
-// application server on an internet-facing endpoint, and a byte-wise
-// == would leak prefix length through response timing.
-func (s *Service) authorizedSecret(r *http.Request) bool {
-	return subtle.ConstantTimeCompare([]byte(bearerToken(r)), []byte(s.cfg.SecretKey)) == 1
+// caller resolves the tenant the request proved it speaks for, or nil.
+//
+// Authenticating and identifying are one act here. A caller cannot name
+// a tenant it has no secret for, because the only thing that names a
+// tenant IS the secret — there is no field to spoof and no header to
+// trust. The comparison is constant-time inside the registry; see
+// tenant.Registry.BySecretKey for why it also scans every entry.
+func (s *Service) caller(r *http.Request) *tenant.Tenant {
+	t, ok := s.cfg.Tenants.BySecretKey(bearerToken(r))
+	if !ok {
+		return nil
+	}
+	return t
 }
 
 // writeError is the single translation from this package's error

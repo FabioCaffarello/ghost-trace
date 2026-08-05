@@ -24,6 +24,7 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/libs/middleware"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
 	"github.com/FabioCaffarello/ghost-trace/libs/substrate"
+	"github.com/FabioCaffarello/ghost-trace/libs/tenant"
 	"github.com/FabioCaffarello/ghost-trace/libs/wire"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/adapters/livesessions"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/adapters/substratearchive"
@@ -48,7 +49,10 @@ func run() error {
 		dataDir     = flag.String("data", "", "substrate directory; empty disables the raw event archive")
 		mode        = flag.String("mode", policy.ModeMonitor, "monitor | enforce")
 		policyFile  = flag.String("policy", "", "calibration JSON; empty uses the embedded default")
-		tenantID    = flag.String("tenant", "t_demo", "tenant id")
+		tenantsFile = flag.String("tenants", os.Getenv("GT_TENANTS"),
+			"JSON registry of tenants (id, site_key, secret_key); empty uses the "+
+				"single-tenant flags below")
+		tenantID    = flag.String("tenant", "t_demo", "tenant id, when -tenants is not given")
 		siteKey     = flag.String("site-key", "pk_demo", "public site key, embedded in the page")
 		secretKey   = flag.String("secret-key", "sk_demo", "secret key for server-to-server decision calls")
 		pointerHz   = flag.Int("pointer-hz", 20, "collect policy: pointer sample rate")
@@ -79,6 +83,13 @@ func run() error {
 			return err
 		}
 	}
+
+	registry, err := tenants(*tenantsFile, *tenantID, *siteKey, *secretKey)
+	if err != nil {
+		return err
+	}
+	log.Info("serving tenants", "ids", registry.IDs(),
+		"source", map[bool]string{true: *tenantsFile, false: "flags"}[*tenantsFile != ""])
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -146,9 +157,7 @@ func run() error {
 
 	sessions := session.NewStore(*ttl, time.Now)
 
-	application := app.New(app.Config{
-		TenantID: *tenantID,
-	}, sessions, eventArchive, time.Now, log)
+	application := app.New(app.Config{}, sessions, eventArchive, time.Now, log)
 	if sessionStore != nil {
 		application = application.WithSnapshots(sessionStore)
 	}
@@ -158,13 +167,12 @@ func run() error {
 	// package over the snapshots that state is published as; the only
 	// difference between the two services is the port below.
 	decisions := decision.New(decision.Config{
-		TenantID:  *tenantID,
-		Mode:      *mode,
-		SecretKey: *secretKey,
+		Mode:    *mode,
+		Tenants: registry,
 	}, livesessions.New(sessions), eventArchive, time.Now, log)
 
 	apiSrv := api.New(api.Config{
-		SiteKey:        *siteKey,
+		Tenants:        registry,
 		AllowedOrigins: splitOrigins(*corsOrigins),
 		CollectPolicy: wire.CollectPolicy{
 			PointerHz: *pointerHz,
@@ -218,6 +226,20 @@ func run() error {
 		defer cancel()
 		return srv.Shutdown(shutdownCtx)
 	}
+}
+
+// tenants builds the registry a service serves.
+//
+// A file is the multi-tenant path; without one the three single-tenant
+// flags become a registry of exactly one, which keeps the all-in-one
+// development binary, the compose defaults and the six-numbers run
+// working without a new file to remember. One tenant is a registry with
+// one row, not a different mode.
+func tenants(path, id, siteKey, secretKey string) (*tenant.Registry, error) {
+	if path != "" {
+		return tenant.Load(path)
+	}
+	return tenant.New(tenant.Tenant{ID: id, SiteKey: siteKey, SecretKey: secretKey})
 }
 
 // splitOrigins parses the comma-separated allowlist. Empty entries are

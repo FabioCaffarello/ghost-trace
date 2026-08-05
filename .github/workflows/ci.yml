@@ -161,6 +161,7 @@ jobs:
           - libs/policy
           - libs/snapshot
           - libs/substrate
+          - libs/tenant
           - libs/wire
           - services/archive
           - services/decision-engine

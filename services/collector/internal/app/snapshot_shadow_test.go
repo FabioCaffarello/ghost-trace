@@ -24,10 +24,20 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/libs/eventstream"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
 	"github.com/FabioCaffarello/ghost-trace/libs/snapshot"
+	"github.com/FabioCaffarello/ghost-trace/libs/tenant"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/adapters/livesessions"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/app"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/session"
 )
+
+func shadowTenants(t *testing.T) *tenant.Registry {
+	t.Helper()
+	r, err := tenant.New(tenant.Tenant{ID: "t_shadow", SiteKey: "pk_shadow", SecretKey: "sk_shadow"})
+	if err != nil {
+		t.Fatalf("tenant registry: %v", err)
+	}
+	return r
+}
 
 func quiet() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
 
@@ -81,17 +91,17 @@ func TestDecisionThroughTheSnapshotStoreMatchesInProcess(t *testing.T) {
 
 	log := quiet()
 	sessions := session.NewStore(30*time.Minute, time.Now)
-	application := app.New(app.Config{TenantID: "t_shadow"},
+	application := app.New(app.Config{},
 		sessions, app.NullArchive{}, time.Now, log).
 		WithSnapshots(store)
 
 	// The collector's own decision path, mounted over the live store —
 	// the same package the decision engine will mount over snapshots.
 	decisions := decision.New(decision.Config{
-		TenantID: "t_shadow", Mode: policy.ModeMonitor,
+		Mode: policy.ModeMonitor, Tenants: shadowTenants(t),
 	}, livesessions.New(sessions), app.NullArchive{}, time.Now, log)
 
-	out, err := application.StartSession(ctx, app.StartSessionInput{PagePath: "/login"})
+	out, err := application.StartSession(ctx, app.StartSessionInput{TenantID: "t_shadow", PagePath: "/login"})
 	if err != nil {
 		t.Fatalf("start session: %v", err)
 	}
@@ -103,6 +113,7 @@ func TestDecisionThroughTheSnapshotStoreMatchesInProcess(t *testing.T) {
 
 	// What the collector decides, holding the state in memory.
 	inProcess, err := decisions.Decide(ctx, decision.Input{
+		TenantID:     "t_shadow",
 		SessionToken: out.Token, Action: "login", SubjectID: "u_shadow",
 	})
 	if err != nil {
