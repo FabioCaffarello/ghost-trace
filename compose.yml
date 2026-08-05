@@ -197,14 +197,21 @@ services:
       - -mode=${GT_MODE:-monitor}
       - -tenant=${GT_TENANT:-t_demo}
       - -secret-key=${GT_SECRET_KEY:-sk_demo}
-      # Must match the collector's -session-ttl: it is the snapshot
-      # bucket's TTL, and two services declaring different lifetimes for
-      # the same bucket is a race over when a session stops existing.
+      # Must match the collector's -session-ttl, and now FAILS AT
+      # STARTUP if it does not. The collector owns the bucket because it
+      # owns the session; the engine binds to it and refuses a lifetime
+      # it was not told. Before that, whichever service started last
+      # silently rewrote the other's TTL.
       - -session-ttl=${GT_SESSION_TTL:-30m}
     ports:
       - "127.0.0.1:8082:8082"
     depends_on:
       nats:
+        condition: service_healthy
+      # The engine READS the snapshot bucket the collector owns, and now
+      # refuses to create it: a reader that created it would be
+      # declaring a session lifetime it has no business declaring.
+      collector:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "/decision-engine", "-healthcheck", "-addr", "0.0.0.0:8082"]

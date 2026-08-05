@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -60,7 +61,9 @@ func run() error {
 				"tenant BY site_key — only the collector does — but a tenant HAS one, and "+
 				"the single-tenant fallback builds a whole tenant rather than a partial one")
 		ttl = flag.Duration("session-ttl", 30*time.Minute,
-			"snapshot bucket TTL; must match the collector's -session-ttl")
+			"snapshot bucket TTL. Must match the collector's -session-ttl: the "+
+				"collector owns the bucket and this service refuses to start on a "+
+				"mismatch rather than rewriting it")
 		health = flag.Bool("healthcheck", false,
 			"probe /healthz on -addr and exit 0/1; the container health check execs the binary because distroless ships no shell or curl")
 	)
@@ -121,6 +124,11 @@ func run() error {
 	if err := eventstream.EnsureStream(ctx, js); err != nil {
 		return fmt.Errorf("ensure event stream: %w", err)
 	}
+	// Bind to the bucket the collector owns, and refuse a TTL that is
+	// not the one this process was told to expect. Starting before the
+	// collector has created it is an error rather than a silent
+	// creation — a reader that created the bucket would be declaring a
+	// lifetime it has no business declaring.
 	snapshots, err := eventstream.OpenSessions(ctx, js, *ttl)
 	if err != nil {
 		return fmt.Errorf("open session snapshots: %w", err)
@@ -152,6 +160,16 @@ func run() error {
 	// endpoint would need two encoders and would drop whichever the
 	// handler forgot.
 	reg := metrics.New()
+	// Published rather than logged so the two services can be COMPARED
+	// from outside. Two registries that disagree about who exists each
+	// behave correctly alone and wrongly together, and no request fails
+	// on the way; `make shadow-http` reads this from both.
+	reg.Info("tenant_registry_info",
+		"The tenant set this process serves. The fingerprint covers ids and site "+
+			"keys, never secrets.",
+		map[string]string{"fingerprint": registry.Fingerprint(),
+			"tenants": strconv.Itoa(registry.Len())})
+
 	httpMetrics := middleware.NewMetrics(reg)
 	mux.Handle("GET /metrics", reg.Handler())
 	handler := middleware.Chain(mux,
