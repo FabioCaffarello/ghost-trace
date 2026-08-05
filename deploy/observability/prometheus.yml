@@ -1,6 +1,10 @@
-# Prometheus scrape config for the observability profile. The slice
-# exposes stdlib-generated exposition on /metrics (internal/httpmw);
-# route-labelled counters and duration histograms.
+# Prometheus scrape config for the observability profile.
+#
+# Every service exposes one registry at /metrics (libs/metrics): the
+# route-labelled HTTP counters and duration histogram that libs/middleware
+# registers, plus the domain counters each service adds. Only the
+# collector is scraped here — the others are worth adding when they have
+# domain series worth reading.
 global:
   scrape_interval: 5s
 

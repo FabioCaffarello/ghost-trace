@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/FabioCaffarello/ghost-trace/libs/eventstream"
+	"github.com/FabioCaffarello/ghost-trace/libs/metrics"
 	"github.com/FabioCaffarello/ghost-trace/libs/middleware"
 	"github.com/FabioCaffarello/ghost-trace/libs/substrate"
 
@@ -66,13 +67,18 @@ func main() {
 
 	cons := consumer.New(sub, time.Now, log)
 
-	metrics := middleware.NewMetrics()
+	// One registry per process: the HTTP series and every domain
+	// counter are exposed together, because two registries behind one
+	// endpoint would need two encoders and would drop whichever the
+	// handler forgot.
+	reg := metrics.New()
+	httpMetrics := middleware.NewMetrics(reg)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
 	})
-	mux.Handle("GET /metrics", metrics.Handler())
+	mux.Handle("GET /metrics", reg.Handler())
 
 	srv := &http.Server{
 		Addr: *addr,
@@ -80,7 +86,7 @@ func main() {
 			middleware.RequestID(),
 			middleware.Recovery(log),
 			middleware.Logging(log),
-			metrics.Collect(),
+			httpMetrics.Collect(),
 		),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,

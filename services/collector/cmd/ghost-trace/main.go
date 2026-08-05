@@ -21,6 +21,7 @@ import (
 
 	"github.com/FabioCaffarello/ghost-trace/libs/decision"
 	"github.com/FabioCaffarello/ghost-trace/libs/eventstream"
+	"github.com/FabioCaffarello/ghost-trace/libs/metrics"
 	"github.com/FabioCaffarello/ghost-trace/libs/middleware"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
 	"github.com/FabioCaffarello/ghost-trace/libs/substrate"
@@ -193,13 +194,18 @@ func run() error {
 	// can correlate, recovery so a panic is logged with its id, logging
 	// so the 500 a panic produces still gets its line, metrics
 	// innermost so it measures the handler rather than the logging.
-	metrics := middleware.NewMetrics()
-	mux.Handle("GET /metrics", metrics.Handler())
+	// One registry per process: the HTTP series and every domain
+	// counter are exposed together, because two registries behind one
+	// endpoint would need two encoders and would drop whichever the
+	// handler forgot.
+	reg := metrics.New()
+	httpMetrics := middleware.NewMetrics(reg)
+	mux.Handle("GET /metrics", reg.Handler())
 	handler := middleware.Chain(mux,
 		middleware.RequestID(),
 		middleware.Recovery(log),
 		middleware.Logging(log),
-		metrics.Collect(),
+		httpMetrics.Collect(),
 	)
 
 	srv := &http.Server{
