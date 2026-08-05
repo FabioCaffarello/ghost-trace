@@ -43,6 +43,9 @@ type Output struct {
 // dimension already models (§7). State is per-session, scoring is
 // per-action (§8.6).
 func (s *Service) Decide(ctx context.Context, in Input) (Output, error) {
+	if in.TenantID == "" {
+		return Output{}, ErrTenantRequired
+	}
 	if in.Action == "" {
 		return Output{}, ErrActionRequired
 	}

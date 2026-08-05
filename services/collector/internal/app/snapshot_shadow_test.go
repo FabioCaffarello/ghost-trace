@@ -113,6 +113,7 @@ func TestDecisionThroughTheSnapshotStoreMatchesInProcess(t *testing.T) {
 
 	// What the collector decides, holding the state in memory.
 	inProcess, err := decisions.Decide(ctx, decision.Input{
+		TenantID:     "t_shadow",
 		SessionToken: out.Token, Action: "login", SubjectID: "u_shadow",
 	})
 	if err != nil {

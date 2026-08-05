@@ -44,6 +44,9 @@ type OutcomeInput struct {
 // poison the calibration loop, so ErrUnavailable and write failures
 // surface to the caller.
 func (s *Service) RecordOutcome(ctx context.Context, in OutcomeInput) error {
+	if in.TenantID == "" {
+		return ErrTenantRequired
+	}
 	if in.EvaluationID == "" {
 		return ErrEvaluationIDRequired
 	}

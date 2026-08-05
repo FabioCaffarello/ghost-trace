@@ -102,6 +102,28 @@ func TestBrokenLookupIsAnErrorAndNotAColdStart(t *testing.T) {
 	}
 }
 
+func TestAMissingTenantIsAnErrorAndNotAColdStart(t *testing.T) {
+	// A caller of the library that forgets the tenant would otherwise
+	// scope every lookup to "" and get a cold start for every session —
+	// a silent wrong answer. The HTTP path cannot produce this, since
+	// the handlers only pass a tenant they resolved from a presented
+	// secret; the guard is for everything else, and it exists because
+	// the shadow test dropped the field and spent a CI run comparing a
+	// cold start against a real judgement.
+	svc := newService(t, fakeSessions{}, archive.Null{})
+
+	if _, err := svc.Decide(context.Background(), decision.Input{
+		SessionToken: "st_x", Action: "login",
+	}); !errors.Is(err, decision.ErrTenantRequired) {
+		t.Errorf("Decide err = %v, want ErrTenantRequired", err)
+	}
+	if err := svc.RecordOutcome(context.Background(), decision.OutcomeInput{
+		EvaluationID: "ev_1", Outcome: "login_success",
+	}); !errors.Is(err, decision.ErrTenantRequired) {
+		t.Errorf("RecordOutcome err = %v, want ErrTenantRequired", err)
+	}
+}
+
 func TestDecideRequiresAnAction(t *testing.T) {
 	svc := newService(t, fakeSessions{}, archive.Null{})
 	if _, err := svc.Decide(context.Background(), decision.Input{
@@ -167,7 +189,7 @@ func TestASessionBelongingToAnotherTenantIsNotVisible(t *testing.T) {
 func TestOutcomeRejectsUnknownLabels(t *testing.T) {
 	svc := newService(t, fakeSessions{}, archive.Null{})
 	if err := svc.RecordOutcome(context.Background(), decision.OutcomeInput{
-		EvaluationID: "ev_1", Outcome: "login_sucess", // sic
+		TenantID: "t_test", EvaluationID: "ev_1", Outcome: "login_sucess", // sic
 	}); !errors.Is(err, decision.ErrUnknownOutcome) {
 		t.Errorf("err = %v, want ErrUnknownOutcome — a typo'd label is worse "+
 			"than a missing one, because it degrades calibration silently", err)
@@ -184,7 +206,7 @@ func TestOutcomeRefusesWhenThereIsNowhereDurableToPutIt(t *testing.T) {
 	svc := newService(t, fakeSessions{}, archive.Null{})
 
 	err := svc.RecordOutcome(context.Background(), decision.OutcomeInput{
-		EvaluationID: "ev_1", Outcome: "login_success",
+		TenantID: "t_test", EvaluationID: "ev_1", Outcome: "login_success",
 	})
 	if !errors.Is(err, decision.ErrArchiveUnavailable) {
 		t.Fatalf("err = %v, want ErrArchiveUnavailable", err)
