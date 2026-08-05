@@ -133,6 +133,17 @@ publish a manifest (`make numbers-manifest`). A moved number with no
 explanation is indistinguishable from a broken detector — which is the
 sentence this repository wrote long before anything enforced it.
 
+## Metrics
+
+Every service exposes one registry at `/metrics` (`libs/metrics`): the
+HTTP series `libs/middleware` registers, plus whatever domain series the
+service adds. One registry per process — two behind one endpoint would
+need two encoders and would drop whichever the handler forgot.
+
+`libs/metrics` is the **only** shared library allowed a non-stdlib
+dependency, and it is allowed exactly one (ADR-0007). A library that
+wants another does not get to cite that ADR; it writes its own.
+
 ## Tenants
 
 One deployment serves several customers. `-tenants` points at a JSON

@@ -20,6 +20,7 @@ use (
 	./libs/feature
 	./libs/genproto
 	./libs/id
+	./libs/metrics
 	./libs/middleware
 	./libs/policy
 	./libs/snapshot

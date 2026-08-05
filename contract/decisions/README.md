@@ -18,3 +18,4 @@ reverse without knowing what it cost.
 | [0004](0004-session-snapshots-carry-feature-state.md) | Session snapshots carry feature state, not events | accepted |
 | [0005](0005-the-decision-endpoints-are-a-shared-module.md) | The decision endpoints are a shared module, handlers included | accepted |
 | [0006](0006-the-stream-is-the-archive.md) | The stream is the archive; `-nats` and `-data` are alternatives | accepted |
+| [0007](0007-the-metrics-library-is-the-exception.md) | prometheus/client_golang is the one exception to stdlib-only | accepted |

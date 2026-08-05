@@ -29,6 +29,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/FabioCaffarello/ghost-trace/libs/metrics"
 	"github.com/FabioCaffarello/ghost-trace/libs/middleware"
 	"github.com/FabioCaffarello/ghost-trace/services/demo-web/internal/web"
 )
@@ -101,15 +102,20 @@ func run() error {
 		_, _ = w.Write([]byte("ok\n"))
 	})
 
-	metrics := middleware.NewMetrics()
-	mux.Handle("GET /metrics", metrics.Handler())
+	// One registry per process: the HTTP series and every domain
+	// counter are exposed together, because two registries behind one
+	// endpoint would need two encoders and would drop whichever the
+	// handler forgot.
+	reg := metrics.New()
+	httpMetrics := middleware.NewMetrics(reg)
+	mux.Handle("GET /metrics", reg.Handler())
 	srv := &http.Server{
 		Addr: *addr,
 		Handler: middleware.Chain(mux,
 			middleware.RequestID(),
 			middleware.Recovery(log),
 			middleware.Logging(log),
-			metrics.Collect(),
+			httpMetrics.Collect(),
 		),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

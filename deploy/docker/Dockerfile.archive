@@ -17,7 +17,8 @@ WORKDIR /src
 # here before download; the list is explicit so a missing one fails at
 # build time. ADD A LINE PER NEW LIB.
 COPY libs/genproto/go.mod libs/genproto/go.sum libs/genproto/
-COPY libs/middleware/go.mod libs/middleware/
+COPY libs/metrics/go.mod libs/metrics/go.sum libs/metrics/
+COPY libs/middleware/go.mod libs/middleware/go.sum libs/middleware/
 COPY libs/canonical/go.mod libs/canonical/go.sum libs/canonical/
 COPY libs/eventstream/go.mod libs/eventstream/go.sum libs/eventstream/
 COPY libs/substrate/go.mod libs/substrate/go.sum libs/substrate/

@@ -2,12 +2,13 @@ package middleware
 
 import (
 	"bytes"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/FabioCaffarello/ghost-trace/libs/metrics"
 )
 
 func TestRequestIDGeneratedAndEchoed(t *testing.T) {
@@ -87,8 +88,61 @@ func TestLoggingEmitsOneEntryPerRequest(t *testing.T) {
 	}
 }
 
+// scrape renders the registry the way a Prometheus server would see it.
+func scrape(t *testing.T, reg *metrics.Registry) string {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	reg.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("scrape status = %d", rec.Code)
+	}
+	return rec.Body.String()
+}
+
+// series reads one counter's value by its labels, out of the registry
+// rather than out of the text.
+//
+// Assertions moved off raw strings deliberately: the client library
+// sorts labels, so `{route=...,le=...}` became `{le=...,route=...}`.
+// Prometheus does not care about label order and neither should a test
+// — a test that does would fail on a change with no observable effect,
+// and pass on one with an effect it does not look at.
+func counterValue(t *testing.T, reg *metrics.Registry, name string, labels map[string]string) float64 {
+	t.Helper()
+	families, err := reg.Gatherer().Gather()
+	if err != nil {
+		t.Fatalf("gather: %v", err)
+	}
+	for _, f := range families {
+		if f.GetName() != name {
+			continue
+		}
+		for _, m := range f.GetMetric() {
+			got := map[string]string{}
+			for _, l := range m.GetLabel() {
+				got[l.GetName()] = l.GetValue()
+			}
+			match := len(got) == len(labels)
+			for k, v := range labels {
+				if got[k] != v {
+					match = false
+				}
+			}
+			if match {
+				if m.GetCounter() != nil {
+					return m.GetCounter().GetValue()
+				}
+				return float64(m.GetHistogram().GetSampleCount())
+			}
+		}
+	}
+	t.Fatalf("no series %s%v in the registry", name, labels)
+	return 0
+}
+
 func TestMetricsCountsByRouteAndStatus(t *testing.T) {
-	m := NewMetrics()
+	reg := metrics.New()
+	m := NewMetrics(reg)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ok", func(w http.ResponseWriter, r *http.Request) {})
 	h := Chain(mux, m.Collect())
@@ -101,12 +155,42 @@ func TestMetricsCountsByRouteAndStatus(t *testing.T) {
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/scanner-probe-1", nil))
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/scanner-probe-2", nil))
 
-	var buf bytes.Buffer
-	if err := m.Encode(&buf); err != nil {
-		t.Fatalf("Encode: %v", err)
+	for _, tc := range []struct {
+		name   string
+		labels map[string]string
+		want   float64
+	}{
+		{"ghosttrace_http_requests_total", map[string]string{"route": "GET /ok", "status": "200"}, 3},
+		{"ghosttrace_http_requests_total", map[string]string{"route": "unmatched", "status": "404"}, 2},
+		{"ghosttrace_http_request_duration_ms", map[string]string{"route": "GET /ok"}, 3},
+	} {
+		if got := counterValue(t, reg, tc.name, tc.labels); got != tc.want {
+			t.Errorf("%s%v = %v, want %v", tc.name, tc.labels, got, tc.want)
+		}
 	}
-	out := buf.String()
 
+	if strings.Contains(scrape(t, reg), "scanner-probe") {
+		t.Error("raw unmatched path leaked into a metric label")
+	}
+}
+
+func TestExpositionDidNotChange(t *testing.T) {
+	// The hand-written encoder these series used to come from produced
+	// exactly these lines. Adopting a library to emit them is only free
+	// if nothing downstream can tell — so this asserts the raw text,
+	// which is the thing a scraper and a stored query actually see.
+	reg := metrics.New()
+	m := NewMetrics(reg)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ok", func(w http.ResponseWriter, r *http.Request) {})
+	h := Chain(mux, m.Collect())
+	for i := 0; i < 3; i++ {
+		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/ok", nil))
+	}
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/scanner-probe-1", nil))
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/scanner-probe-2", nil))
+
+	out := scrape(t, reg)
 	for _, want := range []string{
 		`ghosttrace_http_requests_total{route="GET /ok",status="200"} 3`,
 		`ghosttrace_http_requests_total{route="unmatched",status="404"} 2`,
@@ -114,33 +198,41 @@ func TestMetricsCountsByRouteAndStatus(t *testing.T) {
 		`ghosttrace_http_request_duration_ms_bucket{route="GET /ok",le="+Inf"} 3`,
 	} {
 		if !strings.Contains(out, want) {
-			t.Errorf("exposition missing %q:\n%s", want, out)
+			t.Errorf("exposition changed; missing %q:\n%s", want, out)
 		}
-	}
-	if strings.Contains(out, "scanner-probe") {
-		t.Error("raw unmatched path leaked into a metric label")
 	}
 }
 
-func TestMetricsEncodeIsDeterministic(t *testing.T) {
-	m := NewMetrics()
-	for i := 0; i < 5; i++ {
-		m.inc(fmt.Sprintf("GET /r%d", i%3), 200+i)
-		m.observe(fmt.Sprintf("GET /r%d", i%3), float64(i))
+func TestSuccessiveScrapesOfAnUnchangedRegistryAreIdentical(t *testing.T) {
+	// A scrape that reorders between reads makes every diff noise and
+	// hides the one that matters.
+	reg := metrics.New()
+	m := NewMetrics(reg)
+	mux := http.NewServeMux()
+	for _, p := range []string{"GET /a", "GET /b", "GET /c"} {
+		mux.HandleFunc(p, func(w http.ResponseWriter, r *http.Request) {})
 	}
-	var a, b bytes.Buffer
-	_ = m.Encode(&a)
-	_ = m.Encode(&b)
-	if a.String() != b.String() {
+	h := Chain(mux, m.Collect())
+	for _, p := range []string{"/a", "/b", "/c", "/a", "/b"} {
+		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", p, nil))
+	}
+	first := scrape(t, reg)
+	second := scrape(t, reg)
+	if first != second {
 		t.Error("successive scrapes of an unchanged registry differ")
 	}
 }
 
 func TestMetricsHandlerServesExposition(t *testing.T) {
-	m := NewMetrics()
-	m.inc("GET /x", 200)
+	reg := metrics.New()
+	m := NewMetrics(reg)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /x", func(w http.ResponseWriter, r *http.Request) {})
+	Chain(mux, m.Collect()).ServeHTTP(
+		httptest.NewRecorder(), httptest.NewRequest("GET", "/x", nil))
+
 	rec := httptest.NewRecorder()
-	m.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
+	reg.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
 	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") {
 		t.Errorf("content type = %q", ct)
 	}

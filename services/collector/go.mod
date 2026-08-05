@@ -5,7 +5,7 @@ go 1.26
 toolchain go1.26.5
 
 require (
-	google.golang.org/protobuf v1.36.10 // archive-format pin: canonical bytes are hashed for identity — upgrading is an archive-compatibility event, see internal/canonical
+	google.golang.org/protobuf v1.36.11 // archive-format pin: canonical bytes are hashed for identity — upgrading is an archive-compatibility event, see internal/canonical
 	lukechampine.com/blake3 v1.3.0 // indirect
 	modernc.org/sqlite v1.34.4 // indirect
 )
@@ -40,6 +40,7 @@ require (
 require (
 	github.com/FabioCaffarello/ghost-trace/libs/decision v0.0.0-00010101000000-000000000000
 	github.com/FabioCaffarello/ghost-trace/libs/id v0.0.0
+	github.com/FabioCaffarello/ghost-trace/libs/metrics v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/tenant v0.0.0
 	github.com/invopop/jsonschema v0.14.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
@@ -48,13 +49,20 @@ require (
 
 require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
+	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/buger/jsonparser v1.1.2 // indirect
-	github.com/klauspost/compress v1.18.5 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/klauspost/compress v1.19.1 // indirect
+	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nats-io/nats.go v1.52.0 // indirect
 	github.com/nats-io/nkeys v0.4.15 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
-	go.yaml.in/yaml/v2 v2.4.2 // indirect
+	github.com/prometheus/client_golang v1.24.1 // indirect
+	github.com/prometheus/client_model v0.6.2 // indirect
+	github.com/prometheus/common v0.70.1 // indirect
+	github.com/prometheus/procfs v0.21.1 // indirect
+	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.2 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
@@ -87,5 +95,7 @@ replace github.com/FabioCaffarello/ghost-trace/libs/genproto => ../../libs/genpr
 replace github.com/FabioCaffarello/ghost-trace/libs/substrate => ../../libs/substrate
 
 replace github.com/FabioCaffarello/ghost-trace/libs/wire => ../../libs/wire
+
+replace github.com/FabioCaffarello/ghost-trace/libs/metrics => ../../libs/metrics
 
 replace github.com/FabioCaffarello/ghost-trace/libs/middleware => ../../libs/middleware
