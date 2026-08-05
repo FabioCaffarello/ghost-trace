@@ -271,6 +271,9 @@ jobs:
       # can be checked on every push, and it was unchecked entirely.
       # Repository tooling, not the statistics. The six numbers stay
       # stdlib-only; check-workflows.py parses YAML the way GitHub does.
+      - name: PROOF-RED — this branch is thrown away
+        run: exit 1
+
       - name: Tooling dependencies
         run: python3 -m pip install -r scripts/requirements.txt
 
