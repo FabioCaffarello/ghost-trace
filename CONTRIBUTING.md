@@ -133,6 +133,18 @@ publish a manifest (`make numbers-manifest`). A moved number with no
 explanation is indistinguishable from a broken detector — which is the
 sentence this repository wrote long before anything enforced it.
 
+## Tenants
+
+One deployment serves several customers. `-tenants` points at a JSON
+registry (`deploy/tenants.example.json` is the shape); without it the
+single-tenant flags become a registry of exactly one, which is what
+keeps the development binary and the six-numbers run working unchanged.
+
+Two rules the registry enforces at startup, because neither failure is
+visible at request time: a `secret_key` may not be shared between
+tenants — either could then act as the other and both requests would
+authenticate — and a registry may not be empty.
+
 ## Two rules that are not style
 
 **Absence is never zero.** A tier that did not run is not a tier that

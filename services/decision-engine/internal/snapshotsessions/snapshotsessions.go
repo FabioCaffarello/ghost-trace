@@ -25,19 +25,19 @@ type Store interface {
 
 // Sessions answers lookups from the snapshot bucket.
 type Sessions struct {
-	store  Store
-	tenant string
+	store Store
 }
 
-// New reads snapshots for tenant out of store.
+// New reads snapshots out of store.
 //
-// The tenant is configuration rather than a request field because a
-// decision request carries only the token — the key is (tenant, token)
-// and the caller supplies half of it. PR-2.7 is where a request starts
-// carrying its own tenant; until then a single-tenant engine is honest
-// about what it is.
-func New(store Store, tenant string) *Sessions {
-	return &Sessions{store: store, tenant: tenant}
+// The tenant is no longer configuration. The bucket key has always been
+// (tenant, token) and the caller only ever supplied the token; the
+// missing half used to come from a flag, which meant one engine could
+// serve exactly one customer. It now comes from the secret the caller
+// authenticated with, so a token is only ever looked up under the
+// tenant that proved it may ask.
+func New(store Store) *Sessions {
+	return &Sessions{store: store}
 }
 
 // Lookup fetches the snapshot and maps it to decision state.
@@ -49,8 +49,11 @@ func New(store Store, tenant string) *Sessions {
 // brand-new sessions, every one of them judged innocent for lack of
 // evidence — a detector that fails open silently at exactly the moment
 // its evidence supply breaks.
-func (s *Sessions) Lookup(ctx context.Context, token string) (decision.Session, bool, error) {
-	snap, err := s.store.Get(ctx, s.tenant, token)
+func (s *Sessions) Lookup(ctx context.Context, tenantID, token string) (decision.Session, bool, error) {
+	// Isolation is the KEY here rather than a comparison: another
+	// tenant's token simply addresses a key that does not exist, and
+	// reads as a cold start.
+	snap, err := s.store.Get(ctx, tenantID, token)
 	if err != nil {
 		if errors.Is(err, eventstream.ErrNoSnapshot) {
 			return decision.Session{}, false, nil

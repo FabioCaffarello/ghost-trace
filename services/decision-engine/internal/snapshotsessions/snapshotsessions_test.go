@@ -28,7 +28,7 @@ func (f *fakeStore) Get(_ context.Context, tenant, _ string) (*eventsv1.SessionS
 func TestNoSnapshotIsAColdStart(t *testing.T) {
 	store := &fakeStore{err: fmt.Errorf("%w: t.st_x", eventstream.ErrNoSnapshot)}
 
-	sess, found, err := snapshotsessions.New(store, "t_demo").Lookup(context.Background(), "st_x")
+	sess, found, err := snapshotsessions.New(store).Lookup(context.Background(), "t_demo", "st_x")
 	if err != nil {
 		t.Fatalf("a session with no snapshot returned an error: %v", err)
 	}
@@ -49,8 +49,8 @@ func TestAStoreThatDidNotAnswerIsNotAColdStart(t *testing.T) {
 	boom := errors.New("connection refused")
 	store := &fakeStore{err: boom}
 
-	if _, found, err := snapshotsessions.New(store, "t_demo").
-		Lookup(context.Background(), "st_x"); !errors.Is(err, boom) || found {
+	if _, found, err := snapshotsessions.New(store).
+		Lookup(context.Background(), "t_demo", "st_x"); !errors.Is(err, boom) || found {
 		t.Errorf("Lookup = (found %v, err %v), want (false, the store's error)", found, err)
 	}
 }
@@ -63,7 +63,7 @@ func TestSnapshotMapsToDecisionState(t *testing.T) {
 		Features:    &eventsv1.FeatureState{PointerPoints: 30, KeyEvents: 12},
 	}}
 
-	sess, found, err := snapshotsessions.New(store, "t_demo").Lookup(context.Background(), "st_x")
+	sess, found, err := snapshotsessions.New(store).Lookup(context.Background(), "t_demo", "st_x")
 	if err != nil || !found {
 		t.Fatalf("Lookup = (found %v, err %v), want (true, nil)", found, err)
 	}

@@ -36,9 +36,21 @@ func New(store Store) *Sessions { return &Sessions{store: store} }
 // pointer must not escape: concurrent telemetry batches keep mutating
 // it under the same lock, and a read after With returns would race with
 // them.
-func (s *Sessions) Lookup(_ context.Context, token string) (decision.Session, bool, error) {
+func (s *Sessions) Lookup(_ context.Context, tenantID, token string) (decision.Session, bool, error) {
 	var out decision.Session
+	var mine bool
 	if err := s.store.With(token, func(sess *session.State) {
+		// THE ISOLATION CHECK. Tokens are 144 bits of randomness, so
+		// nobody GUESSES another tenant's token — but a token can be
+		// handed over, logged, or copied out of a page, and before this
+		// existed presenting one with a different tenant's secret
+		// returned a real decision about a session the caller had no
+		// claim to. Both halves looked valid on their own, which is why
+		// nothing caught it.
+		if sess.TenantID != tenantID {
+			return
+		}
+		mine = true
 		out = decision.Session{
 			ID:       sess.ID,
 			TenantID: sess.TenantID,
@@ -56,6 +68,12 @@ func (s *Sessions) Lookup(_ context.Context, token string) (decision.Session, bo
 			return decision.Session{}, false, nil
 		}
 		return decision.Session{}, false, err
+	}
+	// Someone else's session is reported as no session at all, never as
+	// an error: the answer a caller gets must not tell them whether a
+	// token they do not own exists.
+	if !mine {
+		return decision.Session{}, false, nil
 	}
 	return out, true, nil
 }

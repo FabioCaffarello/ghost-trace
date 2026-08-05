@@ -29,6 +29,7 @@ import (
 
 	"github.com/FabioCaffarello/ghost-trace/libs/archive"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
+	"github.com/FabioCaffarello/ghost-trace/libs/tenant"
 )
 
 // Session is the state a decision is computed from, together with what
@@ -40,7 +41,14 @@ type Session struct {
 	LastEventMs uint32
 }
 
-// Sessions is the port over that state.
+// Sessions is the port over that state, scoped to a TENANT.
+//
+// The tenant is a parameter rather than construction-time configuration
+// because a decision request resolves it from the secret it presents,
+// and an implementation must refuse a token belonging to someone else.
+// Without that, a token from one tenant and another tenant's secret
+// would produce a decision about a session the caller has no claim to —
+// and both halves would look valid on their own.
 //
 // A miss is (Session{}, false, nil) and deliberately NOT an error: the
 // caller is at a risk moment and needs an answer, and an unknown token
@@ -49,24 +57,21 @@ type Session struct {
 // session — and those are worth surfacing because they are not
 // something the policy can reason about.
 type Sessions interface {
-	Lookup(ctx context.Context, token string) (Session, bool, error)
+	Lookup(ctx context.Context, tenantID, token string) (Session, bool, error)
 }
 
-// Config is what the host decides: who it speaks for, how decisions
-// operate, and the credential that authenticates the application
-// server.
+// Config is what the host decides: how decisions operate, and which
+// tenants this process serves.
 type Config struct {
-	// TenantID is the fallback attribution for a session that was not
-	// found. A found session carries its own.
-	TenantID string
-
 	// Mode is monitor or enforce (§4).
 	Mode string
 
-	// SecretKey authenticates the application server on both endpoints.
-	// These are the only endpoints that accept subject_id and action,
-	// which is why neither is ever read from a browser request.
-	SecretKey string
+	// Tenants resolves the presented secret_key to the tenant it speaks
+	// for. These are the only endpoints that accept subject_id and
+	// action, which is why neither is ever read from a browser request
+	// — and now also why the CREDENTIAL decides who the caller is,
+	// rather than a flag deciding it once for the whole process.
+	Tenants *tenant.Registry
 }
 
 // Service serves the two endpoints against the ports it is given.

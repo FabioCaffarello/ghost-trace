@@ -1,0 +1,14 @@
+{
+  "tenants": [
+    {
+      "id": "t_alpha",
+      "site_key": "pk_alpha_public_in_the_page",
+      "secret_key": "sk_alpha_never_leaves_a_server"
+    },
+    {
+      "id": "t_beta",
+      "site_key": "pk_beta_public_in_the_page",
+      "secret_key": "sk_beta_never_leaves_a_server"
+    }
+  ]
+}

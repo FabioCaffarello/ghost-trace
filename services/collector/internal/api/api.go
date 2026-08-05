@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/FabioCaffarello/ghost-trace/libs/middleware"
+	"github.com/FabioCaffarello/ghost-trace/libs/tenant"
 	"github.com/FabioCaffarello/ghost-trace/libs/wire"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/app"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/sdk"
@@ -33,7 +34,12 @@ import (
 // and /v1/outcomes, which libs/decision serves, and a credential kept
 // where nothing reads it is a credential that outlives its purpose.
 type Config struct {
-	SiteKey string
+	// Tenants resolves the public site_key a page carries. site_key
+	// identifies and does not authenticate (§1) — a wrong one stops
+	// cross-tenant noise, not an adversary — but it is what decides
+	// which customer a session belongs to, and every record it produces
+	// is attributed accordingly.
+	Tenants *tenant.Registry
 
 	// AllowedOrigins are the page origins permitted to call the browser
 	// endpoints cross-origin. Empty disables CORS entirely, which is
@@ -130,9 +136,11 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// site_key is public and embedded in the page; it identifies the
-	// tenant, it does not authenticate. Checking it stops
-	// cross-tenant noise, not an adversary.
-	if req.SiteKey != s.cfg.SiteKey {
+	// tenant, it does not authenticate. Checking it stops cross-tenant
+	// noise, not an adversary — but it is what binds this session, and
+	// every record it goes on to produce, to a customer.
+	who, ok := s.cfg.Tenants.BySiteKey(req.SiteKey)
+	if !ok {
 		writeError(w, http.StatusUnauthorized, "unknown site_key")
 		return
 	}
@@ -148,6 +156,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	out, err := s.app.StartSession(r.Context(), app.StartSessionInput{
+		TenantID: who.ID,
 		PagePath: req.Page.Path,
 		Client:   c,
 	})

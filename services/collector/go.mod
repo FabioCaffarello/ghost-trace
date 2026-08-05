@@ -40,6 +40,7 @@ require (
 require (
 	github.com/FabioCaffarello/ghost-trace/libs/decision v0.0.0-00010101000000-000000000000
 	github.com/FabioCaffarello/ghost-trace/libs/id v0.0.0
+	github.com/FabioCaffarello/ghost-trace/libs/tenant v0.0.0
 	github.com/invopop/jsonschema v0.14.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	sigs.k8s.io/yaml v1.6.0
@@ -78,6 +79,8 @@ replace github.com/FabioCaffarello/ghost-trace/libs/feature => ../../libs/featur
 replace github.com/FabioCaffarello/ghost-trace/libs/policy => ../../libs/policy
 
 replace github.com/FabioCaffarello/ghost-trace/libs/snapshot => ../../libs/snapshot
+
+replace github.com/FabioCaffarello/ghost-trace/libs/tenant => ../../libs/tenant
 
 replace github.com/FabioCaffarello/ghost-trace/libs/genproto => ../../libs/genproto
 

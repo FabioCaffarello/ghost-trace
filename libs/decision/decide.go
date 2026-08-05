@@ -12,6 +12,10 @@ import (
 // SubjectID and Action arrive only from the authenticated application
 // server — authenticating that is the transport's job.
 type Input struct {
+	// TenantID is who the caller proved to be, resolved from the secret
+	// it presented — never a field a request may set.
+	TenantID string
+
 	SessionToken string
 	Action       string
 	SubjectID    string
@@ -43,17 +47,19 @@ func (s *Service) Decide(ctx context.Context, in Input) (Output, error) {
 		return Output{}, ErrActionRequired
 	}
 
-	sess, found, err := s.sessions.Lookup(ctx, in.SessionToken)
+	// Scoped to the tenant the caller PROVED, so a token belonging to
+	// someone else reads as a session that does not exist rather than
+	// as a session about which this caller may be told anything.
+	sess, found, err := s.sessions.Lookup(ctx, in.TenantID, in.SessionToken)
 	if err != nil {
 		return Output{}, fmt.Errorf("decide: %w", err)
 	}
 
-	// A session that was not found is attributed to the configured
-	// tenant; one that was carries its own.
-	tenantID := s.cfg.TenantID
-	if found {
-		tenantID = sess.TenantID
-	}
+	// Attribution is the caller's tenant either way. A found session
+	// carries the same id by construction — the lookup refused anything
+	// else — and an unknown token is a cold start belonging to whoever
+	// asked about it.
+	tenantID := in.TenantID
 
 	j := policy.Judge(sess.State, in.Action)
 	outcome, err := policy.Apply(j, s.cfg.Mode)

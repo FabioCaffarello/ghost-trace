@@ -101,13 +101,13 @@ func TestEvaluationRecordCarriesFullFeatureState(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	store := session.NewStore(30*time.Minute, time.Now)
 	arch := substratearchive.New(ingest.New(sub, time.Now))
-	a := app.New(app.Config{TenantID: "t_test"}, store, arch, time.Now, log)
+	a := app.New(app.Config{}, store, arch, time.Now, log)
 	s := New(Config{
-		SiteKey:       testSiteKey,
+		Tenants:       testTenants(t),
 		CollectPolicy: wire.CollectPolicy{PointerHz: 20, BatchMs: 2000, Types: []string{"pointer"}},
 	}, a, log)
 	decisions := decision.New(decision.Config{
-		TenantID: "t_test", Mode: policy.ModeMonitor, SecretKey: testSecretKey,
+		Mode: policy.ModeMonitor, Tenants: testTenants(t),
 	}, livesessions.New(store), arch, time.Now, log)
 
 	mux := s.Routes()

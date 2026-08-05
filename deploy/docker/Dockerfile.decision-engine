@@ -30,6 +30,7 @@ COPY libs/snapshot/go.mod libs/snapshot/go.sum libs/snapshot/
 COPY libs/wire/go.mod libs/wire/
 COPY libs/archive/go.mod libs/archive/go.sum libs/archive/
 COPY libs/id/go.mod libs/id/
+COPY libs/tenant/go.mod libs/tenant/
 COPY libs/decision/go.mod libs/decision/go.sum libs/decision/
 COPY services/decision-engine/go.mod services/decision-engine/go.sum services/decision-engine/
 RUN --mount=type=cache,target=/go/pkg/mod \

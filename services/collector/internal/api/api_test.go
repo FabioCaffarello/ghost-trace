@@ -23,6 +23,7 @@ import (
 
 	"github.com/FabioCaffarello/ghost-trace/libs/decision"
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
+	"github.com/FabioCaffarello/ghost-trace/libs/tenant"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/adapters/livesessions"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/app"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/session"
@@ -31,7 +32,22 @@ import (
 const (
 	testSiteKey   = "pk_test"
 	testSecretKey = "sk_test"
+	testTenantID  = "t_test"
 )
+
+// testTenants is the registry these tests speak for. One row, because
+// the property under test here is not multi-tenancy — that has its own
+// end-to-end test — but everything else continuing to work now that a
+// tenant arrives with the request instead of with the process.
+func testTenants(t *testing.T) *tenant.Registry {
+	t.Helper()
+	r, err := tenant.New(tenant.Tenant{ID: testTenantID, SiteKey: testSiteKey,
+		SecretKey: testSecretKey})
+	if err != nil {
+		t.Fatalf("tenant registry: %v", err)
+	}
+	return r
+}
 
 func newTestServer(t *testing.T, mode string) *httptest.Server {
 	t.Helper()
@@ -40,9 +56,9 @@ func newTestServer(t *testing.T, mode string) *httptest.Server {
 	// the session /v1/decisions judges. NullArchive because the decision
 	// path must not depend on storage.
 	store := session.NewStore(30*time.Minute, time.Now)
-	a := app.New(app.Config{TenantID: "t_test"}, store, app.NullArchive{}, time.Now, log)
+	a := app.New(app.Config{}, store, app.NullArchive{}, time.Now, log)
 	s := New(Config{
-		SiteKey: testSiteKey,
+		Tenants: testTenants(t),
 		CollectPolicy: wire.CollectPolicy{
 			PointerHz: 20, BatchMs: 2000, Types: []string{"pointer"},
 		},
@@ -52,7 +68,7 @@ func newTestServer(t *testing.T, mode string) *httptest.Server {
 	// Mounted exactly as the composition root mounts it, so these tests
 	// drive the endpoints a client reaches and not a rehearsal of them.
 	decisions := decision.New(decision.Config{
-		TenantID: "t_test", Mode: mode, SecretKey: testSecretKey,
+		Mode: mode, Tenants: testTenants(t),
 	}, livesessions.New(store), app.NullArchive{}, time.Now, log)
 
 	mux := s.Routes()
@@ -167,10 +183,10 @@ func TestExpiresInFollowsConfiguredTTL(t *testing.T) {
 	// store enforces.
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ttl := 5 * time.Minute
-	a := app.New(app.Config{TenantID: "t_test"},
+	a := app.New(app.Config{},
 		session.NewStore(ttl, time.Now), app.NullArchive{}, time.Now, log)
 	s := New(Config{
-		SiteKey:    testSiteKey,
+		Tenants:    testTenants(t),
 		SessionTTL: ttl,
 	}, a, log)
 	srv := httptest.NewServer(s.Routes())

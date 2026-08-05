@@ -26,12 +26,12 @@ func corsServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	store := session.NewStore(30*time.Minute, time.Now)
-	a := app.New(app.Config{TenantID: "t_test"}, store, app.NullArchive{}, time.Now, log)
-	s := New(Config{SiteKey: testSiteKey, AllowedOrigins: []string{demoOrigin}}, a, log)
+	a := app.New(app.Config{}, store, app.NullArchive{}, time.Now, log)
+	s := New(Config{Tenants: testTenants(t), AllowedOrigins: []string{demoOrigin}}, a, log)
 
 	mux := s.Routes()
 	decision.New(decision.Config{
-		TenantID: "t_test", Mode: policy.ModeMonitor, SecretKey: testSecretKey,
+		Mode: policy.ModeMonitor, Tenants: testTenants(t),
 	}, livesessions.New(store), app.NullArchive{}, time.Now, log).Mount(mux)
 
 	srv := httptest.NewServer(mux)
@@ -132,8 +132,8 @@ func TestCORSIsOffWhenNoOriginIsConfigured(t *testing.T) {
 	// than a permissive one.
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	store := session.NewStore(30*time.Minute, time.Now)
-	a := app.New(app.Config{TenantID: "t_test"}, store, app.NullArchive{}, time.Now, log)
-	srv := httptest.NewServer(New(Config{SiteKey: testSiteKey}, a, log).Routes())
+	a := app.New(app.Config{}, store, app.NullArchive{}, time.Now, log)
+	srv := httptest.NewServer(New(Config{Tenants: testTenants(t)}, a, log).Routes())
 	t.Cleanup(srv.Close)
 
 	if got := preflight(t, srv, "/v1/sessions").
