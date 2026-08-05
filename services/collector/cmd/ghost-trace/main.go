@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -137,7 +138,7 @@ func run() error {
 		// unreachable makes another process's view stale, which is that
 		// process's problem to detect, not a reason to reject telemetry
 		// here.
-		sessionStore, err = eventstream.OpenSessions(ctx, js, *ttl)
+		sessionStore, err = eventstream.EnsureSessions(ctx, js, *ttl)
 		if err != nil {
 			return fmt.Errorf("open session snapshots: %w", err)
 		}
@@ -203,6 +204,16 @@ func run() error {
 	// can correlate, recovery so a panic is logged with its id, logging
 	// so the 500 a panic produces still gets its line, metrics
 	// innermost so it measures the handler rather than the logging.
+	// Published rather than logged so the two services can be COMPARED
+	// from outside. Two registries that disagree about who exists each
+	// behave correctly alone and wrongly together, and no request fails
+	// on the way; `make shadow-http` reads this from both.
+	reg.Info("tenant_registry_info",
+		"The tenant set this process serves. The fingerprint covers ids and site "+
+			"keys, never secrets.",
+		map[string]string{"fingerprint": registry.Fingerprint(),
+			"tenants": strconv.Itoa(registry.Len())})
+
 	httpMetrics := middleware.NewMetrics(reg)
 	mux.Handle("GET /metrics", reg.Handler())
 	handler := middleware.Chain(mux,

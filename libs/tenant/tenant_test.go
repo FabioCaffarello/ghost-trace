@@ -154,3 +154,65 @@ func TestIDsNeverCarrySecrets(t *testing.T) {
 		}
 	}
 }
+
+func TestFingerprintIsStableAndOrderIndependent(t *testing.T) {
+	// It is compared across processes, so declaration order in a file
+	// must not change it — otherwise two identical registries would
+	// read as a disagreement and the check would be muted for crying
+	// wolf.
+	a, err := tenant.New(
+		tenant.Tenant{ID: "t_a", SiteKey: "pk_a", SecretKey: "sk_a"},
+		tenant.Tenant{ID: "t_b", SiteKey: "pk_b", SecretKey: "sk_b"},
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	b, err := tenant.New(
+		tenant.Tenant{ID: "t_b", SiteKey: "pk_b", SecretKey: "sk_b"},
+		tenant.Tenant{ID: "t_a", SiteKey: "pk_a", SecretKey: "sk_a"},
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if a.Fingerprint() != b.Fingerprint() {
+		t.Errorf("the same tenants in a different order fingerprint differently: %s vs %s",
+			a.Fingerprint(), b.Fingerprint())
+	}
+}
+
+func TestFingerprintChangesWhenTheTenantSetDoes(t *testing.T) {
+	base := two(t)
+	extra, err := tenant.New(
+		tenant.Tenant{ID: "t_a", SiteKey: "pk_a", SecretKey: "sk_a"},
+		tenant.Tenant{ID: "t_b", SiteKey: "pk_b", SecretKey: "sk_b"},
+		tenant.Tenant{ID: "t_c", SiteKey: "pk_c", SecretKey: "sk_c"},
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if base.Fingerprint() == extra.Fingerprint() {
+		t.Error("adding a tenant did not change the fingerprint; the check would " +
+			"pass while two services disagreed about who exists")
+	}
+}
+
+func TestFingerprintCarriesNoSecret(t *testing.T) {
+	// It is published on an unauthenticated endpoint. Two registries
+	// differing only in their secrets must fingerprint the SAME, which
+	// is the proof that no secret went into it.
+	a, err := tenant.New(tenant.Tenant{ID: "t", SiteKey: "pk", SecretKey: "sk_one"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	b, err := tenant.New(tenant.Tenant{ID: "t", SiteKey: "pk", SecretKey: "sk_two"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if a.Fingerprint() != b.Fingerprint() {
+		t.Error("the fingerprint depends on the secret; it is published unauthenticated " +
+			"and its safety would then rest on secret entropy this package cannot know")
+	}
+	if strings.Contains(a.Fingerprint(), "sk_") {
+		t.Error("the fingerprint contains a secret verbatim")
+	}
+}

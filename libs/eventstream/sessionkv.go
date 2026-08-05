@@ -41,7 +41,20 @@ type Sessions struct {
 // describes by nothing, so an abandoned session expires rather than
 // accumulating. Bucket-level expiry rather than a sweeper means there
 // is no second place that decides when a session is over.
-func OpenSessions(ctx context.Context, js jetstream.JetStream, ttl time.Duration) (*Sessions, error) {
+// ErrSessionTTLMismatch reports that the bucket's TTL is not the one
+// this process expects.
+var ErrSessionTTLMismatch = errors.New("eventstream: session bucket TTL differs")
+
+// EnsureSessions creates or updates the bucket. THE WRITER CALLS THIS.
+//
+// Ownership follows the writer: the collector owns a session and is the
+// only thing that writes one (ADR-0004), so it is the only thing
+// allowed to declare how long one lives. Before this split both
+// services called CreateOrUpdate, which meant whichever started LAST
+// silently rewrote the other's TTL — a snapshot expiring before or
+// after the session it describes, with a comment in compose.yml as the
+// only thing holding the two flags together.
+func EnsureSessions(ctx context.Context, js jetstream.JetStream, ttl time.Duration) (*Sessions, error) {
 	kv, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
 		Bucket:      SessionBucket,
 		Description: "Latest feature-state snapshot per live session.",
@@ -50,7 +63,33 @@ func OpenSessions(ctx context.Context, js jetstream.JetStream, ttl time.Duration
 		Storage:     jetstream.FileStorage,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("eventstream: open %s: %w", SessionBucket, err)
+		return nil, fmt.Errorf("eventstream: ensure %s: %w", SessionBucket, err)
+	}
+	return &Sessions{kv: kv}, nil
+}
+
+// OpenSessions binds to the existing bucket and refuses a TTL that is
+// not the one expected. READERS CALL THIS.
+//
+// Refusing is the point. A reader that quietly accepted a different TTL
+// would be reading snapshots whose lifetime it does not know, and the
+// failure would surface much later as decisions made from state that
+// expired early — or as sessions that outlive their snapshots, which
+// reads as a cold start for a session that is very much alive.
+func OpenSessions(ctx context.Context, js jetstream.JetStream, expect time.Duration) (*Sessions, error) {
+	kv, err := js.KeyValue(ctx, SessionBucket)
+	if err != nil {
+		return nil, fmt.Errorf("eventstream: open %s: %w (the collector creates it; "+
+			"a reader starting first will see this until it has)", SessionBucket, err)
+	}
+	status, err := kv.Status(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("eventstream: status %s: %w", SessionBucket, err)
+	}
+	if got := status.TTL(); got != expect {
+		return nil, fmt.Errorf("%w: bucket says %s, this process expects %s — "+
+			"the collector owns the value and every reader must be given the same one",
+			ErrSessionTTLMismatch, got, expect)
 	}
 	return &Sessions{kv: kv}, nil
 }

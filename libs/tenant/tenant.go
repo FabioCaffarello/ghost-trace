@@ -18,10 +18,14 @@ package tenant
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 )
 
 // Tenant is one customer.
@@ -135,6 +139,33 @@ func (r *Registry) BySecretKey(k string) (*Tenant, bool) {
 		}
 	}
 	return found, found != nil
+}
+
+// Fingerprint identifies the tenant SET this process serves.
+//
+// Two services that disagree about who exists will each behave
+// correctly on its own and wrongly together: a session opened for a
+// tenant the engine has never heard of gets a decision attributed to
+// nobody, and no request fails on the way. The fingerprint makes that
+// disagreement visible from outside, which a log line cannot be.
+//
+// IT COVERS IDS AND SITE KEYS, NOT SECRETS. Both are public — a site
+// key is in the page source — so publishing a hash of them costs
+// nothing. Hashing the secrets would be a hash of credentials on an
+// unauthenticated endpoint, and its safety would depend entirely on
+// their entropy, which this package cannot know.
+//
+// Credential divergence is caught anyway, and more directly: the same
+// application key is presented to both services in `make shadow-http`,
+// so a mismatch is a 401 rather than a subtle wrong answer.
+func (r *Registry) Fingerprint() string {
+	rows := make([]string, 0, len(r.all))
+	for _, t := range r.all {
+		rows = append(rows, t.ID+"\x00"+t.SiteKey)
+	}
+	sort.Strings(rows)
+	sum := sha256.Sum256([]byte(strings.Join(rows, "\x1e")))
+	return hex.EncodeToString(sum[:8])
 }
 
 // Len reports how many tenants are registered.

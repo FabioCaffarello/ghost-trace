@@ -24,6 +24,7 @@ package metrics
 
 import (
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -66,6 +67,30 @@ func name(n string) string {
 		return n
 	}
 	return Prefix + n
+}
+
+// Info publishes a fact about the process as a series that is always 1,
+// carrying the fact in its labels.
+//
+// The build_info idiom. It is how a value that is a STRING becomes
+// comparable across processes by anything that can read /metrics — a
+// log line cannot be compared by a test, and an endpoint invented for
+// one string is a surface to maintain.
+//
+// Label values must be bounded. A label that varies per request mints a
+// series per request and takes the process down by memory, which is the
+// one failure mode this idiom invites.
+func (r *Registry) Info(n, help string, labels map[string]string) {
+	keys := make([]string, 0, len(labels))
+	for k := range labels {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	values := make([]string, 0, len(keys))
+	for _, k := range keys {
+		values = append(values, labels[k])
+	}
+	r.Gauge(n, help, keys...).WithLabelValues(values...).Set(1)
 }
 
 // Counter registers a counter, or returns the one already registered

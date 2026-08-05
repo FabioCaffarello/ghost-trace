@@ -28,6 +28,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -266,5 +267,53 @@ func TestTheDemoHostReachesTheEngine(t *testing.T) {
 	}
 	if id, _ := out["evaluation_id"].(string); id == "" {
 		t.Error("no evaluation_id: the decision did not come from the engine")
+	}
+}
+
+// fingerprint reads the tenant-set fingerprint a service publishes.
+func fingerprint(t *testing.T, base string) string {
+	t.Helper()
+	resp, err := (&http.Client{Timeout: 10 * time.Second}).Get(base + "/metrics")
+	if err != nil {
+		t.Fatalf("GET %s/metrics: %v", base, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, _ := io.ReadAll(resp.Body)
+
+	for _, line := range strings.Split(string(raw), "\n") {
+		if !strings.HasPrefix(line, "ghosttrace_tenant_registry_info{") {
+			continue
+		}
+		open := strings.Index(line, `fingerprint="`)
+		if open < 0 {
+			continue
+		}
+		rest := line[open+len(`fingerprint="`):]
+		if close := strings.Index(rest, `"`); close >= 0 {
+			return rest[:close]
+		}
+	}
+	t.Fatalf("%s publishes no tenant_registry_info; the registries cannot be compared", base)
+	return ""
+}
+
+func TestBothServicesServeTheSameTenants(t *testing.T) {
+	// Two registries that disagree about who exists each behave
+	// correctly on their own and wrongly together: a session opened for
+	// a tenant the engine has never heard of gets a decision attributed
+	// to nobody, and NO REQUEST FAILS on the way there. Held by nothing
+	// but a comment in compose.yml until this existed.
+	//
+	// The fingerprint covers ids and site keys, not secrets — those are
+	// checked far more directly by the tests above, which present one
+	// application key to both services and would get a 401.
+	e := fromEnv(t)
+
+	collector := fingerprint(t, e.collector)
+	engine := fingerprint(t, e.engine)
+	if collector != engine {
+		t.Errorf("the collector serves tenant set %s and the engine serves %s; "+
+			"a session opened on one can be judged by the other under a tenant it "+
+			"does not know", collector, engine)
 	}
 }

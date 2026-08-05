@@ -84,7 +84,7 @@ func TestDecisionThroughTheSnapshotStoreMatchesInProcess(t *testing.T) {
 	}
 	defer nc.Close()
 
-	store, err := eventstream.OpenSessions(ctx, js, 30*time.Minute)
+	store, err := eventstream.EnsureSessions(ctx, js, 30*time.Minute)
 	if err != nil {
 		t.Fatalf("open sessions bucket: %v", err)
 	}
