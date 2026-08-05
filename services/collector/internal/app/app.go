@@ -61,12 +61,80 @@ type SessionSnapshots interface {
 	Put(ctx context.Context, token string, snap *eventsv1.SessionSnapshot) error
 }
 
+// ErrNoSnapshotStore reports that the run publishes no snapshots.
+//
+// It exists so that "there is no store" is distinguishable from "the
+// write succeeded". NullSnapshots used to return nil, which meant a run
+// with snapshots disabled counted every one of them as WRITTEN — a
+// counter reporting success for something that went nowhere, which is
+// the failure this whole phase is about. It mirrors
+// archive.ErrUnavailable exactly, and for the same reason.
+var ErrNoSnapshotStore = errors.New("app: no session snapshot store configured")
+
 // NullSnapshots is the do-nothing store: the all-in-one binary needs no
 // snapshots because nothing else reads its sessions.
 type NullSnapshots struct{}
 
-// Put discards the snapshot.
-func (NullSnapshots) Put(context.Context, string, *eventsv1.SessionSnapshot) error { return nil }
+// Put reports ErrNoSnapshotStore rather than success.
+func (NullSnapshots) Put(context.Context, string, *eventsv1.SessionSnapshot) error {
+	return ErrNoSnapshotStore
+}
+
+// Record kinds and drop reasons. Constants rather than string literals
+// at the call sites, because every one of these values has to be
+// declared to the meter at startup — see LossMeter — and a typo would
+// mint a series nobody declared and nobody is watching.
+const (
+	KindSessionStart = "session_start"
+	KindTelemetry    = "telemetry"
+	KindSnapshot     = "snapshot"
+
+	// ReasonDeadline: the best-effort budget expired. The record was
+	// not written and will not be retried.
+	ReasonDeadline = "deadline"
+
+	// ReasonError: the store refused or failed for some other reason.
+	ReasonError = "error"
+)
+
+// Kinds and Reasons are every value that can appear, so a composition
+// root can declare the whole cross product before serving anything.
+var (
+	Kinds   = []string{KindSessionStart, KindTelemetry, KindSnapshot}
+	Reasons = []string{ReasonDeadline, ReasonError}
+)
+
+// LossMeter counts what the application hands to a store, and what it
+// fails to.
+//
+// The phase this belongs to exists because three loss paths were logged
+// per occurrence and counted nowhere. A log line answers "did this
+// happen" for someone already looking; a counter answers "how much has
+// happened" for someone who is not.
+//
+// ErrArchiveUnavailable is deliberately NOT a drop. A run configured
+// with no archive is not losing records — it never had a store to lose
+// them from, and counting that would make every development run look
+// catastrophic while telling nobody anything. The distinction is the
+// same one contract §7 draws: absent is not zero, and neither is it
+// failure.
+type LossMeter interface {
+	// Written: the record reached the store.
+	Written(kind string)
+
+	// Dropped: the record did not, and is gone.
+	Dropped(kind, reason string)
+}
+
+// NoLossMeter counts nothing, for tests and for the composition roots
+// that have not been given a registry.
+type NoLossMeter struct{}
+
+// Written discards the count.
+func (NoLossMeter) Written(string) {}
+
+// Dropped discards the count.
+func (NoLossMeter) Dropped(string, string) {}
 
 // Config is the application-level configuration.
 //
@@ -84,6 +152,7 @@ type App struct {
 	sessions  SessionRepository
 	archive   EventArchive
 	snapshots SessionSnapshots
+	loss      LossMeter
 	now       func() time.Time
 	log       *slog.Logger
 }
@@ -98,13 +167,23 @@ func New(cfg Config, sessions SessionRepository, archive EventArchive, now func(
 		log = slog.Default()
 	}
 	return &App{cfg: cfg, sessions: sessions, archive: archive,
-		snapshots: NullSnapshots{}, now: now, log: log}
+		snapshots: NullSnapshots{}, loss: NoLossMeter{}, now: now, log: log}
+}
+
+// WithLossMeter returns a copy counting what it writes and drops.
+// Optional rather than a constructor argument, for the same reason
+// WithSnapshots is: a run without a registry must still work, and a
+// required nil would be a worse API than an explicit opt-in.
+func (a *App) WithLossMeter(m LossMeter) *App {
+	if m == nil {
+		m = NoLossMeter{}
+	}
+	b := *a
+	b.loss = m
+	return &b
 }
 
 // WithSnapshots returns a copy publishing session snapshots to store.
-// Optional rather than a constructor argument because the all-in-one
-// binary genuinely has no use for it, and a required nil would be a
-// worse API than an explicit opt-in.
 func (a *App) WithSnapshots(store SessionSnapshots) *App {
 	if store == nil {
 		store = NullSnapshots{}
@@ -139,15 +218,41 @@ func bestEffort(ctx context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(ctx, BestEffortTimeout)
 }
 
-// archiveBestEffort appends a record, logging failures instead of
-// surfacing them. Archival off the decision path must never take a
-// user-facing request down with it — not by failing it and not by
-// holding it open — so a missing archive is not a failure at these call
-// sites and ErrArchiveUnavailable is not even logged.
-func (a *App) archiveBestEffort(ctx context.Context, msg proto.Message, eventTime int64, what string, args ...any) {
+// archiveBestEffort appends a record, counting and logging failures
+// instead of surfacing them. Archival off the decision path must never
+// take a user-facing request down with it — not by failing it and not
+// by holding it open.
+//
+// Every outcome lands in exactly one place: written, dropped with a
+// reason, or neither because there is no archive configured. The third
+// is not a loss and is not counted; see LossMeter.
+func (a *App) archiveBestEffort(ctx context.Context, msg proto.Message, eventTime int64,
+	kind string, args ...any) {
+
 	ctx, cancel := bestEffort(ctx)
 	defer cancel()
-	if err := a.archive.Append(ctx, msg, eventTime); err != nil && !errors.Is(err, archive.ErrUnavailable) {
-		a.log.Error("archive "+what, append([]any{"err", err}, args...)...)
+
+	err := a.archive.Append(ctx, msg, eventTime)
+	switch {
+	case err == nil:
+		a.loss.Written(kind)
+	case errors.Is(err, archive.ErrUnavailable):
+		// No store to lose it from. Not written, not dropped.
+	default:
+		a.loss.Dropped(kind, reasonFor(err))
+		a.log.Error("archive "+kind, append([]any{"err", err}, args...)...)
 	}
+}
+
+// reasonFor separates the budget expiring from everything else.
+//
+// The distinction is the one that matters when reading the counter: a
+// deadline says the dependency was too slow and the bound did its job,
+// while an error says it refused. Bucketing both as "failed" would hide
+// which of the two a deployment is actually suffering.
+func reasonFor(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return ReasonDeadline
+	}
+	return ReasonError
 }
