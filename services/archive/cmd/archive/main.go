@@ -24,6 +24,7 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/libs/middleware"
 	"github.com/FabioCaffarello/ghost-trace/libs/substrate"
 
+	"github.com/FabioCaffarello/ghost-trace/services/archive/internal/adapters/archivemeter"
 	"github.com/FabioCaffarello/ghost-trace/services/archive/internal/consumer"
 )
 
@@ -33,6 +34,9 @@ func main() {
 			"NATS URL carrying the event stream")
 		dataDir = flag.String("data", envOr("GT_DATA", "./.archive-data"),
 			"directory for the SQLite index and blob store")
+		statsEvery = flag.Duration("stats-every", 10*time.Second,
+			"how often to ask the broker how far behind this consumer is; the "+
+				"reading's age is exposed as archive_stream_observed_timestamp_seconds")
 		addr = flag.String("addr", envOr("GT_ADDR", "127.0.0.1:8081"),
 			"address for /healthz and /metrics")
 	)
@@ -65,13 +69,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	cons := consumer.New(sub, time.Now, log)
+	reg := metrics.New()
+	meter := archivemeter.New(reg, time.Now)
+	cons := consumer.New(sub, meter, time.Now, log)
 
 	// One registry per process: the HTTP series and every domain
 	// counter are exposed together, because two registries behind one
 	// endpoint would need two encoders and would drop whichever the
 	// handler forgot.
-	reg := metrics.New()
 	httpMetrics := middleware.NewMetrics(reg)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -101,7 +106,12 @@ func main() {
 
 	log.Info("archive consuming", "nats", *natsURL, "data", *dataDir, "addr", *addr)
 
-	if err := eventstream.Consume(ctx, js, cons.Handle); err != nil {
+	// The broker's view of how far behind this consumer is, polled on a
+	// timer. Local counters cannot see it: they go up while a thousand
+	// records queue behind them, and the lag stays invisible until
+	// records age out of the stream.
+	if err := eventstream.Consume(ctx, js, cons.Handle,
+		eventstream.WithStats(*statsEvery, meter.Observe)); err != nil {
 		log.Error("consume", "err", err)
 	}
 

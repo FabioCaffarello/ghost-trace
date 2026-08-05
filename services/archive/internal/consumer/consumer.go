@@ -30,9 +30,47 @@ type Store interface {
 		eventTime int64, messageType string, committedAt int64) error
 }
 
+// Reject reasons. Constants because every one of them is declared to
+// the meter at zero before serving; a literal at a call site would mint
+// an undeclared series the first time it went wrong, which is the one
+// moment nobody wants to discover the counter is new.
+const (
+	// ReasonMalformedHash: the identity is not 32 hex bytes. Redelivery
+	// cannot make it one.
+	ReasonMalformedHash = "malformed_hash"
+
+	// ReasonHashMismatch: the payload does not match the hash that
+	// names it. Committing would poison a content-addressed store.
+	ReasonHashMismatch = "hash_mismatch"
+)
+
+// RejectReasons is every value the reason label can take.
+var RejectReasons = []string{ReasonMalformedHash, ReasonHashMismatch}
+
+// Meter counts what the archive commits and refuses.
+//
+// Committed is labelled by message type so a type that stops arriving
+// is visible; rejected is labelled by reason so the two failure modes
+// are not one number. Both are declared at zero by the adapter — see
+// the collector's lossmeter for why that is not optional.
+type Meter interface {
+	Committed(messageType string)
+	Rejected(reason string)
+}
+
+// NoMeter counts nothing.
+type NoMeter struct{}
+
+// Committed discards the count.
+func (NoMeter) Committed(string) {}
+
+// Rejected discards the count.
+func (NoMeter) Rejected(string) {}
+
 // Consumer commits arriving records.
 type Consumer struct {
 	store Store
+	meter Meter
 	now   func() time.Time
 	log   *slog.Logger
 
@@ -40,15 +78,25 @@ type Consumer struct {
 	rejected  atomic.Int64
 }
 
-// New returns a consumer writing into store.
-func New(store Store, now func() time.Time, log *slog.Logger) *Consumer {
+// New returns a consumer writing into store, counting into meter.
+//
+// The meter is a constructor argument rather than a WithMeter option,
+// which is the idiom everywhere else here. A Consumer holds atomic
+// counters, so the copy that idiom performs would copy a lock — `go
+// vet` says so, and it is right: two Consumers sharing one counter's
+// address is exactly the sort of thing that reads correct and drifts.
+// Pass NoMeter{} for a run that counts nothing.
+func New(store Store, meter Meter, now func() time.Time, log *slog.Logger) *Consumer {
+	if meter == nil {
+		meter = NoMeter{}
+	}
 	if now == nil {
 		now = time.Now
 	}
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Consumer{store: store, now: now, log: log}
+	return &Consumer{store: store, meter: meter, now: now, log: log}
 }
 
 // Handle commits one record. Returning an error means the message is
@@ -60,7 +108,7 @@ func (c *Consumer) Handle(ctx context.Context, rec *eventsv1.ArchiveRecord) erro
 	if err != nil || len(raw) != 32 {
 		// Malformed identity. Redelivery cannot fix a hash that is not
 		// a hash, so this is dropped rather than retried forever.
-		c.reject(ctx, rec, "event_hash is not 32 hex bytes")
+		c.reject(ctx, rec, ReasonMalformedHash, "event_hash is not 32 hex bytes")
 		return nil
 	}
 	var hash [32]byte
@@ -71,6 +119,7 @@ func (c *Consumer) Handle(ctx context.Context, rec *eventsv1.ArchiveRecord) erro
 	switch {
 	case err == nil:
 		c.committed.Add(1)
+		c.meter.Committed(rec.GetMessageType())
 		return nil
 
 	case errors.Is(err, substrate.ErrHashMismatch):
@@ -79,7 +128,7 @@ func (c *Consumer) Handle(ctx context.Context, rec *eventsv1.ArchiveRecord) erro
 		// does not describe it, which is worse than losing the record —
 		// every later verification would fail on it. Redelivery would
 		// bring the same bytes, so drop and shout.
-		c.reject(ctx, rec, "payload does not match its hash")
+		c.reject(ctx, rec, ReasonHashMismatch, "payload does not match its hash")
 		return nil
 
 	default:
@@ -90,8 +139,9 @@ func (c *Consumer) Handle(ctx context.Context, rec *eventsv1.ArchiveRecord) erro
 	}
 }
 
-func (c *Consumer) reject(ctx context.Context, rec *eventsv1.ArchiveRecord, why string) {
+func (c *Consumer) reject(ctx context.Context, rec *eventsv1.ArchiveRecord, reason, why string) {
 	c.rejected.Add(1)
+	c.meter.Rejected(reason)
 	c.log.ErrorContext(ctx, "archive rejected a record",
 		"why", why,
 		"event_hash", rec.GetEventHash(),

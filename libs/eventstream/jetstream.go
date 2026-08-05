@@ -113,8 +113,59 @@ const ConsumerName = "archive"
 // was committed twice is collapsed by the substrate's content
 // addressing. At-least-once plus idempotency, which is the only pair
 // that survives a crash between the two.
+// Stats is what the BROKER knows about a consumer's progress, as
+// opposed to what the consumer knows about itself.
+//
+// The difference matters. A consumer can count what it committed
+// without ever learning that a thousand records are queued behind it —
+// the local counters go up, everything looks healthy, and the lag is
+// invisible until records age out of the stream.
+type Stats struct {
+	// Pending: accepted by the stream, not yet acknowledged by us.
+	Pending uint64
+
+	// AckPending: delivered and awaiting an ack right now.
+	AckPending int
+
+	// Redelivered: messages this consumer has been sent more than once.
+	// A non-zero value is not a fault — at-least-once delivery means
+	// redelivery is the mechanism, not the exception — but a growing
+	// one says commits are failing.
+	Redelivered int
+}
+
+// StatsFunc receives each reading, or the error that prevented one.
+//
+// The error is passed rather than swallowed because a reading that
+// could not be taken is not a reading of zero. A caller that treats a
+// failed poll as "no lag" reports perfect health at exactly the moment
+// the broker stopped answering.
+type StatsFunc func(Stats, error)
+
+type consumeOptions struct {
+	statsEvery time.Duration
+	stats      StatsFunc
+}
+
+// ConsumeOption configures Consume.
+type ConsumeOption func(*consumeOptions)
+
+// WithStats polls the broker for this consumer's progress and reports
+// each reading to fn.
+func WithStats(every time.Duration, fn StatsFunc) ConsumeOption {
+	return func(o *consumeOptions) {
+		o.statsEvery, o.stats = every, fn
+	}
+}
+
 func Consume(ctx context.Context, js jetstream.JetStream,
-	fn func(context.Context, *eventsv1.ArchiveRecord) error) error {
+	fn func(context.Context, *eventsv1.ArchiveRecord) error,
+	opts ...ConsumeOption) error {
+
+	var o consumeOptions
+	for _, apply := range opts {
+		apply(&o)
+	}
 
 	cons, err := js.CreateOrUpdateConsumer(ctx, Stream, jetstream.ConsumerConfig{
 		Durable:       ConsumerName,
@@ -153,9 +204,45 @@ func Consume(ctx context.Context, js jetstream.JetStream,
 	}
 	defer sub.Stop()
 
+	if o.stats != nil && o.statsEvery > 0 {
+		go pollStats(ctx, cons, o.statsEvery, o.stats)
+	}
+
 	<-ctx.Done()
 	if errors.Is(ctx.Err(), context.Canceled) {
 		return nil
 	}
 	return ctx.Err()
+}
+
+// pollStats reports the broker's view of this consumer until ctx ends.
+//
+// The first reading is taken immediately rather than after one
+// interval, so a process that starts behind says so at once instead of
+// looking healthy for its first tick.
+func pollStats(ctx context.Context, cons jetstream.Consumer, every time.Duration, report StatsFunc) {
+	read := func() {
+		info, err := cons.Info(ctx)
+		if err != nil {
+			report(Stats{}, err)
+			return
+		}
+		report(Stats{
+			Pending:     info.NumPending,
+			AckPending:  info.NumAckPending,
+			Redelivered: info.NumRedelivered,
+		}, nil)
+	}
+
+	read()
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			read()
+		}
+	}
 }
