@@ -15,11 +15,33 @@ cd services/collector && make run     # then open http://127.0.0.1:8080
 
 ## The six numbers
 
-Reproduce all of them with one command:
+There are **two ways to reproduce them**, and they are not the same
+measurement.
 
 ```bash
-python3 experiments/numbers.py
+make numbers            # the all-in-one binary; no Docker, no broker
 ```
+
+One process answers everything, holding sessions in memory. This is the
+canonical run: it needs only Go, Node, Python and a browser, and it is
+what the published monolith baselines were measured on.
+
+```bash
+docker compose --profile core up -d
+docker compose --profile core --profile experiments run --rm experiments
+```
+
+The composed topology: collector, decision engine, archive and demo host
+with an event stream between them. A decision here crosses a network hop
+and a KV read, so **number 3 is measuring a different path** — the
+manifest records `topology: monolith|composed` and the check refuses to
+compare across them. What the split cost is
+[`docs/results/latency-gate-2026-08-04.md`](docs/results/latency-gate-2026-08-04.md);
+number 6 is an in-process measurement and is the same either way.
+
+Either way, `make numbers` **measures and checks**: it compares the run
+against the newest published manifest of the same topology and fails if
+a number moved.
 
 Its output satisfies a published contract
 ([`experiments/schema/numbers.schema.json`](experiments/schema/numbers.schema.json))
@@ -104,7 +126,18 @@ What is missing is people. It is calendar-bound, not effort-bound.
   budget       80ms
 ```
 
-Single session, idle system, over HTTP including the archive write.
+Single session, idle system, over HTTP including the archive write —
+the friendliest possible conditions, and therefore a floor rather than a
+production figure.
+
+The composed topology's published baseline is **1.515ms** for the same
+number, which is lower rather than higher. Most of that difference is
+not the split: it is the archive write on the decision path moving from
+a synchronous SQLite append to a stream publish. The split itself cost
+**+0.94ms**.
+[`docs/results/latency-gate-2026-08-04.md`](docs/results/latency-gate-2026-08-04.md)
+separates the two, and comparing the two baselines without it leads to
+the wrong conclusion.
 
 ### 4. Time to confident decision
 
@@ -317,7 +350,9 @@ Licensed under [Apache 2.0](LICENSE).
    — five evidence channels
 6. [`docs/duration-forces-the-architecture.md`](docs/duration-forces-the-architecture.md)
    — the benchmark that corrected the plan
-7. [`docs/results/`](docs/results/) — run manifests: which commit, which
+7. [`docs/the-split.md`](docs/the-split.md) — one binary becomes four,
+   and the four things the split found
+8. [`docs/results/`](docs/results/) — run manifests: which commit, which
    machine, which seed produced the numbers above
-8. [`contract/roadmap.md`](contract/roadmap.md) — where the architecture
+9. [`contract/roadmap.md`](contract/roadmap.md) — where the architecture
    is going, kept separate from what it currently guarantees
