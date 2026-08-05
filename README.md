@@ -352,7 +352,10 @@ Licensed under [Apache 2.0](LICENSE).
    — the benchmark that corrected the plan
 7. [`docs/the-split.md`](docs/the-split.md) — one binary becomes four,
    and the four things the split found
-8. [`docs/results/`](docs/results/) — run manifests: which commit, which
+8. [`docs/counting-what-is-lost.md`](docs/counting-what-is-lost.md) —
+   three loss paths made countable, and the measurement that could not
+   be taken from the broker
+9. [`docs/results/`](docs/results/) — run manifests: which commit, which
    machine, which seed produced the numbers above
-9. [`contract/roadmap.md`](contract/roadmap.md) — where the architecture
-   is going, kept separate from what it currently guarantees
+10. [`contract/roadmap.md`](contract/roadmap.md) — where the architecture
+    is going, kept separate from what it currently guarantees
