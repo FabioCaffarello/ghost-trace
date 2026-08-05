@@ -20,7 +20,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 # --- layout ----------------------------------------------------------
-GO_MODULES  := services/collector services/archive services/decision-engine services/demo-web libs/archive libs/canonical libs/decision libs/eventstream libs/feature libs/genproto libs/id libs/metrics libs/middleware libs/policy libs/snapshot libs/substrate libs/tenant libs/wire
+GO_MODULES  := services/collector services/archive services/decision-engine services/demo-web libs/archive libs/canonical libs/decision libs/eventstream libs/feature libs/genproto libs/id libs/metrics libs/middleware libs/policy libs/snapshot libs/substrate libs/tenant libs/wire tools/loadgen
 SERVICE     := services/collector
 EXPERIMENTS := experiments
 COVER_DIR   := .coverage
@@ -545,6 +545,15 @@ kill-test: ## Take each service away and check the degradation promises (needs t
 loss-audit: ## Drive traffic, break things, and make the archive's books balance (needs the topology up)
 	@python3 deploy/loss-audit.py
 
+# The load driver. Not a gate yet — 4.6 is the gate; this is the
+# instrument, and running it is how the curve in 4.2 gets measured.
+#
+# It REFUSES a run in which the driver itself fell behind its schedule,
+# because such a run measured the -workers bound and not the system.
+.PHONY: load
+load: ## Drive the collector on a schedule and report what the load experienced (needs the topology up)
+	@cd tools/loadgen && go run ./cmd/loadgen $(LOAD_ARGS)
+
 .PHONY: parity
 parity: ## Archive parity against a real broker (needs GT_NATS_URL)
 	@if [ -z "$${GT_NATS_URL:-}" ]; then \
@@ -576,6 +585,10 @@ experiments-check: ## Syntax-check every tier and run the asserted statistics se
 	@python3 scripts/check-workflows.py --selftest
 	@echo "== the required checks actually require every job"
 	@python3 scripts/check-workflows.py
+	@echo "== module-list selftest (asserted)"
+	@python3 scripts/check-modules.py --selftest
+	@echo "== every module is in go.work, GO_MODULES and the CI matrix"
+	@python3 scripts/check-modules.py
 
 # Measuring and CHECKING are one target, because they were two habits
 # and the second one kept being skipped. The run prints the six numbers

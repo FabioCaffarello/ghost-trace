@@ -31,4 +31,5 @@ use (
 	./services/decision-engine
 	./services/demo-web
 	./services/collector
+	./tools/loadgen
 )
