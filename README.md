@@ -355,7 +355,10 @@ Licensed under [Apache 2.0](LICENSE).
 8. [`docs/counting-what-is-lost.md`](docs/counting-what-is-lost.md) —
    three loss paths made countable, and the measurement that could not
    be taken from the broker
-9. [`docs/results/`](docs/results/) — run manifests: which commit, which
-   machine, which seed produced the numbers above
-10. [`contract/roadmap.md`](contract/roadmap.md) — where the architecture
+9. [`docs/measuring-under-load.md`](docs/measuring-under-load.md) — the
+   floor becomes a curve, and the gate finds a loss figure that could go
+   negative
+10. [`docs/results/`](docs/results/) — run manifests: which commit, which
+    machine, which seed produced the numbers above
+11. [`contract/roadmap.md`](contract/roadmap.md) — where the architecture
     is going, kept separate from what it currently guarantees
