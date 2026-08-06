@@ -37,6 +37,15 @@ from the broker was taken from that position instead. Written up in
 [`../docs/counting-what-is-lost.md`](../docs/counting-what-is-lost.md);
 the model is [ADR-0008](decisions/0008-what-a-zero-is-allowed-to-mean.md).
 
+**Phase 4 — the numbers survive contention.** An open-loop load driver
+that cannot hide the load it created, curves for all three services, the
+archive's constraint diagnosed and tripled without a durability trade,
+and `make load-gate`. The gate found a loss figure that could read
+negative — shipped in PR-3.6, survived a full phase — within an hour of
+existing. Written up in
+[`../docs/measuring-under-load.md`](../docs/measuring-under-load.md); the
+model is [ADR-0011](decisions/0011-a-latency-is-a-conditional-claim.md).
+
 ### Where the plan and the result differ
 
 Recorded rather than quietly reconciled, because the difference is the
@@ -115,7 +124,15 @@ written down anywhere but here.
   reason to keep deferring it — a load test can now report what it
   dropped — and added nothing to the evidence: `make loss-audit` drives
   twenty-five records per scenario, which proves the accounting is sound
-  and says nothing about rate. **This is now the largest standing gap.**
+  and says nothing about rate.
+
+> **Discharged by Phase 4.** Curves for all three services, an open-loop
+> driver that refuses a run it could not sustain, and `make load-gate`.
+> What replaces it is narrower and worse: **the archive commits 4 133
+> records/s against a collector that bends near 16 000, and there is no
+> backpressure between them.** The stream absorbs the difference until
+> retention does not, and `stream_skipped` reports it after the fact.
+> That is now the largest standing gap.
 - **Calibration is global.** Per-tenant calibration needs `libs/policy`
   to stop being a package global (13 uses of a package-level `cal`), and
   `policy.Ref` then stops being one value per run — which the manifest
@@ -274,7 +291,7 @@ backpressure is unchanged and is now the phase's largest open item.**
 | **4.5** | The decision path at concurrency, against the 80ms budget it has only ever been measured against while idle. **Measured: it holds to 10 000 decisions/s at p99 6.57ms — twelve times inside the budget — and saturates between 10 000 and 11 000. The published idle floor of 1.393ms understated by 4.7x, which is what a floor does and not enough to change any conclusion drawn from it. The KV read costs about half what the engine itself does and is not what gives way first.** The decision path has the most headroom of the three services; the archive is still the constraint. See [the curve](../docs/results/decision-under-load-2026-08-05.md). | S |
 | **4.6** | **`make load-gate`** — the phase gate as a repeatable target, refusing when the topology is down. **Passes**, and found two defects doing it: a skewed metric snapshot (position and row count read as two queries, so the published pair could say the archive held more rows than it performed commits), and — under a mid-run broker disruption — **`unaccounted = -70`**. A loss figure that can be negative is not a loss figure; [ADR-0010](decisions/0010-unaccounted-must-never-be-negative.md) corrects ADR-0008's definition of `committed`. See [the run](../docs/results/load-gate-2026-08-06.md). | M |
 | **4.7** | Republish what moved, and teach `numbers-check` the difference. **The six numbers reproduce after Phase 4's substrate rewrite — nothing moved, which is worth having rather than assuming.** What was missing was the CONDITION: every run this harness has produced was idle, that was stated but never recorded, and 4.5 measured the same p99 at 4.7x under load. `provenance.run.load` now records it; `numbers_check` refuses to compare across conditions and picks a baseline of the same one, exactly as `check_topology` already did. See [the run](../docs/results/numbers-after-phase-4-2026-08-06.md). | M |
-| **4.8** | An ADR for what the numbers now claim, and the write-up. | S |
+| **4.8** | An ADR for what the numbers now claim, and the write-up. [ADR-0011](decisions/0011-a-latency-is-a-conditional-claim.md) · [the write-up](../docs/measuring-under-load.md). | S |
 
 **Dependencies.** 4.1 gates everything else. 4.2, 4.4 and 4.5 are
 independent of one another. 4.3 depends on what 4.2 finds and cannot be

@@ -18,9 +18,13 @@ unaccounted = span - accounted
 
 and stated, deliberately:
 
-> **`committed` counts commit OPERATIONS, not rows.** A record delivered
-> twice commits twice and dedups to one row, so `committed` minus the
-> row count is the duplicate volume rather than a discrepancy.
+> **`committed` counts commit operations, not rows.** A redelivered
+> record dedups to one row; counting rows would make every redelivery
+> look like a vanished record. `committed - rows` is duplicate volume.
+
+(That is ADR-0008's Consequences section, verbatim. Its `Position` type
+comment says the same thing at greater length; both were wrong in the
+same way.)
 
 That reasoning is sound about *rows*. It is wrong about *sequences*, and
 the two were conflated.
