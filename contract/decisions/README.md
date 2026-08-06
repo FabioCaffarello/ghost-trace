@@ -20,3 +20,4 @@ reverse without knowing what it cost.
 | [0006](0006-the-stream-is-the-archive.md) | The stream is the archive; `-nats` and `-data` are alternatives | accepted |
 | [0007](0007-the-metrics-library-is-the-exception.md) | prometheus/client_golang is the one exception to stdlib-only | accepted |
 | [0008](0008-what-a-zero-is-allowed-to-mean.md) | What a zero is allowed to mean, and never measuring a failure with the failing component's state | accepted |
+| [0009](0009-small-payloads-live-in-the-row.md) | Small payloads live in the row — 3x the archive's rate without weakening a durability promise | accepted |

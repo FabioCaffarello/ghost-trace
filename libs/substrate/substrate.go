@@ -36,7 +36,8 @@ CREATE TABLE IF NOT EXISTS events (
     event_time    INTEGER NOT NULL,
     message_type  TEXT    NOT NULL,
     payload_ref   TEXT    NOT NULL,
-    committed_at  INTEGER NOT NULL
+    committed_at  INTEGER NOT NULL,
+    payload       BLOB
 ) WITHOUT ROWID;
 `
 
@@ -65,6 +66,31 @@ CREATE TABLE IF NOT EXISTS stream_position (
     rejected     INTEGER NOT NULL
 );
 `
+
+// InlineThreshold is the payload size at or below which the bytes live
+// in the events row instead of in a file.
+//
+// WHY THIS EXISTS. PR-4.4 decomposed a commit and found two fsyncs, not
+// one: the blob is written to a temp file, fsynced and renamed BEFORE
+// SQLite is touched. On Linux the blob half runs at 1 826/s against
+// 2 988/s for the SQL half, so it is the larger of the two costs.
+//
+// Inlining removes it OUTRIGHT for a payload that fits, and — this is
+// the part that made it the first move rather than one option among
+// three — it weakens nothing. SQLite's own synchronous=FULL then covers
+// the payload as well as the index, in the same transaction that was
+// already being paid for. The alternatives on the table (synchronous=
+// NORMAL, dropping the blob sync) all bought speed by giving up a
+// durability promise; this one does not.
+//
+// THE THRESHOLD IS NOT TUNED, and deliberately so. Every payload
+// measured in a real run was between 60 and 161 bytes — 100% under
+// 256 — while request bodies are capped at 1 MiB, so anything between
+// those two numbers is equally correct for today's traffic and the
+// choice cannot be made by measurement. 16 KiB is far above what the
+// system produces and far below what would make a row unwieldy, and the
+// file path still exists for anything larger.
+const InlineThreshold = 16 << 10
 
 // canonicalPragmas — applied at Open. journal_mode=WAL for concurrent-reader
 // + single-writer semantics; synchronous=FULL for §2.1 durability
@@ -125,7 +151,55 @@ func Open(ctx context.Context, dbPath, blobDir string) (*Substrate, error) {
 		return nil, fmt.Errorf("substrate.Open: create stream_position table: %w", err)
 	}
 
+	// The payload column, added to databases that predate it. SQLite has
+	// no ADD COLUMN IF NOT EXISTS, so this asks first. An archive opened
+	// by an older binary and then a newer one must keep every record it
+	// already holds readable, which is what the file fallback in
+	// ReadBlob is for.
+	if err := ensurePayloadColumn(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("substrate.Open: %w", err)
+	}
+
 	return &Substrate{db: db, blobDir: blobDir}, nil
+}
+
+// ensurePayloadColumn adds events.payload to a database that predates
+// it.
+//
+// A database created by this version already has the column from the
+// DDL above; this exists only for archives written before inlining. The
+// column is declared in BOTH places on purpose — a fresh database
+// should be correct from its schema alone, without depending on a
+// migration having run, and a migration that is the only definition is
+// a schema nobody can read in one place.
+func ensurePayloadColumn(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, `PRAGMA table_info(events)`)
+	if err != nil {
+		return fmt.Errorf("read events schema: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dflt, &pk); err != nil {
+			return fmt.Errorf("scan events schema: %w", err)
+		}
+		if name == "payload" {
+			return rows.Err()
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read events schema: %w", err)
+	}
+
+	if _, err := db.ExecContext(ctx, `ALTER TABLE events ADD COLUMN payload BLOB`); err != nil {
+		return fmt.Errorf("add payload column: %w", err)
+	}
+	return nil
 }
 
 // BlobDir returns the configured blob-store directory. Exposed for
@@ -172,17 +246,32 @@ func (s *Substrate) Append(ctx context.Context, row EventRow, payload []byte) er
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 
-	if err := s.writeBlob(row.EventHash, payload); err != nil {
-		return fmt.Errorf("substrate.Append: blob write: %w", err)
+	inline := len(payload) <= InlineThreshold
+	if !inline {
+		if err := s.writeBlob(row.EventHash, payload); err != nil {
+			return fmt.Errorf("substrate.Append: blob write: %w", err)
+		}
 	}
 
 	if _, err := s.db.ExecContext(ctx,
 		`INSERT OR IGNORE INTO events
-		   (event_hash, event_time, message_type, payload_ref, committed_at)
-		 VALUES (?, ?, ?, ?, ?)`,
+		   (event_hash, event_time, message_type, payload_ref, committed_at, payload)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
 		row.EventHash[:], row.EventTime, row.MessageType, row.PayloadRef, row.CommittedAt,
+		inlinedOrNil(payload, inline),
 	); err != nil {
 		return fmt.Errorf("substrate.Append: insert: %w", err)
+	}
+	return nil
+}
+
+// inlinedOrNil returns the payload when it belongs in the row, and nil
+// otherwise. A NULL payload column is what tells a reader to go and
+// find the file, so it is the discriminator rather than payload_ref —
+// which every row written before this change already carries.
+func inlinedOrNil(payload []byte, inline bool) any {
+	if inline {
+		return payload
 	}
 	return nil
 }
@@ -251,7 +340,31 @@ func (s *Substrate) writeBlob(hash [32]byte, payload []byte) error {
 // and returns ErrHashMismatch on §2.1 violation per the canonical-
 // serialization-contract anti-pattern "hash-verification omitted from
 // blob-read path" and AP5.
-func (s *Substrate) ReadBlob(_ context.Context, hash [32]byte) ([]byte, error) {
+func (s *Substrate) ReadBlob(ctx context.Context, hash [32]byte) ([]byte, error) {
+	// The row first, because that is where a payload written by this
+	// version lives. A miss falls through to the file, which is what
+	// keeps every record written before the inline change readable —
+	// including on an archive that an older binary populated and a newer
+	// one opened.
+	var inline []byte
+	err := s.db.QueryRowContext(ctx,
+		`SELECT payload FROM events WHERE event_hash = ?`, hash[:]).Scan(&inline)
+	switch {
+	case err == nil && inline != nil:
+		recomputed := canonical.Hash(inline)
+		if subtle.ConstantTimeCompare(hash[:], recomputed[:]) != 1 {
+			// The same check the file path makes, for the same reason:
+			// a content-addressed store that answers with bytes not
+			// describing the name it was asked for is worse than one
+			// that answers nothing.
+			return nil, fmt.Errorf("substrate.ReadBlob inline %s: %w",
+				canonical.HashHex(hash), ErrHashMismatch)
+		}
+		return inline, nil
+	case err != nil && !errors.Is(err, sql.ErrNoRows):
+		return nil, fmt.Errorf("substrate.ReadBlob: read row: %w", err)
+	}
+
 	_, finalPath := s.blobPath(hash)
 
 	payload, err := os.ReadFile(finalPath)
@@ -592,8 +705,16 @@ func (s *Substrate) AppendCanonicalAt(ctx context.Context, payload []byte, event
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 
-	if err := s.writeBlob(eventHash, payload); err != nil {
-		return fmt.Errorf("substrate.AppendCanonicalAt: blob write: %w", err)
+	// A payload that fits goes into the transaction below, which is
+	// already paying for an fsync. One that does not still gets its own
+	// file, written and fsynced before the row that names it — a row
+	// pointing at a file that is not there yet would be a record the
+	// archive believes it holds and cannot produce.
+	inline := len(payload) <= InlineThreshold
+	if !inline {
+		if err := s.writeBlob(eventHash, payload); err != nil {
+			return fmt.Errorf("substrate.AppendCanonicalAt: blob write: %w", err)
+		}
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -604,9 +725,10 @@ func (s *Substrate) AppendCanonicalAt(ctx context.Context, payload []byte, event
 
 	if _, err := tx.ExecContext(ctx,
 		`INSERT OR IGNORE INTO events
-		   (event_hash, event_time, message_type, payload_ref, committed_at)
-		 VALUES (?, ?, ?, ?, ?)`,
+		   (event_hash, event_time, message_type, payload_ref, committed_at, payload)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
 		eventHash[:], eventTime, messageType, payloadRef, committedAt,
+		inlinedOrNil(payload, inline),
 	); err != nil {
 		return fmt.Errorf("substrate.AppendCanonicalAt: insert: %w", err)
 	}
