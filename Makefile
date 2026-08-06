@@ -554,6 +554,11 @@ loss-audit: ## Drive traffic, break things, and make the archive's books balance
 load: ## Drive the collector on a schedule and report what the load experienced (needs the topology up)
 	@cd tools/loadgen && go run ./cmd/loadgen $(LOAD_ARGS)
 
+# The curve. `make load` is one point; this is the shape.
+.PHONY: load-sweep
+load-sweep: ## Sweep the offered rate and find where the collector bends (needs the topology up)
+	@python3 deploy/load-sweep.py $(SWEEP_ARGS)
+
 .PHONY: parity
 parity: ## Archive parity against a real broker (needs GT_NATS_URL)
 	@if [ -z "$${GT_NATS_URL:-}" ]; then \
