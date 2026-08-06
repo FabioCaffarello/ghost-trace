@@ -118,6 +118,7 @@ type Meter struct {
 	posCommitted *prometheus.GaugeVec
 	posRejected  *prometheus.GaugeVec
 	posUnaccount *prometheus.GaugeVec
+	posDuplicate *prometheus.GaugeVec
 	posRows      *prometheus.GaugeVec
 	posReadFail  prometheus.Counter
 
@@ -185,6 +186,11 @@ func New(reg *metrics.Registry, now func() time.Time) *Meter {
 			"Sequences inside the range this archive has walked that it neither "+
 				"committed nor refused. Records in flight count here, so it is read "+
 				"after traffic drains, not during."),
+		posDuplicate: reg.Gauge("archive_position_duplicates",
+			"Deliveries whose record the substrate already held. At-least-once "+
+				"delivery working, not loss. Reported beside the subtraction that "+
+				"produces unaccounted rather than inside it — a redelivery adds no "+
+				"sequence to the span, so subtracting it drives the figure negative."),
 		posRows: reg.Gauge("archive_position_rows",
 			"Records the substrate actually holds."),
 		posReadFail: reg.Counter("archive_position_read_failures_total",
@@ -255,6 +261,7 @@ func (m *Meter) ObservePosition(p substrate.Position, rows int64, ok bool, err e
 	m.posCommitted.WithLabelValues().Set(float64(p.Committed))
 	m.posRejected.WithLabelValues().Set(float64(p.Rejected))
 	m.posUnaccount.WithLabelValues().Set(float64(p.Unaccounted()))
+	m.posDuplicate.WithLabelValues().Set(float64(p.Duplicates))
 	m.posRows.WithLabelValues().Set(float64(rows))
 }
 

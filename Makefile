@@ -559,6 +559,13 @@ load: ## Drive the collector on a schedule and report what the load experienced 
 load-sweep: ## Sweep the offered rate and find where the collector bends (needs the topology up)
 	@python3 deploy/load-sweep.py $(SWEEP_ARGS)
 
+# The Phase 4 gate. Complementary to loss-audit rather than a superset:
+# that one reconciles under an induced OUTAGE, this one under sustained
+# LOAD, where nothing is down and the archive simply cannot keep up.
+.PHONY: load-gate
+load-gate: ## The phase gate — the accounting balances under load and the decision path is inside budget (needs the topology up)
+	@python3 deploy/load-gate.py $(GATE_ARGS)
+
 .PHONY: parity
 parity: ## Archive parity against a real broker (needs GT_NATS_URL)
 	@if [ -z "$${GT_NATS_URL:-}" ]; then \

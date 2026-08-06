@@ -63,7 +63,8 @@ CREATE TABLE IF NOT EXISTS stream_position (
     first_seq    INTEGER NOT NULL,
     highest_seq  INTEGER NOT NULL,
     committed    INTEGER NOT NULL,
-    rejected     INTEGER NOT NULL
+    rejected     INTEGER NOT NULL,
+    duplicates   INTEGER NOT NULL DEFAULT 0
 );
 `
 
@@ -157,6 +158,10 @@ func Open(ctx context.Context, dbPath, blobDir string) (*Substrate, error) {
 	// already holds readable, which is what the file fallback in
 	// ReadBlob is for.
 	if err := ensurePayloadColumn(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("substrate.Open: %w", err)
+	}
+	if err := ensureDuplicatesColumn(ctx, db); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("substrate.Open: %w", err)
 	}
@@ -607,6 +612,36 @@ func (s *Substrate) AppendCanonical(ctx context.Context, payload []byte, eventHa
 // which reads as catastrophic loss. Refusing is the cheaper failure.
 var ErrNoSequence = errors.New("substrate: stream sequence is zero")
 
+// ensureDuplicatesColumn adds stream_position.duplicates to a database
+// that predates it. Same reasoning as ensurePayloadColumn.
+func ensureDuplicatesColumn(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, `PRAGMA table_info(stream_position)`)
+	if err != nil {
+		return fmt.Errorf("read stream_position schema: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dflt, &pk); err != nil {
+			return fmt.Errorf("scan stream_position schema: %w", err)
+		}
+		if name == "duplicates" {
+			return rows.Err()
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read stream_position schema: %w", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE stream_position ADD COLUMN duplicates INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return fmt.Errorf("add duplicates column: %w", err)
+	}
+	return nil
+}
+
 // Position is what the archive durably knows about its own progress.
 //
 // The four numbers exist to make one subtraction possible:
@@ -632,6 +667,17 @@ type Position struct {
 	HighestSeq uint64
 	Committed  int64
 	Rejected   int64
+
+	// Duplicates are deliveries whose record was ALREADY in the
+	// substrate — at-least-once delivery working, not loss.
+	//
+	// They are counted apart from Committed because folding them in
+	// makes the subtraction below go negative. ADR-0008 had Committed
+	// counting commit OPERATIONS, which double-counts a redelivered
+	// sequence and left `unaccounted` reading -70 under a broker
+	// disruption. A loss figure that can be negative is not a loss
+	// figure. See ADR-0010.
+	Duplicates int64
 }
 
 // Span is the number of stream sequences this archive has walked past.
@@ -643,20 +689,39 @@ func (p Position) Span() int64 {
 }
 
 // Unaccounted is the span minus everything the archive can explain.
-func (p Position) Unaccounted() int64 { return p.Span() - p.Committed - p.Rejected }
+//
+// DUPLICATES ARE NOT SUBTRACTED, and getting that wrong in either
+// direction produces a negative number:
+//
+//   - ADR-0008 had Committed counting commit OPERATIONS, so a
+//     redelivered sequence was counted twice and Committed could exceed
+//     the span. The Phase 4 gate observed -70 during a broker
+//     disruption.
+//   - Subtracting Duplicates as well over-corrects: a redelivery adds
+//     no sequence to the span, because the sequence it carries was
+//     already accounted for by the original commit. Twenty redeliveries
+//     of one record produced -19 in a test written for the first fix.
+//
+// Committed now counts DISTINCT records, so each sequence is explained
+// exactly once and Duplicates is reported beside the subtraction rather
+// than inside it.
+func (p Position) Unaccounted() int64 {
+	return p.Span() - p.Committed - p.Rejected
+}
 
 // positionUpsert folds one observation into the single row. MIN and MAX
 // keep first_seq and highest_seq monotonic in their own directions, so
 // out-of-order delivery — which JetStream permits — cannot walk either
 // backwards.
 const positionUpsert = `
-INSERT INTO stream_position (id, first_seq, highest_seq, committed, rejected)
-VALUES (1, ?, ?, ?, ?)
+INSERT INTO stream_position (id, first_seq, highest_seq, committed, rejected, duplicates)
+VALUES (1, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     first_seq   = MIN(first_seq,   excluded.first_seq),
     highest_seq = MAX(highest_seq, excluded.highest_seq),
-    committed   = committed + excluded.committed,
-    rejected    = rejected  + excluded.rejected`
+    committed   = committed  + excluded.committed,
+    rejected    = rejected   + excluded.rejected,
+    duplicates  = duplicates + excluded.duplicates`
 
 // Position reads the durable position. The bool is false when nothing
 // has ever been recorded, which is a fresh archive rather than an
@@ -664,8 +729,9 @@ ON CONFLICT(id) DO UPDATE SET
 func (s *Substrate) Position(ctx context.Context) (Position, bool, error) {
 	var p Position
 	err := s.db.QueryRowContext(ctx,
-		`SELECT first_seq, highest_seq, committed, rejected FROM stream_position WHERE id = 1`).
-		Scan(&p.FirstSeq, &p.HighestSeq, &p.Committed, &p.Rejected)
+		`SELECT first_seq, highest_seq, committed, rejected, duplicates
+		   FROM stream_position WHERE id = 1`).
+		Scan(&p.FirstSeq, &p.HighestSeq, &p.Committed, &p.Rejected, &p.Duplicates)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Position{}, false, nil
 	}
@@ -673,6 +739,46 @@ func (s *Substrate) Position(ctx context.Context) (Position, bool, error) {
 		return Position{}, false, fmt.Errorf("substrate.Position: %w", err)
 	}
 	return p, true, nil
+}
+
+// PositionAndCount reads the durable position and the row count as ONE
+// consistent pair.
+//
+// Reading them with two separate queries looks equivalent and is not.
+// Under load, records commit between the two reads, so the row count
+// includes commits the position read missed and the published pair says
+// the archive holds more rows than it performed commits — which reads as
+// rows appearing from nowhere. It was the Phase 4 gate that surfaced
+// this: 169 104 commits against 169 106 rows, a skew of two records at
+// 2 000 sessions/s.
+//
+// The numbers were never wrong; the SNAPSHOT was. A single read
+// transaction makes the pair describe one instant, which is what a
+// scraper assumes it is getting.
+func (s *Substrate) PositionAndCount(ctx context.Context) (Position, int64, bool, error) {
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return Position{}, 0, false, fmt.Errorf("substrate.PositionAndCount: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var p Position
+	err = tx.QueryRowContext(ctx,
+		`SELECT first_seq, highest_seq, committed, rejected, duplicates
+		   FROM stream_position WHERE id = 1`).
+		Scan(&p.FirstSeq, &p.HighestSeq, &p.Committed, &p.Rejected, &p.Duplicates)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Position{}, 0, false, nil
+	}
+	if err != nil {
+		return Position{}, 0, false, fmt.Errorf("substrate.PositionAndCount: position: %w", err)
+	}
+
+	var rows int64
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM events`).Scan(&rows); err != nil {
+		return Position{}, 0, false, fmt.Errorf("substrate.PositionAndCount: count: %w", err)
+	}
+	return p, rows, true, nil
 }
 
 // AppendCanonicalAt commits a record and advances the position in ONE
@@ -723,17 +829,33 @@ func (s *Substrate) AppendCanonicalAt(ctx context.Context, payload []byte, event
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.ExecContext(ctx,
+	res, err := tx.ExecContext(ctx,
 		`INSERT OR IGNORE INTO events
 		   (event_hash, event_time, message_type, payload_ref, committed_at, payload)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		eventHash[:], eventTime, messageType, payloadRef, committedAt,
 		inlinedOrNil(payload, inline),
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("substrate.AppendCanonicalAt: insert: %w", err)
 	}
 
-	if _, err := tx.ExecContext(ctx, positionUpsert, seq, seq, 1, 0); err != nil {
+	// WAS THIS RECORD ALREADY HERE? INSERT OR IGNORE reports zero rows
+	// affected on a primary-key conflict, which is exactly a delivery of
+	// a record the substrate already holds. Counting it as a commit
+	// inflates `committed` past the number of sequences walked and drives
+	// `unaccounted` negative — which the Phase 4 gate observed at -70
+	// while the broker was being disrupted. See ADR-0010.
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("substrate.AppendCanonicalAt: rows affected: %w", err)
+	}
+	committed, duplicates := int64(1), int64(0)
+	if affected == 0 {
+		committed, duplicates = 0, 1
+	}
+	if _, err := tx.ExecContext(ctx, positionUpsert,
+		seq, seq, committed, 0, duplicates); err != nil {
 		return fmt.Errorf("substrate.AppendCanonicalAt: position: %w", err)
 	}
 
@@ -756,7 +878,7 @@ func (s *Substrate) RecordRejected(ctx context.Context, seq uint64) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 
-	if _, err := s.db.ExecContext(ctx, positionUpsert, seq, seq, 0, 1); err != nil {
+	if _, err := s.db.ExecContext(ctx, positionUpsert, seq, seq, 0, 1, 0); err != nil {
 		return fmt.Errorf("substrate.RecordRejected: %w", err)
 	}
 	return nil

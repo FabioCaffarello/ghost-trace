@@ -270,7 +270,7 @@ func (s *Substrate) txOnly(ctx context.Context, hash [32]byte, seq uint64) error
 		 VALUES (?, ?, ?, ?, ?)`, hash[:], 1, "t", "aa/bb", 2); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, positionUpsert, seq, seq, 1, 0); err != nil {
+	if _, err := tx.ExecContext(ctx, positionUpsert, seq, seq, 1, 0, 0); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -297,7 +297,7 @@ func (s *Substrate) txBatch(ctx context.Context, hashes [][32]byte, firstSeq uin
 	}
 	last := firstSeq + uint64(len(hashes)) - 1
 	if _, err := tx.ExecContext(ctx, positionUpsert,
-		firstSeq, last, int64(len(hashes)), 0); err != nil {
+		firstSeq, last, int64(len(hashes)), 0, 0); err != nil {
 		return err
 	}
 	return tx.Commit()

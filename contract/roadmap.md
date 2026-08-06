@@ -257,6 +257,12 @@ where the concurrency model allows → bound the queue and count the
 refusals → publish the curve with the bend in it rather than a number
 that hides it.
 
+**Met, 2026-08-06,** at 2 000 sessions/s and 4 000 decisions/s. No
+mitigation was needed for the gate itself — but it passes because the
+offered rate is below the archive's 4 133 records/s, not because the
+~4x mismatch with the collector was solved. **The absence of
+backpressure is unchanged and is now the phase's largest open item.**
+
 ### Pull requests
 
 | | | size |
@@ -266,7 +272,7 @@ that hides it.
 | **4.3** | Fix what the curve found — **done, and it turned out not to need the durability trade at all.** Every real payload measured between 60 and 161 bytes against a 1 MiB body cap, so a payload that fits now lives in the `events` row and the blob write disappears for it entirely. SQLite's `synchronous=FULL` covers the payload in the transaction that was already being paid for, so nothing is given up. The running archive went from 1 356 to **4 133 records/s (3.0x)**; the alternatives on the table — `synchronous=NORMAL`, dropping the blob fsync — all bought speed by weakening durability and were not taken. [ADR-0009](decisions/0009-small-payloads-live-in-the-row.md). | M |
 | **4.4** | The archive under a real backlog — promoted from "one of three independent measurements" to **the phase's centre**, because 4.2 found it is the constraint. **Measured, and the hypothesis was wrong in a way worth keeping visible: it named ONE fsync (SQLite) and there are TWO — the blob is fsynced before SQLite is touched. On Linux the two cost the same order of magnitude, so neither alone is the constraint; the named lever, batching the transaction, ceilings at ~1.5x end to end while removing both fsyncs is worth 18x. And the attribution INVERTS between macOS and Linux, so measuring on the development machine would have given the wrong production answer with a 33x margin.** See [the decomposition](../docs/results/archive-commit-cost-2026-08-05.md). | M |
 | **4.5** | The decision path at concurrency, against the 80ms budget it has only ever been measured against while idle. **Measured: it holds to 10 000 decisions/s at p99 6.57ms — twelve times inside the budget — and saturates between 10 000 and 11 000. The published idle floor of 1.393ms understated by 4.7x, which is what a floor does and not enough to change any conclusion drawn from it. The KV read costs about half what the engine itself does and is not what gives way first.** The decision path has the most headroom of the three services; the archive is still the constraint. See [the curve](../docs/results/decision-under-load-2026-08-05.md). | S |
-| **4.6** | **`make load-gate`** — the phase gate as a repeatable target. Refuses when the topology is down, like every other topology check. | M |
+| **4.6** | **`make load-gate`** — the phase gate as a repeatable target, refusing when the topology is down. **Passes**, and found two defects doing it: a skewed metric snapshot (position and row count read as two queries, so the published pair could say the archive held more rows than it performed commits), and — under a mid-run broker disruption — **`unaccounted = -70`**. A loss figure that can be negative is not a loss figure; [ADR-0010](decisions/0010-unaccounted-must-never-be-negative.md) corrects ADR-0008's definition of `committed`. See [the run](../docs/results/load-gate-2026-08-06.md). | M |
 | **4.7** | Republish what moved, and teach `numbers-check` the difference. It already compares the architecture **grid** cell by cell, so a curve is not new to it; session latency is the scalar — one `p99` against a budget, measured idle. The precedent to extend is `check_topology`, which already refuses to compare an in-process decision against one crossing a network hop because they are *different measurements wearing the same name*. An idle p99 and a loaded p99 are exactly that, and nothing currently stops them being compared. | M |
 | **4.8** | An ADR for what the numbers now claim, and the write-up. | S |
 
