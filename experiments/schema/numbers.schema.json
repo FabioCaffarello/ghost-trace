@@ -221,6 +221,10 @@
               "type": "string",
               "description": "The adversary's seed. Tiers 5 and 6 derive every random draw from it, so two manifests are only comparable when this matches \u2014 before R1.16 they were unseeded and tier 6 was observed at 70%, 90%, 80% and 100% across four runs of unchanged code.",
               "minLength": 1
+            },
+            "load": {
+              "type": "string",
+              "description": "What else the system was doing while these numbers were taken. Every run before Phase 4 was 'idle' \u2014 one session at a time, against a machine doing nothing else \u2014 and that was stated but never recorded, so an idle baseline and a run taken under load could be compared with nothing to object. Phase 4 measured the same decision p99 under sustained concurrency and got 4.7x the published figure; both readings are true and they are not the same measurement. numbers_check refuses to compare across conditions and picks a baseline of the same one. Optional: where it is absent, read 'idle'."
             }
           }
         }

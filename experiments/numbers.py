@@ -74,6 +74,22 @@ TOPOLOGY = "composed" if ENGINE_BASE != BASE else "monolith"
 # unreproducible as an unseeded one. Keep in step with RUN_SEED there.
 SEED = os.environ.get("GT_SEED", "ghost-trace-v1")
 
+# LOAD_CONDITION names what else the system was doing while these
+# numbers were taken.
+#
+# Every run this harness has ever produced was "idle": one session at a
+# time, against a machine doing nothing else. That was never hidden —
+# the schema calls the latency a floor — but it was never RECORDED
+# either, so an idle baseline and a run taken under load could be
+# compared and nothing would object. Phase 4 measured the same decision
+# p99 under sustained concurrency and got 4.7x the published figure.
+# Both readings are true. They are not the same measurement.
+#
+# Set GT_LOAD to describe a different condition; numbers_check refuses
+# to compare across conditions, for the same reason it refuses to
+# compare across topologies.
+LOAD_CONDITION = os.environ.get("GT_LOAD", "idle")
+
 # Sample sizes. Bot tiers are free, so they are generous; the browser
 # tiers cost about two seconds a session, so they are not. The defaults
 # are the published run; GT_N_TIER<k> overrides one tier for smoke runs
@@ -153,6 +169,7 @@ def main():
     if EXTERNAL_BASE:
         log(f"targeting external slice at {BASE} (demo page at {DEMO_BASE})")
         log(f"topology: {TOPOLOGY} — decisions answered by {ENGINE_BASE}")
+        log(f"load: {LOAD_CONDITION}")
     else:
         log("building")
         for svc, cmd_path, out in ((SVC, "./cmd/ghost-trace", "ghost-trace"),
@@ -327,6 +344,15 @@ def provenance():
             # which is a different claim about what was under test.
             "mode": "external" if EXTERNAL_BASE else "local",
             "topology": TOPOLOGY,
+            # The load condition. Every number this harness produces is
+            # taken against a system doing nothing else, and the schema
+            # already calls the latency a floor — but nothing recorded
+            # WHICH condition, so an idle baseline and a loaded run could
+            # be compared without anyone noticing. Phase 4 measured the
+            # same p99 under sustained concurrency and got 4.7x this
+            # figure; both are true and they are not the same
+            # measurement.
+            "load": LOAD_CONDITION,
             "base": BASE,
             "demo_base": DEMO_BASE,
             "seed": SEED,

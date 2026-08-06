@@ -85,15 +85,22 @@ def pick_newest(paths, stamp) -> str | None:
     return max(paths, key=stamp)
 
 
-def newest_manifest(want: str) -> str | None:
-    """The newest published manifest OF THE SAME TOPOLOGY.
+def newest_manifest(want: str, want_load: str = "idle") -> str | None:
+    """The newest published manifest of the same TOPOLOGY and the same
+    LOAD CONDITION.
 
     Not simply the newest. Once a composed baseline exists, "newest"
     alone would hand a monolith run a composed one to be judged against,
     and the topology check would then reject a perfectly good run for a
     reason that is the picker's fault rather than the run's.
+
+    Load condition joins the filter for exactly the same reason. The two
+    together are what "the same kind of measurement" means here, and a
+    picker that ignored either would manufacture the failure the checks
+    downstream exist to report.
     """
-    same = [p for p in glob.glob(MANIFEST_GLOB) if topology(load(p)) == want]
+    same = [p for p in glob.glob(MANIFEST_GLOB)
+            if topology(load(p)) == want and load_condition(load(p)) == want_load]
     return pick_newest(same, lambda p: load(p)["provenance"]["generated_at"])
 
 
@@ -139,6 +146,27 @@ def topology(d: dict) -> str:
     """Manifests from before the split recorded no topology; there was
     only one thing they could have been."""
     return (d.get("provenance", {}).get("run", {}) or {}).get("topology", "monolith")
+
+
+def load_condition(d: dict) -> str:
+    """Manifests from before Phase 4 recorded no load condition. Every
+    one of them was taken against an otherwise idle system, which is
+    what the harness has always done."""
+    return (d.get("provenance", {}).get("run", {}) or {}).get("load", "idle")
+
+
+def check_load(base: dict, run: dict, rep: Report) -> None:
+    b, n = load_condition(base), load_condition(run)
+    if b != n:
+        rep.fail(
+            f"this run is {n!r} and the baseline is {b!r}. A latency measured "
+            f"against an idle system and one measured under concurrency are "
+            f"different measurements wearing the same name — Phase 4 got 4.7x "
+            f"the published p99 from the same code — so comparing them would "
+            f"report a load change as a regression, or hide one. Publish a "
+            f"baseline for {n!r} (`make numbers-manifest`) and compare against "
+            f"that."
+        )
 
 
 def check_topology(base: dict, run: dict, rep: Report) -> None:
@@ -229,6 +257,7 @@ def verdict(base: dict, run: dict) -> Report:
     """Every rule CONTRIBUTING states, applied to two runs."""
     rep = Report()
     check_topology(base, run, rep)
+    check_load(base, run, rep)
     check_detection(base, run, rep)
     check_absent_tiers(base, run, rep)
     check_session(base, run, rep)
@@ -383,6 +412,27 @@ def selftest() -> int:
     else:
         print("  ok    no baseline is a failure, not a pass")
 
+    # Load condition, the same shape as topology.
+    idle = {"provenance": {"run": {"load": "idle"}}}
+    loaded = {"provenance": {"run": {"load": "sustained-2000rps"}}}
+
+    r = Report()
+    check_load(idle, loaded, r)
+    if not r.failures:
+        failures += 1
+        print("  FAIL  an idle baseline against a loaded run was not refused")
+    else:
+        print("  ok    an idle baseline against a loaded run is refused")
+
+    r = Report()
+    check_load(idle, {"provenance": {"run": {}}}, r)
+    if r.failures:
+        failures += 1
+        print("  FAIL  a manifest with no load field should be treated as idle")
+    else:
+        print("  ok    a manifest with no load field is treated as idle, which is "
+              "what every run before Phase 4 was")
+
     total = len(cases) + 5
     print(f"\n  {total - failures}/{total} numbers-check cases hold")
     return 1 if failures else 0
@@ -408,9 +458,10 @@ def main() -> int:
     run = load(args.run)
 
     want = topology(run)
-    baseline_path = args.baseline or newest_manifest(want)
+    want_load = load_condition(run)
+    baseline_path = args.baseline or newest_manifest(want, want_load)
     if baseline_path is None:
-        return no_baseline(want)
+        return no_baseline(f"{want} under {want_load} load")
 
     base = load(baseline_path)
 
