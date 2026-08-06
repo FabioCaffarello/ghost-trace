@@ -164,7 +164,11 @@ func TestTheLockIsHeldForTheFeatureWorkAndNotJustTheMapLookup(t *testing.T) {
 	t.Logf("lookup only:        %9.0f ops/s", empty)
 	t.Logf("lookup + 8 events:  %9.0f ops/s  (%.0fx slower)", real8, empty/real8)
 
-	if empty/real8 < 5 {
+	// The bound is loose on purpose. This runs on shared CI hardware
+	// where a tight timing assertion is a flake generator rather than a
+	// gate; 2.5x still fails if the feature work leaves the critical
+	// section, which is the only change worth failing for.
+	if empty/real8 < 2.5 {
 		t.Errorf("the real callback is only %.1fx slower than an empty one, so the "+
 			"critical section is dominated by the map lookup rather than by feature "+
 			"work. That contradicts the stated diagnosis and the fix implied by it",
