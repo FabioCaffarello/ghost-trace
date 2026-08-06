@@ -1,6 +1,7 @@
 package substrate
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -152,29 +153,72 @@ func TestReadBlobAfterAppend(t *testing.T) {
 }
 
 func TestReadBlobHashMismatchOnCorruption(t *testing.T) {
-	ctx := context.Background()
-	s := newTestSubstrate(t)
-	payload, hash := newTestPayload(t)
+	// Both storage paths, because there are now two. A payload that fits
+	// lives in the row and a larger one lives in a file, and the
+	// content-addressing guarantee has to hold identically for each —
+	// otherwise inlining quietly bought speed by dropping the check that
+	// makes the store trustworthy.
+	for _, tc := range []struct {
+		name    string
+		size    int
+		corrupt func(t *testing.T, s *Substrate, hash [32]byte)
+	}{
+		{
+			name: "inline",
+			size: 64,
+			corrupt: func(t *testing.T, s *Substrate, hash [32]byte) {
+				t.Helper()
+				if _, err := s.db.Exec(
+					`UPDATE events SET payload = ? WHERE event_hash = ?`,
+					[]byte("corrupted-content"), hash[:]); err != nil {
+					t.Fatalf("corrupt inline payload: %v", err)
+				}
+			},
+		},
+		{
+			name: "file",
+			size: InlineThreshold + 1,
+			corrupt: func(t *testing.T, s *Substrate, hash [32]byte) {
+				t.Helper()
+				_, finalPath := s.blobPath(hash)
+				if err := os.WriteFile(finalPath, []byte("corrupted-content"), 0o644); err != nil {
+					t.Fatalf("corrupt blob: %v", err)
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			s := newTestSubstrate(t)
 
-	hex := canonical.HashHex(hash)
-	row := EventRow{EventHash: hash, EventTime: 1, MessageType: "x", PayloadRef: hex[:2] + "/" + hex[2:], CommittedAt: 1}
-	if err := s.Append(ctx, row, payload); err != nil {
-		t.Fatalf("Append: %v", err)
-	}
+			payload := make([]byte, tc.size)
+			for i := range payload {
+				payload[i] = byte('a' + i%26)
+			}
+			hash := canonical.Hash(payload)
 
-	// Deliberately corrupt the on-disk blob to exercise §2.1 violation
-	// detection on the read path
-	_, finalPath := s.blobPath(hash)
-	if err := os.WriteFile(finalPath, []byte("corrupted-content"), 0o644); err != nil {
-		t.Fatalf("corrupt blob: %v", err)
-	}
+			hex := canonical.HashHex(hash)
+			row := EventRow{EventHash: hash, EventTime: 1, MessageType: "x",
+				PayloadRef: hex[:2] + "/" + hex[2:], CommittedAt: 1}
+			if err := s.Append(ctx, row, payload); err != nil {
+				t.Fatalf("Append: %v", err)
+			}
 
-	_, err := s.ReadBlob(ctx, hash)
-	if err == nil {
-		t.Fatal("expected ErrHashMismatch after corruption, got nil")
-	}
-	if !errors.Is(err, ErrHashMismatch) {
-		t.Fatalf("expected ErrHashMismatch, got: %v", err)
+			got, err := s.ReadBlob(ctx, hash)
+			if err != nil {
+				t.Fatalf("ReadBlob before corruption: %v", err)
+			}
+			if !bytes.Equal(got, payload) {
+				t.Fatal("ReadBlob returned different bytes than were written")
+			}
+
+			tc.corrupt(t, s, hash)
+
+			if _, err := s.ReadBlob(ctx, hash); !errors.Is(err, ErrHashMismatch) {
+				t.Fatalf("after corrupting the %s payload: %v, want ErrHashMismatch",
+					tc.name, err)
+			}
+		})
 	}
 }
 

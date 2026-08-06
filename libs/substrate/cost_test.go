@@ -70,6 +70,9 @@ func openAt(t *testing.T, dir string, pragmas ...string) *Substrate {
 			t.Fatal(err)
 		}
 	}
+	if err := ensurePayloadColumn(ctx, db); err != nil {
+		t.Fatal(err)
+	}
 	s := &Substrate{db: db, blobDir: blobDir}
 	t.Cleanup(func() { _ = s.Close() })
 	return s
@@ -91,25 +94,53 @@ func rate(d time.Duration, fn func(i int) error) (float64, error) {
 const window = 500 * time.Millisecond
 
 func TestWhereACommitSpendsItsTime(t *testing.T) {
-	// The decomposition. Each variant removes exactly one thing, so the
-	// difference between two rows is that thing's cost and not a guess
-	// about it.
+	// The decomposition, and now also the regression guard for what it
+	// bought.
+	//
+	// Before inlining, every commit paid a blob fsync and then a SQL
+	// fsync, serially, inside one writeMu. The measurement said so:
+	// 250/s overall against 252/s for the blob half alone on macOS,
+	// 938/s against 1 826/s on Linux.
+	//
+	// A payload that fits now skips the blob entirely, so the whole
+	// commit should cost what the SQL half costs — and the assertion
+	// below fails if it ever pays the blob cost again. A payload over
+	// the threshold still takes the old path, and the reciprocal model
+	// still describes THAT one.
 	if testing.Short() {
 		t.Skip("timing measurement")
 	}
 	ctx := context.Background()
 	bodies, hashes := payloads(200_000)
+	big := make([][]byte, 4000)
+	bigHashes := make([][32]byte, len(big))
+	for i := range big {
+		b := make([]byte, InlineThreshold+64)
+		copy(b, fmt.Sprintf("%08d", i))
+		big[i] = b
+		bigHashes[i] = canonical.Hash(b)
+	}
 
-	// 1. What the archive actually does today.
-	full := openAt(t, t.TempDir())
+	// 1. What the archive does today for a real record.
+	inlined := openAt(t, t.TempDir())
 	whole, err := rate(window, func(i int) error {
-		return full.AppendCanonicalAt(ctx, bodies[i], hashes[i], 1, "t", 2, uint64(i+1))
+		return inlined.AppendCanonicalAt(ctx, bodies[i], hashes[i], 1, "t", 2, uint64(i+1))
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// 2. The blob half alone: mkdir, stat, temp file, write, FSYNC,
+	// 2. What it does for a payload too large to inline: blob, then SQL.
+	filed := openAt(t, t.TempDir())
+	wholeBig, err := rate(window, func(i int) error {
+		return filed.AppendCanonicalAt(ctx, big[i%len(big)], bigHashes[i%len(big)],
+			1, "t", 2, uint64(i+1))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. The blob half alone: mkdir, stat, temp file, write, FSYNC,
 	//    rename. No SQLite at all.
 	blobOnly := openAt(t, t.TempDir())
 	blob, err := rate(window, func(i int) error {
@@ -119,7 +150,7 @@ func TestWhereACommitSpendsItsTime(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 3. The SQL half alone: the same transaction, no blob.
+	// 4. The SQL half alone.
 	sqlOnly := openAt(t, t.TempDir())
 	sqlRate, err := rate(window, func(i int) error {
 		return sqlOnly.txOnly(ctx, hashes[i], uint64(i+1))
@@ -128,8 +159,8 @@ func TestWhereACommitSpendsItsTime(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 4. The blob half with the fsync removed. This is the measurement
-	//    that separates "writing a file is slow" from "fsyncing it is".
+	// 5. The blob half with the fsync removed, to separate "writing a
+	//    file is slow" from "fsyncing it is".
 	noSync := openAt(t, t.TempDir())
 	blobNoSync, err := rate(window, func(i int) error {
 		return noSync.writeBlobUnsynced(hashes[i], bodies[i])
@@ -138,38 +169,32 @@ func TestWhereACommitSpendsItsTime(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 5. The SQL half at synchronous=NORMAL, which is the pragma the
-	//    hypothesis pointed at.
-	normal := openAt(t, t.TempDir(),
-		"PRAGMA journal_mode=WAL", "PRAGMA synchronous=NORMAL")
-	sqlNormal, err := rate(window, func(i int) error {
-		return normal.txOnly(ctx, hashes[i], uint64(i+1))
-	})
-	if err != nil {
-		t.Fatal(err)
+	t.Logf("commit, payload inlined      %9.0f /s", whole)
+	t.Logf("commit, payload in a file    %9.0f /s", wholeBig)
+	t.Logf("blob only (with fsync)       %9.0f /s", blob)
+	t.Logf("blob only (no fsync)         %9.0f /s", blobNoSync)
+	t.Logf("sql only (synchronous=FULL)  %9.0f /s", sqlRate)
+	t.Logf("inlining is worth            %9.1fx", whole/wholeBig)
+
+	// THE REGRESSION GUARD. An inlined commit must not be dragged down
+	// to the blob path's rate. Half is generous — the gap measured 74x
+	// on macOS and is expected to be a few-fold on Linux — but it fails
+	// unambiguously if the blob write comes back.
+	if whole < blob*2 {
+		t.Errorf("an inlined commit runs at %.0f/s against %.0f/s for the blob "+
+			"path alone. It is paying the fsync that inlining exists to remove; "+
+			"see ADR-0009", whole, blob)
 	}
 
-	t.Logf("full AppendCanonicalAt      %9.0f /s", whole)
-	t.Logf("blob only (with fsync)      %9.0f /s", blob)
-	t.Logf("blob only (no fsync)        %9.0f /s", blobNoSync)
-	t.Logf("sql only (synchronous=FULL) %9.0f /s", sqlRate)
-	t.Logf("sql only (synchronous=NORMAL)%8.0f /s", sqlNormal)
-
-	// Serial costs add as reciprocals: the halves run one after the
-	// other inside one writeMu, so 1/full should be about 1/blob +
-	// 1/sql. Checking it keeps the decomposition honest — if the parts
-	// do not account for the whole, something else is being paid for.
+	// The file path still runs blob-then-SQL serially, so reciprocals
+	// still add there. If they stop, a third cost has appeared.
 	predicted := 1 / (1/blob + 1/sqlRate)
-	t.Logf("blob and sql together predict %7.0f /s against %.0f measured "+
-		"(%.0f%% accounted)", predicted, whole, 100*whole/predicted)
-
-	// Wide on purpose: shared CI hardware makes a tight band a flake
-	// rather than a gate. This still fails if a third cost appears, or
-	// if the two halves stop being serial.
-	if whole > predicted*2.5 || whole < predicted*0.4 {
-		t.Errorf("the two halves predict %.0f/s but the whole runs at %.0f/s; the "+
-			"decomposition does not account for the commit and the attribution "+
-			"below cannot be trusted", predicted, whole)
+	t.Logf("for the file path, blob and sql predict %.0f /s against %.0f measured",
+		predicted, wholeBig)
+	if wholeBig > predicted*2.5 || wholeBig < predicted*0.4 {
+		t.Errorf("the two halves predict %.0f/s for a file-backed commit but it runs "+
+			"at %.0f/s; the decomposition no longer accounts for that path",
+			predicted, wholeBig)
 	}
 }
 
