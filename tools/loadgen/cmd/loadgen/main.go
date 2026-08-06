@@ -28,21 +28,34 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/tools/loadgen"
 )
 
+// decisionBudgetMs is the figure every published decision latency is
+// measured against. Stated in the architecture contract; reproduced here
+// so a run says what it was aiming at rather than leaving the reader to
+// find out.
+const decisionBudgetMs = 80
+
 func main() {
 	var (
 		collector = flag.String("collector", envOr("GT_COLLECTOR", "http://127.0.0.1:8080"),
 			"collector base URL")
 		scenario = flag.String("scenario", "session",
-			"healthz | session — what one scheduled arrival does")
+			"healthz | session | decision — what one scheduled arrival does")
 		rate = flag.Float64("rate", 50, "arrivals per second (a schedule, not a target)")
 		dur  = flag.Duration("duration", 30*time.Second, "how long to keep issuing")
 		// Workers bounds in-flight requests. Set it well above
 		// rate x expected-latency: if it binds, the run measures this
 		// flag rather than the system, which is why deficit_p99 is
 		// reported and checked below.
-		workers  = flag.Int("workers", 512, "maximum in-flight requests")
-		siteKey  = flag.String("site-key", envOr("GT_SITE_KEY", "pk_demo"), "tenant site key")
-		events   = flag.Int("events", 8, "events per telemetry batch")
+		workers = flag.Int("workers", 512, "maximum in-flight requests")
+		siteKey = flag.String("site-key", envOr("GT_SITE_KEY", "pk_demo"), "tenant site key")
+		events  = flag.Int("events", 8, "events per telemetry batch")
+		engine  = flag.String("engine", envOr("GT_ENGINE", "http://127.0.0.1:8082"),
+			"decision-engine base URL")
+		secret = flag.String("secret-key", envOr("GT_SECRET_KEY", "sk_demo"),
+			"tenant secret key, for the server-to-server endpoints")
+		warm = flag.Int("warm-sessions", 500,
+			"sessions to open and feed before a decision run, so each arrival is "+
+				"one /v1/decisions call against state that already exists")
 		outPath  = flag.String("out", "", "write the JSON report here as well as stdout")
 		deficitB = flag.Float64("max-deficit-ms", 50,
 			"refuse the run if the driver fell further behind its own schedule than this")
@@ -68,6 +81,23 @@ func main() {
 		do = healthz(client, *collector)
 	case "session":
 		do = sessionFlow(client, *collector, *siteKey, *events)
+	case "decision":
+		// ISOLATING THE DECISION. The 80ms budget is stated for a
+		// decision, not for a session's whole first round trip, so an
+		// arrival here must be one /v1/decisions call and nothing else.
+		//
+		// That needs sessions to already exist, with state in them —
+		// deciding about an empty session is a different measurement,
+		// and a cheaper one. They are opened and fed before the clock
+		// starts, and the run then draws from the pool.
+		fmt.Fprintf(os.Stderr, "warming %d sessions...\n", *warm)
+		tokens, err := warmSessions(ctx, client, *collector, *siteKey, *events, *warm)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "warm-up:", err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "  %d sessions ready\n", len(tokens))
+		do = decisionOnly(client, *engine, *secret, tokens)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown scenario %q\n", *scenario)
 		os.Exit(2)
@@ -84,9 +114,10 @@ func main() {
 		loadgen.Report
 		Scenario string `json:"scenario"`
 		Target   string `json:"target"`
+		Budget   int    `json:"budget_ms"`
 		Workers  int    `json:"workers"`
 		Events   int    `json:"events_per_batch"`
-	}{rep, *scenario, *collector, cfg.Workers, *events}
+	}{rep, *scenario, *collector, decisionBudgetMs, cfg.Workers, *events}
 
 	enc, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
@@ -123,6 +154,59 @@ func main() {
 			rep.DeficitP99, *deficitB)
 		os.Exit(1)
 	}
+}
+
+// warmSessions opens sessions and posts one telemetry batch into each,
+// so the decisions measured afterwards run against sessions that have
+// something to decide about.
+func warmSessions(ctx context.Context, c *http.Client, base, siteKey string,
+	events, n int) ([]string, error) {
+
+	tokens := make([]string, 0, n)
+	for range n {
+		st, out := post(ctx, c, base+"/v1/sessions",
+			fmt.Sprintf(`{"site_key":%q,"page":{"path":"/login"},"client":{"pointer":"fine"}}`,
+				siteKey), "")
+		if st != http.StatusOK {
+			return nil, fmt.Errorf("open session: status %v", st)
+		}
+		tok := field(out, "session_token")
+		if tok == "" {
+			return nil, fmt.Errorf("open session: no token in response")
+		}
+		if _, err := send(ctx, c, http.MethodPost, base+"/v1/telemetry",
+			[]byte(telemetry(tok, events)), tok); err != nil {
+			return nil, fmt.Errorf("feed session: %w", err)
+		}
+		tokens = append(tokens, tok)
+	}
+	if len(tokens) == 0 {
+		return nil, fmt.Errorf("no sessions could be opened")
+	}
+	return tokens, nil
+}
+
+// decisionOnly is one /v1/decisions call against a session drawn from
+// the warm pool.
+//
+// Tokens are picked at random rather than in order so the engine is not
+// handed a predictable sequence — a KV read that walks the pool in the
+// same order every time is a different access pattern from a real one,
+// and the KV is the part of this path worth measuring.
+func decisionOnly(c *http.Client, engine, secret string, tokens []string) loadgen.Do {
+	return func(ctx context.Context) (int, error) {
+		tok := tokens[rand.IntN(len(tokens))]
+		return send(ctx, c, http.MethodPost, engine+"/v1/decisions",
+			[]byte(fmt.Sprintf(`{"session_token":%q,"action":"login"}`, tok)), secret)
+	}
+}
+
+func post(ctx context.Context, c *http.Client, url, body, bearer string) (int, string) {
+	st, out, err := sendJSON(ctx, c, http.MethodPost, url, body, bearer)
+	if err != nil {
+		return 0, ""
+	}
+	return st, out
 }
 
 func healthz(c *http.Client, base string) loadgen.Do {
