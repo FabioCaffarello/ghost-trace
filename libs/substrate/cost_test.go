@@ -176,15 +176,22 @@ func TestWhereACommitSpendsItsTime(t *testing.T) {
 	t.Logf("sql only (synchronous=FULL)  %9.0f /s", sqlRate)
 	t.Logf("inlining is worth            %9.1fx", whole/wholeBig)
 
-	// THE REGRESSION GUARD. An inlined commit must not be dragged down
-	// to the blob path's rate. Half is generous — the gap measured 74x
-	// on macOS and is expected to be a few-fold on Linux — but it fails
-	// unambiguously if the blob write comes back.
-	if whole < blob*2 {
-		t.Errorf("an inlined commit runs at %.0f/s against %.0f/s for the blob "+
-			"path alone. It is paying the fsync that inlining exists to remove; "+
-			"see ADR-0009", whole, blob)
-	}
+	// NO TIMING ASSERTION ON THE INLINE PATH, and the reason is worth
+	// keeping. This file first guarded the win with `whole > blob*2`,
+	// which passed on two local machines and failed on both CI runners —
+	// not because inlining regressed, but because the runners have a
+	// different cost profile entirely. One measured `sql only` at 524/s
+	// against 1 836/s for the blob half: there, SQLite's fsync is the
+	// expensive one, so an inlined commit is bounded by SQL and can be
+	// legitimately slower than a bare blob write.
+	//
+	// The assertion encoded a relationship between two fsyncs on one
+	// machine and called it a property. What is actually being claimed
+	// is structural — an inlined commit writes no file — and
+	// TestASmallPayloadWritesNoFileAtAll asserts exactly that, on any
+	// hardware, without timing anything.
+	//
+	// These figures are reported, not gated. See ADR-0009.
 
 	// The file path still runs blob-then-SQL serially, so reciprocals
 	// still add there. If they stop, a third cost has appeared.

@@ -71,6 +71,20 @@ NATS, and those costs did not move. PR-4.4 recorded the gap between the
 micro-benchmark and the running service as *bounded, not explained*;
 this narrows it but does not close it.
 
+**The size of the win is hardware-dependent, and CI proved it.** The
+first version of this change guarded the improvement with a timing
+assertion; it passed on two local machines and failed on both GitHub
+runners. Not a regression — a different cost profile. One runner
+measured the SQL half at **524/s against 1 836/s for the blob half**,
+the reverse of the Linux container, and there inlining is worth 1.3×
+rather than 4.7×.
+
+So the claim this ADR makes is **not** "inlining is worth 3×". It is
+that inlining removes one of two fsyncs at no cost to durability. How
+much that is worth depends on which of the two your storage makes
+expensive, and the answer has now been observed to differ across three
+platforms in both directions.
+
 After 180 000 sessions through the new path: 360 000 commits, 360 000
 rows, zero unaccounted, zero skipped, and **zero blob files written**.
 
@@ -103,9 +117,11 @@ rows, zero unaccounted, zero skipped, and **zero blob files written**.
   far above what the system produces and far below what makes a row
   unwieldy. If payload sizes ever approach it, that is a measurement,
   not a guess, and this ADR gets a successor.
-- **`make ci` now guards the win.** `TestWhereACommitSpendsItsTime`
-  fails if an inlined commit is ever dragged back down to the blob
-  path's rate.
+- **The guard is structural, not a timing gate.** An inlined commit
+  writes no file, and `TestASmallPayloadWritesNoFileAtAll` asserts that
+  on any hardware. The timing figures are reported and not gated,
+  because the first attempt to gate them encoded one machine's ratio
+  between two fsyncs and called it a property.
 
 ## What is still open
 
