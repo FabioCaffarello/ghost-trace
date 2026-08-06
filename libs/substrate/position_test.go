@@ -146,35 +146,60 @@ func TestOutOfOrderDeliveryCannotWalkTheBoundsBackwards(t *testing.T) {
 	}
 }
 
-func TestARedeliveredRecordCountsTwiceAndStoresOnce(t *testing.T) {
-	// Committed counts commit OPERATIONS. The same record arriving twice
-	// carries the same stream sequence, dedups to one row, and must
-	// account for its sequence exactly once — counting rows instead would
-	// have made every redelivery look like a vanished record.
+func TestARedeliveredRecordIsADuplicateAndNotASecondCommit(t *testing.T) {
+	// ADR-0010 corrects ADR-0008 here, and the Phase 4 gate is what
+	// forced it. Counting a redelivery as a second commit inflates
+	// `committed` past the number of sequences walked, so the
+	// subtraction that produces `unaccounted` goes NEGATIVE — observed
+	// at -70 while the broker was being disrupted. A loss figure that
+	// can be negative is not a loss figure.
 	s := open(t, t.TempDir())
 	commit(t, s, "same", 1)
-	commit(t, s, "same", 1)
+	commit(t, s, "same", 1) // redelivered: same sequence, same content
 	commit(t, s, "other", 2)
 
 	p := position(t, s)
 	if p.Span() != 2 {
 		t.Errorf("span = %d, want 2", p.Span())
 	}
-	if p.Committed != 3 {
-		t.Errorf("committed = %d, want 3 commit operations", p.Committed)
+	if p.Committed != 2 {
+		t.Errorf("committed = %d, want 2 distinct records", p.Committed)
+	}
+	if p.Duplicates != 1 {
+		t.Errorf("duplicates = %d, want 1 redelivery", p.Duplicates)
+	}
+	if p.Unaccounted() != 0 {
+		t.Errorf("unaccounted = %d, want 0 — a duplicate explains its sequence, "+
+			"and leaving it out of the subtraction is what made this negative",
+			p.Unaccounted())
 	}
 
 	rows, err := s.Count(context.Background())
 	if err != nil {
 		t.Fatalf("count: %v", err)
 	}
-	if rows != 2 {
-		t.Errorf("rows = %d, want 2 — content addressing collapses the duplicate", rows)
+	if rows != 2 || p.Committed != rows {
+		t.Errorf("rows = %d, committed = %d; they must agree now that a duplicate "+
+			"is counted apart", rows, p.Committed)
 	}
-	// The difference is the duplicate volume, and it is informative
-	// rather than a discrepancy.
-	if p.Committed-rows != 1 {
-		t.Errorf("committed - rows = %d, want 1 duplicate", p.Committed-rows)
+}
+
+func TestUnaccountedCannotGoNegativeUnderHeavyRedelivery(t *testing.T) {
+	// The property, stated directly. Whatever the delivery pattern,
+	// a figure that reports loss must never report less than none.
+	s := open(t, t.TempDir())
+	for range 20 {
+		commit(t, s, "repeated", 1)
+	}
+	commit(t, s, "second", 2)
+
+	p := position(t, s)
+	if p.Unaccounted() < 0 {
+		t.Errorf("unaccounted = %d after 20 redeliveries; negative loss is not a "+
+			"reading, it is a broken model", p.Unaccounted())
+	}
+	if p.Duplicates != 19 {
+		t.Errorf("duplicates = %d, want 19", p.Duplicates)
 	}
 }
 

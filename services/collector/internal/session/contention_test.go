@@ -2,6 +2,7 @@ package session_test
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 	"sync"
 	"testing"
@@ -97,6 +98,26 @@ func newStore(t *testing.T, sessions int) (*session.Store, []string) {
 	return store, tokens
 }
 
+// measuring reports whether timing measurements should run.
+//
+// THEY DO NOT RUN IN `make ci`, and the reason was learned twice in one
+// pull request. A timing assertion on shared CI hardware encodes that
+// hardware: one runner measured an inlined commit at 48/s against
+// 18 244/s locally, and the serial-cost model that holds on every
+// machine with a functioning disk predicted 68/s against 4 measured.
+// Neither reading was a regression. Both were the runner.
+//
+// These produce NUMBERS, which is a different job from guarding a
+// property. The properties are guarded structurally and do run in CI —
+// an inlined commit writes no file; a store keeps its content-addressing
+// check. Run the numbers with `make measure`.
+func measuring(t *testing.T) {
+	t.Helper()
+	if os.Getenv("GT_MEASURE") == "" {
+		t.Skip("timing measurement; set GT_MEASURE=1 or run `make measure`")
+	}
+}
+
 func TestTelemetryIngestDoesNotScaleWithCores(t *testing.T) {
 	// THE prediction, on record in contract/roadmap.md before it was
 	// taken: telemetry throughput is bounded by the work done under one
@@ -106,9 +127,7 @@ func TestTelemetryIngestDoesNotScaleWithCores(t *testing.T) {
 	// precise scaling factor — that would be a machine-dependent number
 	// dressed as a property. It claims the SHAPE: eight workers do not
 	// get anywhere near eight times the work of one.
-	if testing.Short() {
-		t.Skip("timing measurement")
-	}
+	measuring(t)
 	if runtime.NumCPU() < 4 {
 		t.Skipf("needs at least 4 cores, this machine has %d", runtime.NumCPU())
 	}
@@ -148,9 +167,7 @@ func TestTheLockIsHeldForTheFeatureWorkAndNotJustTheMapLookup(t *testing.T) {
 	// Measured by comparing a callback that does the real work against
 	// one that does nothing at all: the ratio is how much of the
 	// critical section is the store's own business.
-	if testing.Short() {
-		t.Skip("timing measurement")
-	}
+	measuring(t)
 	store, tokens := newStore(t, 512)
 	const per = 300 * time.Millisecond
 
@@ -193,9 +210,7 @@ func TestBatchSizeMovesThroughputProportionally(t *testing.T) {
 	// merely do more work — it holds the whole collector for longer.
 	// Batch size becomes a lever any single client can pull on every
 	// other client's latency.
-	if testing.Short() {
-		t.Skip("timing measurement")
-	}
+	measuring(t)
 	store, tokens := newStore(t, 512)
 	const per = 300 * time.Millisecond
 	throughput(store, tokens, 1, 8, 150*time.Millisecond)

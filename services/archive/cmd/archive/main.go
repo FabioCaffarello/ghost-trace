@@ -119,11 +119,10 @@ func main() {
 	onStats := func(st eventstream.Stats, err error) {
 		meter.Observe(st, err)
 
-		pos, ok, perr := sub.Position(ctx)
-		var rows int64
-		if perr == nil {
-			rows, perr = sub.Count(ctx)
-		}
+		// One snapshot, not two reads. Separate queries let records
+		// commit in between, and the published pair then says the
+		// archive holds more rows than it performed commits.
+		pos, rows, ok, perr := sub.PositionAndCount(ctx)
 		meter.ObservePosition(pos, rows, ok, perr)
 		if perr != nil {
 			log.Error("read durable position", "err", perr)
