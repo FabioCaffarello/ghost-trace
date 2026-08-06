@@ -562,6 +562,21 @@ load-sweep: ## Sweep the offered rate and find where the collector bends (needs 
 # The Phase 4 gate. Complementary to loss-audit rather than a superset:
 # that one reconciles under an induced OUTAGE, this one under sustained
 # LOAD, where nothing is down and the archive simply cannot keep up.
+# The timing measurements, which are NOT in `make ci`.
+#
+# They produce numbers rather than guarding properties, and a timing
+# assertion on shared CI hardware encodes that hardware — one runner
+# measured an inlined commit at 48/s against 18 244/s locally. The
+# properties those numbers describe are guarded structurally and do run
+# in ci: an inlined commit writes no file, and a store keeps its
+# content-addressing check whichever way the payload was stored.
+.PHONY: measure
+measure: ## Run the timing measurements (where a commit's time goes, session-store contention)
+	@echo "== where a commit's time goes"
+	@cd libs/substrate && GT_MEASURE=1 go test ./ -run 'CommitSpends|Batching' -v -count=1 		| grep -E '/s|worth|predict|^---'
+	@echo "== session-store contention"
+	@cd services/collector && GT_MEASURE=1 go test ./internal/session/ 		-run 'Cores|LockIsHeld|BatchSize' -v -count=1 | grep -E 'worker|lookup|batch|^---'
+
 .PHONY: load-gate
 load-gate: ## The phase gate — the accounting balances under load and the decision path is inside budget (needs the topology up)
 	@python3 deploy/load-gate.py $(GATE_ARGS)

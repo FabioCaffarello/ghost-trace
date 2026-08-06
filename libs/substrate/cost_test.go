@@ -93,6 +93,26 @@ func rate(d time.Duration, fn func(i int) error) (float64, error) {
 
 const window = 500 * time.Millisecond
 
+// measuring reports whether timing measurements should run.
+//
+// THEY DO NOT RUN IN `make ci`, and the reason was learned twice in one
+// pull request. A timing assertion on shared CI hardware encodes that
+// hardware: one runner measured an inlined commit at 48/s against
+// 18 244/s locally, and the serial-cost model that holds on every
+// machine with a functioning disk predicted 68/s against 4 measured.
+// Neither reading was a regression. Both were the runner.
+//
+// These produce NUMBERS, which is a different job from guarding a
+// property. The properties are guarded structurally and do run in CI —
+// an inlined commit writes no file; a store keeps its content-addressing
+// check. Run the numbers with `make measure`.
+func measuring(t *testing.T) {
+	t.Helper()
+	if os.Getenv("GT_MEASURE") == "" {
+		t.Skip("timing measurement; set GT_MEASURE=1 or run `make measure`")
+	}
+}
+
 func TestWhereACommitSpendsItsTime(t *testing.T) {
 	// The decomposition, and now also the regression guard for what it
 	// bought.
@@ -107,9 +127,7 @@ func TestWhereACommitSpendsItsTime(t *testing.T) {
 	// below fails if it ever pays the blob cost again. A payload over
 	// the threshold still takes the old path, and the reciprocal model
 	// still describes THAT one.
-	if testing.Short() {
-		t.Skip("timing measurement")
-	}
+	measuring(t)
 	ctx := context.Background()
 	bodies, hashes := payloads(200_000)
 	big := make([][]byte, 4000)
@@ -213,9 +231,7 @@ func TestBatchingTheTransactionIsNotTheLever(t *testing.T) {
 	// dominates, batching the SQL side leaves the per-record file work
 	// untouched and buys almost nothing — which is exactly the sort of
 	// well-tested fix for the wrong thing this phase is trying to avoid.
-	if testing.Short() {
-		t.Skip("timing measurement")
-	}
+	measuring(t)
 	ctx := context.Background()
 	_, hashes := payloads(200_000)
 
