@@ -308,6 +308,7 @@ recruiting. It governs every other number and it is `null`.
 | --- | --- | --- |
 | **4.P1** | `experiments/PARTICIPANTS.md` — **done.** The consent script in its own reviewable file, and `disclosure_test.go` comparing it against the vocabulary the SDK emits in both directions: a collected value nobody was told about fails the build, and so does a described channel that does not exist. Two sentences are asserted directly because no enumeration implies them — that key content is never collected, and that the data-governance RFC gating recruitment **has not been written**. Proven red three ways. | S |
 | **4.P2** | The capture protocol end to end, dry-run against synthetic participants, so that recruiting is the only thing left that needs a human. | M |
+| **4.P3** | **The data-governance RFC — drafted, not accepted.** Retention, deletion on request, and custody were three open questions that become promises the moment somebody is handed the script. [RFC-0001](rfcs/0001-human-study-data-governance.md) proposes a 12-month retention ceiling with a 90-day post-publication window, a `make forget P=<code>` deletion target whose implementation is a *precondition* of recruiting rather than a follow-up, and a custody section written as a limitation — no institutional review, so adults only, personal networks only, no secondary use. Accepting it is not a technical act and is deliberately left to a person. | S |
 
 ### What Phase 4 is explicitly not
 
