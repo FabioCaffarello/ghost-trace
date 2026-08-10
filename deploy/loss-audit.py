@@ -51,8 +51,19 @@ import json
 import subprocess
 import sys
 import time
+import pathlib
 import urllib.error
 import urllib.request
+
+# Request bodies come from the harness wire module, never hand-rolled
+# dicts. The loadgen driver drifted exactly that way — pointer events
+# carrying fields the wire does not have, silently dropped (PR-5.0c) —
+# and these scripts were the remaining producers outside the shared
+# modules. contract/fixtures/ is emitted from wire.py, so a body built
+# here is a body the contract harness has already validated and
+# replayed against a real server.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "experiments"))
+import wire  # noqa: E402
 
 COLLECTOR = "http://127.0.0.1:8080"
 ARCHIVE = "http://127.0.0.1:8081"
@@ -169,30 +180,30 @@ def drive(n):
     accepted = {"sessions": 0, "telemetry": 0, "decisions": 0, "outcomes": 0}
     for i in range(n):
         st, out = post(COLLECTOR, "/v1/sessions",
-                       {"site_key": SITE, "page": {"path": "/login"},
-                        "client": {"pointer": "fine"}})
+                       wire.session_body(SITE))
         token = out.get("session_token", "") if st == 200 else ""
         if not token:
             continue
         accepted["sessions"] += 1
 
         st, _ = post(COLLECTOR, "/v1/telemetry",
-                     {"session_token": token, "seq": 1, "sent_at_ms": 900,
-                      "page": {"path": "/login"},
-                      "events": [{"type": "key", "t": 100 + i, "phase": "down",
-                                  "class": "alpha", "target": "f"}]}, bearer=token)
+                     wire.telemetry_body(
+                         session_token=token, seq=1, sent_at_ms=900,
+                         events=[wire.key_event(t=100 + i, phase="down",
+                                                key_class="alpha", target="f")]),
+                     bearer=token)
         if st == 202:
             accepted["telemetry"] += 1
 
         st, dec = post(ENGINE, "/v1/decisions",
-                       {"session_token": token, "action": "login"}, bearer=SECRET)
+                       wire.decision_body(token), bearer=SECRET)
         if st != 200:
             continue
         accepted["decisions"] += 1
 
         st, _ = post(ENGINE, "/v1/outcomes",
-                     {"evaluation_id": dec.get("evaluation_id", ""),
-                      "outcome": "login_success"}, bearer=SECRET)
+                     wire.outcome_body(dec.get("evaluation_id", ""),
+                                        "login_success"), bearer=SECRET)
         if st == 202:
             accepted["outcomes"] += 1
     return accepted

@@ -32,8 +32,19 @@ import json
 import subprocess
 import sys
 import time
+import pathlib
 import urllib.error
 import urllib.request
+
+# Request bodies come from the harness wire module, never hand-rolled
+# dicts. The loadgen driver drifted exactly that way — pointer events
+# carrying fields the wire does not have, silently dropped (PR-5.0c) —
+# and these scripts were the remaining producers outside the shared
+# modules. contract/fixtures/ is emitted from wire.py, so a body built
+# here is a body the contract harness has already validated and
+# replayed against a real server.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "experiments"))
+import wire  # noqa: E402
 
 COLLECTOR = "http://127.0.0.1:8080"
 ENGINE = "http://127.0.0.1:8082"
@@ -76,17 +87,17 @@ def post(base, path, body, bearer=None, timeout=30):
 
 def session():
     st, _, out = post(COLLECTOR, "/v1/sessions",
-                      {"site_key": SITE, "page": {"path": "/login"},
-                       "client": {"pointer": "fine"}})
+                      wire.session_body(SITE))
     return out.get("session_token", "") if st == 200 else ""
 
 
 def telemetry(token, seq=1):
     return post(COLLECTOR, "/v1/telemetry",
-                {"session_token": token, "seq": seq, "sent_at_ms": 900,
-                 "page": {"path": "/login"},
-                 "events": [{"type": "key", "t": 100, "phase": "down",
-                             "class": "alpha", "target": "f"}]}, bearer=token)
+                wire.telemetry_body(
+                    session_token=token, seq=seq, sent_at_ms=900,
+                    events=[wire.key_event(t=100, phase="down",
+                                           key_class="alpha", target="f")]),
+                bearer=token)
 
 
 def compose(*args):
@@ -134,11 +145,11 @@ def scenario_archive_down(f: Failures) -> None:
         st, _, _ = telemetry(token)
         f.check(st == 202, f"telemetry is accepted ({st})")
         st, _, dec = post(ENGINE, "/v1/decisions",
-                          {"session_token": token, "action": "login"}, bearer=SECRET)
+                          wire.decision_body(token), bearer=SECRET)
         f.check(st == 200, f"the engine decides ({st})")
         st, _, _ = post(ENGINE, "/v1/outcomes",
-                        {"evaluation_id": dec.get("evaluation_id", "ev_x"),
-                         "outcome": "login_success"}, bearer=SECRET)
+                        wire.outcome_body(dec.get("evaluation_id", "ev_x"),
+                                           "login_success"), bearer=SECRET)
         f.check(st == 202, f"an outcome is accepted — the stream holds it ({st})")
 
         pending_while_down = stream_pending()
@@ -168,13 +179,13 @@ def scenario_engine_down(f: Failures) -> None:
         f.check(st == 202, f"telemetry is still accepted ({st})")
 
         st, _, _ = post(ENGINE, "/v1/decisions",
-                        {"session_token": token, "action": "login"}, bearer=SECRET, timeout=5)
+                        wire.decision_body(token), bearer=SECRET, timeout=5)
         f.check(st == UNREACHABLE, f"the engine itself is gone ({st})")
 
         # The all-in-one binary mounts the same package over its own
         # session store, which is the rollback the phase gate may need.
         st, _, _ = post(COLLECTOR, "/v1/decisions",
-                        {"session_token": token, "action": "login"}, bearer=SECRET)
+                        wire.decision_body(token), bearer=SECRET)
         f.check(st == 200, f"the collector still answers a decision ({st})")
 
         st, _, out = post(DEMO, "/demo/login", {"session_token": token, "username": "alice"})
@@ -190,9 +201,7 @@ def scenario_broker_down(f: Failures) -> None:
     print("\n== the broker is the only durable store (ADR-0006) ==")
     compose("stop", "nats")
     try:
-        st, dt, out = post(COLLECTOR, "/v1/sessions",
-                           {"site_key": SITE, "page": {"path": "/login"},
-                            "client": {"pointer": "fine"}})
+        st, dt, out = post(COLLECTOR, "/v1/sessions", wire.session_body(SITE))
         f.check(st == 200, f"a session still opens ({st})")
         f.check(dt < SESSIONS_BUDGET_S,
                 f"...and does not stall on the broker ({dt:.2f}s < {SESSIONS_BUDGET_S}s)")
@@ -204,17 +213,17 @@ def scenario_broker_down(f: Failures) -> None:
                 f"...and does not stall on the broker ({dt:.2f}s < {TELEMETRY_BUDGET_S}s)")
 
         st, _, _ = post(COLLECTOR, "/v1/decisions",
-                        {"session_token": token, "action": "login"}, bearer=SECRET)
+                        wire.decision_body(token), bearer=SECRET)
         f.check(st == 200, f"the collector decides from memory ({st})")
 
         st, _, _ = post(COLLECTOR, "/v1/outcomes",
-                        {"evaluation_id": "ev_killtest", "outcome": "login_success"},
+                        wire.outcome_body("ev_killtest", "login_success"),
                         bearer=SECRET)
         f.check(st in (500, 503),
                 f"an outcome REFUSES rather than lying about durability ({st})")
 
         st, _, _ = post(ENGINE, "/v1/decisions",
-                        {"session_token": token, "action": "login"}, bearer=SECRET)
+                        wire.decision_body(token), bearer=SECRET)
         f.check(st == 500,
                 f"a broken snapshot store is an error, not a cold start ({st}) — "
                 f"scoring it innocent would fail open at the moment evidence stops")

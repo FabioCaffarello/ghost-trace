@@ -12,11 +12,15 @@
  */
 import {
   decisionBody,
+  focusEvent,
+  formEvent,
   keyEvent,
   outcomeBody,
   pointerEvent,
+  scrollEvent,
   sessionBody,
   telemetryBody,
+  visibilityEvent,
 } from "./wire.js";
 
 const TOKEN = "st_AufHcXG3MEt9x5F3hzVf03ZS";
@@ -53,6 +57,23 @@ const fixtures = {
     seq: 1,
     sentAtMs: 4200,
     events: [pointer, ...keys],
+  }),
+
+  // One of every family, in one batch — so no event type the SDK can
+  // emit is without a fixture. `form`/`injected` is here on purpose:
+  // the policy's strongest signal was the one with no contract test.
+  telemetry_all_families: telemetryBody({
+    sessionToken: TOKEN,
+    seq: 2,
+    sentAtMs: 5100,
+    events: [
+      pointer,
+      keys[0],
+      scrollEvent({ t: 1600, dy: 240 }),
+      focusEvent({ t: 1700, state: "focus", target: "f_1" }),
+      visibilityEvent({ t: 1800, state: "hidden" }),
+      formEvent({ t: 1900, action: "injected", target: "f_1" }),
+    ],
   }),
 
   decisions: decisionBody({ sessionToken: TOKEN, subjectId: "user_8f21" }),

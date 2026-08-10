@@ -83,6 +83,34 @@ export function keyEvent({ t, phase, keyClass, target }) {
   return { type: "key", t, phase, class: keyClass, target };
 }
 
+/**
+ * A scroll event. `mode` separates a real wheel gesture from the page
+ * scrolling itself — a programmatic scroll is one of the stronger
+ * automation signals on its own.
+ */
+export function scrollEvent({ t, dy, mode = "wheel" }) {
+  return { type: "scroll", t, dy, mode };
+}
+
+/** A focus event — focus or blur, with the hashed field identity. */
+export function focusEvent({ t, state, target }) {
+  return { type: "focus", t, state, target };
+}
+
+/** A visibility event — visible or hidden, from document.visibilityState. */
+export function visibilityEvent({ t, state }) {
+  return { type: "visibility", t, state };
+}
+
+/**
+ * A form event. `injected` is the strongest single bot signal — a
+ * field value that appeared with no keystroke and no paste behind it —
+ * and `paste` exists so a human pasting is NOT mistaken for one.
+ */
+export function formEvent({ t, action, target }) {
+  return { type: "form", t, action, target };
+}
+
 /** POST /v1/decisions */
 export function decisionBody({ sessionToken, action = "login", subjectId = "harness" } = {}) {
   return {
