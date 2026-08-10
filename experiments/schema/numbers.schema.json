@@ -218,9 +218,16 @@
               }
             },
             "seed": {
-              "type": "string",
-              "description": "The adversary's seed. Tiers 5 and 6 derive every random draw from it, so two manifests are only comparable when this matches \u2014 before R1.16 they were unseeded and tier 6 was observed at 70%, 90%, 80% and 100% across four runs of unchanged code.",
-              "minLength": 1
+              "description": "The adversary's seed. Tiers 5 and 6 derive every random draw from it, so two manifests are only comparable when this matches \u2014 before R1.16 they were unseeded and tier 6 was observed at 70%, 90%, 80% and 100% across four runs of unchanged code. Null means the run PREDATES seeding: a historical record whose adversary nobody can replay, kept because deleting history is worse \u2014 but numbers_check refuses such a manifest as a baseline, and numbers.py always writes a real seed, so null can only describe the past.",
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "minLength": 1
+                }
+              ]
             },
             "load": {
               "type": "string",

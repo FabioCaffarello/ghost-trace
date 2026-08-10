@@ -158,7 +158,14 @@ def main() -> int:
 
     f = Failures()
     before = metrics(COLLECTOR)
-    drops_before = one(before, "ghosttrace_records_dropped_total") or 0.0
+    # Absent stays absent — the rule one()'s own docstring states, and
+    # this file violated it here: `or 0.0` read a missing drop counter
+    # as a perfect zero, so a collector whose lossmeter never came up
+    # would have passed the "nothing was dropped" claim vacuously.
+    drops_before = one(before, "ghosttrace_records_dropped_total")
+    f.check(drops_before is not None,
+            "the collector publishes its drop counter before the run "
+            "(the series exists at all)")
 
     # ---- ingest under sustained load ----
     print(f"\n== {args.sessions_rate:.0f} sessions/s for {args.duration} ==")
@@ -181,14 +188,19 @@ def main() -> int:
 
     after = metrics(COLLECTOR)
     a = metrics(ARCHIVE)
-    drops = (one(after, "ghosttrace_records_dropped_total") or 0.0) - drops_before
+    drops_after = one(after, "ghosttrace_records_dropped_total")
+    f.check(drops_after is not None,
+            "the collector still publishes its drop counter after the run")
+    drops = (None if drops_before is None or drops_after is None
+             else drops_after - drops_before)
     written = one(after, "ghosttrace_records_written_total")
 
     f.check(written is not None,
             "the collector publishes what it wrote (the series exists at all)")
     f.check(drops == 0,
-            f"nothing was dropped under load ({drops:.0f}); a drop here would be "
-            f"permitted but would have to be counted, and it is")
+            f"nothing was dropped under load "
+            f"({'the counter is absent' if drops is None else f'{drops:.0f}'}); "
+            f"a drop here would be permitted but would have to be counted, and it is")
     f.check(one(a, "ghosttrace_archive_position_unaccounted") == 0,
             "every sequence the archive walked is committed or refused")
     f.check(one(a, "ghosttrace_archive_stream_skipped") == 0,
