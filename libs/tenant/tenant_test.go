@@ -216,3 +216,45 @@ func TestFingerprintCarriesNoSecret(t *testing.T) {
 		t.Error("the fingerprint contains a secret verbatim")
 	}
 }
+
+func TestDemoTenantsAreReported(t *testing.T) {
+	// The shipped credentials authenticate nobody: they are flag
+	// defaults, they are in compose.yml and .env.example, and they are
+	// printed in the README. A process running on them was silent about
+	// it, which is the wrong default for the setting that decides
+	// whether the secret-key endpoints are protected at all.
+	r, err := tenant.New(
+		tenant.Tenant{ID: "t_demo", SiteKey: tenant.DemoSiteKey, SecretKey: tenant.DemoSecretKey},
+		tenant.Tenant{ID: "t_real", SiteKey: "pk_live_x", SecretKey: "sk_live_x"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := r.DemoTenants(); len(got) != 1 || got[0] != "t_demo" {
+		t.Fatalf("DemoTenants() = %v, want [t_demo] — the real tenant beside it "+
+			"must not be reported", got)
+	}
+
+	// Half-demo: a real secret behind the public key the README prints.
+	// Reported too — a site key nobody rotated is still a deployment
+	// running on something the repository ships. (Its own registry:
+	// site keys and secrets are both unique, so the demo pair and a
+	// half-demo tenant cannot coexist.)
+	half, err := tenant.New(
+		tenant.Tenant{ID: "t_half", SiteKey: tenant.DemoSiteKey, SecretKey: "sk_live_y"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := half.DemoTenants(); len(got) != 1 || got[0] != "t_half" {
+		t.Fatalf("DemoTenants() = %v, want [t_half]", got)
+	}
+
+	clean, err := tenant.New(tenant.Tenant{ID: "t_real", SiteKey: "pk_live", SecretKey: "sk_live"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := clean.DemoTenants(); len(n) != 0 {
+		t.Errorf("a registry with no demo credential reported %v; a warning that "+
+			"fires on real keys is a warning people learn to ignore", n)
+	}
+}

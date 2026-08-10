@@ -31,6 +31,7 @@ import (
 
 	"github.com/FabioCaffarello/ghost-trace/libs/metrics"
 	"github.com/FabioCaffarello/ghost-trace/libs/middleware"
+	"github.com/FabioCaffarello/ghost-trace/libs/tenant"
 	"github.com/FabioCaffarello/ghost-trace/services/demo-web/internal/web"
 )
 
@@ -73,6 +74,17 @@ func run() error {
 	engine := *engineBase
 	if engine == "" {
 		engine = *apiBase
+	}
+
+	// The shipped credentials authenticate nobody: they are flag
+	// defaults, they are in compose.yml, and the README prints them.
+	// This service holds no registry — it is a customer, not a tenant —
+	// so it compares against the same constants the registry does.
+	// A warning, not a refusal: the demo is meant to run on them.
+	if *secretKey == tenant.DemoSecretKey || *siteKey == tenant.DemoSiteKey {
+		log.Warn("running on the credentials this repository ships; the decision "+
+			"call this service makes is one anyone who has read the source can make",
+			"fix", "-site-key/-secret-key")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
