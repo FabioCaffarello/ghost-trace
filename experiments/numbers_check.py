@@ -23,6 +23,10 @@ WHAT IT REFUSES TO CALL A PASS
   - a detection rate outside the baseline's interval, in EITHER
     direction. A detector that suddenly catches more is as much a
     change to explain as one that catches less.
+  - a baseline with no adversary seed. Before seeding, tier 6 measured
+    70%, 90%, 80% and 100% from unchanged code; an adversary nobody can
+    replay cannot anchor a comparison, and printing "(none recorded)"
+    next to the verdict was disclosure, not refusal.
 
 Both of the first two are the same rule the repository states twice:
 absence is never zero.
@@ -165,6 +169,14 @@ def load_condition(d: dict) -> str:
     one of them was taken against an otherwise idle system, which is
     what the harness has always done."""
     return (d.get("provenance", {}).get("run", {}) or {}).get("load", "idle")
+
+
+def unseeded(base: dict) -> bool:
+    """A baseline whose adversary cannot be replayed.
+
+    The pre-seeding manifest carries `seed: null` — kept as history,
+    never usable as an anchor. Pure so the selftest can hold it."""
+    return not (base.get("provenance", {}).get("run", {}) or {}).get("seed")
 
 
 def check_load(base: dict, run: dict, rep: Report) -> None:
@@ -558,7 +570,19 @@ def selftest() -> int:
     else:
         print("  ok    p99 exactly at budget passes; over it does not")
 
-    total = len(cases) + 6
+    # An unreplayable adversary is not an anchor — null, empty and
+    # missing all read as unseeded; a real seed does not.
+    seedless = _baseline()
+    seedless["provenance"]["run"]["seed"] = None
+    missing = _baseline()
+    del missing["provenance"]["run"]["seed"]
+    if unseeded(seedless) and unseeded(missing) and not unseeded(_baseline()):
+        print("  ok    a baseline with no adversary seed is refused as an anchor")
+    else:
+        failures += 1
+        print("  FAIL  an unseeded baseline was accepted as an anchor")
+
+    total = len(cases) + 7
     print(f"\n  {total - failures}/{total} numbers-check cases hold")
     return 1 if failures else 0
 
@@ -589,6 +613,16 @@ def main() -> int:
         return no_baseline(f"{want} under {want_load} load")
 
     base = load(baseline_path)
+
+    if unseeded(base):
+        print(f"numbers-check: the baseline "
+              f"{os.path.relpath(baseline_path, ROOT)} records no adversary "
+              f"seed — it predates seeding, when tier 6 measured 70%, 90%, "
+              f"80% and 100% from unchanged code. An adversary nobody can "
+              f"replay cannot anchor a comparison.", file=sys.stderr)
+        print("fix: compare against a seeded manifest, or publish one with "
+              "`make numbers-manifest`", file=sys.stderr)
+        return 1
 
     bmaj = str(base.get("schema_version", "")).split(".")[0]
     rmaj = str(run.get("schema_version", "")).split(".")[0]
