@@ -4,6 +4,14 @@
 · **Topology** compose `core` profile, Docker Desktop on macOS, 10 cores
 · **Driver** `tools/loadgen`, open-loop
 
+> **Correction, 2026-08-10 (PR-5.0c).** The warm-up sessions behind this
+> run were fed pointer events the wire does not recognise, so the
+> session state the engine decided against was thinner than a real
+> session's. The decision path itself (KV read + judgement) was
+> exercised as described; the headroom figures were taken against
+> lighter snapshots and may read favourable. Re-measurement with the
+> corrected driver is scheduled as Phase 5.6.
+
 The 80ms decision budget has only ever been measured on an idle system,
 against one session. [`latency-gate-2026-08-04.md`](latency-gate-2026-08-04.md)
 reported p99 **1.393ms** and said plainly that it was a floor. This is

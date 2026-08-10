@@ -21,10 +21,10 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
+	"github.com/FabioCaffarello/ghost-trace/libs/wire"
 	"github.com/FabioCaffarello/ghost-trace/tools/loadgen"
 )
 
@@ -164,9 +164,7 @@ func warmSessions(ctx context.Context, c *http.Client, base, siteKey string,
 
 	tokens := make([]string, 0, n)
 	for range n {
-		st, out := post(ctx, c, base+"/v1/sessions",
-			fmt.Sprintf(`{"site_key":%q,"page":{"path":"/login"},"client":{"pointer":"fine"}}`,
-				siteKey), "")
+		st, out := post(ctx, c, base+"/v1/sessions", string(sessionBody(siteKey)), "")
 		if st != http.StatusOK {
 			return nil, fmt.Errorf("open session: status %v", st)
 		}
@@ -175,7 +173,7 @@ func warmSessions(ctx context.Context, c *http.Client, base, siteKey string,
 			return nil, fmt.Errorf("open session: no token in response")
 		}
 		if _, err := send(ctx, c, http.MethodPost, base+"/v1/telemetry",
-			[]byte(telemetry(tok, events)), tok); err != nil {
+			telemetry(tok, events), tok); err != nil {
 			return nil, fmt.Errorf("feed session: %w", err)
 		}
 		tokens = append(tokens, tok)
@@ -196,8 +194,11 @@ func warmSessions(ctx context.Context, c *http.Client, base, siteKey string,
 func decisionOnly(c *http.Client, engine, secret string, tokens []string) loadgen.Do {
 	return func(ctx context.Context) (int, error) {
 		tok := tokens[rand.IntN(len(tokens))]
-		return send(ctx, c, http.MethodPost, engine+"/v1/decisions",
-			[]byte(fmt.Sprintf(`{"session_token":%q,"action":"login"}`, tok)), secret)
+		body, err := json.Marshal(wire.DecisionsRequest{SessionToken: tok, Action: "login"})
+		if err != nil {
+			return 0, err
+		}
+		return send(ctx, c, http.MethodPost, engine+"/v1/decisions", body, secret)
 	}
 }
 
@@ -225,9 +226,8 @@ func healthz(c *http.Client, base string) loadgen.Do {
 // throughput.
 func sessionFlow(c *http.Client, base, siteKey string, events int) loadgen.Do {
 	return func(ctx context.Context) (int, error) {
-		body := fmt.Sprintf(
-			`{"site_key":%q,"page":{"path":"/login"},"client":{"pointer":"fine"}}`, siteKey)
-		status, token, err := sendJSON(ctx, c, http.MethodPost, base+"/v1/sessions", body, "")
+		status, token, err := sendJSON(ctx, c, http.MethodPost, base+"/v1/sessions",
+			string(sessionBody(siteKey)), "")
 		if err != nil {
 			return status, err
 		}
@@ -239,32 +239,76 @@ func sessionFlow(c *http.Client, base, siteKey string, events int) loadgen.Do {
 			return status, fmt.Errorf("no session_token in response")
 		}
 		return send(ctx, c, http.MethodPost, base+"/v1/telemetry",
-			[]byte(telemetry(tok, events)), tok)
+			telemetry(tok, events), tok)
 	}
 }
 
-// telemetry builds a batch. The event times jitter so that every session
-// does not present the collector with byte-identical work — a load test
-// whose payloads are all the same measures a cache it did not mean to
-// build.
-func telemetry(token string, events int) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, `{"session_token":%q,"seq":1,"sent_at_ms":900,`, token)
-	b.WriteString(`"page":{"path":"/login"},"events":[`)
+// sessionBody builds the handshake from the SAME Go types the servers
+// decode. This driver used to hand-roll its JSON with fmt.Sprintf, and
+// paid for it in the worst currency available to a measuring
+// instrument: its pointer events carried `x`/`y` — fields the wire
+// does not have — so the collector silently dropped them, `pts` stayed
+// empty, and every published load curve measured batches doing zero
+// pointer-feature work while looking exactly like batches that did it
+// all. Building from libs/wire makes that drift a compile error.
+func sessionBody(siteKey string) []byte {
+	b, err := json.Marshal(wire.SessionsRequest{
+		SiteKey: siteKey,
+		Page:    wire.PageRef{Path: "/login"},
+		Client: wire.ClientHints{
+			Pointer:  "fine",
+			Viewport: []int{1440, 900},
+		},
+	})
+	if err != nil {
+		panic(err) // a struct literal that cannot marshal is a programming error
+	}
+	return b
+}
+
+// telemetry builds a batch. The event times and pointer paths jitter so
+// that every session does not present the collector with byte-identical
+// work — a load test whose payloads are all the same measures a cache
+// it did not mean to build.
+//
+// Pointer events carry a real polyline in `pts`, sized like the ones
+// the SDK flushes, because the per-event feature update is the work the
+// collector does under the session lock — a batch without it measures
+// a lighter system than the one in production.
+func telemetry(token string, events int) []byte {
+	evs := make([]wire.TelemetryEvent, 0, events)
 	for i := range events {
-		if i > 0 {
-			b.WriteByte(',')
-		}
-		t := 100 + i*17 + rand.IntN(7)
+		t := uint32(100 + i*17 + rand.IntN(7))
 		if i%2 == 0 {
-			fmt.Fprintf(&b, `{"type":"pointer","t":%d,"x":%d,"y":%d}`,
-				t, 300+rand.IntN(200), 200+rand.IntN(120))
+			x := int32(300 + rand.IntN(200))
+			y := int32(200 + rand.IntN(120))
+			pts := make([][3]int32, 6)
+			for j := range pts {
+				var dt int32
+				if j > 0 {
+					x += int32(rand.IntN(9) - 4)
+					y += int32(rand.IntN(9) - 4)
+					dt = int32(45 + rand.IntN(20))
+				}
+				pts[j] = [3]int32{x, y, dt}
+			}
+			evs = append(evs, wire.TelemetryEvent{Type: "pointer", T: t, Src: "mouse", Pts: pts})
 			continue
 		}
-		fmt.Fprintf(&b, `{"type":"key","t":%d,"phase":"down","class":"alpha","target":"f"}`, t)
+		evs = append(evs, wire.TelemetryEvent{
+			Type: "key", T: t, Phase: "down", KeyClass: "alpha", Target: "f"})
 	}
-	b.WriteString(`]}`)
-	return b.String()
+	b, err := json.Marshal(wire.TelemetryBatch{
+		SessionToken: token,
+		Seq:          1,
+		SentAtMs:     900,
+		Page:         wire.TelemetryPage{Path: "/login", Viewport: []int{1440, 900}},
+		Events:       evs,
+	})
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
 
 func send(ctx context.Context, c *http.Client, method, url string, body []byte, bearer string) (int, error) {
