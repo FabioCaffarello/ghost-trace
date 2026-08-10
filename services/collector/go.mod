@@ -44,7 +44,7 @@ require (
 	github.com/FabioCaffarello/ghost-trace/libs/tenant v0.0.0
 	github.com/invopop/jsonschema v0.14.0
 	github.com/prometheus/client_golang v1.24.1
-	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	sigs.k8s.io/yaml v1.6.0
 )
 
