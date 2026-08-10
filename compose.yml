@@ -286,6 +286,18 @@ services:
       GT_DEMO_BASE: http://demo-web-internal:8083
       GT_SITE_KEY: ${GT_SITE_KEY:-pk_demo}
       GT_SECRET_KEY: ${GT_SECRET_KEY:-sk_demo}
+      # The collector here runs with -nats, so an evaluation is
+      # published rather than written to a local substrate. Without
+      # this the manifest would record nothing and numbers-check would
+      # compare a stream-backed decision path against the substrate
+      # baselines — the confound PR-5.0g exists to separate.
+      GT_ARCHIVE: stream
+      # And decisions are answered by the engine, not by the collector.
+      # This was UNSET, so a run of the documented compose command
+      # recorded `topology: monolith` while measuring the composed
+      # deployment: the collector mounts the decision endpoints too, so
+      # nothing failed — the label was simply wrong.
+      GT_ENGINE_BASE: http://decision-engine:8082
     volumes:
       # Results land on the host so numbers.json survives the container.
       - ./experiments/results:/work/experiments/results
@@ -293,6 +305,10 @@ services:
       collector:
         condition: service_healthy
       demo-web-internal:
+        condition: service_healthy
+      # Now that GT_ENGINE_BASE points here, a run that starts before
+      # the engine is ready measures a connection refusal.
+      decision-engine:
         condition: service_healthy
     restart: "no"
 
