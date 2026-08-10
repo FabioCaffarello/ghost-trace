@@ -93,12 +93,25 @@ CREATE TABLE IF NOT EXISTS stream_position (
 // file path still exists for anything larger.
 const InlineThreshold = 16 << 10
 
-// canonicalPragmas — applied at Open. journal_mode=WAL for concurrent-reader
-// + single-writer semantics; synchronous=FULL for §2.1 durability
-// guarantee under power loss.
-var canonicalPragmas = []string{
-	"PRAGMA journal_mode=WAL",
-	"PRAGMA synchronous=FULL",
+// The canonical pragmas ride in the DSN, not in an Exec at Open.
+//
+// They used to be applied with db.ExecContext on the *sql.DB, and that
+// is a trap this file walked into: the pool hands Exec ONE connection,
+// so `synchronous=FULL` landed on exactly one of N — probed at 8
+// pooled connections, the split was {FULL:1, NORMAL:7}. Nothing failed,
+// because modernc.org/sqlite's compiled default is already FULL, which
+// means the §2.1 durability guarantee was being provided by the
+// driver's default and not by this code; a driver upgrade or swap
+// would have dropped it silently. journal_mode=WAL never had the
+// problem — it persists in the database file — which is exactly why
+// the bug was invisible.
+//
+// The `_pragma` DSN form is executed by the driver on EVERY new
+// connection, and TestPragmasApplyToTheWholePool holds it there.
+const canonicalDSNPragmas = "?_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)"
+
+func dsn(dbPath string) string {
+	return "file:" + dbPath + canonicalDSNPragmas
 }
 
 // ErrHashMismatch indicates a §2.1 immutability violation: the recomputed
@@ -130,16 +143,16 @@ func Open(ctx context.Context, dbPath, blobDir string) (*Substrate, error) {
 		return nil, fmt.Errorf("substrate.Open: mkdir blob dir: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open("sqlite", dsn(dbPath))
 	if err != nil {
 		return nil, fmt.Errorf("substrate.Open: sql.Open: %w", err)
 	}
 
-	for _, pragma := range canonicalPragmas {
-		if _, err := db.ExecContext(ctx, pragma); err != nil {
-			_ = db.Close()
-			return nil, fmt.Errorf("substrate.Open: %s: %w", pragma, err)
-		}
+	// sql.Open validates nothing; force one connection now so a bad
+	// path or an unparseable DSN fails here rather than on first use.
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("substrate.Open: ping: %w", err)
 	}
 
 	if _, err := db.ExecContext(ctx, eventsSchemaDDL); err != nil {
