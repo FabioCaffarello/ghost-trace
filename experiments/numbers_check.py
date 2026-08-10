@@ -49,6 +49,18 @@ EPS = 1e-9
 # improvement in another.
 MEMORY_REGRESSION = 0.10
 
+# Numbers 3 and 4 are compared against the baseline with a proportional,
+# TWO-SIDED band. The budget alone is no bar at all: the Phase-4 run
+# moved p99 from 5.525ms to 0.739ms — 7.5x, twelve times inside the
+# budget — and was published as "nothing moved" because nothing compared
+# it. Two-sided because an unexplained improvement is as much a change
+# to explain as a regression: a detector that got faster may be a
+# detector doing less. The committed manifests put run-to-run noise at
+# 5-9% for session latency and 0% for TTCD, so half is generous to
+# noise and still five times smaller than the move that sailed through.
+LATENCY_BAND = 0.50
+TTCD_BAND = 0.50
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_RUN = os.path.join(ROOT, "experiments", "results", "numbers.json")
 MANIFEST_GLOB = os.path.join(ROOT, "docs", "results", "numbers-*.json")
@@ -183,25 +195,76 @@ def check_topology(base: dict, run: dict, rep: Report) -> None:
 
 
 def check_session(base: dict, run: dict, rep: Report) -> None:
-    lat = run["session"]["latency"]
+    b, n = base.get("session"), run.get("session")
+
+    # The schema allows session: null — a run where the measurement did
+    # not happen. That is an ABSENCE, the same rule as a vanished tier,
+    # and before this check existed it was a TypeError on one path and a
+    # silent pass on the other.
+    if n is None:
+        if b is not None:
+            rep.fail(
+                "session: measured in the baseline and null in this run. "
+                "Numbers 3, 4 and 5 did not hold; they vanished — a "
+                "measurement that did not run is not a measurement that "
+                "found nothing."
+            )
+        return
+    if b is None:
+        rep.note("session: measured here and null in the baseline — "
+                 "nothing to compare against")
+
+    lat = n["latency"]
     budget = lat["budget_ms"]
     if lat["p99"] > budget:
         rep.fail(f"p99 decision latency {lat['p99']}ms is over the {budget}ms budget")
 
-    cold = run["session"]["cold_start"]
+    # NUMBER 3 against the BASELINE, not only the budget. This is the
+    # check whose absence let a 7.5x move ship as "nothing moved".
+    if b is not None:
+        for q in ("p50", "p95", "p99"):
+            before, after = b["latency"].get(q), lat.get(q)
+            if not before or after is None:
+                continue
+            drift = abs(after - before) / before
+            if drift > LATENCY_BAND:
+                rep.fail(
+                    f"latency {q}: {after}ms against {before}ms in the baseline — "
+                    f"{drift:.0%} apart, and more than {LATENCY_BAND:.0%} is a "
+                    f"different number, not noise. Inside the budget is not the "
+                    f"same as unmoved."
+                )
+
+    cold = n["cold_start"]
     if not cold.get("never_blocks"):
         rep.fail(
             f"cold start blocks: decisions {cold.get('decisions')}. A first visit "
             f"with no history must never be blocked."
         )
 
+    # NUMBER 4. The medians are the published claim; before this check
+    # they produced at most a note, so 3.7s could become 300s and the
+    # verdict would still read "reproduce".
     for gate in ("challenge", "block"):
-        t = run["session"]["ttcd"].get(gate) or {}
+        t = n["ttcd"].get(gate) or {}
+        bt = (b["ttcd"].get(gate) or {}) if b is not None else {}
+        if bt and not t:
+            rep.fail(f"time-to-confident-decision ({gate}): in the baseline "
+                     f"({bt.get('seconds')}s) and absent from this run")
+            continue
+        if bt.get("seconds") and t.get("seconds") is not None:
+            drift = abs(t["seconds"] - bt["seconds"]) / bt["seconds"]
+            if drift > TTCD_BAND:
+                rep.fail(
+                    f"time-to-confident-decision ({gate}): {t['seconds']}s against "
+                    f"{bt['seconds']}s in the baseline — {drift:.0%} apart, and "
+                    f"more than {TTCD_BAND:.0%} is a different number, not noise"
+                )
         if t.get("of") and t.get("reached", 0) < t["of"]:
+            was = (f" (baseline {bt.get('reached')}/{bt.get('of')})"
+                   if bt else "")
             rep.note(f"time-to-confident-decision ({gate}): reached in "
-                     f"{t['reached']}/{t['of']} sessions "
-                     f"(baseline {base['session']['ttcd'][gate]['reached']}/"
-                     f"{base['session']['ttcd'][gate]['of']})")
+                     f"{t['reached']}/{t['of']} sessions{was}")
 
 
 def check_false_positive_rate(base: dict, run: dict, rep: Report) -> None:
@@ -221,15 +284,37 @@ def cell(row: dict) -> tuple:
 
 
 def check_architecture(base: dict, run: dict, rep: Report) -> None:
+    # The decide_*_ms columns in these rows are deliberately NOT banded.
+    # Between two committed manifests of unchanged code the same cell
+    # measured 0.0005ms and 0.01775ms — 35x apart — because a
+    # sub-microsecond micro-benchmark on a shared machine measures the
+    # machine. Number 6 is bytes_per_session; the timing columns are
+    # the bench's own context, and a guard that cries wolf on every run
+    # teaches people to override it.
     b = {cell(r): r for r in base.get("architecture") or []}
-    for row in run.get("architecture") or []:
-        prev = b.get(cell(row))
+    n = {cell(r): r for r in run.get("architecture") or []}
+
+    if b and not n:
+        rep.fail(
+            f"architecture: measured in the baseline ({len(b)} cells) and "
+            f"absent from this run — the schema allows null, and before this "
+            f"check that null read as a pass. Number 6 did not hold; it "
+            f"vanished."
+        )
+        return
+    for key in sorted(set(b) - set(n)):
+        a, s, d = key
+        rep.fail(f"architecture: {a} at {s} sessions x {d}s is in the baseline "
+                 f"and absent from this run")
+
+    for key in sorted(n):
+        row, prev = n[key], b.get(key)
         if not prev or not prev.get("bytes_per_session"):
             continue
         before, after = prev["bytes_per_session"], row["bytes_per_session"]
         growth = (after - before) / before
         if growth > MEMORY_REGRESSION:
-            a, s, d = cell(row)
+            a, s, d = key
             rep.fail(
                 f"memory: {a} at {s} sessions x {d}s uses {after} bytes/session, "
                 f"up {growth:.0%} from {before} (>{MEMORY_REGRESSION:.0%} is a regression)"
@@ -289,10 +374,10 @@ def _baseline() -> dict:
         "absent_tiers": [],
         "false_positive_rate": None,
         "session": {
-            "latency": {"p99": 5.0, "budget_ms": 80},
+            "latency": {"p50": 2.0, "p95": 4.0, "p99": 5.0, "budget_ms": 80},
             "cold_start": {"never_blocks": True, "decisions": ["allow"]},
-            "ttcd": {"challenge": {"reached": 30, "of": 30},
-                     "block": {"reached": 30, "of": 30}},
+            "ttcd": {"challenge": {"reached": 30, "of": 30, "seconds": 3.7},
+                     "block": {"reached": 30, "of": 30, "seconds": 5.7}},
         },
         "architecture": [{"architecture": "maintained", "sessions": 100,
                           "duration_s": 10, "bytes_per_session": 700}],
@@ -343,11 +428,37 @@ def selftest() -> int:
         "tier1": _tier(8, 10, 0.490, 0.943), "tier9": _tier(5, 5, 0.5, 1.0)}), True))
 
     cases.append(("p99 over budget", _mutate(**{"session.latency":
-                  {"p99": 81.0, "budget_ms": 80}}), False))
-    cases.append(("p99 exactly at budget", _mutate(**{"session.latency":
-                  {"p99": 80.0, "budget_ms": 80}}), True))
+                  {"p50": 2.0, "p95": 4.0, "p99": 81.0, "budget_ms": 80}}), False))
     cases.append(("a cold start that blocks", _mutate(**{"session.cold_start":
                   {"never_blocks": False, "decisions": ["block"]}}), False))
+
+    # NUMBER 3 against the baseline. The exact mutation that shipped:
+    # the Phase-4 run moved p99 from 5.525ms to 0.739ms — 7.5x, well
+    # inside the budget — and the verdict read "the six numbers
+    # reproduce" because only the budget was consulted.
+    cases.append(("a p99 that collapsed inside the budget", _mutate(**{
+        "session.latency": {"p50": 2.0, "p95": 4.0, "p99": 0.66, "budget_ms": 80}}),
+        False))
+    cases.append(("a p99 drifted within the band", _mutate(**{
+        "session.latency": {"p50": 2.0, "p95": 4.0, "p99": 5.4, "budget_ms": 80}}),
+        True))
+
+    # NUMBER 4. 3.7s -> 300s was accepted before the medians were
+    # compared; a note is not a verdict.
+    cases.append(("a TTCD that ballooned", _mutate(**{
+        "session.ttcd": {"challenge": {"reached": 30, "of": 30, "seconds": 300.0},
+                         "block": {"reached": 30, "of": 30, "seconds": 5.7}}}),
+        False))
+
+    # The schema allows both of these nulls; before these checks one
+    # crashed and the other passed silently.
+    cases.append(("a session that is null against a measured baseline",
+                  _mutate(session=None), False))
+    cases.append(("an architecture that is null against a measured baseline",
+                  _mutate(architecture=None), False))
+    cases.append(("an architecture cell that vanished", _mutate(architecture=[
+        {"architecture": "maintained", "sessions": 999, "duration_s": 10,
+         "bytes_per_session": 700}]), False))
 
     cases.append(("memory up 20%", _mutate(architecture=[
         {"architecture": "maintained", "sessions": 100, "duration_s": 10,
@@ -433,7 +544,21 @@ def selftest() -> int:
         print("  ok    a manifest with no load field is treated as idle, which is "
               "what every run before Phase 4 was")
 
-    total = len(cases) + 5
+    # At the budget is not over it. Baseline and run share the value so
+    # the band stays out of the way — the boundary rule and the band
+    # rule are different rules and this case exercises only the first.
+    at_budget = _baseline()
+    at_budget["session"]["latency"] = {"p50": 2.0, "p95": 4.0, "p99": 80.0,
+                                       "budget_ms": 80}
+    r = Report()
+    check_session(at_budget, json.loads(json.dumps(at_budget)), r)
+    if r.failures:
+        failures += 1
+        print("  FAIL  p99 exactly at budget was rejected: " + r.failures[0])
+    else:
+        print("  ok    p99 exactly at budget passes; over it does not")
+
+    total = len(cases) + 6
     print(f"\n  {total - failures}/{total} numbers-check cases hold")
     return 1 if failures else 0
 
@@ -488,9 +613,12 @@ def main() -> int:
         was = base["detection"].get(tier)
         shown = (f"{was['detected']}/{was['n']} -> " if was else "new: ")
         print(f"  {tier:34} {shown}{r['detected']}/{r['n']}")
-    lat = run["session"]["latency"]
-    print(f"  {'p99 decision latency':34} {lat['p99']}ms / {lat['budget_ms']}ms budget")
-    print(f"  {'cold start never blocks':34} {run['session']['cold_start']['never_blocks']}")
+    if run.get("session") is not None:
+        lat = run["session"]["latency"]
+        print(f"  {'p99 decision latency':34} {lat['p99']}ms / {lat['budget_ms']}ms budget")
+        print(f"  {'cold start never blocks':34} {run['session']['cold_start']['never_blocks']}")
+    else:
+        print(f"  {'session':34} not measured (null)")
     print(f"  {'false-positive rate':34} {run.get('false_positive_rate')}")
     print()
 
