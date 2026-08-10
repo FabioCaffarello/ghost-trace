@@ -163,3 +163,50 @@ func TestScrollModesMatchTheSDK(t *testing.T) {
 func TestEventTypesMatchTheSDK(t *testing.T) {
 	assertSameSet(t, "event.type", EventTypes, literalsAssignedTo(sdkSource(t), "type"))
 }
+
+// objectKeys reads the property names of an object literal the SDK
+// builds — `var client = { pointer: ..., touch: ..., ... }`. The keys
+// are identifiers rather than string literals, so none of the helpers
+// above can see them.
+func objectKeys(t *testing.T, src, from string) []string {
+	t.Helper()
+	start := strings.Index(src, from)
+	if start < 0 {
+		t.Fatalf("sdk.js no longer contains %q — this guard reads a shape that moved", from)
+	}
+	rest := src[start:]
+	if end := strings.Index(rest, "};"); end >= 0 {
+		rest = rest[:end]
+	}
+	re := regexp.MustCompile(`(?m)^\s*([a-z_]+):`)
+	seen := map[string]bool{}
+	for _, m := range re.FindAllStringSubmatch(rest, -1) {
+		seen[m[1]] = true
+	}
+	return sortedKeys(seen)
+}
+
+func TestClientFieldsMatchTheSDK(t *testing.T) {
+	// The session handshake's `client` block is collected once per
+	// visit and never again, which made it easy to forget it is
+	// collected at all — the consent script omitted it for four
+	// releases while every event vocabulary was disclosed. This binds
+	// the published list to the SDK; disclosure_test.go binds the
+	// consent script to the published list.
+	assertSameSet(t, "session.client", ClientFields,
+		objectKeys(t, sdkSource(t), "var client = {"))
+}
+
+func TestPageFieldsMatchTheSDK(t *testing.T) {
+	// Inline object — `page: { path: location.pathname }` — so the
+	// window is the braces themselves rather than a `};` terminator.
+	m := regexp.MustCompile(`page:\s*\{([^}]*)\}`).FindStringSubmatch(sdkSource(t))
+	if m == nil {
+		t.Fatal("sdk.js no longer contains a `page: {...}` block — this guard reads a shape that moved")
+	}
+	seen := map[string]bool{}
+	for _, k := range regexp.MustCompile(`([a-z_]+):`).FindAllStringSubmatch(m[1], -1) {
+		seen[k[1]] = true
+	}
+	assertSameSet(t, "session.page", PageFields, sortedKeys(seen))
+}

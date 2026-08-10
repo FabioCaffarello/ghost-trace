@@ -28,18 +28,35 @@ collected fails it too.
 > Specifically:
 >
 > - **pointer** — where the mouse or trackpad moves, and when.
-> - **key** — the *timing* of key presses and releases, and a coarse
->   class for each one. The classes are **alpha** (a letter), **digit**
->   (a number), **whitespace** (space, tab, enter), **nav** (arrows,
->   home, end and similar), **mod** (shift, control, alt, command) and
->   **other**. Which class, and when. **Never the key itself.**
+> - **key** — the *timing* of key presses and releases — the **down**
+>   and the **up**, and a coarse class for each one. The classes are
+>   **alpha** (a letter), **digit** (a number), **whitespace** (space,
+>   tab, enter), **nav** (arrows, home, end and similar), **mod**
+>   (shift, control, alt, command) and **other**. Which class, and
+>   when. **Never the key itself.**
 > - **scroll** — that you scrolled, and whether it came from a real
->   gesture or from the page moving itself.
-> - **focus** — when a field gained or lost focus.
-> - **visibility** — when the page became visible or hidden, which is
->   what happens when you switch tabs.
-> - **form** — that a field was filled by pasting, by autofill, by a
->   submit, or with no typing behind it at all.
+>   **wheel** gesture or was **programmatic** — the page moving itself.
+> - **focus** — when a field gained focus or lost it (a **blur**).
+> - **visibility** — when the page became **visible** or **hidden**,
+>   which is what happens when you switch tabs.
+> - **form** — that a field was filled by **paste**, by **autofill**,
+>   by a **submit**, or **injected**: a value that appeared with no
+>   typing behind it at all.
+>
+> **Once per visit, how your browser is set up** — settings that change
+> how interaction looks, never who you are:
+>
+> - whether your pointing device is precise (`pointer`: **fine**, a
+>   mouse or trackpad; **coarse**, a touchscreen; **none**, neither),
+>   and whether the screen answers **touch**;
+> - the size of the browser window (`viewport`), because a small window
+>   scrolls differently than a large one;
+> - your clock's offset from UTC (`tz_offset`) — the offset only, never
+>   a place name and never your location;
+> - whether you prefer reduced motion (`reduced_motion`), because that
+>   setting changes how a page behaves under your hands;
+> - the **path** of the page you are on — never the full address and
+>   never anything after the `?`.
 >
 > **What is never recorded.**
 >
@@ -102,8 +119,11 @@ This file is the third party to that comparison.
 To add a collected value:
 
 1. Add it to `vocabulary.go` and `sdk.js` — `vocabulary_test.go` fails
-   until both agree.
-2. Describe it in the script above — `disclosure_test.go` fails until
-   it is there.
+   until both agree. The once-per-visit session fields (`ClientFields`,
+   `PageFields`) are vocabularies too: they were the gap once, disclosed
+   nowhere while every event channel was.
+2. Describe it in the script above, **in the section that says what is
+   recorded** — `disclosure_test.go` fails until it is there, and a
+   mention inside "What is never recorded" does not count.
 3. Ask whether the script is still one a person would consent to. That
    part no test can do.

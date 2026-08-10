@@ -64,11 +64,31 @@ func script(t *testing.T, doc string) string {
 	return out
 }
 
+// collected isolates the part of the script that describes what IS
+// recorded — everything before "What is never recorded."
+//
+// The positive-enumeration tests match against this section only. A
+// token appearing solely inside the never-recorded list is a sentence
+// asserting the value is NOT collected, and counting that as
+// disclosure would let a channel named `content` or `value` pass the
+// build undisclosed.
+func collected(t *testing.T, body string) string {
+	t.Helper()
+	marker := "What is never recorded"
+	i := strings.Index(body, marker)
+	if i < 0 {
+		t.Fatalf("the consent script no longer contains %q; the positive/negative "+
+			"split this test relies on has moved, and disclosure can no longer be "+
+			"told apart from denial", marker)
+	}
+	return body[:i]
+}
+
 func TestEveryKeyClassCollectedIsDisclosed(t *testing.T) {
 	// The exact shape of the original finding. A class the SDK can emit
 	// and the script does not name is a thing collected from a person
 	// who was not told about it.
-	body := script(t, participants(t))
+	body := collected(t, script(t, participants(t)))
 	for _, class := range ingest.KeyClasses {
 		if !regexp.MustCompile(`\b` + regexp.QuoteMeta(class) + `\b`).MatchString(body) {
 			t.Errorf("key class %q is collected but does not appear in the consent "+
@@ -79,11 +99,53 @@ func TestEveryKeyClassCollectedIsDisclosed(t *testing.T) {
 }
 
 func TestEveryEventTypeCollectedIsDisclosed(t *testing.T) {
-	body := script(t, participants(t))
+	body := collected(t, script(t, participants(t)))
 	for _, ev := range ingest.EventTypes {
 		if !regexp.MustCompile(`\b` + regexp.QuoteMeta(ev) + `\b`).MatchString(body) {
 			t.Errorf("event type %q is collected but does not appear in the consent "+
 				"script", ev)
+		}
+	}
+}
+
+func TestEveryVocabularyValueCollectedIsDisclosed(t *testing.T) {
+	// The original tests covered two of eight vocabularies, and the gap
+	// was load-bearing: a scroll mode, a form action or a focus state
+	// could have been added, collected, and never told to anyone. Every
+	// exported vocabulary is enumerated now, so growing one grows the
+	// obligation automatically.
+	body := collected(t, script(t, participants(t)))
+	for family, values := range map[string][]string{
+		"key phase":        ingest.KeyPhases,
+		"pointer type":     ingest.PointerTypes,
+		"scroll mode":      ingest.ScrollModes,
+		"focus state":      ingest.FocusStates,
+		"visibility state": ingest.VisibilityStates,
+		"form action":      ingest.FormActions,
+	} {
+		for _, v := range values {
+			if !regexp.MustCompile(`\b` + regexp.QuoteMeta(v) + `\b`).MatchString(body) {
+				t.Errorf("%s %q is collected but does not appear in the consent "+
+					"script. Either describe it in experiments/PARTICIPANTS.md or "+
+					"stop collecting it", family, v)
+			}
+		}
+	}
+}
+
+func TestEverySessionStartFieldCollectedIsDisclosed(t *testing.T) {
+	// The handshake's client block is collected once per visit, which
+	// made it invisible: viewport, timezone offset, touch capability
+	// and reduced-motion preference were collected for four releases
+	// while the script described only the event channels. This is the
+	// audit finding this file exists to prevent, one field over from
+	// where it was prevented.
+	body := collected(t, script(t, participants(t)))
+	for _, field := range append(append([]string{}, ingest.ClientFields...), ingest.PageFields...) {
+		if !regexp.MustCompile(`\b` + regexp.QuoteMeta(field) + `\b`).MatchString(body) {
+			t.Errorf("session-start field %q is collected but does not appear in "+
+				"the consent script. Either describe it in "+
+				"experiments/PARTICIPANTS.md or stop collecting it", field)
 		}
 	}
 }
@@ -97,11 +159,15 @@ func TestTheScriptDoesNotDescribeSomethingUncollected(t *testing.T) {
 	body := script(t, participants(t))
 
 	known := map[string]bool{}
-	for _, v := range ingest.EventTypes {
-		known[v] = true
-	}
-	for _, v := range ingest.KeyClasses {
-		known[v] = true
+	for _, family := range [][]string{
+		ingest.EventTypes, ingest.KeyClasses, ingest.KeyPhases,
+		ingest.PointerTypes, ingest.ScrollModes, ingest.FocusStates,
+		ingest.VisibilityStates, ingest.FormActions,
+		ingest.ClientFields, ingest.PageFields,
+	} {
+		for _, v := range family {
+			known[v] = true
+		}
 	}
 
 	// Words that look like vocabulary values. Only checked against the
@@ -109,6 +175,10 @@ func TestTheScriptDoesNotDescribeSomethingUncollected(t *testing.T) {
 	for _, candidate := range []string{
 		"pointer", "key", "scroll", "focus", "visibility", "form",
 		"alpha", "digit", "nav", "mod", "whitespace", "other",
+		"down", "up", "fine", "coarse", "none", "wheel", "programmatic",
+		"blur", "visible", "hidden", "paste", "autofill", "injected",
+		"submit", "touch", "viewport", "tz_offset", "reduced_motion",
+		"path",
 		// Retired or never-collected values. If one of these ever
 		// appears in the script, something described a channel that
 		// does not exist.
