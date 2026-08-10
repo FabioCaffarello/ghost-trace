@@ -152,10 +152,23 @@ func run() error {
 	// stored would silently poison calibration.
 	archive := eventstream.NewArchive(eventstream.NewPublisher(js), *tenantID)
 
+	// One registry per process: the HTTP series and every domain
+	// counter are exposed together, because two registries behind one
+	// endpoint would need two encoders and would drop whichever the
+	// handler forgot. Built here rather than with the rest of the
+	// observability chain because the decision service counts into it.
+	reg := metrics.New()
+
+	// Until now this service had NO domain metrics at all: it archives
+	// an evaluation on every decision, and a broker outage could lose
+	// every one of them while /metrics looked identical. The collector
+	// has counted its records since Phase 3; this is the same counters,
+	// on the other service that writes.
 	decisions := decision.New(decision.Config{
 		Mode:    *mode,
 		Tenants: registry,
-	}, snapshotsessions.New(snapshots), archive, time.Now, log)
+	}, snapshotsessions.New(snapshots), archive, time.Now, log).
+		WithLossMeter(metrics.NewLoss(reg, decision.Kinds, decision.Reasons))
 
 	mux := http.NewServeMux()
 	decisions.Mount(mux)
@@ -168,11 +181,6 @@ func run() error {
 	// can correlate, recovery so a panic is logged with its id, logging
 	// so the 500 a panic produces still gets its line, metrics innermost
 	// so it measures the handler rather than the logging.
-	// One registry per process: the HTTP series and every domain
-	// counter are exposed together, because two registries behind one
-	// endpoint would need two encoders and would drop whichever the
-	// handler forgot.
-	reg := metrics.New()
 	// Published rather than logged so the two services can be COMPARED
 	// from outside. Two registries that disagree about who exists each
 	// behave correctly alone and wrongly together, and no request fails

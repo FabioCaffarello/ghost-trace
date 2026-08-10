@@ -59,6 +59,22 @@ SITE = "pk_demo"
 SESSIONS_BUDGET_S = 1.5
 TELEMETRY_BUDGET_S = 2.5
 
+# The decision path with the broker down.
+#
+# This budget is new, and it is new because its absence hid a defect for
+# a phase: the checks below asserted the STATUS of a decision during an
+# outage and threw the elapsed time away. /v1/decisions archives an
+# evaluation on the way out, that write went to the broker with the
+# caller's own context, and a JetStream publish with no server waits
+# about five seconds for an ack. The verdict was fail-open; the request
+# was not, on the one path with a caller at a risk moment.
+#
+# 1.5s is deliberately loose. The archive write is bounded at 250ms and
+# the decision itself costs single-digit milliseconds, so this asserts
+# that SOME bound applies rather than measuring the machine — and it is
+# three times smaller than the failure it exists to catch.
+DECISIONS_BUDGET_S = 1.5
+
 UNREACHABLE = "unreachable"
 
 
@@ -212,9 +228,12 @@ def scenario_broker_down(f: Failures) -> None:
         f.check(dt < TELEMETRY_BUDGET_S,
                 f"...and does not stall on the broker ({dt:.2f}s < {TELEMETRY_BUDGET_S}s)")
 
-        st, _, _ = post(COLLECTOR, "/v1/decisions",
+        st, dt, _ = post(COLLECTOR, "/v1/decisions",
                         wire.decision_body(token), bearer=SECRET)
         f.check(st == 200, f"the collector decides from memory ({st})")
+        f.check(dt < DECISIONS_BUDGET_S,
+                f"...and does not stall on the broker while archiving the "
+                f"evaluation ({dt:.2f}s < {DECISIONS_BUDGET_S}s)")
 
         st, _, _ = post(COLLECTOR, "/v1/outcomes",
                         wire.outcome_body("ev_killtest", "login_success"),
@@ -222,11 +241,14 @@ def scenario_broker_down(f: Failures) -> None:
         f.check(st in (500, 503),
                 f"an outcome REFUSES rather than lying about durability ({st})")
 
-        st, _, _ = post(ENGINE, "/v1/decisions",
+        st, dt, _ = post(ENGINE, "/v1/decisions",
                         wire.decision_body(token), bearer=SECRET)
         f.check(st == 500,
                 f"a broken snapshot store is an error, not a cold start ({st}) — "
                 f"scoring it innocent would fail open at the moment evidence stops")
+        f.check(dt < DECISIONS_BUDGET_S,
+                f"...and it says so promptly rather than after the broker's own "
+                f"ack timeout ({dt:.2f}s < {DECISIONS_BUDGET_S}s)")
     finally:
         compose("start", "nats")
         healthy(COLLECTOR)
