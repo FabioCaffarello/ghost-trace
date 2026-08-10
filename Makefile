@@ -614,7 +614,7 @@ experiments-check: ## Syntax-check every tier and run the asserted statistics se
 	@python3 scripts/check-workflows.py
 	@echo "== module-list selftest (asserted)"
 	@python3 scripts/check-modules.py --selftest
-	@echo "== every module is in go.work, GO_MODULES and the CI matrix"
+	@echo "== every module is in go.work, GO_MODULES, the CI matrix and dependabot"
 	@python3 scripts/check-modules.py
 
 # Measuring and CHECKING are one target, because they were two habits

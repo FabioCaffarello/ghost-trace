@@ -13,7 +13,7 @@ require (
 	github.com/FabioCaffarello/ghost-trace/libs/snapshot v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/tenant v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/wire v0.0.0
-	google.golang.org/protobuf v1.36.10
+	google.golang.org/protobuf v1.36.11
 )
 
 replace github.com/FabioCaffarello/ghost-trace/libs/archive => ../archive

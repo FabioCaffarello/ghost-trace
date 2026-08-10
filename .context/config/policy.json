@@ -66,11 +66,10 @@
       "effect": "require_approval",
       "when": {
         "paths": [
-          "services/collector/go.mod",
-          "libs/genproto/go.mod"
+          "**/go.mod"
         ]
       },
-      "reason": "google.golang.org/protobuf is an archive-format pin, not a dependency: canonical bytes are hashed for content-addressed identity, so a bump is an archive-compatibility event. Dependabot is configured to leave it alone."
+      "reason": "google.golang.org/protobuf is an archive-format pin, not a dependency: canonical bytes are hashed for content-addressed identity, so a bump is an archive-compatibility event. Every go.mod is guarded, not two of thirteen — the rule named the module holding the tripwire and the module holding the bindings, while the version that actually shipped was decided by the services, which it did not name. scripts/check-modules.py asserts all declarations agree."
     },
     {
       "id": "ci-and-build-contract",

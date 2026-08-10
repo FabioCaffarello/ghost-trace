@@ -18,8 +18,37 @@
 version: 2
 
 updates:
+  # EVERY Go module, not two of nineteen. Until PR-5.0e this entry was
+  # `directory: /services/collector` plus one for `/libs/genproto`, so
+  # seventeen modules — including every one that speaks to the network:
+  # eventstream (nats.go), archive, decision-engine — received no
+  # security updates at all, and nothing said so. `directories` is a
+  # single ecosystem entry across many paths, which keeps the weekly
+  # volume at one grouped pull request rather than nineteen.
+  #
+  # scripts/check-modules.py asserts this list names every module on
+  # disk, for the same reason it asserts the other three lists do.
   - package-ecosystem: gomod
-    directory: /services/collector
+    directories:
+      - /services/collector
+      - /services/archive
+      - /services/decision-engine
+      - /services/demo-web
+      - /libs/archive
+      - /libs/canonical
+      - /libs/decision
+      - /libs/eventstream
+      - /libs/feature
+      - /libs/genproto
+      - /libs/id
+      - /libs/metrics
+      - /libs/middleware
+      - /libs/policy
+      - /libs/snapshot
+      - /libs/substrate
+      - /libs/tenant
+      - /libs/wire
+      - /tools/loadgen
     schedule:
       interval: weekly
       day: monday
@@ -36,18 +65,10 @@ updates:
       # bump is an archive-compatibility event that needs the golden
       # hash fixture re-examined by a person — never an automatic merge.
       # See libs/canonical.
-      - dependency-name: google.golang.org/protobuf
-
-  - package-ecosystem: gomod
-    directory: /libs/genproto
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: chore
-      include: scope
-    ignore:
+      #
+      # The ignore has to cover every module or it covers none: the pin
+      # arrived anyway once, through modules this file did not list,
+      # and the tripwire went on testing a version nothing shipped.
       - dependency-name: google.golang.org/protobuf
 
   - package-ecosystem: npm
