@@ -62,7 +62,12 @@ func run() error {
 		tenantsFile = flag.String("tenants", os.Getenv("GT_TENANTS"),
 			"JSON registry of tenants (id, site_key, secret_key); empty uses the "+
 				"single-tenant flags below")
-		tenantID    = flag.String("tenant", "t_demo", "tenant id, when -tenants is not given")
+		tenantID = flag.String("tenant", "t_demo",
+			"tenant id for the single-tenant fallback, when -tenants is not "+
+				"given. It names WHO THIS PROCESS SERVES BY DEFAULT and nothing "+
+				"else: until PR-5.7a it was also stamped onto every archived "+
+				"record, so a multi-tenant registry attributed every customer's "+
+				"records to this one. The envelope now comes from the payload.")
 		siteKey     = flag.String("site-key", "pk_demo", "public site key, embedded in the page")
 		secretKey   = flag.String("secret-key", "sk_demo", "secret key for server-to-server decision calls")
 		pointerHz   = flag.Int("pointer-hz", 20, "collect policy: pointer sample rate")
@@ -166,7 +171,7 @@ func run() error {
 		if err := eventstream.EnsureStream(ctx, js); err != nil {
 			return fmt.Errorf("ensure event stream: %w", err)
 		}
-		eventArchive = eventstream.NewArchive(eventstream.NewPublisher(js), *tenantID)
+		eventArchive = eventstream.NewArchive(eventstream.NewPublisher(js))
 		log.Info("event stream is the archive", "nats", *natsURL)
 
 		// Session snapshots: what the decision engine reads instead of
