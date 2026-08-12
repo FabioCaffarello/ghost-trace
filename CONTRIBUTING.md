@@ -56,7 +56,7 @@ bodies they build themselves; none of them loads the demo page or runs
 `sdk.js`. This one drives the path a visitor takes — page, SDK, session,
 telemetry, the snapshot, the host application's server-to-server
 decision, the archive's durable position — with a real browser, and
-either asserts all seven links or fails naming the one that broke. It
+either asserts all eight links or fails naming the one that broke. It
 takes about a minute and needs nothing running first: unlike the gates
 above it brings its own topology up in a compose project of its own, on
 ephemeral ports, so it can run alongside a stack you already have up.
