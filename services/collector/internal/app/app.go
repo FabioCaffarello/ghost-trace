@@ -31,8 +31,17 @@ import (
 // not safe for concurrent mutation; implementations own the locking
 // strategy, callers own keeping the critical section small and copying
 // out by value (the pointer must not escape fn).
+//
+// That rule used to be stated here and broken on the next line: Create
+// returned the *State it had just put in the map. `go test -race`
+// confirms it — a goroutine writing through the returned pointer and one
+// writing through With report a data race on the same session. Nothing
+// in production hit it, because the token has not reached the browser
+// when Create returns, so no telemetry can arrive for that session yet.
+// A rule that holds because of timing elsewhere is not a rule, so Create
+// now returns a value.
 type SessionRepository interface {
-	Create(tenantID, pagePath string, c session.Client) (token string, st *session.State, err error)
+	Create(tenantID, pagePath string, c session.Client) (token string, ident session.Identity, err error)
 	With(token string, fn func(*session.State)) error
 	Sweep() int
 }
