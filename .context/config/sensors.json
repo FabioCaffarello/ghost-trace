@@ -192,6 +192,24 @@
         "tools/loadgen/**"
       ],
       "phase": "V"
+    },
+    {
+      "id": "capture-dryrun",
+      "name": "the capture protocol runs without a human",
+      "description": "Drives synthetic participants through the real two-service capture path and checks three things: the protocol runs at all, every participant produces one labelled row, and the cohort labels (arm, condition, visit) never cross the wire \u2014 only the participant code does, as subject_id. The third is a claim experiments/README.md makes and nothing checked. Governs the ONE published number that is null, so its failure mode is a study that cannot start rather than a number that moves.",
+      "command": "make capture-dryrun",
+      "severity": "high",
+      "blocking": false,
+      "expensive": true,
+      "gated": true,
+      "manual": true,
+      "appliesTo": [
+        "services/demo-web/**",
+        "services/collector/**",
+        "experiments/**",
+        "schemas/**"
+      ],
+      "phase": "V"
     }
   ]
 }
