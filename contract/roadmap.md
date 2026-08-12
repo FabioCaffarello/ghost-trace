@@ -334,3 +334,63 @@ recruiting. It governs every other number and it is `null`.
 - **Per-tenant calibration.** Still sitting behind a refactor of
   `libs/policy`.
 - **Telemetry replay.** Still a stated limitation.
+
+---
+
+## Phase 5 — the system chooses its loss
+
+Phase 4 passed its gate and named what it did not solve: the collector
+accepts around 16 000 records/s and the archive commits 4 133. That gap
+is not a performance problem, it is a **design absence**. Nothing in the
+system decided what happens in it. The stream had no byte ceiling, so
+the surplus accumulated until a disk filled; the best-effort archive
+write on the decision path had no deadline, so a broker outage turned an
+80ms budget into a five-second stall; nothing anywhere told the
+collector that the archive was falling behind.
+
+A system without backpressure does not avoid loss. It **defers the
+choice of which loss** to whichever component gives way first — and that
+component chooses badly, silently, and usually all at once.
+
+### The gate, which blocks the phase
+
+> Under an offered rate the archive **cannot** sustain, the system sheds
+> deliberately rather than collapsing: every shed record is counted and
+> attributed, the decision path stays inside its budget, `unaccounted`
+> stays at zero, and no component fails in a way another component
+> caused.
+
+**Not yet met.** The mechanisms are built and merged; the run that
+measures them is 5.6 and has not been taken.
+
+### Pull requests
+
+| | | size |
+| --- | --- | --- |
+| **5.1** | A deadline on the decision path's archive write. `/v1/decisions` wrote best-effort with **no bound** — with the broker down it stalled about five seconds inside an 80ms budget — and the engine had **zero domain metrics**, so the loss was not merely unbounded but uncounted. `libs/decision` gains the collector's `BestEffortTimeout` and a `LossMeter` port. The kill-test latency assertion added here **found a second unbounded path on its first run**: the engine's snapshot KV read, also five seconds. (#338) | M |
+| **5.2** | The watchtower. The archive was the only service without a `-healthcheck` flag; distroless has no shell, so compose had no healthcheck for it, so CI's topology job left it out of the wait list — **the gate was green with the archive dead**. Prometheus now scrapes all four services (the archive's nineteen series were published and never collected), and [`deploy/observability/alerts.yml`](../deploy/observability/alerts.yml) says out loud what "falling behind" means. (#341) | M |
+| **5.3** | [ADR-0012](decisions/0012-the-stream-is-bounded-by-bytes.md) — the stream is bounded by bytes. `MaxAge` alone means that at the measured surplus the disk fills in hours and NATS and the collector die together. `MaxBytes` is **4 GiB, derived** from ">1h of backlog at 4 133 rec/s × 256 B" — the first number written here was 2 GiB, chosen by taste, and **the new test rejected it at 34 minutes**. Also an owner-binder split: all three services called `CreateOrUpdate`, so the last to start rewrote the limits. (#342) | M |
+| **5.4** | Batch commits in the archive consumer: **2.3× at 8, 3.2× at 128, 3.5× at 512** ([the measurement](../docs/results/batch-commit-cost-2026-08-11.md)). The roadmap's "~1.5× ceiling" from 4.4 measured the **pre-inlining two-fsync path** and was stale — a figure that was correct when written and wrong when quoted. Rejected sequences travel *inside* the batch transaction, because recording them outside would re-record on redelivery, which is ADR-0010 again. (#343) | M |
+| **5.5** | The admission signal. `eventstream.WatchArchive` binds the archive's durable read-only from the collector; above 80% of the retention window the collector sheds and counts it. All the care is in refusing to infer: no reading is **−1, not 0**, a failed poll moves nothing, over 90 seconds is stale, and `MaxAge == 0` yields unknown rather than infinity. (#344) | S |
+| **5.6a** | The gates become visible to the machinery that is supposed to run them. `.context/config/sensors.json` listed eleven sensors and **not one of the four topology gates** — the file said the project's strongest claim-checking machinery did not exist. `make loss-audit` joins CI's topology job. `scripts/check-sensors.py` makes the `.context` README's rule enforceable instead of aspirational, and `deploy/provenance.py` stamps each gate run with the commit **and the image IDs that actually served the requests**, because a topology gate does not measure the working tree. **Its first CI run failed, usefully: the gates pass alone and do not compose.** Running directly after `kill-test`, which restarts three services and returns without waiting for them to settle, `loss-audit` reported four drops and no commit delta in the scenario it calls *an intact topology* — a scene that was not intact. The gate gets a freshly recreated topology rather than looser assertions; "the collector dropped nothing with everything up" is exactly the claim worth keeping strict. | M |
+| **5.6b** | **Not done — needs a Docker daemon.** Re-run `make load-gate` and the load curves with the corrected driver and republish. Everything in 5.4 and 5.5 changes the numbers 4.4 and 4.6 published, and until this runs the roadmap quotes figures from before the batching. | M |
+| **5.7a** | A record says which customer it belongs to, not which flag. The archive envelope's tenant came from the `-tenant` flag while every payload already carried the tenant the request had proven; with `-tenants <file>` they agree only for the one customer matching the flag, so **every other customer's records were archived and subject-routed as `t_demo`** — wrong durable attribution, not just wrong routing. The tenant is now read from the payload, and a payload without one is refused. (#345) | S |
+| **5.7b** | **Not done.** An ADR for the backpressure and shedding model, and the phase write-up. Deliberately left until 5.6b says how much of the 4× gap the batching actually closed — an ADR arguing for a shed threshold is worth less than one that knows what it is shedding against. | S |
+
+**Dependencies.** 5.1 through 5.5 are independent and all merged. 5.6b
+depends on all of them and on a machine that can run the topology.
+5.7b depends on 5.6b.
+
+### What Phase 5 is explicitly not
+
+- **`make load-gate` in CI.** It measures a *rate*, and a rate measured
+  on a shared runner encodes that runner: this repository has already
+  watched a CI machine report an inlined commit at 48/s against
+  18 244/s locally. `loss-audit` is in CI because it asserts
+  **arithmetic** — twenty-five records per scenario, and the books
+  either balance or they do not.
+- **Flow control back to the SDK.** The collector sheds; it does not
+  ask the browser to slow down. That is a wire-contract change and a
+  product decision.
+- **State durability.** Unchanged since Phase 4, and still a map in
+  memory.

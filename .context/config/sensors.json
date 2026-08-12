@@ -4,12 +4,22 @@
   "note": "Every sensor is a make target and nothing else. The Makefile is already the single definition of what CI runs (R1.13); binding sensors to it means humans, CI and agents share one vocabulary, and a gate cannot be strengthened in one place and quietly left behind in the others. If a sensor here would need a command that is not a make target, the target is what is missing.",
   "stack": {
     "primaryLanguage": "go",
-    "languages": ["go", "python", "javascript"],
+    "languages": [
+      "go",
+      "python",
+      "javascript"
+    ],
     "frameworks": [],
-    "buildTools": ["make", "buf", "docker"],
-    "testFrameworks": ["go test"],
+    "buildTools": [
+      "make",
+      "buf",
+      "docker"
+    ],
+    "testFrameworks": [
+      "go test"
+    ],
     "packageManager": "npm",
-    "stackNote": "The bootstrap scan reported typescript as primary and found no Docker and no build tools. It had indexed experiments/ and the browser SDK only — the Go service under services/collector/internal was absent from its map entirely. Corrected by hand rather than preserved: a harness that describes the wrong repository is worse than none."
+    "stackNote": "The bootstrap scan reported typescript as primary and found no Docker and no build tools. It had indexed experiments/ and the browser SDK only \u2014 the Go service under services/collector/internal was absent from its map entirely. Corrected by hand rather than preserved: a harness that describes the wrong repository is worse than none."
   },
   "sensors": [
     {
@@ -33,7 +43,7 @@
     {
       "id": "lint",
       "name": "golangci-lint",
-      "description": "Core defect-class set only (.golangci.yml). Every linter guards a class of bug, not a preference — a config that fires on style teaches people to read red as noise.",
+      "description": "Core defect-class set only (.golangci.yml). Every linter guards a class of bug, not a preference \u2014 a config that fires on style teaches people to read red as noise.",
       "command": "make lint",
       "severity": "critical",
       "blocking": true,
@@ -69,7 +79,7 @@
     {
       "id": "experiments-check",
       "name": "experiment harness syntax and asserted selftests",
-      "description": "py_compile, node --check, the statistics selftest (22 assertions) and the numbers-schema fixture corpus (21 fixtures). No browsers, no network — the part of the harness that is checkable on every push.",
+      "description": "py_compile, node --check, the statistics selftest (22 assertions) and the numbers-schema fixture corpus (21 fixtures). No browsers, no network \u2014 the part of the harness that is checkable on every push.",
       "command": "make experiments-check",
       "severity": "critical",
       "blocking": true,
@@ -96,7 +106,7 @@
     {
       "id": "ci",
       "name": "the whole gate",
-      "description": "Everything CI runs, in the order CI runs it. `make ci` green locally and a green pipeline are the same statement — that equivalence is the reason the Makefile exists.",
+      "description": "Everything CI runs, in the order CI runs it. `make ci` green locally and a green pipeline are the same statement \u2014 that equivalence is the reason the Makefile exists.",
       "command": "make ci",
       "severity": "critical",
       "blocking": true,
@@ -111,7 +121,76 @@
       "blocking": true,
       "expensive": true,
       "gated": true,
-      "appliesTo": ["services/**", "experiments/**", "schemas/**"],
+      "appliesTo": [
+        "services/**",
+        "experiments/**",
+        "schemas/**"
+      ],
+      "phase": "V"
+    },
+    {
+      "id": "topology-shadow",
+      "name": "collector and engine agree",
+      "description": "A/Bs the collector against the decision engine over real HTTP while both are up, and checks the demo host is wired to the engine rather than to itself. The two services mount the SAME decision package (ADR-0005); what differs is where the state came from \u2014 memory versus the KV snapshot \u2014 so a disagreement here is libs/snapshot losing something the judgement needed. Also compares the tenant-registry fingerprint both services publish, because two processes that disagree about who exists each behave correctly alone and wrongly together.",
+      "command": "make shadow-http",
+      "severity": "critical",
+      "blocking": true,
+      "expensive": true,
+      "gated": true,
+      "appliesTo": [
+        "services/**",
+        "libs/**",
+        "compose.yml"
+      ],
+      "phase": "V"
+    },
+    {
+      "id": "topology-degradation",
+      "name": "each service taken away",
+      "description": "Stops each service in turn and checks the promise the contract makes about its absence: the collector decides from memory with the engine gone, the demo host fails OPEN rather than breaking, an outcome REFUSES rather than lying about durability, and \u2014 since PR-5.1 \u2014 a decision comes back promptly rather than after the broker's own ack timeout. That latency assertion found a second unbounded path on its first run.",
+      "command": "make kill-test",
+      "severity": "critical",
+      "blocking": true,
+      "expensive": true,
+      "gated": true,
+      "appliesTo": [
+        "services/**",
+        "libs/**",
+        "compose.yml"
+      ],
+      "phase": "V"
+    },
+    {
+      "id": "loss-accounting",
+      "name": "the books balance under an outage",
+      "description": "The Phase 3 gate: drive traffic, induce a broker and an archive outage, and reconcile against the archive's DURABLE position rather than against process counters. Every record the collector accepted must be in the archive, refused on purpose, or named as unaccounted. Twenty-five records per scenario \u2014 it proves the accounting is sound and says nothing about rate, which is what makes it cheap enough to run automatically.",
+      "command": "make loss-audit",
+      "severity": "critical",
+      "blocking": true,
+      "expensive": true,
+      "gated": true,
+      "appliesTo": [
+        "services/**",
+        "libs/**",
+        "deploy/**"
+      ],
+      "phase": "V"
+    },
+    {
+      "id": "load-gate",
+      "name": "the accounting holds under load",
+      "description": "The Phase 4 gate: sustained concurrency, the accounting still balancing, the decision p99 inside its budget. DELIBERATELY NOT AUTOMATED, unlike the three above. It measures RATES, and a rate measured on a shared runner encodes that runner \u2014 this repository learned that twice in one pull request, when a CI machine reported an inlined commit at 48/s against 18 244/s locally, and moved its timing assertions to `make measure` for exactly this reason. Run it on a machine whose numbers mean something, and commit the manifest.",
+      "command": "make load-gate",
+      "severity": "critical",
+      "blocking": false,
+      "expensive": true,
+      "gated": true,
+      "manual": true,
+      "appliesTo": [
+        "services/**",
+        "libs/**",
+        "tools/loadgen/**"
+      ],
       "phase": "V"
     }
   ]

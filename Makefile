@@ -534,9 +534,17 @@ shadow-http: ## A/B the collector against the engine, and check the demo is wire
 kill-test: ## Take each service away and check the degradation promises (needs the topology up)
 	@python3 deploy/kill-test.py
 
-# The accounting phase's gate. Deliberately outside `make ci`: it stops
-# and starts containers, which a pull-request runner should not be doing
-# to a shared daemon, and it takes minutes rather than seconds.
+# The accounting phase's gate. It now runs in CI's topology job — the
+# comment here used to say it was deliberately outside, on the grounds
+# that it stops and starts containers, and that reason had already been
+# overtaken: `make kill-test` runs in that same job and stops three
+# services by design. The runner's daemon is not shared, and the whole
+# gate is ninety seconds at twenty-five records a scenario.
+#
+# What is NOT in CI is `make load-gate`, and that distinction is the
+# real one. This target asserts ARITHMETIC — the books balance or they
+# do not, and the answer is the same on any machine. load-gate asserts
+# a RATE, which is a fact about the hardware as much as the code.
 #
 # It refuses when the topology is down. A gate that skips is the exact
 # failure this phase was opened to remove — `make shadow` skipping
@@ -619,6 +627,21 @@ experiments-check: ## Syntax-check every tier and run the asserted statistics se
 	@echo "== every module is in go.work, GO_MODULES, the CI matrix and dependabot"
 	@python3 scripts/check-modules.py
 
+# The topology gates are the scripts that decide whether the accounting
+# claims hold, and until PR-5.6a nothing compiled them: a typo in
+# load-gate.py surfaced only when somebody remembered to run it, which
+# for a manual gate can be months.
+.PHONY: gates-check
+gates-check: ## Syntax-check the topology gates and assert their provenance logic
+	@echo "== gate syntax"
+	@python3 -m compileall -q deploy/*.py
+	@echo "== gate-provenance selftest (asserted)"
+	@python3 deploy/provenance.py --selftest
+	@echo "== sensor-registry selftest (asserted)"
+	@python3 scripts/check-sensors.py --selftest
+	@echo "== every sensor is a make target, and every gate is a sensor"
+	@python3 scripts/check-sensors.py
+
 # Measuring and CHECKING are one target, because they were two habits
 # and the second one kept being skipped. The run prints the six numbers
 # either way; the check is what decides whether they reproduced.
@@ -679,7 +702,7 @@ verify: fmt-check vet lint test-race ## Pre-push gate: format, vet, lint, race t
 # ci: the whole gate. `make ci` green locally and a green CI run are the
 # same statement — that equivalence is the reason this file exists.
 .PHONY: ci
-ci: fmt-check tidy-check lint-commit-selftest buf-lint genproto-sync openapi-sync openapi-lint contract-fixtures-sync context-sync-check vet lint test-race coverage experiments-check vuln ## Everything CI runs
+ci: fmt-check tidy-check lint-commit-selftest buf-lint genproto-sync openapi-sync openapi-lint contract-fixtures-sync context-sync-check vet lint test-race coverage experiments-check gates-check vuln ## Everything CI runs
 
 ##@ Housekeeping
 
