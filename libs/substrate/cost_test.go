@@ -44,27 +44,21 @@ func payloads(n int) ([][]byte, [][32]byte) {
 	return bodies, hashes
 }
 
-func openAt(t *testing.T, dir string, pragmas ...string) *Substrate {
+func openAt(t *testing.T, dir string) *Substrate {
 	t.Helper()
 	dbPath := filepath.Join(dir, "events.db")
 	blobDir := filepath.Join(dir, "blobs")
 	if err := os.MkdirAll(blobDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	db, err := sql.Open("sqlite", dbPath)
+	// The production DSN, so what this file measures is what ships —
+	// including the pragmas, which ride the DSN precisely so that every
+	// pooled connection gets them (an Exec configures exactly one).
+	db, err := sql.Open("sqlite", dsn(dbPath))
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	applied := canonicalPragmas
-	if len(pragmas) > 0 {
-		applied = pragmas
-	}
-	for _, p := range applied {
-		if _, err := db.ExecContext(ctx, p); err != nil {
-			t.Fatalf("%s: %v", p, err)
-		}
-	}
 	for _, ddl := range []string{eventsSchemaDDL, positionSchemaDDL} {
 		if _, err := db.ExecContext(ctx, ddl); err != nil {
 			t.Fatal(err)
