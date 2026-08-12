@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/FabioCaffarello/ghost-trace/libs/eventstream"
-	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
 	"github.com/FabioCaffarello/ghost-trace/libs/substrate"
 )
 
@@ -34,8 +33,18 @@ import (
 // walked past and cannot explain is loss, and one it refused on purpose
 // is not.
 type Store interface {
-	AppendCanonicalAt(ctx context.Context, payload []byte, eventHash [32]byte,
-		eventTime int64, messageType string, committedAt int64, seq uint64) error
+	// AppendCanonicalBatch commits what the archive keeps and accounts
+	// for what it refuses, in ONE transaction. Both halves travel
+	// together because a reject recorded outside the transaction would
+	// survive a rollback and be recorded again on redelivery — ADR-0010
+	// arriving through a different door.
+	AppendCanonicalBatch(ctx context.Context, recs []substrate.BatchRecord,
+		rejected []uint64, committedAt int64) error
+
+	// RecordRejected accounts for a single sequence outside any batch.
+	// Only the undecodable path uses it, and only because that message
+	// was TERMINATED rather than naked: it will never be redelivered,
+	// so there is no second recording to guard against.
 	RecordRejected(ctx context.Context, seq uint64) error
 }
 
@@ -132,57 +141,168 @@ func New(store Store, meter Meter, now func() time.Time, log *slog.Logger) *Cons
 // a sequence the archive walked past and did not explain is loss, so a
 // silent return would manufacture loss that never happened — and, worse,
 // would look exactly like the real thing.
-func (c *Consumer) Handle(ctx context.Context, rec *eventsv1.ArchiveRecord,
-	d eventstream.Delivery) error {
+// HandleBatch commits a whole fetch.
+//
+// It partitions rather than loops: records the archive will KEEP become
+// substrate rows, records it REFUSES become accounted sequences, and
+// both go into one transaction. Returning an error naks the entire
+// batch, so nothing here may have written anything durable of its own
+// first — which is why rejections are collected rather than recorded as
+// they are found.
+func (c *Consumer) HandleBatch(ctx context.Context, batch []eventstream.Item) error {
+	recs := make([]substrate.BatchRecord, 0, len(batch))
+	var rejected []uint64
 
-	if d.Sequence == 0 {
-		// No position, no commit. Writing the record while failing to
-		// record where it came from would leave the archive holding
-		// content its own bookkeeping does not know about, which is the
-		// single inconsistency the durable position exists to prevent.
-		// Nothing to account against either, so this is counted in the
-		// process and shouted about rather than written down.
-		c.rejected.Add(1)
-		c.meter.Rejected(ReasonNoSequence)
-		c.log.ErrorContext(ctx, "archive could not place a record in the stream",
-			"why", "the broker returned no sequence for this delivery",
-			"event_hash", rec.GetEventHash(),
-			"message_type", rec.GetMessageType())
-		return nil
+	// Deferred logging: a batch that fails to commit is retried whole,
+	// and shouting about rejections that got rolled back would fill the
+	// log with events that did not happen.
+	var notes []rejectNote
+
+	for _, it := range batch {
+		rec, d := it.Record, it.Delivery
+
+		if d.Sequence == 0 {
+			// No position, no commit. Writing the record while failing
+			// to record where it came from would leave the archive
+			// holding content its own bookkeeping does not know about.
+			// Nothing to account against either, so this is counted in
+			// the process and shouted about rather than written down.
+			c.rejected.Add(1)
+			c.meter.Rejected(ReasonNoSequence)
+			c.log.ErrorContext(ctx, "archive could not place a record in the stream",
+				"why", "the broker returned no sequence for this delivery",
+				"event_hash", rec.GetEventHash(),
+				"message_type", rec.GetMessageType())
+			continue
+		}
+
+		raw, err := hex.DecodeString(rec.GetEventHash())
+		if err != nil || len(raw) != 32 {
+			// Malformed identity. Redelivery cannot fix a hash that is
+			// not a hash, so this is refused rather than retried.
+			rejected = append(rejected, d.Sequence)
+			notes = append(notes, rejectNote{seq: d.Sequence,
+				reason: ReasonMalformedHash,
+				why:    "event_hash is not 32 hex bytes",
+				hash:   rec.GetEventHash()})
+			continue
+		}
+		var hash [32]byte
+		copy(hash[:], raw)
+
+		// The hash is verified again inside the substrate, over the
+		// same bytes, before anything is written. Checking it here as
+		// well would be a second implementation of the one check that
+		// must not drift.
+		recs = append(recs, substrate.BatchRecord{
+			Payload:     rec.GetCanonicalPayload(),
+			EventHash:   hash,
+			EventTime:   rec.GetEventTime(),
+			MessageType: rec.GetMessageType(),
+			Seq:         d.Sequence,
+		})
 	}
 
-	raw, err := hex.DecodeString(rec.GetEventHash())
-	if err != nil || len(raw) != 32 {
-		// Malformed identity. Redelivery cannot fix a hash that is not
-		// a hash, so this is dropped rather than retried forever.
-		return c.reject(ctx, rec, d, ReasonMalformedHash, "event_hash is not 32 hex bytes")
-	}
-	var hash [32]byte
-	copy(hash[:], raw)
-
-	err = c.store.AppendCanonicalAt(ctx, rec.GetCanonicalPayload(), hash,
-		rec.GetEventTime(), rec.GetMessageType(), c.now().UnixNano(), d.Sequence)
+	err := c.store.AppendCanonicalBatch(ctx, recs, rejected, c.now().UnixNano())
 	switch {
 	case err == nil:
-		c.committed.Add(1)
-		c.meter.Committed(rec.GetMessageType())
-		return nil
+		// nothing to do; counted below
 
 	case errors.Is(err, substrate.ErrHashMismatch):
-		// The bytes did not survive the trip. Committing them would put
-		// a payload into a content-addressed store under a hash that
-		// does not describe it, which is worse than losing the record —
-		// every later verification would fail on it. Redelivery would
-		// bring the same bytes, so drop and shout.
-		return c.reject(ctx, rec, d, ReasonHashMismatch, "payload does not match its hash")
+		// One record's bytes did not survive the trip, and an
+		// all-or-nothing batch cannot tell which from here. Re-drive it
+		// one at a time: the fast path stays free of per-record error
+		// handling and the slow path is exact.
+		return c.isolate(ctx, recs, notes)
 
 	default:
-		// Anything else — a full disk, a locked database — is
-		// transient as far as this service can tell. Nak and let it
+		// Anything else — a full disk, a locked database — is transient
+		// as far as this service can tell. Nak the batch and let it
 		// come back.
-		return fmt.Errorf("consumer: commit %s: %w", rec.GetEventHash(), err)
+		return fmt.Errorf("consumer: commit batch of %d: %w", len(recs), err)
+	}
+
+	c.report(ctx, recs, notes)
+	return nil
+}
+
+// rejectNote is a refusal waiting to be announced, once the transaction
+// that recorded it has actually committed.
+type rejectNote struct {
+	seq    uint64
+	reason string
+	why    string
+	hash   string
+}
+
+// isolate is the slow path: a batch that failed on a hash mismatch,
+// re-driven one record at a time so the poisoned record is found and
+// the rest still land.
+//
+// It does NOT call HandleBatch again. The first version did, and a
+// batch of one whose single record was the bad one recursed until the
+// stack ran out — caught by TestCorruptedPayloadIsRefused, which
+// panicked instead of failing. A slow path that can re-enter the fast
+// path is a slow path that can re-enter itself.
+func (c *Consumer) isolate(ctx context.Context, recs []substrate.BatchRecord,
+	notes []rejectNote) error {
+
+	var poisoned []uint64
+	committed := make([]substrate.BatchRecord, 0, len(recs))
+
+	for _, r := range recs {
+		err := c.store.AppendCanonicalBatch(ctx, []substrate.BatchRecord{r}, nil,
+			c.now().UnixNano())
+		switch {
+		case err == nil:
+			committed = append(committed, r)
+		case errors.Is(err, substrate.ErrHashMismatch):
+			// The bytes did not survive the trip. Committing them would
+			// put a payload into a content-addressed store under a hash
+			// that does not describe it — worse than losing the record,
+			// because every later verification would fail on it.
+			// Redelivery brings the same bytes, so refuse it.
+			poisoned = append(poisoned, r.Seq)
+			notes = append(notes, rejectNote{seq: r.Seq, reason: ReasonHashMismatch,
+				why: "payload does not match its hash", hash: hexOf(r.EventHash)})
+		default:
+			return fmt.Errorf("consumer: isolate commit at %d: %w", r.Seq, err)
+		}
+	}
+
+	// The refusals, accounted together. A separate transaction from the
+	// commits above is safe here and only here: if it fails the batch is
+	// naked, redelivery re-commits the good records as duplicates and
+	// re-refuses the bad ones, and the position lands in the same place.
+	if len(poisoned) > 0 {
+		if err := c.store.AppendCanonicalBatch(ctx, nil, poisoned, c.now().UnixNano()); err != nil {
+			return fmt.Errorf("consumer: account for %d refused: %w", len(poisoned), err)
+		}
+	}
+
+	c.report(ctx, committed, notes)
+	return nil
+}
+
+// report counts and logs, once a batch is durable. Kept apart from the
+// writing so that nothing is announced before it is true — a batch that
+// is naked and retried must not have shouted about rejections that got
+// rolled back.
+func (c *Consumer) report(ctx context.Context, recs []substrate.BatchRecord, notes []rejectNote) {
+	for _, n := range notes {
+		c.rejected.Add(1)
+		c.meter.Rejected(n.reason)
+		c.log.ErrorContext(ctx, "archive rejected a record",
+			"why", n.why, "sequence", n.seq, "event_hash", n.hash,
+			"rejected_total", c.rejected.Load())
+	}
+	for _, r := range recs {
+		c.committed.Add(1)
+		c.meter.Committed(r.MessageType)
 	}
 }
+
+func hexOf(h [32]byte) string { return hex.EncodeToString(h[:]) }
 
 // Undecodable accounts for a message the stream library terminated
 // before this consumer ever saw it.
@@ -204,31 +324,6 @@ func (c *Consumer) Undecodable(d eventstream.Delivery) {
 	c.meter.Rejected(ReasonUndecodable)
 	c.log.ErrorContext(ctx, "archive terminated an undecodable message",
 		"sequence", d.Sequence, "rejected_total", c.rejected.Load())
-}
-
-// reject records a deliberate refusal, durably.
-//
-// It returns an error only when the refusal could NOT be written down.
-// That is on purpose: a refusal nobody recorded leaves its sequence
-// unaccounted, and the audit would report it as a record the stream
-// lost. Naking sends the message back so the refusal can be recorded on
-// the next attempt — the record is still refused, but the accounting
-// gets another chance to be true.
-func (c *Consumer) reject(ctx context.Context, rec *eventsv1.ArchiveRecord,
-	d eventstream.Delivery, reason, why string) error {
-
-	if err := c.store.RecordRejected(ctx, d.Sequence); err != nil {
-		return fmt.Errorf("consumer: account for refused %s: %w", rec.GetEventHash(), err)
-	}
-	c.rejected.Add(1)
-	c.meter.Rejected(reason)
-	c.log.ErrorContext(ctx, "archive rejected a record",
-		"why", why,
-		"sequence", d.Sequence,
-		"event_hash", rec.GetEventHash(),
-		"message_type", rec.GetMessageType(),
-		"rejected_total", c.rejected.Load())
-	return nil
 }
 
 // Counts reports what this process has committed and rejected.

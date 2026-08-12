@@ -155,7 +155,7 @@ func main() {
 		}
 	}
 
-	if err := eventstream.Consume(ctx, js, cons.Handle,
+	if err := eventstream.Consume(ctx, js, cons.HandleBatch,
 		eventstream.WithStats(*statsEvery, onStats),
 		eventstream.WithUndecodable(cons.Undecodable)); err != nil {
 		log.Error("consume", "err", err)
