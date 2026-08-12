@@ -25,3 +25,4 @@ reverse without knowing what it cost.
 | [0011](0011-a-latency-is-a-conditional-claim.md) | A published latency claims a bound under a stated condition, not a value | accepted |
 | [0012](0012-the-stream-is-bounded-by-bytes.md) | The stream is bounded by bytes, and the collector owns the bound | accepted |
 | [0013](0013-the-system-chooses-which-records-to-lose.md) | The system chooses which records to lose, and sheds the new to save the old | accepted |
+| [0014](0014-a-study-identity-never-enters-the-archive.md) | A study identity never enters the append-only archive, so deletion needs no exception | accepted |

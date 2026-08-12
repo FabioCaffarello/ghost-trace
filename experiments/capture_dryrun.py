@@ -203,14 +203,17 @@ def main() -> int:
         f.check(not found,
                 "no condition label reached the archive"
                 + (f" — found {found}" if found else ""))
-        # The participant code SHOULD be there: it is subject_id, the
-        # pseudonymous identity the application asserts. Its absence
-        # would mean the labelling never reached the decision at all.
+        # And the participant code must NOT be there either. It used to
+        # be, as subject_id, until ADR-0014: a pseudonym for a real
+        # person, in an append-only store, permanently. The study's join
+        # key is evaluation_id, which lives in the capture row — so
+        # deleting the row severs the link, which is what deletion can
+        # mean when the archive does not forget.
         codes = leaked(db, [p["participant"] for p in PARTICIPANTS])
-        f.check(len(codes) == len(PARTICIPANTS),
-                f"every participant code IS in the archive as subject_id "
-                f"({len(codes)} of {len(PARTICIPANTS)}) — absence here would mean "
-                f"the capture never reached a decision")
+        f.check(not codes,
+                "no participant code reached the archive"
+                + (f" — found {codes}, which `make forget` could not remove"
+                   if codes else ""))
     else:
         print("  --data not given; the archive was not inspected. Absence of a "
               "check is not a passing check.")

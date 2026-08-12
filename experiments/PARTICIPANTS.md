@@ -82,6 +82,9 @@ collected fails it too.
 > **Your participant code is a pseudonym you chose to accept**, and you
 > can discard it. It appears in the link you were sent and in the
 > recorded rows, and it is the only thing linking one visit to another.
+> It is **not** sent to the detection service and never reaches the
+> permanent event store — those hold a session with no code attached to
+> it.
 >
 > **You can stop at any time**, and you do not have to say why.
 
