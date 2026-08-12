@@ -7,10 +7,22 @@
 #                    docker compose --profile core up
 #                  With it up, `make shadow-http` A/Bs the collector
 #                  against the decision engine over real HTTP.
-#   demo           the topology with human-capture enabled; rows land in
-#                  ./experiments/results/human_sessions.jsonl on the host
-#                    docker compose --profile demo up
-#                  (core and demo both claim 127.0.0.1:8083 — run one)
+#   demo           the same topology. It used to differ — a SECOND
+#                  demo-web carrying -capture-log, which meant core and
+#                  demo both claimed 127.0.0.1:8083 and the comment here
+#                  had to warn against running both. Capture is a
+#                  configuration, not a topology, so it is one variable
+#                  now and the duplicate service is gone:
+#                    GT_CAPTURE_LOG=/captures/human_sessions.jsonl \
+#                      docker compose --profile demo up
+#                  Rows land in ./experiments/results/ on the host.
+#                  The profile itself no longer selects anything core
+#                  does not; it stays because `--profile demo` is in
+#                  written protocols, and a profile that selects NOTHING
+#                  starts zero containers and says nothing about why.
+#                  WITHOUT that variable the study runs with capture
+#                  silently off — which is why `make capture-dryrun`
+#                  refuses a run whose capture log did not grow.
 #   experiments    the adversarial tiers against the running topology
 #                    docker compose --profile core --profile experiments \
 #                      run --rm experiments
@@ -21,6 +33,14 @@
 #                  image — a stale one runs an old copy of experiments/
 #                  and fails in ways that look like a topology problem.
 #                  It cost an afternoon once.
+#   e2e            the whole chain, driven by a real browser from inside
+#                  the network, asserting every link in it
+#                    make e2e
+#                  Run it through that target, not by hand: the gate
+#                  belongs in a compose project of its own, and the
+#                  target is what empties GT_*_PORT so the copy it brings
+#                  up publishes on ephemeral ports. Run by hand it binds
+#                  8080-8082 and collides with any stack you have up.
 #   observability  Prometheus scraping /metrics, bound to 127.0.0.1:9090
 #                    docker compose --profile core --profile observability up
 #
@@ -65,7 +85,7 @@ x-collector-build: &collector-build
 services:
   collector:
     <<: *hardened
-    profiles: [core, demo]
+    profiles: [core, demo, e2e]
     image: ghost-trace/collector:${IMAGE_TAG:-dev}
     build: *collector-build
     command:
@@ -86,7 +106,15 @@ services:
       # earned the local write's removal, and docs/results/ holds it.
       - -nats=nats://nats:4222
     ports:
-      - "127.0.0.1:8080:8080"
+      # The host port is a VARIABLE so this service can also run under
+      # `make e2e`, which brings the same topology up in a project of its
+      # own and must not fight a stack the operator already has up.
+      #
+      # `${VAR-8080}`, with a bare dash: the default applies when the
+      # variable is UNSET, and an EMPTY value therefore publishes on an
+      # ephemeral port instead. `:-` would collapse both cases back to
+      # 8080 and rebuild the collision this exists to avoid.
+      - "127.0.0.1:${GT_COLLECTOR_PORT-8080}:8080"
     depends_on:
       nats:
         condition: service_healthy
@@ -105,7 +133,7 @@ services:
   # never sees that key.
   demo-web:
     <<: *hardened
-    profiles: [core]
+    profiles: [core, demo]
     image: ghost-trace/demo-web:${IMAGE_TAG:-dev}
     build: &demo-build
       context: .
@@ -113,7 +141,7 @@ services:
       args:
         GOLANG_IMAGE: ${GOLANG_IMAGE:-golang:1.26-alpine}
         DISTROLESS_IMAGE: ${DISTROLESS_IMAGE:-gcr.io/distroless/static-debian12:nonroot}
-    command: &demo-command
+    command:
       - -addr=0.0.0.0:8083
       # TWO DIFFERENT KINDS OF ADDRESS, and they are not
       # interchangeable.
@@ -132,8 +160,27 @@ services:
       - -engine=${GT_ENGINE_SERVICE:-http://decision-engine:8082}
       - -site-key=${GT_SITE_KEY:-pk_demo}
       - -secret-key=${GT_SECRET_KEY:-sk_demo}
+      # Capture belongs to the demo host because it records what the
+      # HOST APPLICATION learned about a session, not what the collector
+      # observed. Empty — the default — disables it, which is the
+      # binary's own zero value and not a compose invention.
+      #
+      # This used to be a SECOND SERVICE, identical but for this one
+      # flag, and the two fought over 127.0.0.1:8083. What made the
+      # duplicate defensible was that the flag could not then be absent:
+      # `--profile demo` was capture, by construction. One variable
+      # cannot promise that, so the promise moved to a gate —
+      # `make capture-dryrun` fails a run whose capture log did not
+      # grow, and names this variable when it does.
+      - -capture-log=${GT_CAPTURE_LOG:-}
     ports:
       - "127.0.0.1:8083:8083"
+    volumes:
+      # Mounted whether or not capture is on. The alternative is a
+      # conditional mount, which compose cannot express, and an
+      # unwritable path discovered at the first participant rather than
+      # at startup.
+      - ./experiments/results:/captures
     depends_on:
       decision-engine:
         condition: service_healthy
@@ -145,34 +192,11 @@ services:
       start_period: 3s
     restart: unless-stopped
 
-  # The capture variant for the human study: same image, capture log
-  # bind-mounted to the host where analyze.py reads it. Capture belongs
-  # to the demo host because it records what the HOST APPLICATION
-  # learned about a session, not what the collector observed.
-  demo-web-capture:
-    <<: *hardened
-    profiles: [demo]
-    image: ghost-trace/demo-web:${IMAGE_TAG:-dev}
-    build: *demo-build
-    command:
-      - -addr=0.0.0.0:8083
-      - -api=${GT_API_ORIGIN:-http://127.0.0.1:8080}
-      - -engine=${GT_ENGINE_SERVICE:-http://decision-engine:8082}
-      - -site-key=${GT_SITE_KEY:-pk_demo}
-      - -secret-key=${GT_SECRET_KEY:-sk_demo}
-      - -capture-log=/captures/human_sessions.jsonl
-    ports:
-      - "127.0.0.1:8083:8083"
-    volumes:
-      - ./experiments/results:/captures
-    healthcheck: *demo-health
-    restart: unless-stopped
-
   # The event stream. JetStream on, file-backed, so a restart does not
   # lose records the archive has not consumed yet.
   nats:
     <<: *hardened
-    profiles: [core, demo]
+    profiles: [core, demo, e2e]
     image: ${NATS_IMAGE:-nats:2.10-alpine}
     command: ["-js", "-sd", "/data", "-m", "8222"]
     volumes:
@@ -196,7 +220,7 @@ services:
   # No volume: it holds no session state and has no local store.
   decision-engine:
     <<: *hardened
-    profiles: [core, demo]
+    profiles: [core, demo, e2e]
     image: ghost-trace/decision-engine:${IMAGE_TAG:-dev}
     build:
       context: .
@@ -217,7 +241,15 @@ services:
       # silently rewrote the other's TTL.
       - -session-ttl=${GT_SESSION_TTL:-30m}
     ports:
-      - "127.0.0.1:8082:8082"
+      # The host port is a VARIABLE so this service can also run under
+      # `make e2e`, which brings the same topology up in a project of its
+      # own and must not fight a stack the operator already has up.
+      #
+      # `${VAR-8080}`, with a bare dash: the default applies when the
+      # variable is UNSET, and an EMPTY value therefore publishes on an
+      # ephemeral port instead. `:-` would collapse both cases back to
+      # 8080 and rebuild the collision this exists to avoid.
+      - "127.0.0.1:${GT_ENGINE_PORT-8082}:8082"
     depends_on:
       nats:
         condition: service_healthy
@@ -237,7 +269,7 @@ services:
   # The archive service: consumes the stream, stores nothing else.
   archive:
     <<: *hardened
-    profiles: [core, demo]
+    profiles: [core, demo, e2e]
     image: ghost-trace/archive:${IMAGE_TAG:-dev}
     build:
       context: .
@@ -250,7 +282,15 @@ services:
       - -data=/data
       - -nats=nats://nats:4222
     ports:
-      - "127.0.0.1:8081:8081"
+      # The host port is a VARIABLE so this service can also run under
+      # `make e2e`, which brings the same topology up in a project of its
+      # own and must not fight a stack the operator already has up.
+      #
+      # `${VAR-8080}`, with a bare dash: the default applies when the
+      # variable is UNSET, and an EMPTY value therefore publishes on an
+      # ephemeral port instead. `:-` would collapse both cases back to
+      # 8080 and rebuild the collision this exists to avoid.
+      - "127.0.0.1:${GT_ARCHIVE_PORT-8081}:8081"
     volumes:
       - gt-archive-data:/data
     depends_on:
@@ -287,7 +327,7 @@ services:
   # No published port: nothing outside this network addresses it.
   demo-web-internal:
     <<: *hardened
-    profiles: [experiments]
+    profiles: [experiments, e2e]
     image: ghost-trace/demo-web:${IMAGE_TAG:-dev}
     build: *demo-build
     command:
@@ -339,6 +379,55 @@ services:
       # Now that GT_ENGINE_BASE points here, a run that starts before
       # the engine is ready measures a connection refusal.
       decision-engine:
+        condition: service_healthy
+    restart: "no"
+
+  # The end-to-end gate: one browser, one session, the whole chain, and
+  # a named failure for every link in it. `make e2e` is the entry point;
+  # deploy/e2e.py brings this profile up in a project of its own.
+  #
+  # Same image as the tiers above, on purpose. It needs the same Chromium
+  # and the same playwright, and a second Playwright base to run one
+  # session would be a build nobody would keep current. Nothing else is
+  # shared: the tiers measure DETECTION and take seven minutes, this
+  # asserts CONNECTION and takes about one.
+  #
+  # NO PUBLISHED PORTS, and that is the design rather than an omission.
+  # Everything it reads — the page, the SDK, both /metrics endpoints, the
+  # archive's durable position — is reachable by service name from
+  # inside this network. Publishing nothing is what lets the gate run in
+  # its own compose project while the operator's stack is up, and what
+  # keeps it from inheriting a topology another gate just took apart.
+  e2e:
+    <<: *hardened
+    profiles: [e2e]
+    image: ghost-trace/experiments:${IMAGE_TAG:-dev}
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.experiments
+      args:
+        PLAYWRIGHT_IMAGE: ${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.49.1-noble}
+    command: ["node", "e2e/flow.mjs"]
+    environment:
+      # Addresses as a browser INSIDE this network sees them. GT_BASE is
+      # also the origin link 1 requires the page to name: the page is
+      # what the browser obeys, so a page naming an origin this container
+      # cannot reach is the failure, not a configuration difference.
+      GT_DEMO_BASE: http://demo-web-internal:8083
+      GT_BASE: http://collector:8080
+      GT_ENGINE_BASE: http://decision-engine:8082
+      GT_ARCHIVE_BASE: http://archive:8081
+    depends_on:
+      collector:
+        condition: service_healthy
+      demo-web-internal:
+        condition: service_healthy
+      decision-engine:
+        condition: service_healthy
+      # The archive has a healthcheck since PR-5.2. Before it did, CI's
+      # topology job had nothing to wait on and reported green with the
+      # archive dead — link 7 would have inherited exactly that.
+      archive:
         condition: service_healthy
     restart: "no"
 

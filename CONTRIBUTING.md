@@ -50,6 +50,19 @@ claims in the decision records stop being prose. That second one exists because 
 (§5) means a demo wired to an unreachable engine answers "allow"
 forever and looks perfectly healthy.
 
+**`make e2e` is the one to run when you want to know the system still
+works.** Those gates all enter the chain in the middle, with request
+bodies they build themselves; none of them loads the demo page or runs
+`sdk.js`. This one drives the path a visitor takes — page, SDK, session,
+telemetry, the snapshot, the host application's server-to-server
+decision, the archive's durable position — with a real browser, and
+either asserts all seven links or fails naming the one that broke. It
+takes about a minute and needs nothing running first: unlike the gates
+above it brings its own topology up in a compose project of its own, on
+ephemeral ports, so it can run alongside a stack you already have up.
+[ADR-0015](contract/decisions/0015-the-e2e-gate-asserts-connection-not-detection.md)
+records what it asserts and, as carefully, what it cannot see.
+
 `make hooks` installs the git hooks: fast checks on commit, `make
 verify` on push, every failure naming the command that fixes it.
 

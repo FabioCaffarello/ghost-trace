@@ -120,11 +120,16 @@ jobs:
             --build-arg PLAYWRIGHT_IMAGE="$PLAYWRIGHT_IMAGE" \
             -f deploy/docker/Dockerfile.experiments .
 
-      # compose.yml is the deployment contract for four profiles; a YAML
+      # compose.yml is the deployment contract for five profiles; a YAML
       # or interpolation error in it currently surfaces only when
       # someone tries to run it.
+      #
+      # Every profile is named here on purpose: `config` only resolves
+      # the services a profile selects, so a profile left off this line
+      # is a profile whose interpolation nobody checks until the day it
+      # is needed.
       - name: Validate compose topology
-        run: docker compose --profile core --profile demo --profile experiments --profile observability config --quiet
+        run: docker compose --profile core --profile demo --profile experiments --profile observability --profile e2e config --quiet
 
       # The alert rules are the only part of the observability profile
       # that is neither compiled nor exercised by a test, so a typo in a

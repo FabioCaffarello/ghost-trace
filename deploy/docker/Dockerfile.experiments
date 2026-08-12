@@ -33,6 +33,17 @@ COPY experiments/package.json experiments/package-lock.json ./
 RUN PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm ci
 
 COPY experiments/ ./
+
+# The e2e gate rides in this image rather than in one of its own: it
+# needs the same Chromium and the same playwright, and a second 2 GB base
+# to run one session would be a build nobody would keep current.
+#
+# It lands UNDER the workdir, not beside it, and that is load-bearing —
+# node_modules is at /work/experiments, and ESM resolution only walks
+# PARENT directories. A driver at /work/e2e would not find playwright,
+# and NODE_PATH does not apply to ESM.
+COPY deploy/e2e/ ./e2e/
+
 COPY deploy/docker/experiments-entrypoint.sh /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

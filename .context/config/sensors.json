@@ -129,6 +129,23 @@
       "phase": "V"
     },
     {
+      "id": "e2e",
+      "name": "the product runs end to end",
+      "description": "Drives the path a visitor actually takes — the host page, sdk.js from the collector, the cross-origin session handshake, telemetry, the stream, the snapshot the engine judges from, the server-to-server decision the host application makes, and the archive's durable position — with a real browser inside the compose network, asserting all seven links by name. The other topology sensors enter the chain in the MIDDLE with bodies they build themselves; nothing else here loads the page or runs the SDK, and the two failures this catches were both WIRING that left every service healthy and every request answered. It brings its own topology up in a compose project of its own, so unlike the sensors below it needs nothing running first and cannot inherit a system another gate just took apart.",
+      "command": "make e2e",
+      "severity": "critical",
+      "blocking": true,
+      "expensive": true,
+      "gated": true,
+      "appliesTo": [
+        "services/**",
+        "libs/**",
+        "deploy/e2e/**",
+        "compose.yml"
+      ],
+      "phase": "V"
+    },
+    {
       "id": "topology-shadow",
       "name": "collector and engine agree",
       "description": "A/Bs the collector against the decision engine over real HTTP while both are up, and checks the demo host is wired to the engine rather than to itself. The two services mount the SAME decision package (ADR-0005); what differs is where the state came from \u2014 memory versus the KV snapshot \u2014 so a disagreement here is libs/snapshot losing something the judgement needed. Also compares the tenant-registry fingerprint both services publish, because two processes that disagree about who exists each behave correctly alone and wrongly together.",
