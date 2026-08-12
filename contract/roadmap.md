@@ -399,3 +399,58 @@ the one quantity it cannot yet justify.
   product decision.
 - **State durability.** Unchanged since Phase 4, and still a map in
   memory.
+
+---
+
+## Phase 6 — the claims the repository makes about itself
+
+Not a product phase. The 2026-08-10 strategic audit reconciled the
+previous one and left **nine findings open**, most of them a single
+kind: *a statement this repository makes about itself that nothing
+checks.* A false claim in a measurement project is not a documentation
+defect. It is the same defect as a wrong number, arriving through prose.
+
+Each pull request below closes one, and — where the claim could be made
+checkable — leaves behind the guard, so the corrected version cannot rot
+the way the original did.
+
+### Pull requests
+
+| | | size |
+| --- | --- | --- |
+| **6.1** | **M5** — the store said it never hands out the pointer, and handed out the pointer. `SessionRepository`'s doc states "the pointer must not escape fn"; the next line declared `Create(...) (string, *session.State, error)`, returning the exact pointer just placed in the map. `go test -race` reports a real data race against a concurrent `With`. Nothing in production had hit it — the token has not reached the browser when `Create` returns — and a rule that holds because of timing elsewhere is not a rule. `Create` now returns `session.Identity`, a value. Copying `State` would not have worked: two of its three accumulators hold maps. (#348) | S |
+| **6.2** | **M4** — a gate that selects no tests, or skips them, is not a gate. `make parity` runs `-run Archive`, and `go test` with a filter matching nothing prints `[no tests to run]` and **exits 0**; rename one test and the gate becomes a no-op reporting success. A test can also still skip for its own reasons inside a target whose whole purpose is to supply what the skip guards against. `scripts/gated-test.py` refuses both. `make test-race` is untouched — skipping is correct there. (#349) | S |
+| **6.3** | **M1** — the JSON does not mirror the proto. §2 claimed "field-for-field"; the wire carries one `events` array discriminated by `type` against six typed lists, nests `page` and `client` against a flat message, renames `class` to `key_class`, and four archived fields are never accepted from a browser at all. A reader who believed it would conclude the browser supplies its own tenant and its own timestamps. The `wire-contract-change` skill listed five guards and **none looked at this seam** — the shape of M22 exactly. `wire_proto_mapping_test.go` enumerates both sides and fails until a new field is placed. (#350) | M |
+| **6.4** | **`/metrics` outside the contract.** §3 opens "Four endpoints. This section is the contract's core"; the binaries answer eleven routes, and `GET /metrics` — unauthenticated, publishing `tenant_registry_info{fingerprint, tenants}` — appeared in no contract section. `SECURITY.md` had disclosed it all along, so the document that promises to *define* the external surface was the one understating it. `scripts/check-routes.py` now fails on any route no section names. (#351) | S |
+| **6.5** | **M7** — a dead API that would have given back the 3.0×. `AppendPair` had no caller and called `writeBlob` unconditionally, twice: the pre-ADR-0009 path. Adopting it on the strength of its confident doc comment would have restored two fsyncs per commit with every test green, because the only test asserting a small payload writes no file exercised one path. Its comment described types no repository here declares and cited a decision log that does not exist — the file predates ghost-trace. Deleted, along with `WalkBlobs`; replaced by a table over every live write path. (#352) | S |
+
+### What Phase 6 deliberately does not do
+
+- **M6 — `ctx` on `SessionRepository`.** Not done, and not an oversight.
+  `session.Store` is guarded by a `sync.Mutex`, which **cannot be
+  acquired with a context**. Threading `ctx` through the port would add
+  a parameter the only implementation cannot honour — a promise of
+  cancellation that does not exist, which is worse than its absence.
+  Honouring it means replacing the mutex with a channel semaphore, and
+  that is a performance change; the comment on `Store` has said since M1
+  that it should not be made "before there is a measurement showing
+  contention". Revisit when the store stops being a map in one process.
+- **M9 — proto hygiene.** Zero enums, no `reserved`, no `optional`.
+  [ADR-0004](decisions/0004-session-snapshots-carry-feature-state.md)
+  keeps zero-means-zero deliberately.
+- **Authenticating `/metrics`.** The exposure is disclosed, compose binds
+  `127.0.0.1`, and `make shadow-http` compares the two tenant registries
+  through it. Adding auth is a deployment decision this repository has
+  not made, and a half-made one would break a gate to buy nothing.
+
+### The shape that kept recurring
+
+Five findings, one mechanism: **the guard and the claim were written by
+the same person at the same time, so the guard checked what the claim
+already said.** `AppendPair`'s comment justified itself. §2 described a
+correspondence nobody compared. `make parity` refused a missing broker
+but not an empty selection.
+
+It is the same failure as a test whose two sides come from one function —
+which happened here too, inside 6.1, and was found the same way: by
+mutating the code and watching the assertion stay green.
