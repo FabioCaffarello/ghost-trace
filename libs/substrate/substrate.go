@@ -807,6 +807,143 @@ func (s *Substrate) PositionAndCount(ctx context.Context) (Position, int64, bool
 // row is already possible and already harmless: it is content-addressed,
 // so it is either garbage-collected or rewritten identically. A row with
 // no blob would not be.
+// BatchRecord is one record in a batched commit.
+type BatchRecord struct {
+	Payload     []byte
+	EventHash   [32]byte
+	EventTime   int64
+	MessageType string
+	Seq         uint64
+}
+
+// AppendCanonicalBatch commits many records in ONE transaction.
+//
+// synchronous=FULL costs one fsync per transaction, not per row, so a
+// batch of N amortises that fsync across N records. Everything else is
+// unchanged and deliberately so: each payload is still hash-verified
+// before it is written, each oversized payload still gets its own
+// fsynced blob first, and the durable position still advances inside
+// the same transaction as the rows — so "the archive holds record N"
+// and "the archive reached sequence N" still cannot disagree across a
+// crash.
+//
+// REJECTED SEQUENCES TRAVEL WITH THE BATCH, and that is not a
+// convenience. A caller that recorded rejections separately and then
+// failed to commit the rest would have advanced the position for the
+// rejects; redelivery would record them a second time, inflating
+// `rejected` past the sequences actually walked and driving
+// `unaccounted` negative — the ADR-0010 failure, reintroduced by the
+// back door. One transaction covers what was kept and what was
+// refused, so a rollback un-decides both.
+//
+// A batch is ALL OR NOTHING. One bad record fails the whole
+// transaction, and the caller re-drives the batch one record at a time
+// to find it; that keeps the fast path free of per-record error
+// handling and makes the slow path exact.
+func (s *Substrate) AppendCanonicalBatch(ctx context.Context, recs []BatchRecord,
+	rejected []uint64, committedAt int64) error {
+
+	if len(recs) == 0 && len(rejected) == 0 {
+		return nil
+	}
+
+	// Verify before touching anything durable. A hash mismatch found
+	// halfway through would otherwise leave blobs on disk for records
+	// the transaction is about to roll back.
+	for _, r := range recs {
+		if r.Seq == 0 {
+			return ErrNoSequence
+		}
+		if got := canonical.Hash(r.Payload); got != r.EventHash {
+			return fmt.Errorf("%w: payload hashes to %s, record claims %s",
+				ErrHashMismatch, canonical.HashHex(got), canonical.HashHex(r.EventHash))
+		}
+	}
+
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	// Oversized payloads keep their own file, written and fsynced
+	// before the rows that name them. These are NOT amortised — a blob
+	// is a blob — which is the honest limit of this optimisation and
+	// the reason PR-4.3's inlining had to come first.
+	for _, r := range recs {
+		if len(r.Payload) > InlineThreshold {
+			if err := s.writeBlob(r.EventHash, r.Payload); err != nil {
+				return fmt.Errorf("substrate.AppendCanonicalBatch: blob write: %w", err)
+			}
+		}
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("substrate.AppendCanonicalBatch: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Prepared once and reused: N inserts in one transaction is the
+	// point, and re-parsing the statement N times would give some of it
+	// back.
+	stmt, err := tx.PrepareContext(ctx,
+		`INSERT OR IGNORE INTO events
+		   (event_hash, event_time, message_type, payload_ref, committed_at, payload)
+		 VALUES (?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("substrate.AppendCanonicalBatch: prepare: %w", err)
+	}
+	defer func() { _ = stmt.Close() }()
+
+	var committed, duplicates int64
+	first, highest := uint64(0), uint64(0)
+	span := func(seq uint64) {
+		if first == 0 || seq < first {
+			first = seq
+		}
+		if seq > highest {
+			highest = seq
+		}
+	}
+	for _, seq := range rejected {
+		if seq == 0 {
+			return ErrNoSequence
+		}
+		span(seq)
+	}
+
+	for _, r := range recs {
+		hexed := canonical.HashHex(r.EventHash)
+		inline := len(r.Payload) <= InlineThreshold
+		res, err := stmt.ExecContext(ctx,
+			r.EventHash[:], r.EventTime, r.MessageType, hexed[:2]+"/"+hexed[2:],
+			committedAt, inlinedOrNil(r.Payload, inline))
+		if err != nil {
+			return fmt.Errorf("substrate.AppendCanonicalBatch: insert: %w", err)
+		}
+		// Same rule as the single-record path (ADR-0010): a
+		// primary-key conflict is a redelivery, not a commit, and
+		// counting it as one drives unaccounted negative.
+		affected, err := res.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("substrate.AppendCanonicalBatch: rows affected: %w", err)
+		}
+		if affected == 0 {
+			duplicates++
+		} else {
+			committed++
+		}
+		span(r.Seq)
+	}
+
+	if _, err := tx.ExecContext(ctx, positionUpsert,
+		first, highest, committed, int64(len(rejected)), duplicates); err != nil {
+		return fmt.Errorf("substrate.AppendCanonicalBatch: position: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("substrate.AppendCanonicalBatch: commit: %w", err)
+	}
+	return nil
+}
+
 func (s *Substrate) AppendCanonicalAt(ctx context.Context, payload []byte, eventHash [32]byte,
 	eventTime int64, messageType string, committedAt int64, seq uint64) error {
 
