@@ -619,6 +619,21 @@ experiments-check: ## Syntax-check every tier and run the asserted statistics se
 	@echo "== every module is in go.work, GO_MODULES, the CI matrix and dependabot"
 	@python3 scripts/check-modules.py
 
+# The topology gates are the scripts that decide whether the accounting
+# claims hold, and until PR-5.6a nothing compiled them: a typo in
+# load-gate.py surfaced only when somebody remembered to run it, which
+# for a manual gate can be months.
+.PHONY: gates-check
+gates-check: ## Syntax-check the topology gates and assert their provenance logic
+	@echo "== gate syntax"
+	@python3 -m compileall -q deploy/*.py
+	@echo "== gate-provenance selftest (asserted)"
+	@python3 deploy/provenance.py --selftest
+	@echo "== sensor-registry selftest (asserted)"
+	@python3 scripts/check-sensors.py --selftest
+	@echo "== every sensor is a make target, and every gate is a sensor"
+	@python3 scripts/check-sensors.py
+
 # Measuring and CHECKING are one target, because they were two habits
 # and the second one kept being skipped. The run prints the six numbers
 # either way; the check is what decides whether they reproduced.
@@ -679,7 +694,7 @@ verify: fmt-check vet lint test-race ## Pre-push gate: format, vet, lint, race t
 # ci: the whole gate. `make ci` green locally and a green CI run are the
 # same statement — that equivalence is the reason this file exists.
 .PHONY: ci
-ci: fmt-check tidy-check lint-commit-selftest buf-lint genproto-sync openapi-sync openapi-lint contract-fixtures-sync context-sync-check vet lint test-race coverage experiments-check vuln ## Everything CI runs
+ci: fmt-check tidy-check lint-commit-selftest buf-lint genproto-sync openapi-sync openapi-lint contract-fixtures-sync context-sync-check vet lint test-race coverage experiments-check gates-check vuln ## Everything CI runs
 
 ##@ Housekeeping
 

@@ -278,6 +278,9 @@ jobs:
       - name: Syntax + asserted selftest
         run: make experiments-check
 
+      - name: The topology gates compile, and know when they cannot be cited
+        run: make gates-check
+
   # The composed topology, brought up and interrogated.
   #
   # Nothing gated it before, and it broke twice without anything
@@ -291,7 +294,7 @@ jobs:
   # locally; what was actually broken both times was WIRING, which these
   # two check in a fraction of the time.
   topology:
-    name: topology — shadow and kill-test
+    name: topology — shadow, kill-test and the books
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -325,6 +328,20 @@ jobs:
 
       - name: Take each service away
         run: make kill-test
+
+      # The Phase 3 gate, which until PR-5.6a ran only when somebody
+      # remembered. It reconciles against the archive's DURABLE position
+      # rather than process counters, and it refuses rather than skips —
+      # both of which make it safe to run here.
+      #
+      # `make load-gate` is deliberately NOT added beside it. That one
+      # measures RATES, and a rate measured on a shared runner encodes
+      # the runner: this repository moved its timing assertions out of
+      # CI after one machine reported an inlined commit at 48/s against
+      # 18 244/s locally. loss-audit drives twenty-five records per
+      # scenario and asserts arithmetic, not speed.
+      - name: The books balance under an outage
+        run: make loss-audit
 
       - name: Logs on failure
         if: failure()

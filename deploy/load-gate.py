@@ -55,6 +55,9 @@ import time
 import urllib.error
 import urllib.request
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import provenance  # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 COLLECTOR = "http://127.0.0.1:8080"
 ARCHIVE = "http://127.0.0.1:8081"
@@ -255,9 +258,21 @@ def report_and_exit(f: Failures, ingest, dec, args) -> int:
         print(f"  {'decision p99 (response)':34} {dec['response_p99_ms']:.2f}ms "
               f"of {DECISION_BUDGET_MS}ms budget")
 
+    st = provenance.stamp("load-gate", {
+        "sessions_rate": args.sessions_rate,
+        "decisions_rate": args.decisions_rate,
+        "duration": args.duration,
+        "workers": args.workers,
+    })
+    # Printed whether or not --out was given: somebody reading the
+    # terminal is as capable of misciting a number as somebody reading
+    # the file.
+    for w in provenance.warnings(st):
+        print(f"\n  NOT CITABLE: {w}")
+
     if args.out:
         with open(args.out, "w") as fh:
-            json.dump({"ingest": ingest, "decision": dec,
+            json.dump({"provenance": st, "ingest": ingest, "decision": dec,
                        "failures": list(f)}, fh, indent=2)
         print(f"\n  wrote {args.out}")
 

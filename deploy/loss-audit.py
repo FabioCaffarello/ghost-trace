@@ -63,7 +63,9 @@ import urllib.request
 # here is a body the contract harness has already validated and
 # replayed against a real server.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "experiments"))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import wire  # noqa: E402
+import provenance  # noqa: E402
 
 COLLECTOR = "http://127.0.0.1:8080"
 ARCHIVE = "http://127.0.0.1:8081"
@@ -359,15 +361,20 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--records", type=int, default=25,
                     help="records to drive per scenario")
+    ap.add_argument("--out", default="",
+                    help="write the reconciliation, and what produced it, "
+                         "as JSON")
     args = ap.parse_args()
 
+    # `healthy` and not a single 3s probe. In CI this runs immediately
+    # after `make kill-test`, which restores the services it stopped in a
+    # `finally` and returns without waiting for them to reconnect to the
+    # broker. A one-shot probe there refuses for a reason that is not a
+    # defect — the refusal must mean "the topology is not coming up", not
+    # "the topology is not up yet".
     for name, base in (("collector", COLLECTOR), ("archive", ARCHIVE),
                        ("decision-engine", ENGINE)):
-        try:
-            with urllib.request.urlopen(base + "/healthz", timeout=3) as r:
-                if r.status != 200:
-                    raise RuntimeError(r.status)
-        except Exception:
+        if not healthy(base):
             print(f"the {name} is not answering at {base}.")
             print("bring the topology up first:  make docker-build && make up")
             print("\nrefusing rather than skipping: a gate that quietly does nothing "
@@ -389,6 +396,20 @@ def main() -> int:
             "the final position accounts for every sequence it walked")
 
     report(f)
+
+    st = provenance.stamp("loss-audit", {"records": args.records})
+    for w in provenance.warnings(st):
+        print(f"\n  NOT CITABLE: {w}")
+    if args.out:
+        a, c = metrics(ARCHIVE), metrics(COLLECTOR)
+        with open(args.out, "w") as fh:
+            json.dump({
+                "provenance": st,
+                "archive": {k: one(a, k) for k in sorted(a)},
+                "collector": {k: total(c, k) for k in sorted(c)},
+                "failures": list(f),
+            }, fh, indent=2)
+        print(f"\n  wrote {args.out}")
 
     if f:
         print(f"\n  {len(f)} claim(s) did not hold:")
