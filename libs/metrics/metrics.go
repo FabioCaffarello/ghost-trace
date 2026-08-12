@@ -132,6 +132,33 @@ func (r *Registry) Gauge(n, help string, labels ...string) *prometheus.GaugeVec 
 	return g
 }
 
+// GaugeFunc registers a gauge whose value is READ AT SCRAPE TIME from
+// the thing that owns it.
+//
+// For a quantity that already exists somewhere — the size of a live
+// map, the depth of a queue — this is the honest shape. The alternative
+// is a plain Gauge that every mutation site has to remember to update,
+// which is a second copy of the truth that drifts the first time
+// somebody adds a code path; and a background loop that polls and Sets
+// is the same drift with a delay bolted on.
+//
+// The function is called by the scrape, so it must be cheap and must
+// not block. Anything that needs I/O to answer belongs in a plain Gauge
+// written by whoever does the I/O.
+func (r *Registry) GaugeFunc(n, help string, read func() float64) {
+	g := prometheus.NewGaugeFunc(
+		prometheus.GaugeOpts{Name: name(n), Help: help}, read)
+	if err := r.reg.Register(g); err != nil {
+		var already prometheus.AlreadyRegisteredError
+		if ok := asAlreadyRegistered(err, &already); ok {
+			// Already registered: the first reader wins, and it reads
+			// the same state.
+			return
+		}
+		panic(err)
+	}
+}
+
 // Histogram registers a histogram with explicit bucket bounds.
 //
 // Buckets are never defaulted here. prometheus.DefBuckets spans 5ms to

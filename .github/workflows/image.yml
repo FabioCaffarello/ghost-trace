@@ -126,6 +126,18 @@ jobs:
       - name: Validate compose topology
         run: docker compose --profile core --profile demo --profile experiments --profile observability config --quiet
 
+      # The alert rules are the only part of the observability profile
+      # that is neither compiled nor exercised by a test, so a typo in a
+      # PromQL expression would surface as a rule that silently never
+      # fires — which is worse than no rule, because the dashboard looks
+      # armed. promtool parses the config, resolves rule_files relative
+      # to it, and type-checks every expression.
+      - name: Validate the scrape config and alert rules
+        run: |
+          docker run --rm -v "$PWD/deploy/observability:/cfg" \
+            --entrypoint promtool "${PROMETHEUS_IMAGE:-prom/prometheus:v3.1.0}" \
+            check config /cfg/prometheus.yml
+
   # A single context for branch protection to require, instead of one
   # per job and one per matrix cell.
   #

@@ -226,6 +226,19 @@ func run() error {
 	mux := apiSrv.Routes()
 	decisions.Mount(mux)
 
+	// How many sessions this process is holding.
+	//
+	// Store.Len() has existed since M1 and reached exactly one place: a
+	// log line, printed only on sweeps that removed something. It is
+	// the collector's memory footprint, its restart blast radius, and
+	// the producer-side half of any backpressure reading — and none of
+	// that was scrapeable. A gauge rather than a counter because it
+	// goes down.
+	reg.GaugeFunc("sessions_live",
+		"Sessions the collector is currently holding in memory. A restart "+
+			"loses every one of them.",
+		func() float64 { return float64(sessions.Len()) })
+
 	// Expired sessions are never otherwise removed, so without this the
 	// store grows for the life of the process.
 	go sweepLoop(ctx, sessions, log)

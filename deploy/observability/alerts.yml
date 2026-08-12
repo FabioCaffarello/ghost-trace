@@ -1,0 +1,85 @@
+# Alert rules for the gap this repository already knows it has.
+#
+# The archive commits about 4 133 records/s against a collector that
+# bends near 16 000, with a stream between them bounded only by a
+# seven-day retention window and nothing slowing the producer down. The
+# accounting for that is complete — Phase 3 made every loss countable
+# and Phase 4 measured the mismatch — and until now the only way to SEE
+# it happening was to run `make load-gate` afterwards and read the
+# subtraction.
+#
+# These rules do not fix the mismatch. They make it arrive as a warning
+# hours before it arrives as loss, which is the difference between an
+# operator with a decision to make and an operator reading a postmortem.
+#
+# THERE IS NO ALERTMANAGER HERE, deliberately. Where an alert should be
+# sent is a property of a deployment, and this repository does not have
+# one. A rule with no receiver still evaluates and is still visible in
+# Prometheus, which is worth having; inventing a destination would not
+# be.
+
+groups:
+  - name: ghost-trace-archive
+    rules:
+      # THE ONE THAT MATTERS. archivemeter's own doc comment instructs
+      # the reader to take these two as a ratio: how old the oldest
+      # unread message is, against how old the stream will let it get.
+      # At 0.5 the archive has burned half its runway; the records are
+      # all still there, and there is still time to do something.
+      - alert: ArchiveFallingBehind
+        expr: >
+          ghosttrace_archive_stream_oldest_message_age_seconds
+            / ghosttrace_archive_stream_max_age_seconds > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: The archive has used half the stream's retention window
+          description: >
+            The oldest message the archive has not read is more than half
+            the stream's max age. Nothing is lost yet. At the far end of
+            this ratio records age out unread and only stream_skipped
+            reports it, after the fact.
+
+      # Already too late, and it must not be silent. A record left the
+      # stream above the archive's mark: that loss has happened.
+      - alert: ArchiveSkippedRecords
+        expr: increase(ghosttrace_archive_stream_skipped[1h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: Records aged out of the stream before the archive read them
+          description: >
+            stream_skipped counts sequences that left the stream above the
+            archive's durable position. These are not recoverable from the
+            broker, which rewrites its own bookkeeping when it discards.
+
+      # The stall the drain-rate alerts cannot see: an archive that is
+      # up, reading nothing, while the collector keeps publishing.
+      - alert: ArchiveNotCommitting
+        expr: >
+          rate(ghosttrace_archive_committed_total[10m]) == 0
+            and ghosttrace_archive_stream_pending > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: The archive has work pending and is committing nothing
+          description: >
+            Records are waiting and none are being written. A hung-but-alive
+            process looks exactly like this, and `restart: unless-stopped`
+            will not restart one.
+
+      # Absence is never zero, applied to monitoring itself. An alert on
+      # a series that stopped arriving never fires; this one does.
+      - alert: GhostTraceTargetDown
+        expr: up{job="ghost-trace"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: A Ghost Trace service is not being scraped
+          description: >
+            Every rule above is written against series from this target.
+            While it is down they cannot fire, so its absence has to.

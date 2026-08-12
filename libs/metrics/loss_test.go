@@ -121,3 +121,42 @@ func TestCountingIsPerKindAndPerReason(t *testing.T) {
 		}
 	}
 }
+
+func TestGaugeFuncReadsAtScrapeTime(t *testing.T) {
+	// The property that makes GaugeFunc the right shape for a live map:
+	// nothing has to remember to update it. A plain Gauge would be a
+	// second copy of the truth, drifting the first time somebody adds a
+	// code path that changes the first.
+	reg := metrics.New()
+	live := 0
+	reg.GaugeFunc("sessions_live", "test gauge", func() float64 { return float64(live) })
+
+	if v, ok := gaugeValue(t, reg, "ghosttrace_sessions_live"); !ok || v != 0 {
+		t.Fatalf("gauge = %v (present %v) before anything happened, want 0", v, ok)
+	}
+
+	live = 42
+	if v, _ := gaugeValue(t, reg, "ghosttrace_sessions_live"); v != 42 {
+		t.Errorf("gauge = %v after the underlying value changed, want 42 — it is "+
+			"being cached rather than read at scrape time", v)
+	}
+
+	live = 7
+	if v, _ := gaugeValue(t, reg, "ghosttrace_sessions_live"); v != 7 {
+		t.Errorf("gauge = %v, want 7 — a gauge must be able to go DOWN", v)
+	}
+}
+
+func gaugeValue(t *testing.T, reg *metrics.Registry, name string) (float64, bool) {
+	t.Helper()
+	families, err := reg.Gatherer().Gather()
+	if err != nil {
+		t.Fatalf("gather: %v", err)
+	}
+	for _, f := range families {
+		if f.GetName() == name && len(f.GetMetric()) == 1 {
+			return f.GetMetric()[0].GetGauge().GetValue(), true
+		}
+	}
+	return 0, false
+}

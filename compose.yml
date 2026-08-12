@@ -243,6 +243,23 @@ services:
     depends_on:
       nats:
         condition: service_healthy
+    healthcheck:
+      # The other three services have had one since they were split out;
+      # this one could not, because a compose healthcheck on a distroless
+      # image has to exec the binary and the binary had no -healthcheck
+      # flag. So CI's topology job had nothing to wait on for the
+      # archive, left it out of the wait list, and reported green with
+      # the archive dead. One missing flag, all the way to a false-green
+      # required check.
+      #
+      # Note what this still cannot do: `restart: unless-stopped` cannot
+      # restart a process that is hung but alive. The healthcheck is what
+      # makes that state visible.
+      test: ["CMD", "/archive", "-healthcheck", "-addr", "0.0.0.0:8081"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
     restart: unless-stopped
 
   # The demo host as a browser INSIDE this network sees it.
@@ -320,6 +337,10 @@ services:
       - "127.0.0.1:9090:9090"
     volumes:
       - ./deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Mounted beside the config because rule_files resolves relative to
+      # it. Without this mount Prometheus starts, serves, and evaluates
+      # no rules — a monitoring stack that looks up and is not watching.
+      - ./deploy/observability/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prom-data:/prometheus
     restart: unless-stopped
 
