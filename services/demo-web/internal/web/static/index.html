@@ -114,6 +114,12 @@
       <tbody id="reasons"></tbody>
     </table>
     <p class="status">evaluation <code id="evalid"></code></p>
+    <!-- The other half of the loop. This host application tells Ghost
+         Trace what its own action turned out to be, which is where every
+         future calibration gets its ground truth. Empty when nothing was
+         filed — a challenge has not turned out yet, and fail-open has no
+         evaluation to label. -->
+    <p class="status" id="outcomeline"></p>
   </div>
 
   <p class="note">
@@ -215,6 +221,13 @@
     document.getElementById("events").textContent = d.evidence.events;
     document.getElementById("duration").textContent = (d.evidence.duration_ms / 1000).toFixed(1) + "s";
     document.getElementById("evalid").textContent = d.evaluation_id;
+
+    // Reports what the SERVER says it filed, never what this page
+    // assumes follows from the verdict. The two differ exactly when the
+    // label could not be stored, which is the case worth seeing.
+    document.getElementById("outcomeline").textContent = d.outcome_reported
+      ? "outcome filed: " + d.outcome_reported
+      : "no outcome filed — nothing has turned out yet";
 
     var tb = document.getElementById("reasons");
     tb.innerHTML = "";

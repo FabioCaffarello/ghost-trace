@@ -93,10 +93,27 @@ func startDemo(t *testing.T, apiBase, captureLog string) *httptest.Server {
 type stubDecisions struct {
 	out map[string]any
 	err error
+
+	// filed collects the bodies passed to Report. A pointer because the
+	// stub is passed by value and a value receiver cannot otherwise
+	// record what it was asked to file — which is the whole assertion
+	// for the labels channel.
+	filed     *[]string
+	reportErr error
 }
 
 func (s stubDecisions) Decide(context.Context, []byte) (map[string]any, error) {
 	return s.out, s.err
+}
+
+func (s stubDecisions) Report(_ context.Context, body []byte) error {
+	if s.reportErr != nil {
+		return s.reportErr
+	}
+	if s.filed != nil {
+		*s.filed = append(*s.filed, string(body))
+	}
+	return nil
 }
 
 // failingSink proves a capture failure costs a log line, not the
@@ -320,5 +337,111 @@ func TestLoginAppendsCaptureRow(t *testing.T) {
 	}
 	if _, ok := row["evaluation_id"]; !ok {
 		t.Error("row missing evaluation_id")
+	}
+}
+
+// The labels channel. Until PR-E6 `POST /v1/outcomes` had no caller
+// anywhere in the product — only the topology gates reached it — so the
+// endpoint every future calibration depends on was exercised solely by
+// the scripts that check it.
+func TestTheApplicationFilesWhatItsOwnActionTurnedOutToBe(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		decision map[string]any
+		want     string
+	}{
+		{
+			name:     "allow — the user was signed in",
+			decision: map[string]any{"evaluation_id": "ev_1", "decision": "allow"},
+			want:     "login_success",
+		},
+		{
+			name:     "block — the user was refused",
+			decision: map[string]any{"evaluation_id": "ev_2", "decision": "block"},
+			want:     "login_failure",
+		},
+		{
+			// The case worth having a test for. A challenge means the
+			// application is NOT finished: there is no challenge_passed
+			// to file yet, and filing login_success because the request
+			// returned would label a session that was never let in.
+			// libs/decision rejects a label outside the enumeration; a
+			// wrong label INSIDE it is the same damage with nothing left
+			// to catch it.
+			name:     "challenge — nothing has turned out yet",
+			decision: map[string]any{"evaluation_id": "ev_3", "decision": "challenge"},
+			want:     "",
+		},
+		{
+			// Fail-open synthesises a verdict with no evaluation behind
+			// it. There is nothing on the other side to label.
+			name:     "fail-open — there is no evaluation to label",
+			decision: map[string]any{"evaluation_id": "", "decision": "allow", "mode": "fail-open"},
+			want:     "",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var filed []string
+			demo := startDemoWithPorts(t,
+				stubDecisions{out: tc.decision, filed: &filed}, NoCapture{})
+
+			_, body := postLogin(t, demo, map[string]any{
+				"session_token": "st_webtest", "username": "x",
+			})
+
+			if tc.want == "" {
+				if len(filed) != 0 {
+					t.Errorf("filed %v, want nothing", filed)
+				}
+				if _, ok := body["outcome_reported"]; ok {
+					t.Errorf("response claims a label was filed: %v", body["outcome_reported"])
+				}
+				return
+			}
+
+			if len(filed) != 1 {
+				t.Fatalf("filed %d labels, want 1", len(filed))
+			}
+			var got map[string]any
+			if err := json.Unmarshal([]byte(filed[0]), &got); err != nil {
+				t.Fatalf("the body is not JSON: %v", err)
+			}
+			if got["outcome"] != tc.want {
+				t.Errorf("outcome = %v, want %q", got["outcome"], tc.want)
+			}
+			if got["evaluation_id"] != tc.decision["evaluation_id"] {
+				t.Errorf("evaluation_id = %v, want %v", got["evaluation_id"], tc.decision["evaluation_id"])
+			}
+			// The response tells the page what was filed, so an operator
+			// reads the label rather than inferring it.
+			if body["outcome_reported"] != tc.want {
+				t.Errorf("outcome_reported = %v, want %q", body["outcome_reported"], tc.want)
+			}
+		})
+	}
+}
+
+// A label that could not be filed must not cost the user their login —
+// they are already signed in, and refusing them because a record failed
+// is the detector-takes-down-the-login failure §5 exists to prevent. But
+// the response must not then claim a label that was never stored.
+func TestAnUnfiledLabelCostsALogLineAndNotTheLogin(t *testing.T) {
+	demo := startDemoWithPorts(t, stubDecisions{
+		out:       map[string]any{"evaluation_id": "ev_9", "decision": "allow"},
+		reportErr: errors.New("outcomes: 503 Service Unavailable"),
+	}, NoCapture{})
+
+	status, body := postLogin(t, demo, map[string]any{
+		"session_token": "st_webtest", "username": "x",
+	})
+
+	if status != http.StatusOK {
+		t.Errorf("status = %d, want 200: the login stands", status)
+	}
+	if body["decision"] != "allow" {
+		t.Errorf("decision = %v, want allow", body["decision"])
+	}
+	if v, ok := body["outcome_reported"]; ok {
+		t.Errorf("response claims %v was filed, and it was not", v)
 	}
 }

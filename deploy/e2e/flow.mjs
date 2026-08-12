@@ -23,7 +23,8 @@
  *   page → sdk.js → POST /v1/sessions → POST /v1/telemetry
  *        → NATS → snapshot KV
  *        → demo-web calls POST /v1/decisions server-to-server
- *        → verdict rendered → records committed to the archive
+ *        → verdict rendered → demo-web files POST /v1/outcomes
+ *        → records committed to the archive
  *
  * WHAT IT IS NOT. It is not a measurement. The adversarial tiers in
  * experiments/ measure DETECTION and take about seven minutes; this
@@ -47,7 +48,7 @@ const ENGINE = process.env.GT_ENGINE_BASE || "http://decision-engine:8082";
 const ARCHIVE = process.env.GT_ARCHIVE_BASE || "http://archive:8081";
 const CHROME = process.env.GT_CHROME || "";
 
-// The archive commits asynchronously. This is how long link 7 waits for
+// The archive commits asynchronously. This is how long link 8 waits for
 // the stream to drain before calling it a loss — generous, because a
 // timeout here must mean "did not arrive", not "arrived slowly".
 const DRAIN_TIMEOUT_MS = 60_000;
@@ -112,7 +113,7 @@ const seen = { sdk: null, sessions: null, telemetry: [], failures: [], aborted: 
 async function run() {
   // Read before anything is driven. The archive is empty in this
   // project — the gate brings its own topology up — but a baseline read
-  // is what makes link 7 a DELTA rather than an absolute, and a delta
+  // is what makes link 8 a DELTA rather than an absolute, and a delta
   // survives a rerun against a topology that was already carrying rows.
   const archiveBefore = await counter(ARCHIVE, "archive_position_committed");
   const engineBefore = await counter(ENGINE, "http_requests_total", {
@@ -122,6 +123,10 @@ async function run() {
   const collectorBefore = await counter(COLLECTOR, "http_requests_total", {
     route: "POST /v1/decisions",
     status: "200",
+  });
+  const outcomeBefore = await counter(ENGINE, "http_requests_total", {
+    route: "POST /v1/outcomes",
+    status: "202",
   });
 
   /* ---- link 1: the page ---- */
@@ -199,7 +204,7 @@ async function run() {
   // it has already handed to the network — this run saw three ERR_ABORTED
   // for batches the collector logged as 202. Whether anything was
   // actually lost is not a question the browser can answer, and it is
-  // the question link 7 exists to answer from the archive's books. So
+  // the question link 8 exists to answer from the archive's books. So
   // these are reported, not failed on.
   page.on("requestfailed", (req) => {
     const rec = `${req.url()} — ${req.failure()?.errorText}`;
@@ -308,6 +313,7 @@ async function run() {
       events: document.getElementById("events")?.textContent?.trim(),
       evalid: document.getElementById("evalid")?.textContent?.trim(),
       status: document.getElementById("status")?.textContent?.trim(),
+      outcome: document.getElementById("outcomeline")?.textContent?.trim(),
     }));
 
     check(!!shown.evalid, `the host application rendered a verdict (evaluation ${shown.evalid || "none"})`);
@@ -364,16 +370,44 @@ async function run() {
     if (seen.aborted.length) {
       console.log(
         `  note  ${seen.aborted.length} telemetry batch(es) were aborted by the browser ` +
-          "(keepalive); link 7 is what decides whether anything was lost",
+          "(keepalive); link 8 is what decides whether anything was lost",
       );
     }
+
+    /* ---- link 7: the loop closes ---- */
+    link(7, "the loop closes — the application says what happened");
+    // `POST /v1/outcomes` is one of the contract's four endpoints and,
+    // until the demo host filed a label, no product code called it at
+    // all: `kill-test` and `loss-audit` reached it and nothing else, so
+    // the channel every future calibration depends on was exercised
+    // solely by the gates that check it.
+    //
+    // The COUNTER is the assertion; the page's line is a cross-check.
+    // Asking the page whether the label was filed and believing the page
+    // is the shape this repository keeps finding — a guard that checks
+    // what the claim already said. These are two independent sources and
+    // they have to agree.
+    const outcomeAfter = await counter(ENGINE, "http_requests_total", {
+      route: "POST /v1/outcomes",
+      status: "202",
+    });
+    check(
+      moved(outcomeBefore, outcomeAfter) >= 1,
+      `the engine accepted a label for this evaluation ` +
+        `(${outcomeBefore ?? "absent"} -> ${outcomeAfter ?? "absent"})`,
+    );
+    check(
+      /outcome filed: login_success/.test(shown.outcome || ""),
+      `and the page reports the one the server says it filed ` +
+        `(${shown.outcome || "no outcome line rendered"})`,
+    );
   } finally {
     await context.close();
     await browser.close();
   }
 
-  /* ---- link 7: the archive ---- */
-  link(7, "the records reach the durable store");
+  /* ---- link 8: the archive ---- */
+  link(8, "the records reach the durable store");
   // Read from the archive's DURABLE position, never its process
   // counters: 3.4 established that counters reset on restart, so a
   // reconciliation built on them measures one process's lifetime.
@@ -397,15 +431,16 @@ async function run() {
     await new Promise((r) => setTimeout(r, 1000));
   }
   check(committed !== null, "the archive publishes a durable position at all");
-  // A FLOOR, deliberately: the evaluation the engine archived lands here
-  // too, so the real number is higher. Asserting equality would make the
-  // gate a spec for how many records a decision costs, which is not a
-  // property this gate has any business freezing.
+  // A FLOOR, deliberately: the evaluation the engine archived and the
+  // label link 7 filed both land here too, so the real number is higher.
+  // Asserting equality would make the gate a spec for how many records a
+  // decision costs, which is not a property this gate has any business
+  // freezing.
   check(
     moved(archiveBefore, committed) >= expected,
     `it committed at least what this run produced ` +
       `(${archiveBefore ?? "absent"} -> ${committed ?? "absent"}, floor of ${expected}: ` +
-      `1 session + ${expected - 1} accepted batch(es), plus the evaluation)`,
+      `1 session + ${expected - 1} accepted batch(es), plus the evaluation and the label)`,
   );
   check(pending === 0, `the stream drained (pending=${pending ?? "absent"})`);
   check(unaccounted === 0, `and nothing is unaccounted (unaccounted=${unaccounted ?? "absent"})`);
@@ -432,7 +467,7 @@ for (const l of links) {
 // A link that was never reached is reported as such rather than left
 // off. Seven links minus the ones that ran is the number that matters
 // when the run died halfway.
-for (let n = links.length + 1; n <= 7; n++) console.log(`  ------  link ${n} — not reached`);
+for (let n = links.length + 1; n <= 8; n++) console.log(`  ------  link ${n} — not reached`);
 
 if (crashed) {
   console.log(`\n  the run did not finish: ${crashed.stack || crashed.message}`);

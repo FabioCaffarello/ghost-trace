@@ -1,6 +1,6 @@
 # Project Rules and Guidelines
 
-> Auto-generated from .context/docs on 2026-08-12T17:59:06.332Z
+> Auto-generated from .context/docs on 2026-08-12T21:02:43.916Z
 
 ## README
 
@@ -82,7 +82,7 @@ minutes.
 change could affect whether the system still *works*. It drives the
 product path a visitor takes — page, SDK, session, telemetry, the
 snapshot, the host application's decision, the archive — with a real
-browser, and asserts seven links by name. Unlike the other topology
+browser, and asserts eight links by name. Unlike the other topology
 gates it needs nothing running first: it brings its own topology up in a
 compose project of its own and drops it afterwards. What it asserts, and
 the one thing it cannot see, are in

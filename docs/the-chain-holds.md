@@ -3,9 +3,9 @@
 The first time anything in this repository ran the product end to end
 and failed when it did not.
 
-Written during the work. The parts worth reading are the two runs that
-were supposed to be red, because both of them were — and the second one
-found two bugs in the gate itself.
+Written during the work. The parts worth reading are the runs that were
+supposed to be red, because each of them was — and one of them found two
+bugs in the gate itself.
 
 ---
 
@@ -55,17 +55,23 @@ verdict. Nothing is red anywhere.
    │   network)  ├─────►│       sessions   │    │        │    │             │
    │             │   4  │  POST /v1/       │    │        │    │             │
    │             ├─────►│       telemetry  ├───►│ stream ├───►│  committed  │
-   └──────┬──────┘      └──────────────────┘    │  + KV  │  7 │ unaccounted │
+   └──────┬──────┘      └──────────────────┘    │  + KV  │  8 │ unaccounted │
           │ submits                              └───┬────┘    │     = 0     │
           ▼                                          │ 6       └─────────────┘
    ┌─────────────┐                          ┌────────▼─────────┐
    │  demo-web,  │            5             │ decision-engine  │
    │ server-side ├─────────────────────────►│ judges the       │
    │ secret key  │  POST /v1/decisions      │ SNAPSHOT         │
-   └─────────────┘                          └──────────────────┘
+   │             │            7             │                  │
+   │             ├─────────────────────────►│                  │
+   └─────────────┘  POST /v1/outcomes       └──────────────────┘
+                    the label for what the
+                    application itself did
 ```
 
-Seven links, each failing by name:
+Eight links, each failing by name. [ADR-0015](../contract/decisions/0015-the-e2e-gate-asserts-connection-not-detection.md)
+describes seven; the eighth arrived immediately afterwards with the
+outcomes loop, and changes none of that record's three decisions.
 
 | # | what must hold | what it catches |
 | --- | --- | --- |
@@ -75,16 +81,19 @@ Seven links, each failing by name:
 | 4 | every batch was accepted and carried its bearer token | wire drift, unattributed telemetry |
 | 5 | a verdict rendered, **and the engine's `/v1/decisions` counter moved while the collector's did not** | fail-open; and the collector answering instead of the engine |
 | 6 | `events > 0` and `confidence > 0` | a cold start, which scores identically and looks healthy |
-| 7 | the committed position advanced and `unaccounted == 0` | records accepted and never made durable |
+| 7 | the engine's `/v1/outcomes` counter moved, **and** the page reports the label the server says it filed | a labels channel with no caller; a page claiming a label that was never stored |
+| 8 | the committed position advanced and `unaccounted == 0` | records accepted and never made durable |
 
 Link 5 is the one that carries the design. A verdict on a screen cannot
 tell you which service produced it, and both wrong answers — fail-open
 and the-collector-answered — render something correct-looking. Only the
 two counters, read before and after and compared, separate them.
 
-## The two runs that were supposed to be red
+## The runs that were supposed to be red
 
-A gate nobody has seen fail is a gate nobody has tested.
+A gate nobody has seen fail is a gate nobody has tested. These two
+predate the eighth link, so they were seven-link runs; the third is in
+*The endpoint with no caller* below.
 
 **The demo dialled the collector instead of the engine.** The page
 rendered `allow`, with `events=36`, `confidence=0.292`, mode `monitor`,
@@ -111,6 +120,39 @@ That second run also found two defects in the gate:
 
 Neither would have been found by a green run. That is what the red ones
 are for.
+
+## The endpoint with no caller
+
+Writing link 7 turned up something the gate could not have found,
+because there was nothing to drive: **`POST /v1/outcomes` had no caller
+anywhere in the product.** One of the contract's four endpoints — the
+labels channel, "the channel every future calibration depends on" by its
+own doc comment — was reached only by `deploy/kill-test.py` and
+`deploy/loss-audit.py`. It was exercised exclusively by the gates that
+check it.
+
+So the demo host now files what its own action turned out to be, the way
+a real integrator does: `allow` → `login_success`, `block` →
+`login_failure`. Two of the seven labels stay unreachable from a login
+handler and that is correct — `fraud_confirmed` and `user_appealed`
+arrive days later from a chargeback or a support ticket, which is why
+the labels channel is a separate endpoint rather than a field on the
+decision response.
+
+The third case is the one worth a test. A `challenge` decision means the
+application **is not finished**: there is no `challenge_passed` to file
+yet, and filing `login_success` because the request returned would label
+a session that was never let in. `libs/decision` rejects a label outside
+the enumeration on the grounds that a wrong one silently degrades every
+future calibration — and a wrong label *inside* the enumeration is that
+same damage with nothing left to catch it. So it files nothing, and the
+page says so.
+
+Link 7's red proof was one mutation: `login_success` → `signed_in`, a
+label outside §3's enumeration. Link 7 failed on both checks, the other
+seven passed, and the archive committed **4** records instead of 5 —
+exactly the one that was refused. It proved the gate and the engine's
+enum rejection in the same run.
 
 ## What it deliberately does not say
 
