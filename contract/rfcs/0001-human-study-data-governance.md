@@ -110,7 +110,13 @@ make forget P=p07
 It must:
 
 1. rewrite `results/human_sessions.jsonl` without that participant's
-   rows, and delete the matching archive records by `subject_id`;
+   rows. ~~and delete the matching archive records by `subject_id`~~ —
+   **struck.** That clause assumed the participant code reaches the
+   archive. [ADR-0014](../decisions/0014-a-study-identity-never-enters-the-archive.md)
+   stops it from ever getting there, so there is nothing to delete and
+   the append-only guarantee never has to be renegotiated. The clause is
+   obsolete rather than unmet, and should be read as struck when this
+   RFC is considered for acceptance;
 2. append to a deletion log the **participant code, the date, and the
    number of rows removed** — never their content, so the log does not
    reconstitute what it records;
@@ -161,7 +167,7 @@ The gate, as a checklist, so that "are we ready" has an answer that is
 not a judgement call:
 
 - [ ] this RFC is **accepted**, and `contract/rfcs/README.md` says so;
-- [ ] `make forget` exists, is tested, and has been run once against
+- [x] `make forget` exists, is tested, and has been run once against
       synthetic rows;
 - [ ] the consent script names the retention period, the deletion right,
       and the limit in §2 — that a published number cannot be recalled;

@@ -559,6 +559,19 @@ kill-test: ## Take each service away and check the degradation promises (needs t
 #
 # Needs the collector and demo-web up; see experiments/README.md. It
 # refuses rather than skips.
+# Deletion on request, with no reason given and no negotiation.
+#
+# RFC-0001 §2 asks for a target rather than a promise to remember: "an
+# unimplemented deletion mechanism is indistinguishable from no deletion
+# mechanism at the only moment it matters." It does NOT delete from the
+# archive, and does not need to — ADR-0014 keeps the participant code out
+# of it, so there is nothing there to remove.
+#
+#   make forget P=p07
+.PHONY: forget
+forget: ## Remove one participant's captured rows, on request (P=<code>)
+	@python3 $(EXPERIMENTS)/forget.py -P "$(P)"
+
 .PHONY: capture-dryrun
 capture-dryrun: ## Drive synthetic participants through the capture protocol (needs collector + demo-web)
 	@python3 $(EXPERIMENTS)/capture_dryrun.py $(DRYRUN_ARGS)
@@ -618,7 +631,7 @@ parity: ## Archive parity against a real broker (needs GT_NATS_URL)
 experiments-check: ## Syntax-check every tier and run the asserted statistics selftest
 	@echo "== python syntax"
 	@cd $(EXPERIMENTS) && python3 -m compileall -q analyze.py numbers.py run.py make_links.py \
-		publish_manifest.py schema/ \
+		publish_manifest.py forget.py capture_dryrun.py schema/ \
 		tiers/tier3_undetected_chromedriver.py testdata/make_synthetic_human.py
 	@echo "== node syntax"
 	@cd $(EXPERIMENTS) && for f in tiers/*.js lib/*.js *.mjs; do node --check "$$f" || exit 1; done
@@ -628,6 +641,8 @@ experiments-check: ## Syntax-check every tier and run the asserted statistics se
 	@cd $(EXPERIMENTS) && python3 -m schema --selftest
 	@echo "== published manifests satisfy the schema"
 	@cd $(EXPERIMENTS) && python3 -m schema ../docs/results/numbers-*.json
+	@echo "== forget selftest (asserted)"
+	@python3 $(EXPERIMENTS)/forget.py --selftest
 	@echo "== numbers-check selftest (asserted)"
 	@python3 $(EXPERIMENTS)/numbers_check.py --selftest
 	@echo "== release-derivation selftest (asserted)"
