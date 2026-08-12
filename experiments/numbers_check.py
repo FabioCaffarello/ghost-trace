@@ -101,22 +101,25 @@ def pick_newest(paths, stamp) -> str | None:
     return max(paths, key=stamp)
 
 
-def newest_manifest(want: str, want_load: str = "idle") -> str | None:
-    """The newest published manifest of the same TOPOLOGY and the same
-    LOAD CONDITION.
+def newest_manifest(want: str, want_load: str = "idle",
+                    want_archive: str | None = None) -> str | None:
+    """The newest published manifest of the same TOPOLOGY, the same LOAD
+    CONDITION and the same ARCHIVE BACKEND.
 
     Not simply the newest. Once a composed baseline exists, "newest"
     alone would hand a monolith run a composed one to be judged against,
     and the topology check would then reject a perfectly good run for a
     reason that is the picker's fault rather than the run's.
 
-    Load condition joins the filter for exactly the same reason. The two
-    together are what "the same kind of measurement" means here, and a
-    picker that ignored either would manufacture the failure the checks
-    downstream exist to report.
+    Load condition and archive backend join the filter for exactly the
+    same reason. The three together are what "the same kind of
+    measurement" means here, and a picker that ignored any of them would
+    manufacture the failure the checks downstream exist to report.
     """
     same = [p for p in glob.glob(MANIFEST_GLOB)
-            if topology(load(p)) == want and load_condition(load(p)) == want_load]
+            if topology(load(p)) == want
+            and load_condition(load(p)) == want_load
+            and (want_archive is None or archive(load(p)) == want_archive)]
     return pick_newest(same, lambda p: load(p)["provenance"]["generated_at"])
 
 
@@ -177,6 +180,42 @@ def unseeded(base: dict) -> bool:
     The pre-seeding manifest carries `seed: null` — kept as history,
     never usable as an anchor. Pure so the selftest can hold it."""
     return not (base.get("provenance", {}).get("run", {}) or {}).get("seed")
+
+
+def archive(d: dict) -> str | None:
+    """What the decision path wrote evaluations through.
+
+    Where the key is ABSENT, it is read from the topology, which is what
+    every manifest published before the field existed actually was: a
+    monolith run started its own binary with -data (a local substrate),
+    and a composed run measured compose, where the collector runs with
+    -nats and the stream is the archive. Present-but-null is different
+    and means nobody recorded it — see unrecorded_archive.
+    """
+    run = d.get("provenance", {}).get("run", {}) or {}
+    if "archive" not in run:
+        return "substrate" if topology(d) == "monolith" else "stream"
+    return run["archive"]
+
+
+def unrecorded_archive(base: dict) -> bool:
+    """A baseline whose decision-path store nobody wrote down."""
+    run = base.get("provenance", {}).get("run", {}) or {}
+    return "archive" in run and not run["archive"]
+
+
+def check_archive(base: dict, run: dict, rep: Report) -> None:
+    b, n = archive(base), archive(run)
+    if b != n:
+        rep.fail(
+            f"this run writes evaluations through {n!r} and the baseline through "
+            f"{b!r}. Both writes sit on /v1/decisions, and a local substrate "
+            f"commit with synchronous=FULL is not a NATS publish — comparing "
+            f"them reads a change of store as a change in the decision path, "
+            f"which is the confound the two published baselines already carry. "
+            f"Publish a baseline for {n!r} (`make numbers-manifest`) and compare "
+            f"against that."
+        )
 
 
 def check_load(base: dict, run: dict, rep: Report) -> None:
@@ -355,6 +394,7 @@ def verdict(base: dict, run: dict) -> Report:
     rep = Report()
     check_topology(base, run, rep)
     check_load(base, run, rep)
+    check_archive(base, run, rep)
     check_detection(base, run, rep)
     check_absent_tiers(base, run, rep)
     check_session(base, run, rep)
@@ -582,7 +622,42 @@ def selftest() -> int:
         failures += 1
         print("  FAIL  an unseeded baseline was accepted as an anchor")
 
-    total = len(cases) + 7
+    # The archive backend, the third thing "the same kind of
+    # measurement" has to mean. Same three-part shape as check_load.
+    sub = {"provenance": {"run": {"archive": "substrate"}}}
+    strm = {"provenance": {"run": {"archive": "stream"}}}
+
+    r = Report()
+    check_archive(sub, strm, r)
+    if not r.failures:
+        failures += 1
+        print("  FAIL  a substrate baseline against a stream run was not refused")
+    else:
+        print("  ok    a substrate baseline against a stream run is refused")
+
+    # Absence is read from the topology, because that is what every
+    # manifest published before the field existed actually was.
+    old_monolith = {"provenance": {"run": {"topology": "monolith"}}}
+    old_composed = {"provenance": {"run": {"topology": "composed"}}}
+    if archive(old_monolith) == "substrate" and archive(old_composed) == "stream":
+        print("  ok    a manifest with no archive field is read from its topology, "
+              "which is what every run before this field was")
+    else:
+        failures += 1
+        print(f"  FAIL  archive fallback gave {archive(old_monolith)} / "
+              f"{archive(old_composed)}, want substrate / stream")
+
+    # Present-but-null is NOT absence: it means an external deployment
+    # nobody described, and a baseline nobody described cannot anchor.
+    if unrecorded_archive({"provenance": {"run": {"archive": None}}}) and \
+            not unrecorded_archive(sub) and not unrecorded_archive(old_monolith):
+        print("  ok    a baseline that records no archive is refused as an anchor, "
+              "while an absent field falls back")
+    else:
+        failures += 1
+        print("  FAIL  present-but-null archive was not told apart from absent")
+
+    total = len(cases) + 10
     print(f"\n  {total - failures}/{total} numbers-check cases hold")
     return 1 if failures else 0
 
@@ -608,12 +683,16 @@ def main() -> int:
 
     want = topology(run)
     want_load = load_condition(run)
-    baseline_path = args.baseline or newest_manifest(want, want_load)
+    want_archive = archive(run)
+    baseline_path = args.baseline or newest_manifest(want, want_load, want_archive)
     if baseline_path is None:
-        return no_baseline(f"{want} under {want_load} load")
+        return no_baseline(f"{want} under {want_load} load, archiving to {want_archive}")
 
     base = load(baseline_path)
 
+    # Two ways a baseline can fail to anchor, and they are separate
+    # facts about it rather than one: an adversary nobody can replay,
+    # and a decision-path store nobody wrote down.
     if unseeded(base):
         print(f"numbers-check: the baseline "
               f"{os.path.relpath(baseline_path, ROOT)} records no adversary "
@@ -622,6 +701,16 @@ def main() -> int:
               f"replay cannot anchor a comparison.", file=sys.stderr)
         print("fix: compare against a seeded manifest, or publish one with "
               "`make numbers-manifest`", file=sys.stderr)
+        return 1
+
+    if unrecorded_archive(base):
+        print(f"numbers-check: the baseline "
+              f"{os.path.relpath(baseline_path, ROOT)} does not record which "
+              f"store its decision path wrote through, so it cannot anchor "
+              f"number 3 — the write sits on /v1/decisions and a substrate "
+              f"commit is not a stream publish.", file=sys.stderr)
+        print("fix: re-run with GT_ARCHIVE set, or compare against a manifest "
+              "that records it", file=sys.stderr)
         return 1
 
     bmaj = str(base.get("schema_version", "")).split(".")[0]
@@ -639,7 +728,8 @@ def main() -> int:
     print(f"               generated {prov['generated_at']}, "
           f"seed {prov['run'].get('seed', '(none recorded)')}, "
           f"commit {prov['git']['commit'][:12]}")
-    print(f"               topology {topology(base)} -> {topology(run)}")
+    print(f"               topology {topology(base)} -> {topology(run)}, "
+          f"archive {archive(base)} -> {archive(run)}")
     print()
 
     for tier in sorted(run["detection"]):

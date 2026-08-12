@@ -90,6 +90,25 @@ SEED = os.environ.get("GT_SEED", "ghost-trace-v1")
 # compare across topologies.
 LOAD_CONDITION = os.environ.get("GT_LOAD", "idle")
 
+# ARCHIVE names what the decision path writes THROUGH, and it is a
+# second thing `topology` was silently carrying.
+#
+# The two published baselines differ by more than one variable: the
+# monolith runs wrote evaluations into a local SQLite substrate with
+# synchronous=FULL, the composed run published them onto a stream. Both
+# writes sit on /v1/decisions, so part of the p99 difference the phase
+# gate reads as "the cost of the split" is the cost of a different
+# store. contract/roadmap.md recorded this as unguardable; it is not —
+# it is unrecorded, which is a different problem with a known fix, and
+# `load` got exactly this treatment one phase earlier.
+#
+# In local mode the harness starts the binary itself with -data, so it
+# knows. Against an external deployment it cannot know, and guessing
+# would be worse than saying so: GT_ARCHIVE names it, and null means
+# nobody wrote it down — usable as a run, refused as a baseline.
+ARCHIVE = ("substrate" if not EXTERNAL_BASE
+           else (os.environ.get("GT_ARCHIVE") or None))
+
 # Sample sizes. Bot tiers are free, so they are generous; the browser
 # tiers cost about two seconds a session, so they are not. The defaults
 # are the published run; GT_N_TIER<k> overrides one tier for smoke runs
@@ -170,6 +189,7 @@ def main():
         log(f"targeting external slice at {BASE} (demo page at {DEMO_BASE})")
         log(f"topology: {TOPOLOGY} — decisions answered by {ENGINE_BASE}")
         log(f"load: {LOAD_CONDITION}")
+        log(f"archive: {ARCHIVE or '(not recorded — set GT_ARCHIVE)'}")
     else:
         log("building")
         for svc, cmd_path, out in ((SVC, "./cmd/ghost-trace", "ghost-trace"),
@@ -353,6 +373,7 @@ def provenance():
             # figure; both are true and they are not the same
             # measurement.
             "load": LOAD_CONDITION,
+            "archive": ARCHIVE,
             "base": BASE,
             "demo_base": DEMO_BASE,
             "seed": SEED,

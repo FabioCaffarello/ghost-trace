@@ -140,6 +140,21 @@ written down anywhere but here.
 - **Number 3's interpretation is unguarded.** The two published
   baselines differ mostly by archive backend rather than by topology.
   The comparison is guarded; the reading is not, and cannot be.
+
+> **"Cannot be" was wrong, and PR-5.0g fixes it.** The confound was not
+> unguardable — it was *unrecorded*, which is a different problem with a
+> precedent one PR earlier: `check_load` had already given exactly this
+> treatment to the load condition. `provenance.run.archive` now names
+> what the decision path writes evaluations through (`substrate` |
+> `stream` | `none`), the baseline picker filters on it, and
+> `check_archive` refuses across it. Where the field is absent it is
+> read from the topology, which is what every earlier manifest was.
+>
+> Finding the field also found the label: the compose `experiments`
+> profile never set `GT_ENGINE_BASE`, so a run of the documented
+> command recorded `topology: monolith` while measuring the composed
+> deployment — the collector mounts the decision endpoints too, so
+> nothing failed and the manifest was simply wrong about itself.
 - **The demo is load-bearing for the invariant** while §6 calls it a
   stand-in. Five of six tiers drive its page.
 
