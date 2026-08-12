@@ -604,6 +604,8 @@ experiments-check: ## Syntax-check every tier and run the asserted statistics se
 	@cd $(EXPERIMENTS) && python3 analyze.py --selftest
 	@echo "== numbers.json schema selftest"
 	@cd $(EXPERIMENTS) && python3 -m schema --selftest
+	@echo "== published manifests satisfy the schema"
+	@cd $(EXPERIMENTS) && python3 -m schema ../docs/results/numbers-*.json
 	@echo "== numbers-check selftest (asserted)"
 	@python3 $(EXPERIMENTS)/numbers_check.py --selftest
 	@echo "== release-derivation selftest (asserted)"
