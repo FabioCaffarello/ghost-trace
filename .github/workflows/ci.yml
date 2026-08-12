@@ -329,6 +329,30 @@ jobs:
       - name: Take each service away
         run: make kill-test
 
+      # A quiet topology, because the next step asserts about one.
+      #
+      # The first CI run of `make loss-audit` failed here and the failure
+      # was the useful kind: the gate ran directly after `kill-test`,
+      # which stops and restarts three services and returns without
+      # waiting for them to settle, so loss-audit's "25 records through
+      # an INTACT topology" scenario inherited a topology that had just
+      # been taken apart. It reported four drops and no commit delta in a
+      # run it believes to be clean. The gates each pass alone and do not
+      # compose; the fix is to give this one the quiet system its
+      # assertions describe, not to teach it to tolerate a noisy one.
+      - name: A quiet topology for the accounting gate
+        run: |
+          docker compose --profile core down -v
+          docker compose --profile core up -d
+          for svc in collector decision-engine demo-web archive; do
+            for i in $(seq 1 60); do
+              state=$(docker inspect -f '{{.State.Health.Status}}' "ghost-trace-$svc-1" 2>/dev/null || echo starting)
+              [ "$state" = healthy ] && break
+              sleep 2
+            done
+            [ "$state" = healthy ] || { echo "::error::$svc never became healthy"; docker compose --profile core logs "$svc"; exit 1; }
+          done
+
       # The Phase 3 gate, which until PR-5.6a ran only when somebody
       # remembered. It reconciles against the archive's DURABLE position
       # rather than process counters, and it refuses rather than skips —

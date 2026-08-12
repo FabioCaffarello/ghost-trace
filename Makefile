@@ -534,9 +534,17 @@ shadow-http: ## A/B the collector against the engine, and check the demo is wire
 kill-test: ## Take each service away and check the degradation promises (needs the topology up)
 	@python3 deploy/kill-test.py
 
-# The accounting phase's gate. Deliberately outside `make ci`: it stops
-# and starts containers, which a pull-request runner should not be doing
-# to a shared daemon, and it takes minutes rather than seconds.
+# The accounting phase's gate. It now runs in CI's topology job — the
+# comment here used to say it was deliberately outside, on the grounds
+# that it stops and starts containers, and that reason had already been
+# overtaken: `make kill-test` runs in that same job and stops three
+# services by design. The runner's daemon is not shared, and the whole
+# gate is ninety seconds at twenty-five records a scenario.
+#
+# What is NOT in CI is `make load-gate`, and that distinction is the
+# real one. This target asserts ARITHMETIC — the books balance or they
+# do not, and the answer is the same on any machine. load-gate asserts
+# a RATE, which is a fact about the hardware as much as the code.
 #
 # It refuses when the topology is down. A gate that skips is the exact
 # failure this phase was opened to remove — `make shadow` skipping
