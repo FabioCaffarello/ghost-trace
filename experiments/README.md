@@ -269,27 +269,61 @@ a group chat; the second is something you can ask of one person.
 Each volunteer gets a link carrying their pseudonymous code:
 
 ```
-http://<host>:8080/?p=p07&arm=B&c=mouse-desktop&v=1
-http://<host>:8080/?p=p02&arm=A&c=trackpad-tired&v=17
+http://<host>:8083/?p=p07&arm=B&c=mouse-desktop&v=1
+http://<host>:8083/?p=p02&arm=A&c=trackpad-tired&v=17
 ```
+
+Port **8083**, not 8080. The page a volunteer opens is served by
+`demo-web`; 8080 is the collector, which serves the SDK and the API and
+has no page to show. This line said 8080 until PR-4.P2.
 
 - `p` participant code — pseudonymous, never a name
 - `arm` `A` or `B`
 - `c` condition label
 - `v` visit index, used for the habituation contrast
 
-Run the slice with `-capture-log` to record them:
+`-capture-log` is a **`demo-web`** flag, not a collector one. The
+collector never sees the labels — it sees a session like any other. Run
+both, from the repository root:
 
 ```bash
-go run ./cmd/ghost-trace -data .run-data \
-  -capture-log ../../experiments/results/human_sessions.jsonl \
-  -addr 0.0.0.0:8080
+# the collector: sessions, telemetry, the SDK
+go run ./services/collector/cmd/ghost-trace -data .run-data -addr 127.0.0.1:8080
+
+# the page the volunteer opens, and the only thing that writes the log
+go run ./services/demo-web/cmd/demo-web -addr 0.0.0.0:8083 \
+  -api http://127.0.0.1:8080 \
+  -capture-log experiments/results/human_sessions.jsonl
 ```
 
-The labels travel through the contract's existing `subject_id` and
-`context` fields rather than any new API surface. A session's cohort is a
-property of the experiment, not of the product — the engine must not know
-which population it is looking at.
+This block ran `./cmd/ghost-trace -capture-log` until PR-4.P2, which the
+collector has no flag for: an operator following it verbatim got
+`flag provided but not defined` and no capture at all.
+
+**Only `participant` crosses the wire**, as `subject_id` — the
+pseudonymous identity the host application asserts, which is exactly what
+`subject_id` is for. `arm`, `condition` and `visit` stay in `demo-web`
+and go straight into the capture row: a session's cohort is a property of
+the experiment, not of the product, and the engine must not know which
+population it is looking at.
+
+Once both are up, check the pipeline before anyone is invited:
+
+```bash
+make capture-dryrun DRYRUN_ARGS="--data .run-data"
+```
+
+It drives three participants who do not exist through the same path a
+real one takes, and asserts that each produces one labelled row, that the
+labels survive, and that `arm`, `condition` and `visit` reach neither the
+collector nor the archive. Without `--data` it says so rather than
+reporting the archive clean — an absent check is not a passing one.
+
+The older wording here said the labels travelled through `subject_id`
+**and `context`**. That was wrong twice over. `context` was removed from
+the contract at R1.14 — `libs/wire` records that it "was accepted, never
+reached the use case, and never reached the archive" — and the three
+cohort labels were never meant to cross at all.
 
 ### What volunteers should be told
 

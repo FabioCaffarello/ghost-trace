@@ -549,6 +549,20 @@ kill-test: ## Take each service away and check the degradation promises (needs t
 # It refuses when the topology is down. A gate that skips is the exact
 # failure this phase was opened to remove — `make shadow` skipping
 # without GT_NATS_URL is how a broken tenant lookup reached CI.
+# The human-study pipeline, driven by participants who do not exist.
+#
+# The false-positive rate is calendar-bound: it needs recruited people
+# and no engineering shortens that. What engineering can do is make sure
+# recruiting is the ONLY thing left — that on the day a volunteer opens
+# the link, nothing in the pipeline turns out to be broken. Before
+# PR-4.P2 the documented command did not run at all.
+#
+# Needs the collector and demo-web up; see experiments/README.md. It
+# refuses rather than skips.
+.PHONY: capture-dryrun
+capture-dryrun: ## Drive synthetic participants through the capture protocol (needs collector + demo-web)
+	@python3 $(EXPERIMENTS)/capture_dryrun.py $(DRYRUN_ARGS)
+
 .PHONY: loss-audit
 loss-audit: ## Drive traffic, break things, and make the archive's books balance (needs the topology up)
 	@python3 deploy/loss-audit.py
