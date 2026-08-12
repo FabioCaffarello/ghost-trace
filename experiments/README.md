@@ -300,6 +300,21 @@ This block ran `./cmd/ghost-trace -capture-log` until PR-4.P2, which the
 collector has no flag for: an operator following it verbatim got
 `flag provided but not defined` and no capture at all.
 
+Under compose the same flag is `GT_CAPTURE_LOG`, a path **inside** the
+container — `./experiments/results` is mounted at `/captures`:
+
+```bash
+GT_CAPTURE_LOG=/captures/human_sessions.jsonl \
+  docker compose --profile demo up -d
+```
+
+There is no separate capture service any more. There was one, and what
+made it safe was that it could not be started without the flag; a
+variable can simply be left unset, and a `demo-web` with no sink serves
+the study perfectly while recording nobody. `make capture-dryrun` is
+what closes that: it fails a run whose capture log did not grow, and
+prints both ways to turn capture on.
+
 **Only `participant` crosses the wire**, as `subject_id` — the
 pseudonymous identity the host application asserts, which is exactly what
 `subject_id` is for. `arm`, `condition` and `visit` stay in `demo-web`

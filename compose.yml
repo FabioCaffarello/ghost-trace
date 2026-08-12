@@ -7,10 +7,22 @@
 #                    docker compose --profile core up
 #                  With it up, `make shadow-http` A/Bs the collector
 #                  against the decision engine over real HTTP.
-#   demo           the topology with human-capture enabled; rows land in
-#                  ./experiments/results/human_sessions.jsonl on the host
-#                    docker compose --profile demo up
-#                  (core and demo both claim 127.0.0.1:8083 — run one)
+#   demo           the same topology. It used to differ — a SECOND
+#                  demo-web carrying -capture-log, which meant core and
+#                  demo both claimed 127.0.0.1:8083 and the comment here
+#                  had to warn against running both. Capture is a
+#                  configuration, not a topology, so it is one variable
+#                  now and the duplicate service is gone:
+#                    GT_CAPTURE_LOG=/captures/human_sessions.jsonl \
+#                      docker compose --profile demo up
+#                  Rows land in ./experiments/results/ on the host.
+#                  The profile itself no longer selects anything core
+#                  does not; it stays because `--profile demo` is in
+#                  written protocols, and a profile that selects NOTHING
+#                  starts zero containers and says nothing about why.
+#                  WITHOUT that variable the study runs with capture
+#                  silently off — which is why `make capture-dryrun`
+#                  refuses a run whose capture log did not grow.
 #   experiments    the adversarial tiers against the running topology
 #                    docker compose --profile core --profile experiments \
 #                      run --rm experiments
@@ -105,7 +117,7 @@ services:
   # never sees that key.
   demo-web:
     <<: *hardened
-    profiles: [core]
+    profiles: [core, demo]
     image: ghost-trace/demo-web:${IMAGE_TAG:-dev}
     build: &demo-build
       context: .
@@ -113,7 +125,7 @@ services:
       args:
         GOLANG_IMAGE: ${GOLANG_IMAGE:-golang:1.26-alpine}
         DISTROLESS_IMAGE: ${DISTROLESS_IMAGE:-gcr.io/distroless/static-debian12:nonroot}
-    command: &demo-command
+    command:
       - -addr=0.0.0.0:8083
       # TWO DIFFERENT KINDS OF ADDRESS, and they are not
       # interchangeable.
@@ -132,8 +144,27 @@ services:
       - -engine=${GT_ENGINE_SERVICE:-http://decision-engine:8082}
       - -site-key=${GT_SITE_KEY:-pk_demo}
       - -secret-key=${GT_SECRET_KEY:-sk_demo}
+      # Capture belongs to the demo host because it records what the
+      # HOST APPLICATION learned about a session, not what the collector
+      # observed. Empty — the default — disables it, which is the
+      # binary's own zero value and not a compose invention.
+      #
+      # This used to be a SECOND SERVICE, identical but for this one
+      # flag, and the two fought over 127.0.0.1:8083. What made the
+      # duplicate defensible was that the flag could not then be absent:
+      # `--profile demo` was capture, by construction. One variable
+      # cannot promise that, so the promise moved to a gate —
+      # `make capture-dryrun` fails a run whose capture log did not
+      # grow, and names this variable when it does.
+      - -capture-log=${GT_CAPTURE_LOG:-}
     ports:
       - "127.0.0.1:8083:8083"
+    volumes:
+      # Mounted whether or not capture is on. The alternative is a
+      # conditional mount, which compose cannot express, and an
+      # unwritable path discovered at the first participant rather than
+      # at startup.
+      - ./experiments/results:/captures
     depends_on:
       decision-engine:
         condition: service_healthy
@@ -143,29 +174,6 @@ services:
       timeout: 3s
       retries: 5
       start_period: 3s
-    restart: unless-stopped
-
-  # The capture variant for the human study: same image, capture log
-  # bind-mounted to the host where analyze.py reads it. Capture belongs
-  # to the demo host because it records what the HOST APPLICATION
-  # learned about a session, not what the collector observed.
-  demo-web-capture:
-    <<: *hardened
-    profiles: [demo]
-    image: ghost-trace/demo-web:${IMAGE_TAG:-dev}
-    build: *demo-build
-    command:
-      - -addr=0.0.0.0:8083
-      - -api=${GT_API_ORIGIN:-http://127.0.0.1:8080}
-      - -engine=${GT_ENGINE_SERVICE:-http://decision-engine:8082}
-      - -site-key=${GT_SITE_KEY:-pk_demo}
-      - -secret-key=${GT_SECRET_KEY:-sk_demo}
-      - -capture-log=/captures/human_sessions.jsonl
-    ports:
-      - "127.0.0.1:8083:8083"
-    volumes:
-      - ./experiments/results:/captures
-    healthcheck: *demo-health
     restart: unless-stopped
 
   # The event stream. JetStream on, file-backed, so a restart does not

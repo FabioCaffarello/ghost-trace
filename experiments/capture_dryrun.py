@@ -43,6 +43,28 @@ import wire  # noqa: E402
 COLLECTOR = os.environ.get("GT_BASE", "http://127.0.0.1:8080")
 DEMO = os.environ.get("GT_DEMO_URL", "http://127.0.0.1:8083")
 
+# Printed when the protocol ran and recorded nothing. It names the two
+# ways to be in that state, because they look identical from here: this
+# script talks to demo-web over HTTP and demo-web does not report
+# whether it has a sink.
+NO_SINK_HELP = """
+  Capture is off unless demo-web is given a log to write.
+
+  in compose:
+    GT_CAPTURE_LOG=/captures/human_sessions.jsonl \\
+      docker compose --profile demo up -d --force-recreate demo-web
+    (./experiments/results is mounted at /captures)
+
+  standalone:
+    go run ./services/demo-web/cmd/demo-web -addr 127.0.0.1:8083 \\
+      -api http://127.0.0.1:8080 -engine http://127.0.0.1:8082 \\
+      -capture-log experiments/results/human_sessions.jsonl
+
+  Refusing rather than reporting three participants and no rows: a study
+  that recorded nobody must not be distinguishable only by someone
+  noticing the file is empty.
+"""
+
 # Distinctive on purpose. A condition label is searched for as raw bytes
 # in the archive, so it has to be a string that cannot appear there by
 # accident — see `arm` in leaked() for the case where that is impossible.
@@ -167,12 +189,27 @@ def main() -> int:
         _, decision = one_participant(p)
         f.check(decision != "", f"{p['participant']} reached a decision ({decision or 'none'})")
 
-    if not log.exists():
-        f.check(False, f"the capture log exists at {log} — demo-web was started "
-                       f"without -capture-log, so nothing was recorded")
+    rows = ([json.loads(l) for l in log.read_text().splitlines()[before:] if l.strip()]
+            if log.exists() else [])
+
+    # A demo-web with no capture sink answers every request exactly as
+    # one with a sink does: the participants reach decisions, the page
+    # works, and nothing anywhere says the study recorded nobody. That is
+    # the whole failure mode, and it is why this check is separate from
+    # the row-count one below and reports first.
+    #
+    # It used to be impossible to reach — capture was a second service
+    # that existed only with the flag, so `--profile demo` WAS capture.
+    # Folding that service away made the flag a variable, and a variable
+    # can be forgotten. This is the guard that came with the fold.
+    if not rows:
+        f.check(False,
+                f"the capture log grew during the run ({log}) — it did not, so "
+                f"demo-web is running with NO capture sink and the study "
+                f"recorded nobody")
+        print(NO_SINK_HELP)
         return report(f)
 
-    rows = [json.loads(l) for l in log.read_text().splitlines()[before:] if l.strip()]
     f.check(len(rows) == len(PARTICIPANTS),
             f"one row per participant ({len(rows)} of {len(PARTICIPANTS)})")
 
