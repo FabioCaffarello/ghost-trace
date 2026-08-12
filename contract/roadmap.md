@@ -439,6 +439,17 @@ the way the original did.
 - **M9 — proto hygiene.** Zero enums, no `reserved`, no `optional`.
   [ADR-0004](decisions/0004-session-snapshots-carry-feature-state.md)
   keeps zero-means-zero deliberately.
+- **A read surface on the archive.**
+  [ADR-0015](decisions/0015-the-e2e-gate-asserts-connection-not-detection.md)
+  names what `make e2e` cannot see: whether *this* session reached the
+  durable store. The archive serves `/healthz` and `/metrics` and nothing
+  else, so link 7 asserts that the committed position advanced by at
+  least what the run produced and that nothing is unaccounted — a count,
+  not an identity. A run that archived somebody else's records and lost
+  its own would pass it. Closing that means an endpoint that returns
+  archived telemetry by session, which is a different authorization
+  question from one that returns a count, and answering it in passing to
+  strengthen a gate is how a read surface gets designed by accident.
 - **Authenticating `/metrics`.** The exposure is disclosed, compose binds
   `127.0.0.1`, and `make shadow-http` compares the two tenant registries
   through it. Adding auth is a deployment decision this repository has

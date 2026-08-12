@@ -71,3 +71,13 @@ is a `make` target and nothing else, so humans, CI and agents share one
 vocabulary. `make ci` is the whole gate; `make numbers` is the invariant
 and is deliberately outside it — it needs real browsers and seven
 minutes.
+
+`make e2e` is also outside `make ci`, and is the one to run when a
+change could affect whether the system still *works*. It drives the
+product path a visitor takes — page, SDK, session, telemetry, the
+snapshot, the host application's decision, the archive — with a real
+browser, and asserts seven links by name. Unlike the other topology
+gates it needs nothing running first: it brings its own topology up in a
+compose project of its own and drops it afterwards. What it asserts, and
+the one thing it cannot see, are in
+[`contract/decisions/0015`](contract/decisions/0015-the-e2e-gate-asserts-connection-not-detection.md).
