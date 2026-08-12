@@ -309,7 +309,9 @@ jobs:
         run: |
           cp .env.example .env
           docker compose --profile core up -d --build
-          for svc in collector decision-engine demo-web; do
+          # archive included since PR-5.2: it had no healthcheck to wait
+          # on, so this gate ran — and passed — with the archive dead.
+          for svc in collector decision-engine demo-web archive; do
             for i in $(seq 1 60); do
               state=$(docker inspect -f '{{.State.Health.Status}}' "ghost-trace-$svc-1" 2>/dev/null || echo starting)
               [ "$state" = healthy ] && break
