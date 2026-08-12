@@ -294,9 +294,12 @@ jobs:
   # locally; what was actually broken both times was WIRING, which these
   # two check in a fraction of the time.
   topology:
-    name: topology — shadow, kill-test and the books
+    name: topology — shadow, kill-test, the books and the product
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 30 rather than 20 since the e2e step: it pulls a Playwright base
+    # and drives a browser. A timeout that the slowest healthy run brushes
+    # against reports infrastructure as a product failure.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -366,6 +369,24 @@ jobs:
       # scenario and asserts arithmetic, not speed.
       - name: The books balance under an outage
         run: make loss-audit
+
+      # The product itself, end to end, with a real browser.
+      #
+      # A STEP IN THIS JOB AND NOT A JOB OF ITS OWN. Branch protection
+      # requires four job names verbatim; a fifth would need a settings
+      # change to protect anything, and an unrequired job is a gate that
+      # gates nothing. That is not a workaround — `required` below is the
+      # single context precisely so this decision never has to be made
+      # again.
+      #
+      # LAST, and its position is the one thing here that does not
+      # matter: it brings its own topology up in a compose project of its
+      # own, so unlike the step above it cannot inherit a system a
+      # previous step took apart. It is last because it is the expensive
+      # one — a Playwright base and about a minute of browser — and a
+      # cheaper gate that is going to fail should say so first.
+      - name: The product runs end to end
+        run: make e2e
 
       - name: Logs on failure
         if: failure()

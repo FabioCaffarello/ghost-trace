@@ -42,6 +42,7 @@ GATES = {
     "kill-test": "each service taken away behaves as promised",
     "loss-audit": "the books balance under an outage",
     "load-gate": "the accounting holds under load",
+    "e2e": "the product runs end to end, every link asserted",
 }
 
 TARGET = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)\s*:(?!=)")
@@ -122,6 +123,7 @@ def _selftest() -> int:
           "loss-audit:\n"
           "load-gate:\n"
           "numbers:\n"
+          "e2e:\n"
           "VAR := notatarget\n")
     every = [{"id": g, "command": f"make {g}"} for g in GATES]
 
