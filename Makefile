@@ -490,7 +490,7 @@ shadow: ## Snapshot-shadow equivalence against a real broker (needs GT_NATS_URL)
 		echo "start a broker:  docker run --rm -d -p 4222:4222 --name gt-nats nats:alpine -js"; \
 		exit 1; \
 	fi
-	cd $(SERVICE) && go test -count=1 ./internal/app/ -run TestDecisionThroughTheSnapshotStore -v
+	@python3 scripts/gated-test.py --dir $(SERVICE) -- ./internal/app/ -run TestDecisionThroughTheSnapshotStore
 
 # The same equivalence one layer out: not through the KV store in one
 # process, but through the topology a client actually meets. Two
@@ -521,7 +521,7 @@ shadow-http: ## A/B the collector against the engine, and check the demo is wire
 		GT_COLLECTOR_URL="$${GT_COLLECTOR_URL:-http://127.0.0.1:8080}" \
 		GT_ENGINE_URL="$${GT_ENGINE_URL:-http://127.0.0.1:8082}" \
 		GT_DEMO_URL="$${GT_DEMO_URL:-http://127.0.0.1:8083}" \
-		go test -count=1 ./internal/shadow/ -v
+		python3 ../../scripts/gated-test.py --dir . -- ./internal/shadow/
 
 # The kill-test: take one service away and check what the rest
 # promises. Each scenario is a degradation an ADR asserts, and until
@@ -596,7 +596,7 @@ parity: ## Archive parity against a real broker (needs GT_NATS_URL)
 		echo "start a broker:  docker run --rm -d -p 4222:4222 --name gt-nats nats:alpine -js"; \
 		exit 1; \
 	fi
-	cd services/archive && go test -count=1 ./internal/consumer/ -run Archive -v
+	@python3 scripts/gated-test.py --dir services/archive -- ./internal/consumer/ -run Archive
 
 ##@ Experiments
 
@@ -637,6 +637,8 @@ gates-check: ## Syntax-check the topology gates and assert their provenance logi
 	@python3 -m compileall -q deploy/*.py
 	@echo "== gate-provenance selftest (asserted)"
 	@python3 deploy/provenance.py --selftest
+	@echo "== gated-run selftest (asserted)"
+	@python3 scripts/gated-test.py --selftest
 	@echo "== sensor-registry selftest (asserted)"
 	@python3 scripts/check-sensors.py --selftest
 	@echo "== every sensor is a make target, and every gate is a sensor"
