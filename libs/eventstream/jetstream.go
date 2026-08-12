@@ -144,6 +144,32 @@ func OpenStream(ctx context.Context, js jetstream.JetStream) error {
 	return nil
 }
 
+// WatchArchive polls the archive consumer's progress from a process
+// that is NOT the archive.
+//
+// The producer needs the same number the consumer already publishes,
+// and it cannot get it from its own counters: a collector knows what it
+// published and has no idea whether any of it has been stored. Reading
+// the archive's /metrics would work and is worse — it makes the ingest
+// path depend on another service answering HTTP, which is precisely the
+// coupling the split was for.
+//
+// This binds to the existing durable READ-ONLY. It never creates one: a
+// producer that created the archive's consumer would silently reset its
+// delivery position, which is the most expensive mistake available
+// here.
+func WatchArchive(ctx context.Context, js jetstream.JetStream,
+	every time.Duration, fn StatsFunc) error {
+
+	cons, err := js.Consumer(ctx, Stream, ConsumerName)
+	if err != nil {
+		return fmt.Errorf("eventstream: watch %s/%s: %w (the archive creates it)",
+			Stream, ConsumerName, err)
+	}
+	go pollStats(ctx, js, cons, every, fn)
+	return nil
+}
+
 // Publisher writes records onto the stream.
 type Publisher struct {
 	js jetstream.JetStream

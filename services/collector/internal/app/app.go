@@ -95,14 +95,58 @@ const (
 
 	// ReasonError: the store refused or failed for some other reason.
 	ReasonError = "error"
+
+	// ReasonShed: the archive is close enough to losing its backlog
+	// that this record was not offered to it. Deliberate, counted, and
+	// the only drop reason here that describes a CHOICE rather than a
+	// failure.
+	ReasonShed = "shed"
 )
 
 // Kinds and Reasons are every value that can appear, so a composition
 // root can declare the whole cross product before serving anything.
 var (
 	Kinds   = []string{KindSessionStart, KindTelemetry, KindSnapshot}
-	Reasons = []string{ReasonDeadline, ReasonError}
+	Reasons = []string{ReasonDeadline, ReasonError, ReasonShed}
 )
+
+// ArchivePressure reports how close the archive is to losing its
+// backlog, as a fraction of the stream's retention window: 0 is empty,
+// 1 means the oldest unread record is at the age limit and the next
+// thing to happen is age-out.
+//
+// A PORT RATHER THAN A NUMBER because the collector must work without
+// it. A deployment with no broker has no archive to be behind, and one
+// whose watcher cannot reach the broker knows nothing — which is not
+// the same as knowing there is no pressure, and NoPressure says so by
+// reporting a level nothing acts on.
+type ArchivePressure interface {
+	// Level is 0..1, or negative when there is no reading. Negative is
+	// deliberately not zero: a poll that failed must not read as calm.
+	Level() float64
+}
+
+// NoPressure is the absence of a signal, not a signal of absence.
+type NoPressure struct{}
+
+// Level reports -1: unknown, act on nothing.
+func (NoPressure) Level() float64 { return -1 }
+
+// SheddingThreshold is the pressure at which the collector stops
+// offering records to the archive.
+//
+// 0.8 of the retention window. Below it the archive is behind but the
+// backlog is still recoverable, and every record handed over is one the
+// archive will get to. Above it the stream is about to discard its
+// OLDEST records — the ones already accepted and waiting — so adding
+// newer ones to the queue trades a record that would have been stored
+// for one that will not be.
+//
+// SHEDDING THE NEW TO SAVE THE OLD is the whole argument. Both paths
+// lose records; only one of them loses records nobody counted, at a
+// moment nobody chose, from the end of the queue that has been waiting
+// longest. ADR-0012 §Alternatives set this up; PR-5.7 records it.
+const SheddingThreshold = 0.8
 
 // LossMeter counts what the application hands to a store, and what it
 // fails to.
@@ -153,6 +197,7 @@ type App struct {
 	archive   EventArchive
 	snapshots SessionSnapshots
 	loss      LossMeter
+	pressure  ArchivePressure
 	now       func() time.Time
 	log       *slog.Logger
 }
@@ -167,7 +212,8 @@ func New(cfg Config, sessions SessionRepository, archive EventArchive, now func(
 		log = slog.Default()
 	}
 	return &App{cfg: cfg, sessions: sessions, archive: archive,
-		snapshots: NullSnapshots{}, loss: NoLossMeter{}, now: now, log: log}
+		snapshots: NullSnapshots{}, loss: NoLossMeter{}, pressure: NoPressure{},
+		now: now, log: log}
 }
 
 // WithLossMeter returns a copy counting what it writes and drops.
@@ -180,6 +226,17 @@ func (a *App) WithLossMeter(m LossMeter) *App {
 	}
 	b := *a
 	b.loss = m
+	return &b
+}
+
+// WithArchivePressure returns a copy that sheds when the archive is
+// close to losing its backlog.
+func (a *App) WithArchivePressure(p ArchivePressure) *App {
+	if p == nil {
+		p = NoPressure{}
+	}
+	b := *a
+	b.pressure = p
 	return &b
 }
 
@@ -228,6 +285,24 @@ func bestEffort(ctx context.Context) (context.Context, context.CancelFunc) {
 // is not a loss and is not counted; see LossMeter.
 func (a *App) archiveBestEffort(ctx context.Context, msg proto.Message, eventTime int64,
 	kind string, args ...any) {
+
+	// SHED BEFORE TRYING, when the archive is nearly out of runway.
+	//
+	// The bound below stops a slow store from holding a request open;
+	// it does nothing about a store that is keeping up with the
+	// REQUESTS and falling behind the STREAM. That is the standing
+	// mismatch — the archive commits far slower than the collector
+	// accepts — and its end state is the broker discarding the oldest
+	// records to make room for these newest ones.
+	//
+	// So at high pressure this record is not offered. It is a drop
+	// either way; this one is counted, attributed to a decision, and
+	// spends the remaining runway on the backlog that has been waiting
+	// longest rather than on a record that just arrived.
+	if lvl := a.pressure.Level(); lvl >= SheddingThreshold {
+		a.loss.Dropped(kind, ReasonShed)
+		return
+	}
 
 	ctx, cancel := bestEffort(ctx)
 	defer cancel()
