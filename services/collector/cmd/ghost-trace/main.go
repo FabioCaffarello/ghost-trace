@@ -35,6 +35,7 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/libs/substrate"
 	"github.com/FabioCaffarello/ghost-trace/libs/tenant"
 	"github.com/FabioCaffarello/ghost-trace/libs/wire"
+	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/adapters/archivepressure"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/adapters/livesessions"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/adapters/substratearchive"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/api"
@@ -70,6 +71,10 @@ func run() error {
 		corsOrigins = flag.String("cors-origin", os.Getenv("GT_CORS_ORIGINS"),
 			"comma-separated page origins allowed to call /v1/sessions and /v1/telemetry "+
 				"cross-origin; empty disables CORS (same-origin deployments)")
+		pressureEvery = flag.Duration("archive-pressure-every", 5*time.Second,
+			"how often to ask the broker how far behind the ARCHIVE is; at "+
+				"80% of the stream's retention window this collector stops "+
+				"offering records to it and counts the drops as shed")
 		health = flag.Bool("healthcheck", false, "probe /healthz on -addr and exit 0/1; the container health check execs the binary because distroless ships no shell or curl")
 	)
 	flag.Parse()
@@ -131,8 +136,20 @@ func run() error {
 	// Either way the archive is optional to the DECISION path: nothing
 	// reads from it to judge a session. It exists so a recorded session
 	// can be re-scored when a threshold moves.
+	// One registry per process: the HTTP series and every domain counter
+	// are exposed together, because two registries behind one endpoint
+	// would need two encoders and would drop whichever the handler
+	// forgot. Built before the archive switch because the pressure
+	// watcher created inside it publishes a gauge.
+	reg := metrics.New()
+
 	var eventArchive app.EventArchive = app.NullArchive{}
 	var sessionStore app.SessionSnapshots
+
+	// Interface, not the concrete type: an unset *Pressure assigned to
+	// an interface is non-nil and panics on first read, which is a
+	// worse failure than having no signal at all.
+	var pressure app.ArchivePressure = app.NoPressure{}
 
 	switch {
 	case *natsURL != "" && *dataDir != "":
@@ -163,6 +180,24 @@ func run() error {
 		}
 		log.Info("session snapshots enabled", "bucket", eventstream.SessionBucket, "ttl", *ttl)
 
+		// What the ARCHIVE's backlog looks like, read from the broker
+		// rather than from the archive. Only meaningful with a stream:
+		// the -data path has no queue to fall behind on.
+		//
+		// A watcher that cannot bind is not fatal. The archive creates
+		// the durable, so a collector that starts first will find
+		// nothing here — and a collector with no reading sheds nothing,
+		// which is the same behaviour it had before this existed.
+		live := archivepressure.New(reg, time.Now)
+		if err := eventstream.WatchArchive(ctx, js, *pressureEvery, live.Observe); err != nil {
+			log.Warn("archive pressure unavailable; the collector will not shed",
+				"err", err, "consumer", eventstream.ConsumerName)
+		} else {
+			pressure = live
+			log.Info("watching archive pressure", "every", *pressureEvery,
+				"sheds_at", app.SheddingThreshold)
+		}
+
 	case *dataDir != "":
 		sub, err := substrate.Open(ctx, *dataDir+"/events.db", *dataDir+"/blobs")
 		if err != nil {
@@ -179,13 +214,6 @@ func run() error {
 
 	sessions := session.NewStore(*ttl, time.Now)
 
-	// One registry per process: the HTTP series and every domain counter
-	// are exposed together, because two registries behind one endpoint
-	// would need two encoders and would drop whichever the handler
-	// forgot. Built here rather than with the rest of the observability
-	// chain because the application counts into it too.
-	reg := metrics.New()
-
 	// One meter for both. This process publishes session starts,
 	// telemetry and snapshots through the application AND evaluations
 	// through the decision endpoints it mounts, so the counters have to
@@ -197,7 +225,8 @@ func run() error {
 		app.Reasons)
 
 	application := app.New(app.Config{}, sessions, eventArchive, time.Now, log).
-		WithLossMeter(loss)
+		WithLossMeter(loss).
+		WithArchivePressure(pressure)
 	if sessionStore != nil {
 		application = application.WithSnapshots(sessionStore)
 	}
