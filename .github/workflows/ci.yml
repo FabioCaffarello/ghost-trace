@@ -296,9 +296,13 @@ jobs:
   topology:
     name: topology — shadow, kill-test, the books and the product
     runs-on: ubuntu-latest
-    # 30 rather than 20 since the e2e step: it pulls a Playwright base
-    # and drives a browser. A timeout that the slowest healthy run brushes
-    # against reports infrastructure as a product failure.
+    # 30 rather than 20 since the e2e step. That was a guess when it was
+    # written — "it pulls a Playwright base and drives a browser" — and
+    # the first run measured it: the e2e step took 69s and the whole job
+    # 4m29s. The headroom stays anyway. A timeout is not a budget, it is
+    # the point at which a slow runner stops being reported as a product
+    # failure, and it should sit far from the number a healthy run
+    # produces rather than near it.
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
