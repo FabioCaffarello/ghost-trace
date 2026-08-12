@@ -41,6 +41,19 @@ x-hardened: &hardened
     options:
       max-size: "10m"
       max-file: "3"
+  # Resource ceilings, added in PR-5.3 alongside the stream's byte cap
+  # and for the same reason: the failure this topology had was not a bad
+  # number, it was an UNBOUNDED one. A collector holding sessions in a
+  # map and a broker spooling a backlog to disk both grow until
+  # something outside them says stop, and nothing did.
+  #
+  # These are development ceilings, not capacity planning. They are high
+  # enough that the load gate's 2 000 sessions/s does not touch them and
+  # low enough that a runaway takes its own container down instead of
+  # the machine — which is the difference between one service failing
+  # its healthcheck and an operator losing the host.
+  mem_limit: 1g
+  pids_limit: 512
 
 x-collector-build: &collector-build
   context: .

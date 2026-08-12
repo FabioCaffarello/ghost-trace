@@ -81,10 +81,13 @@ func main() {
 	}
 	defer nc.Close()
 
-	// Declared by whichever side starts first, so compose does not have
-	// to order the collector and the archive against each other.
-	if err := eventstream.EnsureStream(ctx, js); err != nil {
-		log.Error("ensure stream", "err", err)
+	// Binds rather than declares, so compose DOES have to order the
+	// collector ahead of the archive — which is the trade PR-5.3 makes
+	// deliberately. "Whichever side starts first declares it" meant the
+	// consumer could choose the retention it is measured against, and
+	// once the stream has a byte cap that is the backlog bound itself.
+	if err := eventstream.OpenStream(ctx, js); err != nil {
+		log.Error("open event stream", "err", err)
 		os.Exit(1)
 	}
 

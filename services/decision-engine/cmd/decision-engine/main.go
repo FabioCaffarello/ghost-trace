@@ -134,8 +134,13 @@ func run() error {
 	}
 	defer nc.Close()
 
-	if err := eventstream.EnsureStream(ctx, js); err != nil {
-		return fmt.Errorf("ensure event stream: %w", err)
+	// Binds rather than declares. This service publishes evaluations
+	// onto the stream, but the collector OWNS its shape — the same rule
+	// the snapshot bucket already follows, and for the same reason: a
+	// process that declared the limits would be deciding how much
+	// backlog the archive may accumulate, which is not its call.
+	if err := eventstream.OpenStream(ctx, js); err != nil {
+		return fmt.Errorf("open event stream: %w", err)
 	}
 	// Bind to the bucket the collector owns, and refuse a TTL that is
 	// not the one this process was told to expect. Starting before the

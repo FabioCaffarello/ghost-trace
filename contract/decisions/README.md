@@ -23,3 +23,4 @@ reverse without knowing what it cost.
 | [0009](0009-small-payloads-live-in-the-row.md) | Small payloads live in the row — 3x the archive's rate without weakening a durability promise | accepted |
 | [0010](0010-unaccounted-must-never-be-negative.md) | `unaccounted` counts sequences, not commit operations — corrects one consequence of 0008 | accepted |
 | [0011](0011-a-latency-is-a-conditional-claim.md) | A published latency claims a bound under a stated condition, not a value | accepted |
+| [0012](0012-the-stream-is-bounded-by-bytes.md) | The stream is bounded by bytes, and the collector owns the bound | accepted |
