@@ -50,10 +50,19 @@ the promise that governs *ingest* — telemetry accepted and dropped,
 ### 1. Every loss is counted, attributed, and bounded in time
 
 No path may lose a record without incrementing a counter that names
-**why**. `libs/decision` and the collector share the vocabulary:
-`ReasonDeadline`, `ReasonError`, `ReasonShed`. Every best-effort write
-runs under `BestEffortTimeout` (250ms), so no loss path can also be a
-latency path.
+**why**. Every best-effort write runs under `BestEffortTimeout`
+(250ms), so no loss path can also be a latency path.
+
+The vocabularies are close but deliberately not identical.
+`libs/decision` declares `deadline` and `error`; the collector declares
+those two and `shed`. The engine has no ingest path to shed from — it
+answers a decision and archives a copy — so a `shed` counter there
+would be a series that can never move, which
+[ADR-0008](0008-what-a-zero-is-allowed-to-mean.md) treats as a lie of a
+different kind than an absent one. The two constant sets are declared
+separately rather than shared, because the alternative is a library
+whose only purpose is to make two packages agree about strings they use
+differently.
 
 `ErrArchiveUnavailable` is deliberately **not** a drop. A run
 configured with no archive never had a store to lose records from, and
