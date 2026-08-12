@@ -68,6 +68,7 @@ checklist; it is short because the guards do most of the work now.
 | `vocabulary_test.go` | SDK and contract vocabularies diverging |
 | OpenAPI conformance | the spec promising something the server does not send |
 | goldens | any byte a client receives moving |
+| `wire_proto_mapping_test.go` | the request struct and the archived proto drifting apart — the seam none of the five above could see |
 
 ## The thing to remember
 
