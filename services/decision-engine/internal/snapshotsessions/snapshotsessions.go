@@ -11,6 +11,7 @@ package snapshotsessions
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/FabioCaffarello/ghost-trace/libs/decision"
 	"github.com/FabioCaffarello/ghost-trace/libs/eventstream"
@@ -22,6 +23,24 @@ import (
 type Store interface {
 	Get(ctx context.Context, tenant, token string) (*eventsv1.SessionSnapshot, error)
 }
+
+// LookupTimeout bounds how long a decision waits for its evidence.
+//
+// Found by `make kill-test` on the first run of the latency assertion
+// PR-5.1 added, and it is the same defect as that PR's in a second
+// place: with the broker stopped, this read waits for the client's own
+// ack timeout — about five seconds — and the engine answers 500 five
+// seconds late. A caller kept waiting five seconds for an error is
+// worse off than one kept waiting for a wrong answer, and this is the
+// path with an 80ms budget and someone at a risk moment.
+//
+// 250ms is deliberately LARGER than that budget. A bound tight enough
+// to fire inside it would convert "slow" into "broken" on an ordinary
+// bad day; this one only fires when the store is not answering at all.
+// The KV read costs single-digit milliseconds when it works, so this
+// is roughly eighty times the normal cost and a twentieth of the stall
+// it replaces.
+const LookupTimeout = 250 * time.Millisecond
 
 // Sessions answers lookups from the snapshot bucket.
 type Sessions struct {
@@ -50,6 +69,9 @@ func New(store Store) *Sessions {
 // evidence — a detector that fails open silently at exactly the moment
 // its evidence supply breaks.
 func (s *Sessions) Lookup(ctx context.Context, tenantID, token string) (decision.Session, bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, LookupTimeout)
+	defer cancel()
+
 	// Isolation is the KEY here rather than a comparison: another
 	// tenant's token simply addresses a key that does not exist, and
 	// reads as a cold start.
@@ -58,6 +80,11 @@ func (s *Sessions) Lookup(ctx context.Context, tenantID, token string) (decision
 		if errors.Is(err, eventstream.ErrNoSnapshot) {
 			return decision.Session{}, false, nil
 		}
+		// A deadline is an ERROR and not a miss, which is the same
+		// distinction the rest of this function turns on. Timing out is
+		// the store failing to answer; treating it as "no snapshot"
+		// would score every session innocent for lack of evidence at
+		// exactly the moment the evidence supply broke.
 		return decision.Session{}, false, err
 	}
 	return decision.Session{

@@ -90,7 +90,7 @@ func (s *Service) Decide(ctx context.Context, in Input) (Output, error) {
 	}
 
 	rec := buildEvaluation(tenantID, sess.ID, in, out, sess.State, j, s.now().UnixNano())
-	s.archiveBestEffort(ctx, rec, rec.DecidedAt, "evaluation", "evaluation_id", evalID)
+	s.archiveBestEffort(ctx, rec, rec.DecidedAt, KindEvaluation, "evaluation_id", evalID)
 
 	return out, nil
 }

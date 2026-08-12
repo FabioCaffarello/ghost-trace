@@ -36,7 +36,6 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/libs/tenant"
 	"github.com/FabioCaffarello/ghost-trace/libs/wire"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/adapters/livesessions"
-	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/adapters/lossmeter"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/adapters/substratearchive"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/api"
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/app"
@@ -187,8 +186,18 @@ func run() error {
 	// chain because the application counts into it too.
 	reg := metrics.New()
 
+	// One meter for both. This process publishes session starts,
+	// telemetry and snapshots through the application AND evaluations
+	// through the decision endpoints it mounts, so the counters have to
+	// declare the union — a kind left out of the declaration is a series
+	// that appears only once something goes wrong, which is the absence
+	// this whole family of counters exists to refuse.
+	loss := metrics.NewLoss(reg,
+		append(append([]string{}, app.Kinds...), decision.Kinds...),
+		app.Reasons)
+
 	application := app.New(app.Config{}, sessions, eventArchive, time.Now, log).
-		WithLossMeter(lossmeter.New(reg))
+		WithLossMeter(loss)
 	if sessionStore != nil {
 		application = application.WithSnapshots(sessionStore)
 	}
@@ -200,7 +209,8 @@ func run() error {
 	decisions := decision.New(decision.Config{
 		Mode:    *mode,
 		Tenants: registry,
-	}, livesessions.New(sessions), eventArchive, time.Now, log)
+	}, livesessions.New(sessions), eventArchive, time.Now, log).
+		WithLossMeter(loss)
 
 	apiSrv := api.New(api.Config{
 		Tenants:        registry,

@@ -79,6 +79,7 @@ type Service struct {
 	cfg      Config
 	sessions Sessions
 	archive  archive.Store
+	loss     LossMeter
 	now      func() time.Time
 	log      *slog.Logger
 
@@ -103,21 +104,127 @@ func New(cfg Config, sessions Sessions, store archive.Store,
 		store = archive.Null{}
 	}
 	return &Service{cfg: cfg, sessions: sessions, archive: store,
-		now: now, log: log, maxBody: 1 << 20}
+		loss: NoLossMeter{}, now: now, log: log, maxBody: 1 << 20}
+}
+
+// WithLossMeter returns a copy counting into meter.
+//
+// A copy rather than a setter, and an option rather than a constructor
+// parameter: New already takes five arguments and has eight call sites,
+// six of them tests that do not care. A host that wants the counters
+// asks for them; one that does not gets NoLossMeter and no series,
+// which is honest — a process with no registry is not reporting zero
+// drops, it is reporting nothing.
+func (s *Service) WithLossMeter(meter LossMeter) *Service {
+	if meter == nil {
+		return s
+	}
+	c := *s
+	c.loss = meter
+	return &c
 }
 
 // Mode reports the operating mode decisions run under.
 func (s *Service) Mode() string { return s.cfg.Mode }
 
-// archiveBestEffort appends a record, logging failures instead of
-// surfacing them. Archival off the decision path must never take a
-// user-facing request down with it; a missing archive is not a failure
-// at these call sites, so ErrUnavailable is not even logged.
+// BestEffortTimeout bounds how long a best-effort write may hold a
+// decision open.
+//
+// The collector learned this and this package did not. "Best effort"
+// was true of the OUTCOME and false of the LATENCY: with the broker
+// down, a JetStream publish waits for a server ack that never comes and
+// gives up after about five seconds — so /v1/decisions, which archives
+// an evaluation on the way out, took five seconds to return a fail-open
+// allow. The verdict was fail-open; the request was not, and this is
+// the path with a caller at a risk moment and an 80ms budget.
+//
+// The same 250ms the collector uses (app.BestEffortTimeout), and the
+// same accepted consequence: during an outage a bounded wait DROPS
+// records an unbounded one would eventually have published. §5 permits
+// the loss. What §5 does not permit is losing it silently, which is why
+// the drop is counted rather than only logged.
+//
+// Outcomes do NOT come through here. They are the labels channel every
+// future calibration depends on, they require durability, and they are
+// allowed to fail honestly with a 503 instead.
+const BestEffortTimeout = 250 * time.Millisecond
+
+// Record kinds and drop reasons, as constants for the same reason the
+// collector keeps its own: every value has to be declared to the meter
+// before serving, and a literal at a call site is how a series nobody
+// declared and nobody watches gets minted.
+const (
+	// KindEvaluation is a judgement archived off the decision path.
+	KindEvaluation = "evaluation"
+
+	// ReasonDeadline: the best-effort budget expired. The record was
+	// not written and will not be retried.
+	ReasonDeadline = "deadline"
+
+	// ReasonError: the store refused or failed for some other reason.
+	ReasonError = "error"
+)
+
+// Kinds and Reasons are every value that can appear here, so a
+// composition root can declare the whole cross product before serving.
+var (
+	Kinds   = []string{KindEvaluation}
+	Reasons = []string{ReasonDeadline, ReasonError}
+)
+
+// LossMeter counts what this service hands to a store, and what it
+// fails to. Defined here rather than imported so the port belongs to
+// its consumer; metrics.Loss satisfies it structurally.
+type LossMeter interface {
+	// Written: the record reached the store.
+	Written(kind string)
+
+	// Dropped: the record did not, and is gone.
+	Dropped(kind, reason string)
+}
+
+// NoLossMeter counts nothing, for tests and for hosts with no registry.
+type NoLossMeter struct{}
+
+// Written discards the count.
+func (NoLossMeter) Written(string) {}
+
+// Dropped discards the count.
+func (NoLossMeter) Dropped(string, string) {}
+
+// archiveBestEffort appends a record, counting and logging failures
+// instead of surfacing them. Archival off the decision path must never
+// take a user-facing request down with it — not by failing it, and not
+// by holding it open.
+//
+// Every outcome lands in exactly one place: written, dropped with a
+// reason, or neither because there is no archive configured. The third
+// is not a loss and is not counted.
 func (s *Service) archiveBestEffort(ctx context.Context, msg proto.Message,
 	eventTime int64, what string, args ...any) {
 
-	if err := s.archive.Append(ctx, msg, eventTime); err != nil &&
-		!errors.Is(err, archive.ErrUnavailable) {
+	ctx, cancel := context.WithTimeout(ctx, BestEffortTimeout)
+	defer cancel()
+
+	err := s.archive.Append(ctx, msg, eventTime)
+	switch {
+	case err == nil:
+		s.loss.Written(what)
+	case errors.Is(err, archive.ErrUnavailable):
+		// No store to lose it from. Not written, not dropped.
+	default:
+		s.loss.Dropped(what, reasonFor(err))
 		s.log.Error("archive "+what, append([]any{"err", err}, args...)...)
 	}
+}
+
+// reasonFor separates the budget expiring from everything else. A
+// deadline says the dependency was too slow and the bound did its job;
+// an error says it refused. Bucketing both as "failed" would hide which
+// of the two a deployment is actually suffering.
+func reasonFor(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return ReasonDeadline
+	}
+	return ReasonError
 }
