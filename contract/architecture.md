@@ -105,8 +105,28 @@ page{path, viewport}, events[]}`.
 - Events carry `src` (mouse / trackpad / touch / pen) where the platform
   exposes it, because §0 admits properties that change interpretation.
 
-The canonical schema is `schemas/events/v1/*.proto`; the JSON accepted at
-the HTTP boundary mirrors it field-for-field.
+The canonical schema is `schemas/events/v1/*.proto`. The JSON accepted at
+the HTTP boundary is a **different shape**, and reading one to learn the
+other will mislead you:
+
+- The wire carries one `events` array discriminated by `type`; the proto
+  carries six typed lists (`pointer_events`, `key_events`, and so on).
+- The wire nests `page` and `client`; the proto is flat, and
+  `page.viewport` arrives as one array and is stored as `viewport_w` and
+  `viewport_h`.
+- `class` on the wire is `key_class` in the proto.
+- Three archived fields are never accepted from a browser, because a
+  browser that could set them could lie about them: `tenant_id` is
+  resolved from `site_key` (§1), `session_id` is issued by the server
+  while the browser holds a token, and `received_at` / `started_at` are
+  the server's clock — the client's claim about time is `sent_at_ms` and
+  stays separate.
+
+This paragraph said "mirrors it field-for-field" until PR-6.3, which was
+false on every line above. The correspondence that does hold is written
+down as three tables in
+`services/collector/internal/api/wire_proto_mapping_test.go`, and a field
+added or renamed on either side fails until somebody places it.
 
 ## §3 — The external surface
 
@@ -119,7 +139,30 @@ Four endpoints. This section is the contract's core.
 | `POST /v1/decisions` | app server | `Bearer <secret_key>` |
 | `POST /v1/outcomes` | app server | `Bearer <secret_key>` |
 
-`GET /healthz` is unauthenticated liveness.
+Two operational routes sit beside them on the same listener, both
+**unauthenticated**, on every service:
+
+- `GET /healthz` — liveness.
+- `GET /metrics` — Prometheus-format counters and gauges, including
+  `tenant_registry_info{fingerprint, tenants}`. The fingerprint covers
+  tenant ids and site keys, never secrets, and site keys are public by
+  §1 — but the **number** of tenants is a fact about the operator, and
+  the rate series describe traffic. It is on the public listener rather
+  than a private one because `make shadow-http` compares the two
+  registries from outside the processes: two services that disagree
+  about who exists each behave correctly alone and wrongly together, and
+  no request fails on the way.
+
+Neither is in `openapi.yaml`, which describes the product API. Both were
+missing from this section until PR-6.4 — `SECURITY.md` had disclosed
+them all along, so the document that promises to define the external
+surface was the one understating it. Anyone operating this must keep
+`/metrics` off the public internet; there is no auth on it and adding
+some is a deployment decision this repository has not made (see
+`SECURITY.md`).
+
+`scripts/check-routes.py` now fails if any service registers a route no
+contract section names.
 
 **`score` and `confidence` are separate fields.** This is the contract's
 most important commitment. `score` is belief (how bot-like), `confidence`

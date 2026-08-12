@@ -26,6 +26,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/FabioCaffarello/ghost-trace/libs/wire"
 )
 
 //go:embed static/*
@@ -119,12 +121,15 @@ type loginRequest struct {
 	SessionToken string `json:"session_token"`
 	Username     string `json:"username"`
 
-	// Capture-study labels, supplied by the participant's link. They
-	// travel through the contract's existing fields — subject_id and
-	// context — rather than through any new API surface, because a
-	// session's cohort is a property of the experiment, not of the
-	// product. The engine must not know which population it is looking
-	// at.
+	// Capture-study labels, supplied by the participant's link. Only
+	// `participant` crosses the wire, as subject_id — the pseudonymous
+	// identity the host application asserts, which is exactly what
+	// subject_id is for. Arm, condition and visit stay HERE: they are
+	// written into the local capture row and never sent, because the
+	// engine must not know which population it is looking at. (An older
+	// version of this comment claimed they travelled through a request
+	// `context` field; that field was removed from the contract at
+	// R1.14 and this handler kept posting it into the void.)
 	Participant string `json:"participant"`
 	Arm         string `json:"arm"`
 	Condition   string `json:"condition"`
@@ -164,23 +169,33 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	// between a browser session and an account — it exists because the
 	// application says so (§1).
 	//
-	// During the capture study the participant code plays that role: it
-	// is the pseudonymous identity the host application asserts, which
-	// is exactly what subject_id is for.
+	// During the capture study it asserts NOTHING. The participant code
+	// used to travel here, which put a pseudonym for a real person into
+	// the append-only archive permanently — and ADR-0006 makes that
+	// archive the durable record, so "delete my data" would have meant
+	// deleting from a store whose whole guarantee is that nothing is
+	// removed. RFC-0001 promises deletion on request; ADR-0014 keeps the
+	// promise by never writing the identity in the first place.
+	//
+	// Nothing is lost by omitting it. The engine copies subject_id into
+	// the Evaluation record and decides nothing with it, and the study's
+	// join key is `evaluation_id`, which the capture row already carries.
+	// Delete the row and the link is gone — which is what deletion means
+	// when the remaining record can no longer be attributed to anyone.
 	subject := "user_" + req.Username
 	if req.Participant != "" {
-		subject = req.Participant
+		subject = ""
 	}
-	body, _ := json.Marshal(map[string]any{
-		"session_token": req.SessionToken,
-		"action":        "login",
-		"subject_id":    subject,
-		"context": map[string]any{
-			"attempt_n": 1,
-			"arm":       req.Arm,
-			"condition": req.Condition,
-			"visit":     req.Visit,
-		},
+	// Built from the wire type the engine decodes, not a hand-rolled
+	// map. The map this replaces still carried the `context` object
+	// removed from the contract at R1.14 — accepted, dropped, and
+	// promised by a comment above to be the capture channel it never
+	// was. The server tolerating unknown fields means nothing but a
+	// shared type stops that from happening again.
+	body, _ := json.Marshal(wire.DecisionsRequest{
+		SessionToken: req.SessionToken,
+		Action:       "login",
+		SubjectID:    subject,
 	})
 
 	decision, err := h.decisions.Decide(r.Context(), body)

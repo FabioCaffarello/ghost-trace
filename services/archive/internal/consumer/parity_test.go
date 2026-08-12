@@ -98,7 +98,7 @@ func TestArchiveHoldsEverythingTheCollectorWrote(t *testing.T) {
 	cons := consumer.New(remote, consumer.NoMeter{}, time.Now, nil)
 	consumeCtx, stopConsume := context.WithCancel(ctx)
 	consumed := make(chan error, 1)
-	go func() { consumed <- eventstream.Consume(consumeCtx, js, cons.Handle) }()
+	go func() { consumed <- eventstream.Consume(consumeCtx, js, cons.HandleBatch) }()
 
 	// The producer side: record what is published, and publish it. The
 	// reference store is the test's own bookkeeping.
@@ -190,11 +190,14 @@ func TestCorruptedPayloadIsRefused(t *testing.T) {
 	corrupted := append([]byte(nil), payload...)
 	corrupted[len(corrupted)-1] ^= 0xff
 
-	err = cons.Handle(context.Background(), &eventsv1.ArchiveRecord{
-		CanonicalPayload: corrupted,
-		EventHash:        canonical.HashHex(hash),
-		MessageType:      "ghosttrace.events.v1.Outcome",
-	}, eventstream.Delivery{Sequence: 1})
+	err = cons.HandleBatch(context.Background(), []eventstream.Item{{
+		Record: &eventsv1.ArchiveRecord{
+			CanonicalPayload: corrupted,
+			EventHash:        canonical.HashHex(hash),
+			MessageType:      "ghosttrace.events.v1.Outcome",
+		},
+		Delivery: eventstream.Delivery{Sequence: 1},
+	}})
 	if err != nil {
 		t.Fatalf("a corrupted record should be dropped, not retried forever: %v", err)
 	}

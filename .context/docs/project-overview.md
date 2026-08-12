@@ -14,12 +14,14 @@ dynamics alone: how the pointer moves, how keys are timed, how a form is
 actually filled. Explicitly NOT *which browser is this*; fingerprinting
 is out of scope and the tools that defeat it are freely available.
 
-Three Go services today — the collector (`services/collector`), the
-decision engine, and the archive — serving four HTTP endpoints between
-them, plus a browser SDK, a protobuf archive, and an adversarial
-experiment layer that produces six published numbers. It was one binary
-through M5; Phase 2 is splitting it, and `make shadow-http` is what
-holds the split honest.
+Four Go services — the collector (`services/collector`), the decision
+engine, the archive, and a stand-in customer site on its own origin —
+serving four HTTP endpoints between them, plus a browser SDK, a protobuf
+archive, and an adversarial experiment layer that produces six published
+numbers. It was one binary through M5; Phase 2 split it, Phase 3 made
+what the split can lose countable, Phase 4 measured it under load.
+`make shadow-http` is what holds the split honest, and the all-in-one
+binary is kept permanently as the no-broker path `make numbers` uses.
 
 ## The thing to understand first
 
@@ -42,7 +44,16 @@ The false-positive rate has **no data**. It is the number that governs
 every other one, it is calendar-bound rather than effort-bound, and
 until it exists the detection rates are unfalsifiable in exactly the way
 this project was built to avoid. Anything you write should preserve that
-admission rather than smooth it over.
+admission rather than smooth it over. Recruitment is gated on a
+data-governance RFC that has not been written, and
+`disclosure_test.go` fails if `experiments/PARTICIPANTS.md` stops
+saying so.
+
+The other standing gap is **backpressure**: the archive commits about
+4 133 records/s against a collector that bends near 16 000, with a
+stream between them bounded only by a seven-day retention window.
+Nothing slows the producer down, and `stream_skipped` reports the loss
+after the fact.
 
 ## Canonical sources — never restate them here
 

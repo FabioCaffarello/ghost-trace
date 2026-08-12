@@ -39,6 +39,9 @@ import time
 import urllib.error
 import urllib.request
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import provenance  # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 COLLECTOR = "http://127.0.0.1:8080"
 ARCHIVE = "http://127.0.0.1:8081"
@@ -171,9 +174,17 @@ def main() -> int:
         print(f"  {name.replace('ghosttrace_archive_', ''):38} "
               f"{'(absent)' if v is None else f'{v:.0f}'}")
 
+    st = provenance.stamp("load-sweep", {
+        "rates": args.rates, "duration": args.duration,
+        "events": args.events, "workers": args.workers,
+    })
+    for w in provenance.warnings(st):
+        print(f"\n  NOT CITABLE: {w}")
+
     if args.out:
         with open(args.out, "w") as fh:
-            json.dump({"steps": steps, "bends": bends}, fh, indent=2)
+            json.dump({"provenance": st, "steps": steps, "bends": bends},
+                      fh, indent=2)
         print(f"\n  wrote {args.out}")
     return 0
 

@@ -53,7 +53,12 @@ func run() error {
 		tenantsFile = flag.String("tenants", os.Getenv("GT_TENANTS"),
 			"JSON registry of tenants (id, site_key, secret_key); empty uses the "+
 				"single-tenant flags below")
-		tenantID  = flag.String("tenant", "t_demo", "tenant id, when -tenants is not given")
+		tenantID = flag.String("tenant", "t_demo",
+			"tenant id for the single-tenant fallback, when -tenants is not "+
+				"given. It names WHO THIS PROCESS SERVES BY DEFAULT and nothing "+
+				"else: until PR-5.7a it was also stamped onto every archived "+
+				"record, so a multi-tenant registry attributed every customer's "+
+				"records to this one. The envelope now comes from the payload.")
 		secretKey = flag.String("secret-key", "sk_demo",
 			"secret key for server-to-server calls, when -tenants is not given")
 		siteKey = flag.String("site-key", "pk_demo",
@@ -112,6 +117,19 @@ func run() error {
 	log.Info("serving tenants", "ids", registry.IDs(),
 		"source", map[bool]string{true: *tenantsFile, false: "flags"}[*tenantsFile != ""])
 
+	// The shipped credentials authenticate nobody: they are flag
+	// defaults, they are in compose.yml and .env.example, and the
+	// README prints them. Starting on one was silent, which is the
+	// wrong default for the setting that decides whether the
+	// secret-key endpoints are protected at all. A warning, not a
+	// refusal — `make numbers`, compose and every gate run on these
+	// keys deliberately.
+	if demo := registry.DemoTenants(); len(demo) > 0 {
+		log.Warn("running on the credentials this repository ships; anyone who has "+
+			"read the source can call the secret-key endpoints",
+			"tenants", demo, "fix", "-tenants <file>, or -site-key/-secret-key")
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -121,8 +139,13 @@ func run() error {
 	}
 	defer nc.Close()
 
-	if err := eventstream.EnsureStream(ctx, js); err != nil {
-		return fmt.Errorf("ensure event stream: %w", err)
+	// Binds rather than declares. This service publishes evaluations
+	// onto the stream, but the collector OWNS its shape — the same rule
+	// the snapshot bucket already follows, and for the same reason: a
+	// process that declared the limits would be deciding how much
+	// backlog the archive may accumulate, which is not its call.
+	if err := eventstream.OpenStream(ctx, js); err != nil {
+		return fmt.Errorf("open event stream: %w", err)
 	}
 	// Bind to the bucket the collector owns, and refuse a TTL that is
 	// not the one this process was told to expect. Starting before the
@@ -137,12 +160,25 @@ func run() error {
 	// The stream IS the durable store here, so publish failures are
 	// returned rather than counted: an outcome answered 202 but never
 	// stored would silently poison calibration.
-	archive := eventstream.NewArchive(eventstream.NewPublisher(js), *tenantID)
+	archive := eventstream.NewArchive(eventstream.NewPublisher(js))
 
+	// One registry per process: the HTTP series and every domain
+	// counter are exposed together, because two registries behind one
+	// endpoint would need two encoders and would drop whichever the
+	// handler forgot. Built here rather than with the rest of the
+	// observability chain because the decision service counts into it.
+	reg := metrics.New()
+
+	// Until now this service had NO domain metrics at all: it archives
+	// an evaluation on every decision, and a broker outage could lose
+	// every one of them while /metrics looked identical. The collector
+	// has counted its records since Phase 3; this is the same counters,
+	// on the other service that writes.
 	decisions := decision.New(decision.Config{
 		Mode:    *mode,
 		Tenants: registry,
-	}, snapshotsessions.New(snapshots), archive, time.Now, log)
+	}, snapshotsessions.New(snapshots), archive, time.Now, log).
+		WithLossMeter(metrics.NewLoss(reg, decision.Kinds, decision.Reasons))
 
 	mux := http.NewServeMux()
 	decisions.Mount(mux)
@@ -155,11 +191,6 @@ func run() error {
 	// can correlate, recovery so a panic is logged with its id, logging
 	// so the 500 a panic produces still gets its line, metrics innermost
 	// so it measures the handler rather than the logging.
-	// One registry per process: the HTTP series and every domain
-	// counter are exposed together, because two registries behind one
-	// endpoint would need two encoders and would drop whichever the
-	// handler forgot.
-	reg := metrics.New()
 	// Published rather than logged so the two services can be COMPARED
 	// from outside. Two registries that disagree about who exists each
 	// behave correctly alone and wrongly together, and no request fails

@@ -1,12 +1,16 @@
-package lossmeter_test
+package metrics_test
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/FabioCaffarello/ghost-trace/libs/metrics"
-	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/adapters/lossmeter"
-	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/app"
+)
+
+// The vocabularies are the CALLER's, so the tests supply their own
+// rather than importing a service's.
+var (
+	testKinds   = []string{"session_start", "telemetry", "snapshot"}
+	testReasons = []string{"deadline", "error"}
 )
 
 func series(t *testing.T, reg *metrics.Registry, name string, labels map[string]string) (float64, bool) {
@@ -49,15 +53,15 @@ func TestEverySeriesExistsBeforeAnythingHappens(t *testing.T) {
 	//
 	// Declared at zero, a zero means measured-zero.
 	reg := metrics.New()
-	lossmeter.New(reg)
+	metrics.NewLoss(reg, testKinds, testReasons)
 
-	for _, kind := range app.Kinds {
+	for _, kind := range testKinds {
 		if _, ok := series(t, reg, "ghosttrace_records_written_total",
 			map[string]string{"kind": kind}); !ok {
 			t.Errorf("written{kind=%q} is absent before any traffic; an absent "+
 				"series is indistinguishable from a zero one", kind)
 		}
-		for _, reason := range app.Reasons {
+		for _, reason := range testReasons {
 			if _, ok := series(t, reg, "ghosttrace_records_dropped_total",
 				map[string]string{"kind": kind, "reason": reason}); !ok {
 				t.Errorf("dropped{kind=%q,reason=%q} is absent before any traffic",
@@ -72,9 +76,9 @@ func TestDeclaredSeriesStartAtZeroRatherThanAtOne(t *testing.T) {
 	// every deployment would report one phantom loss of every kind and
 	// the reconciliation this phase is building would never balance.
 	reg := metrics.New()
-	lossmeter.New(reg)
+	metrics.NewLoss(reg, testKinds, testReasons)
 
-	for _, kind := range app.Kinds {
+	for _, kind := range testKinds {
 		if v, _ := series(t, reg, "ghosttrace_records_written_total",
 			map[string]string{"kind": kind}); v != 0 {
 			t.Errorf("written{kind=%q} = %v before any traffic, want 0", kind, v)
@@ -84,12 +88,12 @@ func TestDeclaredSeriesStartAtZeroRatherThanAtOne(t *testing.T) {
 
 func TestCountingIsPerKindAndPerReason(t *testing.T) {
 	reg := metrics.New()
-	m := lossmeter.New(reg)
+	m := metrics.NewLoss(reg, testKinds, testReasons)
 
-	m.Written(app.KindTelemetry)
-	m.Written(app.KindTelemetry)
-	m.Dropped(app.KindTelemetry, app.ReasonDeadline)
-	m.Dropped(app.KindSnapshot, app.ReasonError)
+	m.Written("telemetry")
+	m.Written("telemetry")
+	m.Dropped("telemetry", "deadline")
+	m.Dropped("snapshot", "error")
 
 	for _, tc := range []struct {
 		name   string
@@ -118,16 +122,41 @@ func TestCountingIsPerKindAndPerReason(t *testing.T) {
 	}
 }
 
-func TestKindsAndReasonsCoverTheConstants(t *testing.T) {
-	// The declaration loop reads app.Kinds and app.Reasons. A constant
-	// added without being listed there would mint an undeclared series
-	// at first use — present only after it has already been wrong once.
-	declared := strings.Join(app.Kinds, ",") + "|" + strings.Join(app.Reasons, ",")
-	for _, v := range []string{app.KindSessionStart, app.KindTelemetry, app.KindSnapshot,
-		app.ReasonDeadline, app.ReasonError} {
-		if !strings.Contains(declared, v) {
-			t.Errorf("%q is a constant but is not in Kinds or Reasons, so it would "+
-				"never be declared at zero", v)
+func TestGaugeFuncReadsAtScrapeTime(t *testing.T) {
+	// The property that makes GaugeFunc the right shape for a live map:
+	// nothing has to remember to update it. A plain Gauge would be a
+	// second copy of the truth, drifting the first time somebody adds a
+	// code path that changes the first.
+	reg := metrics.New()
+	live := 0
+	reg.GaugeFunc("sessions_live", "test gauge", func() float64 { return float64(live) })
+
+	if v, ok := gaugeValue(t, reg, "ghosttrace_sessions_live"); !ok || v != 0 {
+		t.Fatalf("gauge = %v (present %v) before anything happened, want 0", v, ok)
+	}
+
+	live = 42
+	if v, _ := gaugeValue(t, reg, "ghosttrace_sessions_live"); v != 42 {
+		t.Errorf("gauge = %v after the underlying value changed, want 42 — it is "+
+			"being cached rather than read at scrape time", v)
+	}
+
+	live = 7
+	if v, _ := gaugeValue(t, reg, "ghosttrace_sessions_live"); v != 7 {
+		t.Errorf("gauge = %v, want 7 — a gauge must be able to go DOWN", v)
+	}
+}
+
+func gaugeValue(t *testing.T, reg *metrics.Registry, name string) (float64, bool) {
+	t.Helper()
+	families, err := reg.Gatherer().Gather()
+	if err != nil {
+		t.Fatalf("gather: %v", err)
+	}
+	for _, f := range families {
+		if f.GetName() == name && len(f.GetMetric()) == 1 {
+			return f.GetMetric()[0].GetGauge().GetValue(), true
 		}
 	}
+	return 0, false
 }

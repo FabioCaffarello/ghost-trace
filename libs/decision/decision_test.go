@@ -18,6 +18,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/FabioCaffarello/ghost-trace/libs/archive"
 	"github.com/FabioCaffarello/ghost-trace/libs/decision"
 	"github.com/FabioCaffarello/ghost-trace/libs/feature"
@@ -284,5 +286,135 @@ func TestObservedAtMustBeRFC3339(t *testing.T) {
 	if got := post(t, srv, "/v1/outcomes", "sk_test",
 		`{"evaluation_id":"ev_1","outcome":"login_success","observed_at":"yesterday"}`); got != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", got)
+	}
+}
+
+// ---------------------------------------------------------------
+// the best-effort bound on the decision path
+// ---------------------------------------------------------------
+
+// okStore accepts everything, so the written counter has something to
+// count.
+type okStore struct{}
+
+func (okStore) Append(context.Context, proto.Message, int64) error { return nil }
+
+// brokerAckTimeout is roughly what a JetStream publish waits for an ack
+// from a server that is gone — the five seconds the unbounded path
+// actually took.
+//
+// The stalled store gives up after it rather than blocking forever, so
+// deleting the bound under test makes this test FAIL on elapsed time
+// instead of hanging. A red proof that hangs is a broken test, not a
+// demonstration; the first version of this file hung, which is how the
+// distinction got learned.
+const brokerAckTimeout = 5 * time.Second
+
+// stalledStore is a broker that has stopped answering: the publish
+// blocks until whichever comes first — the caller's deadline, or the
+// ack timeout the client would eventually hit on its own.
+type stalledStore struct{}
+
+func (stalledStore) Append(ctx context.Context, _ proto.Message, _ int64) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(brokerAckTimeout):
+		return errors.New("no ack from the broker")
+	}
+}
+
+// countingMeter records what the service claims it wrote and lost.
+type countingMeter struct {
+	written map[string]int
+	dropped map[string]int
+}
+
+func newCountingMeter() *countingMeter {
+	return &countingMeter{written: map[string]int{}, dropped: map[string]int{}}
+}
+
+func (m *countingMeter) Written(kind string) { m.written[kind]++ }
+func (m *countingMeter) Dropped(kind, reason string) {
+	m.dropped[kind+"/"+reason]++
+}
+
+func TestADecisionIsNotHeldOpenByAStalledArchive(t *testing.T) {
+	// The defect this closes was a LATENCY defect, not a result defect:
+	// the verdict was always fail-open, and the request that carried it
+	// took as long as the broker's own ack timeout — about five seconds
+	// — on the one path with a caller at a risk moment and an 80ms
+	// budget. The collector bounded this at 250ms; this package kept
+	// passing the raw request context straight through.
+	meter := newCountingMeter()
+	svc := newService(t, fakeSessions{"st_live": {ID: "s_1", TenantID: "t_test"}},
+		stalledStore{}).WithLossMeter(meter)
+
+	start := time.Now()
+	out, err := svc.Decide(context.Background(), decision.Input{
+		TenantID: "t_test", SessionToken: "st_live", Action: "login",
+	})
+	elapsed := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("a stalled archive must not fail the decision: %v", err)
+	}
+	if out.Decision == "" {
+		t.Fatal("a stalled archive must not empty the decision")
+	}
+
+	// Generous: the assertion is that SOME bound applies, not that the
+	// machine is fast. Unbounded is five seconds.
+	if limit := 2 * decision.BestEffortTimeout; elapsed > limit {
+		t.Errorf("the decision took %v with the archive stalled; the best-effort "+
+			"bound is %v, so anything near the broker's own ack timeout means the "+
+			"request context is reaching the store unbounded",
+			elapsed, decision.BestEffortTimeout)
+	}
+
+	// And the record is gone, so it has to be counted. A drop that only
+	// reaches a log is the silent loss Phase 3 exists to remove.
+	if got := meter.dropped[decision.KindEvaluation+"/"+decision.ReasonDeadline]; got != 1 {
+		t.Errorf("dropped{evaluation,deadline} = %d, want 1 (counts: %v)",
+			got, meter.dropped)
+	}
+	if got := meter.written[decision.KindEvaluation]; got != 0 {
+		t.Errorf("written = %d, want 0 — nothing reached the store", got)
+	}
+}
+
+func TestAnArchivedEvaluationIsCounted(t *testing.T) {
+	meter := newCountingMeter()
+	svc := newService(t, fakeSessions{"st_live": {ID: "s_1", TenantID: "t_test"}},
+		okStore{}).WithLossMeter(meter)
+
+	if _, err := svc.Decide(context.Background(), decision.Input{
+		TenantID: "t_test", SessionToken: "st_live", Action: "login",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := meter.written[decision.KindEvaluation]; got != 1 {
+		t.Errorf("written[evaluation] = %d, want 1", got)
+	}
+	if len(meter.dropped) != 0 {
+		t.Errorf("nothing was lost, but dropped = %v", meter.dropped)
+	}
+}
+
+func TestNoArchiveIsNeitherWrittenNorDropped(t *testing.T) {
+	// A host with no store configured has not lost anything. Counting
+	// it as a drop would make every no-archive run look like an outage.
+	meter := newCountingMeter()
+	svc := newService(t, fakeSessions{"st_live": {ID: "s_1", TenantID: "t_test"}},
+		archive.Null{}).WithLossMeter(meter)
+
+	if _, err := svc.Decide(context.Background(), decision.Input{
+		TenantID: "t_test", SessionToken: "st_live", Action: "login",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(meter.written) != 0 || len(meter.dropped) != 0 {
+		t.Errorf("no archive configured, but written=%v dropped=%v",
+			meter.written, meter.dropped)
 	}
 }

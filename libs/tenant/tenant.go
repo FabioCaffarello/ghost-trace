@@ -171,6 +171,39 @@ func (r *Registry) Fingerprint() string {
 // Len reports how many tenants are registered.
 func (r *Registry) Len() int { return len(r.all) }
 
+// The credentials this repository ships. They are flag defaults, they
+// appear in compose.yml and .env.example, and they are printed in the
+// README — so they authenticate nobody, and any process running on them
+// accepts decision calls from anyone who has read the source.
+const (
+	DemoSiteKey   = "pk_demo"
+	DemoSecretKey = "sk_demo"
+)
+
+// DemoTenants lists the registered tenants still holding a shipped demo
+// credential.
+//
+// A service starting on `sk_demo` used to be silent, which is the wrong
+// default for the one setting that decides whether the secret-key
+// endpoints are protected at all. It stays a WARNING rather than a
+// refusal: `make numbers`, the compose topology and every gate run on
+// these keys deliberately, and a service that refused to start would
+// break the reproduction path this repository exists to offer.
+//
+// It lives here rather than in three main packages because it is a
+// property of the registry's contents, and three copies of a security
+// check is two chances to fix one of them.
+func (r *Registry) DemoTenants() []string {
+	var out []string
+	for _, t := range r.all {
+		if t.SecretKey == DemoSecretKey || t.SiteKey == DemoSiteKey {
+			out = append(out, t.ID)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // IDs lists the tenant ids, for logging what a process is serving.
 // Secrets are never included.
 func (r *Registry) IDs() []string {

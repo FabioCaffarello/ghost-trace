@@ -68,7 +68,7 @@ jobs:
       # thing this PR can act on, and a gate that cannot be satisfied
       # gets disabled. Fixable HIGH and CRITICAL fail the build.
       - name: Scan for known vulnerabilities
-        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ghost-trace/${{ matrix.service }}:ci
           format: table
@@ -125,6 +125,18 @@ jobs:
       # someone tries to run it.
       - name: Validate compose topology
         run: docker compose --profile core --profile demo --profile experiments --profile observability config --quiet
+
+      # The alert rules are the only part of the observability profile
+      # that is neither compiled nor exercised by a test, so a typo in a
+      # PromQL expression would surface as a rule that silently never
+      # fires — which is worse than no rule, because the dashboard looks
+      # armed. promtool parses the config, resolves rule_files relative
+      # to it, and type-checks every expression.
+      - name: Validate the scrape config and alert rules
+        run: |
+          docker run --rm -v "$PWD/deploy/observability:/cfg" \
+            --entrypoint promtool "${PROMETHEUS_IMAGE:-prom/prometheus:v3.1.0}" \
+            check config /cfg/prometheus.yml
 
   # A single context for branch protection to require, instead of one
   # per job and one per matrix cell.

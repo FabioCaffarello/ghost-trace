@@ -16,6 +16,7 @@
     },
     "run": {
       "mode": "local",
+      "seed": null,
       "base": "http://127.0.0.1:18099",
       "sample_sizes": {
         "tier1_playwright": 12,

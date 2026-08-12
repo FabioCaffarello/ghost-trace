@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/FabioCaffarello/ghost-trace/libs/eventstream"
 	eventsv1 "github.com/FabioCaffarello/ghost-trace/libs/genproto/events/v1"
@@ -79,5 +80,49 @@ func TestSnapshotMapsToDecisionState(t *testing.T) {
 	if store.tenant != "t_demo" {
 		t.Errorf("looked up under tenant %q; the key is (tenant, token) and the "+
 			"tenant is configuration, not something the request carries", store.tenant)
+	}
+}
+
+// stalledStore is a snapshot bucket whose broker has stopped
+// answering: the read blocks until the caller's deadline, or until the
+// client would eventually give up on its own.
+type stalledStore struct{}
+
+func (stalledStore) Get(ctx context.Context, _, _ string) (*eventsv1.SessionSnapshot, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(5 * time.Second):
+		return nil, errors.New("no answer from the broker")
+	}
+}
+
+func TestALookupIsNotHeldOpenByADeadBroker(t *testing.T) {
+	// Found by `make kill-test` on the first run of PR-5.1's latency
+	// assertion: the engine answered 500 five seconds after the broker
+	// stopped, because this read carried the request's own context into
+	// a client that waits for an ack nobody will send.
+	//
+	// Two things are asserted, and the second is why the first is not
+	// enough on its own: it must be PROMPT, and it must still be an
+	// ERROR. Returning a miss quickly would be worse than returning an
+	// error slowly — every session would score innocent for lack of
+	// evidence at the moment the evidence supply broke.
+	s := snapshotsessions.New(stalledStore{})
+
+	start := time.Now()
+	_, found, err := s.Lookup(context.Background(), "t_test", "st_x")
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("a store that never answered reported success")
+	}
+	if found {
+		t.Error("a store that never answered reported a session")
+	}
+	if limit := 2 * snapshotsessions.LookupTimeout; elapsed > limit {
+		t.Errorf("the lookup took %v; the bound is %v, so anything near the "+
+			"broker's own ack timeout means the request context is reaching the "+
+			"store unbounded", elapsed, snapshotsessions.LookupTimeout)
 	}
 }

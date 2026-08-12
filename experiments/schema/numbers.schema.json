@@ -173,6 +173,17 @@
                   "type": "string"
                 }
               ]
+            },
+            "puppeteer_core": {
+              "description": "Resolved puppeteer-core version. Four of the six numbers depend on it directly \u2014 it drives tiers 1, 2, 5 and 6 \u2014 so a manifest without it cannot say which driver produced its detection table. Optional: manifests published before this field existed stay valid, and their absence is not a claim that the driver was absent.",
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
             }
           }
         },
@@ -218,9 +229,32 @@
               }
             },
             "seed": {
-              "type": "string",
-              "description": "The adversary's seed. Tiers 5 and 6 derive every random draw from it, so two manifests are only comparable when this matches \u2014 before R1.16 they were unseeded and tier 6 was observed at 70%, 90%, 80% and 100% across four runs of unchanged code.",
-              "minLength": 1
+              "description": "The adversary's seed. Tiers 5 and 6 derive every random draw from it, so two manifests are only comparable when this matches \u2014 before R1.16 they were unseeded and tier 6 was observed at 70%, 90%, 80% and 100% across four runs of unchanged code. Null means the run PREDATES seeding: a historical record whose adversary nobody can replay, kept because deleting history is worse \u2014 but numbers_check refuses such a manifest as a baseline, and numbers.py always writes a real seed, so null can only describe the past.",
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "minLength": 1
+                }
+              ]
+            },
+            "archive": {
+              "description": "What the decision path writes evaluations THROUGH \u2014 'substrate' is the local SQLite store with synchronous=FULL, 'stream' is a NATS publish, 'none' is NullArchive. It is recorded because `topology` was silently carrying it: the monolith baselines wrote to a substrate and the composed one published to a stream, so part of the p99 difference the phase gate reads as the cost of the split is the cost of a different store. Null means an external deployment nobody described (set GT_ARCHIVE) \u2014 usable as a run, refused as a baseline. Optional: where the key is ABSENT, read it from the topology, which is what every manifest published before this field was \u2014 monolith ran locally with -data, composed ran on compose with -nats.",
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "substrate",
+                    "stream",
+                    "none"
+                  ]
+                }
+              ]
             },
             "load": {
               "type": "string",

@@ -1,0 +1,66 @@
+{
+  "session_token": "st_AufHcXG3MEt9x5F3hzVf03ZS",
+  "seq": 2,
+  "sent_at_ms": 5100,
+  "page": {
+    "path": "/login",
+    "viewport": [
+      1440,
+      900
+    ]
+  },
+  "events": [
+    {
+      "type": "pointer",
+      "t": 1200,
+      "src": "mouse",
+      "pts": [
+        [
+          412,
+          300,
+          0
+        ],
+        [
+          418,
+          305,
+          16
+        ],
+        [
+          427,
+          311,
+          17
+        ]
+      ]
+    },
+    {
+      "type": "key",
+      "t": 1500,
+      "phase": "down",
+      "class": "alpha",
+      "target": "f_1"
+    },
+    {
+      "type": "scroll",
+      "t": 1600,
+      "dy": 240,
+      "mode": "wheel"
+    },
+    {
+      "type": "focus",
+      "t": 1700,
+      "state": "focus",
+      "target": "f_1"
+    },
+    {
+      "type": "visibility",
+      "t": 1800,
+      "state": "hidden"
+    },
+    {
+      "type": "form",
+      "t": 1900,
+      "action": "injected",
+      "target": "f_1"
+    }
+  ]
+}

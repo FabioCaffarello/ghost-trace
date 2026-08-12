@@ -490,7 +490,7 @@ shadow: ## Snapshot-shadow equivalence against a real broker (needs GT_NATS_URL)
 		echo "start a broker:  docker run --rm -d -p 4222:4222 --name gt-nats nats:alpine -js"; \
 		exit 1; \
 	fi
-	cd $(SERVICE) && go test -count=1 ./internal/app/ -run TestDecisionThroughTheSnapshotStore -v
+	@python3 scripts/gated-test.py --dir $(SERVICE) -- ./internal/app/ -run TestDecisionThroughTheSnapshotStore
 
 # The same equivalence one layer out: not through the KV store in one
 # process, but through the topology a client actually meets. Two
@@ -521,7 +521,7 @@ shadow-http: ## A/B the collector against the engine, and check the demo is wire
 		GT_COLLECTOR_URL="$${GT_COLLECTOR_URL:-http://127.0.0.1:8080}" \
 		GT_ENGINE_URL="$${GT_ENGINE_URL:-http://127.0.0.1:8082}" \
 		GT_DEMO_URL="$${GT_DEMO_URL:-http://127.0.0.1:8083}" \
-		go test -count=1 ./internal/shadow/ -v
+		python3 ../../scripts/gated-test.py --dir . -- ./internal/shadow/
 
 # The kill-test: take one service away and check what the rest
 # promises. Each scenario is a degradation an ADR asserts, and until
@@ -534,13 +534,48 @@ shadow-http: ## A/B the collector against the engine, and check the demo is wire
 kill-test: ## Take each service away and check the degradation promises (needs the topology up)
 	@python3 deploy/kill-test.py
 
-# The accounting phase's gate. Deliberately outside `make ci`: it stops
-# and starts containers, which a pull-request runner should not be doing
-# to a shared daemon, and it takes minutes rather than seconds.
+# The accounting phase's gate. It now runs in CI's topology job — the
+# comment here used to say it was deliberately outside, on the grounds
+# that it stops and starts containers, and that reason had already been
+# overtaken: `make kill-test` runs in that same job and stops three
+# services by design. The runner's daemon is not shared, and the whole
+# gate is ninety seconds at twenty-five records a scenario.
+#
+# What is NOT in CI is `make load-gate`, and that distinction is the
+# real one. This target asserts ARITHMETIC — the books balance or they
+# do not, and the answer is the same on any machine. load-gate asserts
+# a RATE, which is a fact about the hardware as much as the code.
 #
 # It refuses when the topology is down. A gate that skips is the exact
 # failure this phase was opened to remove — `make shadow` skipping
 # without GT_NATS_URL is how a broken tenant lookup reached CI.
+# The human-study pipeline, driven by participants who do not exist.
+#
+# The false-positive rate is calendar-bound: it needs recruited people
+# and no engineering shortens that. What engineering can do is make sure
+# recruiting is the ONLY thing left — that on the day a volunteer opens
+# the link, nothing in the pipeline turns out to be broken. Before
+# PR-4.P2 the documented command did not run at all.
+#
+# Needs the collector and demo-web up; see experiments/README.md. It
+# refuses rather than skips.
+# Deletion on request, with no reason given and no negotiation.
+#
+# RFC-0001 §2 asks for a target rather than a promise to remember: "an
+# unimplemented deletion mechanism is indistinguishable from no deletion
+# mechanism at the only moment it matters." It does NOT delete from the
+# archive, and does not need to — ADR-0014 keeps the participant code out
+# of it, so there is nothing there to remove.
+#
+#   make forget P=p07
+.PHONY: forget
+forget: ## Remove one participant's captured rows, on request (P=<code>)
+	@python3 $(EXPERIMENTS)/forget.py -P "$(P)"
+
+.PHONY: capture-dryrun
+capture-dryrun: ## Drive synthetic participants through the capture protocol (needs collector + demo-web)
+	@python3 $(EXPERIMENTS)/capture_dryrun.py $(DRYRUN_ARGS)
+
 .PHONY: loss-audit
 loss-audit: ## Drive traffic, break things, and make the archive's books balance (needs the topology up)
 	@python3 deploy/loss-audit.py
@@ -588,7 +623,7 @@ parity: ## Archive parity against a real broker (needs GT_NATS_URL)
 		echo "start a broker:  docker run --rm -d -p 4222:4222 --name gt-nats nats:alpine -js"; \
 		exit 1; \
 	fi
-	cd services/archive && go test -count=1 ./internal/consumer/ -run Archive -v
+	@python3 scripts/gated-test.py --dir services/archive -- ./internal/consumer/ -run Archive
 
 ##@ Experiments
 
@@ -596,7 +631,7 @@ parity: ## Archive parity against a real broker (needs GT_NATS_URL)
 experiments-check: ## Syntax-check every tier and run the asserted statistics selftest
 	@echo "== python syntax"
 	@cd $(EXPERIMENTS) && python3 -m compileall -q analyze.py numbers.py run.py make_links.py \
-		publish_manifest.py schema/ \
+		publish_manifest.py forget.py capture_dryrun.py schema/ \
 		tiers/tier3_undetected_chromedriver.py testdata/make_synthetic_human.py
 	@echo "== node syntax"
 	@cd $(EXPERIMENTS) && for f in tiers/*.js lib/*.js *.mjs; do node --check "$$f" || exit 1; done
@@ -604,6 +639,10 @@ experiments-check: ## Syntax-check every tier and run the asserted statistics se
 	@cd $(EXPERIMENTS) && python3 analyze.py --selftest
 	@echo "== numbers.json schema selftest"
 	@cd $(EXPERIMENTS) && python3 -m schema --selftest
+	@echo "== published manifests satisfy the schema"
+	@cd $(EXPERIMENTS) && python3 -m schema ../docs/results/numbers-*.json
+	@echo "== forget selftest (asserted)"
+	@python3 $(EXPERIMENTS)/forget.py --selftest
 	@echo "== numbers-check selftest (asserted)"
 	@python3 $(EXPERIMENTS)/numbers_check.py --selftest
 	@echo "== release-derivation selftest (asserted)"
@@ -616,6 +655,27 @@ experiments-check: ## Syntax-check every tier and run the asserted statistics se
 	@python3 scripts/check-modules.py --selftest
 	@echo "== every module is in go.work, GO_MODULES, the CI matrix and dependabot"
 	@python3 scripts/check-modules.py
+
+# The topology gates are the scripts that decide whether the accounting
+# claims hold, and until PR-5.6a nothing compiled them: a typo in
+# load-gate.py surfaced only when somebody remembered to run it, which
+# for a manual gate can be months.
+.PHONY: gates-check
+gates-check: ## Syntax-check the topology gates and assert their provenance logic
+	@echo "== gate syntax"
+	@python3 -m compileall -q deploy/*.py
+	@echo "== gate-provenance selftest (asserted)"
+	@python3 deploy/provenance.py --selftest
+	@echo "== gated-run selftest (asserted)"
+	@python3 scripts/gated-test.py --selftest
+	@echo "== route-inventory selftest (asserted)"
+	@python3 scripts/check-routes.py --selftest
+	@echo "== every route a service serves is named in the contract"
+	@python3 scripts/check-routes.py
+	@echo "== sensor-registry selftest (asserted)"
+	@python3 scripts/check-sensors.py --selftest
+	@echo "== every sensor is a make target, and every gate is a sensor"
+	@python3 scripts/check-sensors.py
 
 # Measuring and CHECKING are one target, because they were two habits
 # and the second one kept being skipped. The run prints the six numbers
@@ -677,7 +737,7 @@ verify: fmt-check vet lint test-race ## Pre-push gate: format, vet, lint, race t
 # ci: the whole gate. `make ci` green locally and a green CI run are the
 # same statement — that equivalence is the reason this file exists.
 .PHONY: ci
-ci: fmt-check tidy-check lint-commit-selftest buf-lint genproto-sync openapi-sync openapi-lint contract-fixtures-sync context-sync-check vet lint test-race coverage experiments-check vuln ## Everything CI runs
+ci: fmt-check tidy-check lint-commit-selftest buf-lint genproto-sync openapi-sync openapi-lint contract-fixtures-sync context-sync-check vet lint test-race coverage experiments-check gates-check vuln ## Everything CI runs
 
 ##@ Housekeeping
 

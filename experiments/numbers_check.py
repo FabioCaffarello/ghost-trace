@@ -23,6 +23,10 @@ WHAT IT REFUSES TO CALL A PASS
   - a detection rate outside the baseline's interval, in EITHER
     direction. A detector that suddenly catches more is as much a
     change to explain as one that catches less.
+  - a baseline with no adversary seed. Before seeding, tier 6 measured
+    70%, 90%, 80% and 100% from unchanged code; an adversary nobody can
+    replay cannot anchor a comparison, and printing "(none recorded)"
+    next to the verdict was disclosure, not refusal.
 
 Both of the first two are the same rule the repository states twice:
 absence is never zero.
@@ -48,6 +52,18 @@ EPS = 1e-9
 # because an aggregate hides a regression in one cell behind an
 # improvement in another.
 MEMORY_REGRESSION = 0.10
+
+# Numbers 3 and 4 are compared against the baseline with a proportional,
+# TWO-SIDED band. The budget alone is no bar at all: the Phase-4 run
+# moved p99 from 5.525ms to 0.739ms — 7.5x, twelve times inside the
+# budget — and was published as "nothing moved" because nothing compared
+# it. Two-sided because an unexplained improvement is as much a change
+# to explain as a regression: a detector that got faster may be a
+# detector doing less. The committed manifests put run-to-run noise at
+# 5-9% for session latency and 0% for TTCD, so half is generous to
+# noise and still five times smaller than the move that sailed through.
+LATENCY_BAND = 0.50
+TTCD_BAND = 0.50
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_RUN = os.path.join(ROOT, "experiments", "results", "numbers.json")
@@ -85,22 +101,25 @@ def pick_newest(paths, stamp) -> str | None:
     return max(paths, key=stamp)
 
 
-def newest_manifest(want: str, want_load: str = "idle") -> str | None:
-    """The newest published manifest of the same TOPOLOGY and the same
-    LOAD CONDITION.
+def newest_manifest(want: str, want_load: str = "idle",
+                    want_archive: str | None = None) -> str | None:
+    """The newest published manifest of the same TOPOLOGY, the same LOAD
+    CONDITION and the same ARCHIVE BACKEND.
 
     Not simply the newest. Once a composed baseline exists, "newest"
     alone would hand a monolith run a composed one to be judged against,
     and the topology check would then reject a perfectly good run for a
     reason that is the picker's fault rather than the run's.
 
-    Load condition joins the filter for exactly the same reason. The two
-    together are what "the same kind of measurement" means here, and a
-    picker that ignored either would manufacture the failure the checks
-    downstream exist to report.
+    Load condition and archive backend join the filter for exactly the
+    same reason. The three together are what "the same kind of
+    measurement" means here, and a picker that ignored any of them would
+    manufacture the failure the checks downstream exist to report.
     """
     same = [p for p in glob.glob(MANIFEST_GLOB)
-            if topology(load(p)) == want and load_condition(load(p)) == want_load]
+            if topology(load(p)) == want
+            and load_condition(load(p)) == want_load
+            and (want_archive is None or archive(load(p)) == want_archive)]
     return pick_newest(same, lambda p: load(p)["provenance"]["generated_at"])
 
 
@@ -155,6 +174,50 @@ def load_condition(d: dict) -> str:
     return (d.get("provenance", {}).get("run", {}) or {}).get("load", "idle")
 
 
+def unseeded(base: dict) -> bool:
+    """A baseline whose adversary cannot be replayed.
+
+    The pre-seeding manifest carries `seed: null` — kept as history,
+    never usable as an anchor. Pure so the selftest can hold it."""
+    return not (base.get("provenance", {}).get("run", {}) or {}).get("seed")
+
+
+def archive(d: dict) -> str | None:
+    """What the decision path wrote evaluations through.
+
+    Where the key is ABSENT, it is read from the topology, which is what
+    every manifest published before the field existed actually was: a
+    monolith run started its own binary with -data (a local substrate),
+    and a composed run measured compose, where the collector runs with
+    -nats and the stream is the archive. Present-but-null is different
+    and means nobody recorded it — see unrecorded_archive.
+    """
+    run = d.get("provenance", {}).get("run", {}) or {}
+    if "archive" not in run:
+        return "substrate" if topology(d) == "monolith" else "stream"
+    return run["archive"]
+
+
+def unrecorded_archive(base: dict) -> bool:
+    """A baseline whose decision-path store nobody wrote down."""
+    run = base.get("provenance", {}).get("run", {}) or {}
+    return "archive" in run and not run["archive"]
+
+
+def check_archive(base: dict, run: dict, rep: Report) -> None:
+    b, n = archive(base), archive(run)
+    if b != n:
+        rep.fail(
+            f"this run writes evaluations through {n!r} and the baseline through "
+            f"{b!r}. Both writes sit on /v1/decisions, and a local substrate "
+            f"commit with synchronous=FULL is not a NATS publish — comparing "
+            f"them reads a change of store as a change in the decision path, "
+            f"which is the confound the two published baselines already carry. "
+            f"Publish a baseline for {n!r} (`make numbers-manifest`) and compare "
+            f"against that."
+        )
+
+
 def check_load(base: dict, run: dict, rep: Report) -> None:
     b, n = load_condition(base), load_condition(run)
     if b != n:
@@ -183,25 +246,76 @@ def check_topology(base: dict, run: dict, rep: Report) -> None:
 
 
 def check_session(base: dict, run: dict, rep: Report) -> None:
-    lat = run["session"]["latency"]
+    b, n = base.get("session"), run.get("session")
+
+    # The schema allows session: null — a run where the measurement did
+    # not happen. That is an ABSENCE, the same rule as a vanished tier,
+    # and before this check existed it was a TypeError on one path and a
+    # silent pass on the other.
+    if n is None:
+        if b is not None:
+            rep.fail(
+                "session: measured in the baseline and null in this run. "
+                "Numbers 3, 4 and 5 did not hold; they vanished — a "
+                "measurement that did not run is not a measurement that "
+                "found nothing."
+            )
+        return
+    if b is None:
+        rep.note("session: measured here and null in the baseline — "
+                 "nothing to compare against")
+
+    lat = n["latency"]
     budget = lat["budget_ms"]
     if lat["p99"] > budget:
         rep.fail(f"p99 decision latency {lat['p99']}ms is over the {budget}ms budget")
 
-    cold = run["session"]["cold_start"]
+    # NUMBER 3 against the BASELINE, not only the budget. This is the
+    # check whose absence let a 7.5x move ship as "nothing moved".
+    if b is not None:
+        for q in ("p50", "p95", "p99"):
+            before, after = b["latency"].get(q), lat.get(q)
+            if not before or after is None:
+                continue
+            drift = abs(after - before) / before
+            if drift > LATENCY_BAND:
+                rep.fail(
+                    f"latency {q}: {after}ms against {before}ms in the baseline — "
+                    f"{drift:.0%} apart, and more than {LATENCY_BAND:.0%} is a "
+                    f"different number, not noise. Inside the budget is not the "
+                    f"same as unmoved."
+                )
+
+    cold = n["cold_start"]
     if not cold.get("never_blocks"):
         rep.fail(
             f"cold start blocks: decisions {cold.get('decisions')}. A first visit "
             f"with no history must never be blocked."
         )
 
+    # NUMBER 4. The medians are the published claim; before this check
+    # they produced at most a note, so 3.7s could become 300s and the
+    # verdict would still read "reproduce".
     for gate in ("challenge", "block"):
-        t = run["session"]["ttcd"].get(gate) or {}
+        t = n["ttcd"].get(gate) or {}
+        bt = (b["ttcd"].get(gate) or {}) if b is not None else {}
+        if bt and not t:
+            rep.fail(f"time-to-confident-decision ({gate}): in the baseline "
+                     f"({bt.get('seconds')}s) and absent from this run")
+            continue
+        if bt.get("seconds") and t.get("seconds") is not None:
+            drift = abs(t["seconds"] - bt["seconds"]) / bt["seconds"]
+            if drift > TTCD_BAND:
+                rep.fail(
+                    f"time-to-confident-decision ({gate}): {t['seconds']}s against "
+                    f"{bt['seconds']}s in the baseline — {drift:.0%} apart, and "
+                    f"more than {TTCD_BAND:.0%} is a different number, not noise"
+                )
         if t.get("of") and t.get("reached", 0) < t["of"]:
+            was = (f" (baseline {bt.get('reached')}/{bt.get('of')})"
+                   if bt else "")
             rep.note(f"time-to-confident-decision ({gate}): reached in "
-                     f"{t['reached']}/{t['of']} sessions "
-                     f"(baseline {base['session']['ttcd'][gate]['reached']}/"
-                     f"{base['session']['ttcd'][gate]['of']})")
+                     f"{t['reached']}/{t['of']} sessions{was}")
 
 
 def check_false_positive_rate(base: dict, run: dict, rep: Report) -> None:
@@ -221,15 +335,37 @@ def cell(row: dict) -> tuple:
 
 
 def check_architecture(base: dict, run: dict, rep: Report) -> None:
+    # The decide_*_ms columns in these rows are deliberately NOT banded.
+    # Between two committed manifests of unchanged code the same cell
+    # measured 0.0005ms and 0.01775ms — 35x apart — because a
+    # sub-microsecond micro-benchmark on a shared machine measures the
+    # machine. Number 6 is bytes_per_session; the timing columns are
+    # the bench's own context, and a guard that cries wolf on every run
+    # teaches people to override it.
     b = {cell(r): r for r in base.get("architecture") or []}
-    for row in run.get("architecture") or []:
-        prev = b.get(cell(row))
+    n = {cell(r): r for r in run.get("architecture") or []}
+
+    if b and not n:
+        rep.fail(
+            f"architecture: measured in the baseline ({len(b)} cells) and "
+            f"absent from this run — the schema allows null, and before this "
+            f"check that null read as a pass. Number 6 did not hold; it "
+            f"vanished."
+        )
+        return
+    for key in sorted(set(b) - set(n)):
+        a, s, d = key
+        rep.fail(f"architecture: {a} at {s} sessions x {d}s is in the baseline "
+                 f"and absent from this run")
+
+    for key in sorted(n):
+        row, prev = n[key], b.get(key)
         if not prev or not prev.get("bytes_per_session"):
             continue
         before, after = prev["bytes_per_session"], row["bytes_per_session"]
         growth = (after - before) / before
         if growth > MEMORY_REGRESSION:
-            a, s, d = cell(row)
+            a, s, d = key
             rep.fail(
                 f"memory: {a} at {s} sessions x {d}s uses {after} bytes/session, "
                 f"up {growth:.0%} from {before} (>{MEMORY_REGRESSION:.0%} is a regression)"
@@ -258,6 +394,7 @@ def verdict(base: dict, run: dict) -> Report:
     rep = Report()
     check_topology(base, run, rep)
     check_load(base, run, rep)
+    check_archive(base, run, rep)
     check_detection(base, run, rep)
     check_absent_tiers(base, run, rep)
     check_session(base, run, rep)
@@ -289,10 +426,10 @@ def _baseline() -> dict:
         "absent_tiers": [],
         "false_positive_rate": None,
         "session": {
-            "latency": {"p99": 5.0, "budget_ms": 80},
+            "latency": {"p50": 2.0, "p95": 4.0, "p99": 5.0, "budget_ms": 80},
             "cold_start": {"never_blocks": True, "decisions": ["allow"]},
-            "ttcd": {"challenge": {"reached": 30, "of": 30},
-                     "block": {"reached": 30, "of": 30}},
+            "ttcd": {"challenge": {"reached": 30, "of": 30, "seconds": 3.7},
+                     "block": {"reached": 30, "of": 30, "seconds": 5.7}},
         },
         "architecture": [{"architecture": "maintained", "sessions": 100,
                           "duration_s": 10, "bytes_per_session": 700}],
@@ -343,11 +480,37 @@ def selftest() -> int:
         "tier1": _tier(8, 10, 0.490, 0.943), "tier9": _tier(5, 5, 0.5, 1.0)}), True))
 
     cases.append(("p99 over budget", _mutate(**{"session.latency":
-                  {"p99": 81.0, "budget_ms": 80}}), False))
-    cases.append(("p99 exactly at budget", _mutate(**{"session.latency":
-                  {"p99": 80.0, "budget_ms": 80}}), True))
+                  {"p50": 2.0, "p95": 4.0, "p99": 81.0, "budget_ms": 80}}), False))
     cases.append(("a cold start that blocks", _mutate(**{"session.cold_start":
                   {"never_blocks": False, "decisions": ["block"]}}), False))
+
+    # NUMBER 3 against the baseline. The exact mutation that shipped:
+    # the Phase-4 run moved p99 from 5.525ms to 0.739ms — 7.5x, well
+    # inside the budget — and the verdict read "the six numbers
+    # reproduce" because only the budget was consulted.
+    cases.append(("a p99 that collapsed inside the budget", _mutate(**{
+        "session.latency": {"p50": 2.0, "p95": 4.0, "p99": 0.66, "budget_ms": 80}}),
+        False))
+    cases.append(("a p99 drifted within the band", _mutate(**{
+        "session.latency": {"p50": 2.0, "p95": 4.0, "p99": 5.4, "budget_ms": 80}}),
+        True))
+
+    # NUMBER 4. 3.7s -> 300s was accepted before the medians were
+    # compared; a note is not a verdict.
+    cases.append(("a TTCD that ballooned", _mutate(**{
+        "session.ttcd": {"challenge": {"reached": 30, "of": 30, "seconds": 300.0},
+                         "block": {"reached": 30, "of": 30, "seconds": 5.7}}}),
+        False))
+
+    # The schema allows both of these nulls; before these checks one
+    # crashed and the other passed silently.
+    cases.append(("a session that is null against a measured baseline",
+                  _mutate(session=None), False))
+    cases.append(("an architecture that is null against a measured baseline",
+                  _mutate(architecture=None), False))
+    cases.append(("an architecture cell that vanished", _mutate(architecture=[
+        {"architecture": "maintained", "sessions": 999, "duration_s": 10,
+         "bytes_per_session": 700}]), False))
 
     cases.append(("memory up 20%", _mutate(architecture=[
         {"architecture": "maintained", "sessions": 100, "duration_s": 10,
@@ -433,7 +596,68 @@ def selftest() -> int:
         print("  ok    a manifest with no load field is treated as idle, which is "
               "what every run before Phase 4 was")
 
-    total = len(cases) + 5
+    # At the budget is not over it. Baseline and run share the value so
+    # the band stays out of the way — the boundary rule and the band
+    # rule are different rules and this case exercises only the first.
+    at_budget = _baseline()
+    at_budget["session"]["latency"] = {"p50": 2.0, "p95": 4.0, "p99": 80.0,
+                                       "budget_ms": 80}
+    r = Report()
+    check_session(at_budget, json.loads(json.dumps(at_budget)), r)
+    if r.failures:
+        failures += 1
+        print("  FAIL  p99 exactly at budget was rejected: " + r.failures[0])
+    else:
+        print("  ok    p99 exactly at budget passes; over it does not")
+
+    # An unreplayable adversary is not an anchor — null, empty and
+    # missing all read as unseeded; a real seed does not.
+    seedless = _baseline()
+    seedless["provenance"]["run"]["seed"] = None
+    missing = _baseline()
+    del missing["provenance"]["run"]["seed"]
+    if unseeded(seedless) and unseeded(missing) and not unseeded(_baseline()):
+        print("  ok    a baseline with no adversary seed is refused as an anchor")
+    else:
+        failures += 1
+        print("  FAIL  an unseeded baseline was accepted as an anchor")
+
+    # The archive backend, the third thing "the same kind of
+    # measurement" has to mean. Same three-part shape as check_load.
+    sub = {"provenance": {"run": {"archive": "substrate"}}}
+    strm = {"provenance": {"run": {"archive": "stream"}}}
+
+    r = Report()
+    check_archive(sub, strm, r)
+    if not r.failures:
+        failures += 1
+        print("  FAIL  a substrate baseline against a stream run was not refused")
+    else:
+        print("  ok    a substrate baseline against a stream run is refused")
+
+    # Absence is read from the topology, because that is what every
+    # manifest published before the field existed actually was.
+    old_monolith = {"provenance": {"run": {"topology": "monolith"}}}
+    old_composed = {"provenance": {"run": {"topology": "composed"}}}
+    if archive(old_monolith) == "substrate" and archive(old_composed) == "stream":
+        print("  ok    a manifest with no archive field is read from its topology, "
+              "which is what every run before this field was")
+    else:
+        failures += 1
+        print(f"  FAIL  archive fallback gave {archive(old_monolith)} / "
+              f"{archive(old_composed)}, want substrate / stream")
+
+    # Present-but-null is NOT absence: it means an external deployment
+    # nobody described, and a baseline nobody described cannot anchor.
+    if unrecorded_archive({"provenance": {"run": {"archive": None}}}) and \
+            not unrecorded_archive(sub) and not unrecorded_archive(old_monolith):
+        print("  ok    a baseline that records no archive is refused as an anchor, "
+              "while an absent field falls back")
+    else:
+        failures += 1
+        print("  FAIL  present-but-null archive was not told apart from absent")
+
+    total = len(cases) + 10
     print(f"\n  {total - failures}/{total} numbers-check cases hold")
     return 1 if failures else 0
 
@@ -459,11 +683,35 @@ def main() -> int:
 
     want = topology(run)
     want_load = load_condition(run)
-    baseline_path = args.baseline or newest_manifest(want, want_load)
+    want_archive = archive(run)
+    baseline_path = args.baseline or newest_manifest(want, want_load, want_archive)
     if baseline_path is None:
-        return no_baseline(f"{want} under {want_load} load")
+        return no_baseline(f"{want} under {want_load} load, archiving to {want_archive}")
 
     base = load(baseline_path)
+
+    # Two ways a baseline can fail to anchor, and they are separate
+    # facts about it rather than one: an adversary nobody can replay,
+    # and a decision-path store nobody wrote down.
+    if unseeded(base):
+        print(f"numbers-check: the baseline "
+              f"{os.path.relpath(baseline_path, ROOT)} records no adversary "
+              f"seed — it predates seeding, when tier 6 measured 70%, 90%, "
+              f"80% and 100% from unchanged code. An adversary nobody can "
+              f"replay cannot anchor a comparison.", file=sys.stderr)
+        print("fix: compare against a seeded manifest, or publish one with "
+              "`make numbers-manifest`", file=sys.stderr)
+        return 1
+
+    if unrecorded_archive(base):
+        print(f"numbers-check: the baseline "
+              f"{os.path.relpath(baseline_path, ROOT)} does not record which "
+              f"store its decision path wrote through, so it cannot anchor "
+              f"number 3 — the write sits on /v1/decisions and a substrate "
+              f"commit is not a stream publish.", file=sys.stderr)
+        print("fix: re-run with GT_ARCHIVE set, or compare against a manifest "
+              "that records it", file=sys.stderr)
+        return 1
 
     bmaj = str(base.get("schema_version", "")).split(".")[0]
     rmaj = str(run.get("schema_version", "")).split(".")[0]
@@ -480,7 +728,8 @@ def main() -> int:
     print(f"               generated {prov['generated_at']}, "
           f"seed {prov['run'].get('seed', '(none recorded)')}, "
           f"commit {prov['git']['commit'][:12]}")
-    print(f"               topology {topology(base)} -> {topology(run)}")
+    print(f"               topology {topology(base)} -> {topology(run)}, "
+          f"archive {archive(base)} -> {archive(run)}")
     print()
 
     for tier in sorted(run["detection"]):
@@ -488,9 +737,12 @@ def main() -> int:
         was = base["detection"].get(tier)
         shown = (f"{was['detected']}/{was['n']} -> " if was else "new: ")
         print(f"  {tier:34} {shown}{r['detected']}/{r['n']}")
-    lat = run["session"]["latency"]
-    print(f"  {'p99 decision latency':34} {lat['p99']}ms / {lat['budget_ms']}ms budget")
-    print(f"  {'cold start never blocks':34} {run['session']['cold_start']['never_blocks']}")
+    if run.get("session") is not None:
+        lat = run["session"]["latency"]
+        print(f"  {'p99 decision latency':34} {lat['p99']}ms / {lat['budget_ms']}ms budget")
+        print(f"  {'cold start never blocks':34} {run['session']['cold_start']['never_blocks']}")
+    else:
+        print(f"  {'session':34} not measured (null)")
     print(f"  {'false-positive rate':34} {run.get('false_positive_rate')}")
     print()
 

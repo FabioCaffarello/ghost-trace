@@ -11,7 +11,9 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -39,8 +41,25 @@ func main() {
 				"reading's age is exposed as archive_stream_observed_timestamp_seconds")
 		addr = flag.String("addr", envOr("GT_ADDR", "127.0.0.1:8081"),
 			"address for /healthz and /metrics")
+		health = flag.Bool("healthcheck", false,
+			"probe /healthz on -addr and exit 0/1; the container health check execs "+
+				"the binary because distroless ships no shell or curl")
 	)
 	flag.Parse()
+
+	// The last service to get this flag, and its absence propagated
+	// further than a missing flag should. Distroless has no shell, so a
+	// compose healthcheck has to exec the binary — with no flag to exec,
+	// the archive had no healthcheck; with no healthcheck, CI's topology
+	// job had nothing to wait on and left it out of the wait list. The
+	// gate reported green with the archive dead.
+	if *health {
+		if err := probeHealth(*addr); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
@@ -62,10 +81,13 @@ func main() {
 	}
 	defer nc.Close()
 
-	// Declared by whichever side starts first, so compose does not have
-	// to order the collector and the archive against each other.
-	if err := eventstream.EnsureStream(ctx, js); err != nil {
-		log.Error("ensure stream", "err", err)
+	// Binds rather than declares, so compose DOES have to order the
+	// collector ahead of the archive — which is the trade PR-5.3 makes
+	// deliberately. "Whichever side starts first declares it" meant the
+	// consumer could choose the retention it is measured against, and
+	// once the stream has a byte cap that is the backlog bound itself.
+	if err := eventstream.OpenStream(ctx, js); err != nil {
+		log.Error("open event stream", "err", err)
 		os.Exit(1)
 	}
 
@@ -133,7 +155,7 @@ func main() {
 		}
 	}
 
-	if err := eventstream.Consume(ctx, js, cons.Handle,
+	if err := eventstream.Consume(ctx, js, cons.HandleBatch,
 		eventstream.WithStats(*statsEvery, onStats),
 		eventstream.WithUndecodable(cons.Undecodable)); err != nil {
 		log.Error("consume", "err", err)
@@ -155,6 +177,29 @@ func main() {
 	shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(shutdown)
+}
+
+// probeHealth GETs /healthz on the listen address. A wildcard listen
+// host is probed via loopback — inside the container the server binds
+// 0.0.0.0 but the probe runs in the same network namespace.
+func probeHealth(addr string) error {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("healthcheck: bad -addr %q: %w", addr, err)
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get("http://" + net.JoinHostPort(host, port) + "/healthz")
+	if err != nil {
+		return fmt.Errorf("healthcheck: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("healthcheck: /healthz returned %d", resp.StatusCode)
+	}
+	return nil
 }
 
 func envOr(key, fallback string) string {

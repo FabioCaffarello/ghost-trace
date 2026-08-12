@@ -45,6 +45,14 @@ checklist; it is short because the guards do most of the work now.
 4. **Update the harness** — `experiments/lib/wire.js` and
    `experiments/wire.py`. They are one module per language precisely so
    this is one edit rather than five.
+   The wire modules feed EVERY producer, not just the tiers:
+   `tools/loadgen` and `services/demo-web` build their bodies from
+   `libs/wire` (Go), and `deploy/kill-test.py` / `deploy/loss-audit.py`
+   import `experiments/wire.py`. This list exists because the checklist
+   once said "the harness" and meant two files — and the load driver,
+   outside it, spent a phase sending pointer events the server silently
+   discarded (PR-5.0c). A producer not on this list is a producer that
+   can drift.
 5. **Regenerate**: `make openapi && make contract-fixtures`.
 6. **Regenerate goldens if the response bytes really changed**:
    `go test ./internal/api -run Golden -update`. If you did not intend
@@ -60,6 +68,7 @@ checklist; it is short because the guards do most of the work now.
 | `vocabulary_test.go` | SDK and contract vocabularies diverging |
 | OpenAPI conformance | the spec promising something the server does not send |
 | goldens | any byte a client receives moving |
+| `wire_proto_mapping_test.go` | the request struct and the archived proto drifting apart — the seam none of the five above could see |
 
 ## The thing to remember
 

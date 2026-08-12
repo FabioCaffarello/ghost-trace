@@ -17,10 +17,14 @@ so is more useful than a response time nobody can honour.
 
 ## Project status
 
-Ghost Trace is a research project. The repository contains a running Go
-service (`services/collector`) exposing four HTTP endpoints plus a demo
-page, a browser SDK (`sdk.js`), protobuf schemas, and an adversarial
-experiment layer. Nothing here is deployed as a production service by
+Ghost Trace is a research project. The repository contains four Go
+services — the collector (`/v1/sessions`, `/v1/telemetry`), the decision
+engine (`/v1/decisions`, `/v1/outcomes`), the archive, and a stand-in
+customer site — plus a browser SDK (`sdk.js`), protobuf schemas, and an
+adversarial experiment layer. Every service also serves unauthenticated
+`/healthz` and `/metrics`. Traffic between them is plaintext HTTP and
+the compose topology binds `127.0.0.1` only; there is no TLS story and
+no rate limiting. Nothing here is deployed as a production service by
 this repository; anyone operating it does so at their own risk.
 
 ## Scope

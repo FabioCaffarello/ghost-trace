@@ -8,8 +8,13 @@ Ghost Trace answers a different one, from interaction dynamics alone: how
 the pointer moves, how keys are timed, how a form is actually filled.
 
 ```bash
-cd services/collector && make run     # then open http://127.0.0.1:8080
+make up                               # then open http://127.0.0.1:8083
 ```
+
+The page is a stand-in customer site on its own origin, embedding the
+SDK and calling the decision endpoint server-to-server — which is what
+an integration looks like. `make run` starts the API alone on
+`127.0.0.1:8080`: four endpoints and the SDK, no page to open.
 
 ---
 
@@ -219,17 +224,21 @@ one browser from another.
 ## Layout
 
 ```
-  services/collector/          the collector: sessions, telemetry, demo page
-    internal/feature/          Category II: deterministic feature extraction
-    internal/policy/           score / confidence / decision
+  services/collector/          the collector: sessions and telemetry
     internal/session/          maintained state + the on-call comparison
     internal/api/              the browser-facing endpoints
+    internal/ingest/           the wire vocabularies, as data
+    internal/app/              use cases behind ports
     internal/sdk/              the browser SDK, served from here
+    cmd/ghost-trace/           the all-in-one binary `make run` starts
     cmd/bench-architecture/    the concurrency x duration grid
   services/decision-engine/    /v1/decisions and /v1/outcomes, answered from
                                snapshots rather than observed sessions
   services/demo-web/           the stand-in customer site, on its own origin
   services/archive/            consumes the event stream, stores records
+  tools/loadgen/               the open-loop load driver
+  deploy/                      images, compose topology, and the gates that
+                               drive it: loss-audit, load-gate, kill-test
   experiments/                 six adversarial tiers + the statistics
   schemas/events/v1/           protobuf archive schema
   contract/                    what must be true: the architecture contract,
@@ -313,8 +322,13 @@ is checked in CI by the same script the commit hook runs.
   human session and replays its event stream under a fresh token is the
   strongest attack against any system in this class. Partial mitigations
   raise the cost; none close it.
-- **One process, one machine.** Nothing here measures a deploy
-  surviving, state spanning replicas, or GC churn under real load.
+- **One machine, minutes not hours.** Phase 4 measured all three
+  services under sustained load, so the latencies are curves now rather
+  than idle floors — but the driver shares a machine with the system it
+  drives, nothing here runs long enough to be thermal or to show a
+  leak, and nothing measures a deploy surviving or state spanning
+  replicas. Session state is still a map in the collector's memory; a
+  restart loses every live session.
 - **Detection rate is a dial the adversary holds.** Tier 5's curvature
   sweep moved detection from 100% to 42% by varying one parameter.
 
