@@ -1,9 +1,16 @@
-// Command ghost-trace runs the M1 vertical slice: the API, the raw
-// event archive, and the demo host application, in one process.
+// Command ghost-trace runs the collection and decision endpoints, and
+// an event archive, in one process.
 //
-// One binary is the right shape here. M1 is a slice, not a topology, and
-// splitting it into services before there is a measurement showing why
-// would repeat v1's mistake of building the decomposition first.
+// It was the M1 vertical slice, and this comment used to argue against
+// splitting it before a measurement justified one. The measurement
+// arrived and the split happened (docs/the-split.md): the demo host is
+// its own origin now, and this binary no longer serves a page.
+//
+// It is kept deliberately and permanently. It is the path `make
+// numbers` takes — the canonical six-numbers run needs no broker and no
+// Docker — and it is the cheap rollback if the composed topology has to
+// be abandoned. Both shapes are built from one codebase, and
+// `make shadow-http` is what keeps them answering alike.
 package main
 
 import (
@@ -93,6 +100,19 @@ func run() error {
 	}
 	log.Info("serving tenants", "ids", registry.IDs(),
 		"source", map[bool]string{true: *tenantsFile, false: "flags"}[*tenantsFile != ""])
+
+	// The shipped credentials authenticate nobody: they are flag
+	// defaults, they are in compose.yml and .env.example, and the
+	// README prints them. Starting on one was silent, which is the
+	// wrong default for the setting that decides whether the
+	// secret-key endpoints are protected at all. A warning, not a
+	// refusal — `make numbers`, compose and every gate run on these
+	// keys deliberately.
+	if demo := registry.DemoTenants(); len(demo) > 0 {
+		log.Warn("running on the credentials this repository ships; anyone who has "+
+			"read the source can call the secret-key endpoints",
+			"tenants", demo, "fix", "-tenants <file>, or -site-key/-secret-key")
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

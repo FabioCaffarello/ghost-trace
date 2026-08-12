@@ -112,6 +112,19 @@ func run() error {
 	log.Info("serving tenants", "ids", registry.IDs(),
 		"source", map[bool]string{true: *tenantsFile, false: "flags"}[*tenantsFile != ""])
 
+	// The shipped credentials authenticate nobody: they are flag
+	// defaults, they are in compose.yml and .env.example, and the
+	// README prints them. Starting on one was silent, which is the
+	// wrong default for the setting that decides whether the
+	// secret-key endpoints are protected at all. A warning, not a
+	// refusal — `make numbers`, compose and every gate run on these
+	// keys deliberately.
+	if demo := registry.DemoTenants(); len(demo) > 0 {
+		log.Warn("running on the credentials this repository ships; anyone who has "+
+			"read the source can call the secret-key endpoints",
+			"tenants", demo, "fix", "-tenants <file>, or -site-key/-secret-key")
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 

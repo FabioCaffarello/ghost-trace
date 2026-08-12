@@ -1,7 +1,7 @@
 # Ghost Trace — agent context
 
 **Does this session behave like a human?** — answered from interaction
-dynamics alone. Four HTTP endpoints across three Go services, a browser
+dynamics alone. Four HTTP endpoints across four Go services, a browser
 SDK, an append-only archive, and an adversarial experiment layer that
 produces six published numbers.
 

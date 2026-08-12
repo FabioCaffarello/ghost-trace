@@ -7,6 +7,18 @@ network hop and a KV read. This is that measurement.
 **Result: p99 1.4ms against an 80ms budget. The gate passes, with about
 fifty times the headroom it needed.**
 
+> **Read this beside the load measurement.** Every figure here is one
+> session on an otherwise idle system — a floor, as this document says
+> below, and README links here from three places. Phase 4 measured the
+> same decision path under sustained concurrency and got **6.57ms at
+> 10 000 decisions/s, 4.7× this floor** and still twelve times inside
+> the budget: [`decision-under-load-2026-08-05.md`](decision-under-load-2026-08-05.md).
+> Nothing here is retracted. But
+> [ADR-0011](../../contract/decisions/0011-a-latency-is-a-conditional-claim.md)
+> says a published latency is a bound under a stated condition, and a
+> document stating the floor without pointing at the curve is the
+> reading that ADR exists to prevent.
+
 ## What was compared
 
 Four configurations, because "the composed topology is faster" would
