@@ -10,7 +10,7 @@ require (
 	github.com/FabioCaffarello/ghost-trace/libs/policy v0.0.0
 )
 
-require google.golang.org/protobuf v1.36.0 // indirect
+require google.golang.org/protobuf v1.36.11 // indirect
 
 replace github.com/FabioCaffarello/ghost-trace/libs/feature => ../feature
 
