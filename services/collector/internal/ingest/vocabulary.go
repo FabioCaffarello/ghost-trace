@@ -52,4 +52,16 @@ var (
 	// it — and `paste` exists so that a human pasting is NOT mistaken
 	// for one.
 	FormActions = []string{"paste", "autofill", "injected", "submit"}
+
+	// ClientFields are the once-per-session normalization properties
+	// the SDK sends on the session handshake — not events, but still
+	// things collected from a person's browser. Declared as data for
+	// the same reason the event vocabularies are: disclosure_test.go
+	// holds the consent script to this list, so a field added here
+	// without telling a volunteer fails the build.
+	ClientFields = []string{"pointer", "touch", "viewport", "tz_offset", "reduced_motion"}
+
+	// PageFields is what the SDK reports about the page itself. The
+	// path only — never the query string, never the fragment.
+	PageFields = []string{"path"}
 )

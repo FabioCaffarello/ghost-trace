@@ -32,9 +32,14 @@ checklist; it is short because the guards do most of the work now.
      Go values (`policy.ReasonCodes`, `ingest.KeyClasses`,
      `decision.ValidOutcomes`) and the generator injects them. Three
      retyped enums were published wrong before this rule existed.
-2. **If it is a telemetry vocabulary**, edit
-   `internal/ingest/vocabulary.go` AND `sdk.js`. `vocabulary_test.go`
-   compares them in both directions and fails either way.
+2. **If it is a telemetry vocabulary or a session-start field**, edit
+   `internal/ingest/vocabulary.go` AND `sdk.js` — `vocabulary_test.go`
+   compares them in both directions and fails either way — AND describe
+   it in `experiments/PARTICIPANTS.md`, in the section that says what
+   IS recorded. `disclosure_test.go` fails until a volunteer would be
+   told. This is not bookkeeping: a collected value nobody was told
+   about is the one finding in this repository with a person on the
+   other side of it.
 3. **If it touches the archive**, edit `schemas/` and
    `make generate`. Never hand-edit `libs/genproto`.
 4. **Update the harness** — `experiments/lib/wire.js` and

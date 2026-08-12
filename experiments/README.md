@@ -293,17 +293,23 @@ which population it is looking at.
 
 ### What volunteers should be told
 
-- **How** they interact is recorded, never **what** they type: pointer
-  movement, key *timing* with a coarse six-way class (letter, digit,
-  whitespace, navigation, modifier, other), scroll, focus changes, page
-  visibility, and form events (paste / autofill / submit). Key content
-  is never collected — the class preserves rhythm while making
-  reconstruction of typed text infeasible.
-- No canvas, WebGL, font or audio fingerprinting.
-- Nothing persistent is written to their browser.
-- The participant code is a pseudonym they can discard.
-- They can use a throwaway value in the form fields; the content is
-  never read.
+The script lives in **[`PARTICIPANTS.md`](PARTICIPANTS.md)**, in a file
+of its own, and it is not duplicated here.
+
+That is deliberate. It used to live in this README, where a change to
+what the SDK collects produced no diff a volunteer would ever be shown —
+and the wording went stale exactly that way, claiming no key events were
+collected after the keystroke channel was added. A second copy would
+recreate the problem it was moved to solve.
+
+`disclosure_test.go` compares that file against the vocabulary the SDK
+actually emits, in both directions, on every `make ci`. Adding a
+collected value without describing it fails the build; describing a
+channel that does not exist fails it too.
+
+**Recruitment is gated** on a data-governance RFC that has not been
+written. `PARTICIPANTS.md` says so, and a test fails if it stops saying
+so.
 
 ---
 

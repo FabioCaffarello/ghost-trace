@@ -1,9 +1,16 @@
 /*
- * Ghost Trace browser SDK — M1.
+ * Ghost Trace browser SDK.
  *
- * Collects pointer geometry only. No canvas, WebGL, font enumeration or
- * audio fingerprinting: those identify the browser rather than the
- * behaviour and are out of scope per contract/architecture.md §0.
+ * Collects interaction dynamics: pointer geometry, key timing with a
+ * coarse class (never the key), scroll, focus, visibility and form
+ * events, plus a once-per-session client block of normalization
+ * properties. Every channel and field is enumerated in
+ * internal/ingest/vocabulary.go and disclosed in
+ * experiments/PARTICIPANTS.md — tests hold all three to each other.
+ *
+ * No canvas, WebGL, font enumeration or audio fingerprinting: those
+ * identify the browser rather than the behaviour and are out of scope
+ * per contract/architecture.md §0.
  *
  * Nothing persistent is written to the client. The session token lives
  * in a closure and dies with the page.

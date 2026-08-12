@@ -31,12 +31,14 @@
       "when": {
         "paths": [
           "services/collector/internal/sdk/sdk.js",
+          "services/collector/internal/ingest/vocabulary.go",
+          "experiments/PARTICIPANTS.md",
           "services/demo-web/internal/web/static/index.html",
           "experiments/README.md",
           "SECURITY.md"
         ]
       },
-      "reason": "This is the boundary of what is collected from real people. The keystroke channel carries timing and a coarse class only \u2014 never the key, never the field value. A widening here is a change to what the project is, and the consent text was false once already."
+      "reason": "This is the boundary of what is collected from real people. The keystroke channel carries timing and a coarse class only \u2014 never the key, never the field value. A widening here is a change to what the project is, and the consent text was false once already. experiments/PARTICIPANTS.md is the consent script itself \u2014 it was extracted into its own file precisely so changes are reviewable, and this rule must follow the text wherever it lives."
     },
     {
       "id": "published-numbers",

@@ -306,7 +306,7 @@ recruiting. It governs every other number and it is `null`.
 
 | | | size |
 | --- | --- | --- |
-| **4.P1** | `experiments/PARTICIPANTS.md` — the consent script in its own reviewable file, and **a test that what volunteers are told matches what the SDK collects**. The ARB's C1 finding had two halves: the wording was false (fixed) and it lived buried in a 300-line README, so a change to what is collected produced no volunteer-facing diff (not fixed). The repository already compares the SDK and contract vocabularies in both directions; the disclosure is the third party to that comparison. | S |
+| **4.P1** | `experiments/PARTICIPANTS.md` — **done.** The consent script in its own reviewable file, and `disclosure_test.go` comparing it against the vocabulary the SDK emits in both directions: a collected value nobody was told about fails the build, and so does a described channel that does not exist. Two sentences are asserted directly because no enumeration implies them — that key content is never collected, and that the data-governance RFC gating recruitment **has not been written**. Proven red three ways. | S |
 | **4.P2** | The capture protocol end to end, dry-run against synthetic participants, so that recruiting is the only thing left that needs a human. | M |
 
 ### What Phase 4 is explicitly not
