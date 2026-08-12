@@ -5,6 +5,15 @@
 Docker Desktop on macOS, 10 cores · **Driver** `tools/loadgen`,
 open-loop
 
+> **Correction, 2026-08-10 (PR-5.0c).** The driver behind this run sent
+> pointer events as `x`/`y` — fields the wire does not have — so the
+> collector dropped them and did **zero pointer-feature work** for half
+> of every batch. The shape of this curve and its comparisons stand;
+> the absolute throughput figures describe a system doing less
+> per-batch work than production does, and read **high**. The driver
+> now builds batches from `libs/wire` with real `pts` polylines;
+> re-measurement is scheduled as Phase 5.6.
+
 The first measurement of this system under load. It confirms the
 pre-registered hypothesis in its mechanism, **refutes it in its
 significance**, and finds the real constraint somewhere else entirely.
