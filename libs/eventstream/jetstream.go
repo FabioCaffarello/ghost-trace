@@ -38,21 +38,50 @@ func Connect(url, name string) (*nats.Conn, jetstream.JetStream, error) {
 	return nc, js, nil
 }
 
-// EnsureStream declares the stream idempotently.
+// StreamMaxAge and StreamMaxBytes bound the stream. See ADR-0012.
 //
-// Both the producer and the consumer call it, deliberately: whichever
-// starts first creates it, and neither has to be ordered after the
-// other in a compose file. Retention is limits-based — records are
-// dropped by age or size, never by having been acknowledged, because an
-// archive that has not caught up must still be able to.
-func EnsureStream(ctx context.Context, js jetstream.JetStream) error {
-	_, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
+// AGE alone was the bound until PR-5.3, and age alone is not a bound on
+// anything an operator controls. The archive commits about 4 133
+// records/s against a collector that bends near 16 000, so a sustained
+// overload writes the difference to disk for seven days — and at that
+// surplus the volume fills in hours. When it does, NATS dies, and the
+// collector dies with it, because compose makes it depend on a healthy
+// broker. The system's worst failure was a disk-full, not a data loss.
+//
+// A byte cap converts that into the loss the design already accounts
+// for: DiscardOld drops the oldest unread records, `stream_skipped`
+// counts them, and the alert on oldest-age fires long before either.
+// Bounded, counted, and survivable is strictly better than unbounded
+// and fatal.
+//
+// 4 GiB is DERIVED, not chosen: it is the smallest round cap that holds
+// more than an hour of backlog at the archive's measured drain rate of
+// 4 133 records/s, taking a conservative 256 bytes per record (real
+// ones measured 60 to 161). That works out at about 68 minutes — long
+// enough that an archive restart, a redeploy, or an outage somebody is
+// actively fixing does not cost records.
+//
+// The requirement is the decision; the number follows from it and from
+// two measurements, and a deployment with a different disk or a
+// different drain rate should recompute rather than copy it. The first
+// attempt at this constant was 2 GiB, picked by taste, and the test
+// below rejected it at 34 minutes.
+const (
+	StreamMaxAge   = 7 * 24 * time.Hour
+	StreamMaxBytes = 4 << 30
+)
+
+// streamConfig is the declaration, in one place, so the owner and the
+// binder cannot disagree about what they are describing.
+func streamConfig() jetstream.StreamConfig {
+	return jetstream.StreamConfig{
 		Name:        Stream,
 		Description: "Ghost Trace Category I records in flight to the archive.",
 		Subjects:    []string{AllSubjects()},
 		Retention:   jetstream.LimitsPolicy,
 		Storage:     jetstream.FileStorage,
-		MaxAge:      7 * 24 * time.Hour,
+		MaxAge:      StreamMaxAge,
+		MaxBytes:    StreamMaxBytes,
 		Discard:     jetstream.DiscardOld,
 		// Duplicate suppression by Nats-Msg-Id, which Publish sets to
 		// the record's content hash. A retried publish of the same
@@ -60,9 +89,57 @@ func EnsureStream(ctx context.Context, js jetstream.JetStream) error {
 		// twice — the archive is idempotent anyway, so this is about
 		// not paying for the redelivery.
 		Duplicates: 5 * time.Minute,
-	})
-	if err != nil {
+	}
+}
+
+// ErrStreamLimitsMismatch is returned when the stream a reader binds to
+// is not bounded the way that reader expects.
+var ErrStreamLimitsMismatch = errors.New("eventstream: stream limits differ from this process's")
+
+// EnsureStream declares the stream. THE PRODUCER CALLS THIS.
+//
+// Ownership follows the writer, the same rule the snapshot bucket
+// already follows (EnsureSessions / OpenSessions). Until PR-5.3 all
+// three services called CreateOrUpdateStream, so whichever started LAST
+// silently rewrote the limits — including, once a byte cap exists, how
+// much backlog the archive is allowed to fall behind by. A retention
+// policy that depends on container start order is not a policy.
+//
+// Retention is limits-based: records are dropped by age or size, never
+// by having been acknowledged, because an archive that has not caught
+// up must still be able to.
+func EnsureStream(ctx context.Context, js jetstream.JetStream) error {
+	if _, err := js.CreateOrUpdateStream(ctx, streamConfig()); err != nil {
 		return fmt.Errorf("eventstream: ensure stream %s: %w", Stream, err)
+	}
+	return nil
+}
+
+// OpenStream binds to the existing stream and refuses limits that are
+// not the ones this process expects. READERS CALL THIS.
+//
+// Refusing rather than rewriting is the whole point, and it is the
+// lesson the KV bucket taught first: a consumer that quietly accepted a
+// different MaxBytes would be reasoning about a backlog bound it does
+// not know, and `archive_stream_max_age_seconds` — which the alert
+// rules divide by — would describe a limit nobody chose.
+func OpenStream(ctx context.Context, js jetstream.JetStream) error {
+	s, err := js.Stream(ctx, Stream)
+	if err != nil {
+		return fmt.Errorf("eventstream: open stream %s: %w (the collector creates "+
+			"it; a reader starting first will see this until it has)", Stream, err)
+	}
+	info, err := s.Info(ctx)
+	if err != nil {
+		return fmt.Errorf("eventstream: info %s: %w", Stream, err)
+	}
+	want := streamConfig()
+	if info.Config.MaxAge != want.MaxAge || info.Config.MaxBytes != want.MaxBytes {
+		return fmt.Errorf("%w: stream says max_age=%s max_bytes=%d, this process "+
+			"expects max_age=%s max_bytes=%d — the collector owns these and every "+
+			"reader must be built from the same constants",
+			ErrStreamLimitsMismatch,
+			info.Config.MaxAge, info.Config.MaxBytes, want.MaxAge, want.MaxBytes)
 	}
 	return nil
 }
