@@ -1,14 +1,27 @@
 # Prometheus scrape config for the observability profile.
 #
 # Every service exposes one registry at /metrics (libs/metrics): the
-# route-labelled HTTP counters and duration histogram that libs/middleware
-# registers, plus the domain counters each service adds. Only the
-# collector is scraped here — the others are worth adding when they have
-# domain series worth reading.
+# route-labelled HTTP counters and duration histogram that
+# libs/middleware registers, plus the domain counters each service adds.
+#
+# UNTIL PR-5.2 ONLY THE COLLECTOR WAS SCRAPED, and this file said the
+# others were "worth adding when they have domain series worth reading".
+# By then the archive had nineteen — including the three that answer the
+# question this phase exists for: how far behind is it, and is anything
+# ageing out of the stream unread. They were exposed on a published port
+# and collected by nothing. The one consumer was `make load-gate`, run
+# by hand, after the fact.
 global:
   scrape_interval: 5s
+
+rule_files:
+  - alerts.yml
 
 scrape_configs:
   - job_name: ghost-trace
     static_configs:
-      - targets: ["collector:8080"]
+      - targets:
+          - collector:8080
+          - decision-engine:8082
+          - archive:8081
+          - demo-web:8083

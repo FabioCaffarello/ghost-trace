@@ -169,12 +169,22 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	// between a browser session and an account — it exists because the
 	// application says so (§1).
 	//
-	// During the capture study the participant code plays that role: it
-	// is the pseudonymous identity the host application asserts, which
-	// is exactly what subject_id is for.
+	// During the capture study it asserts NOTHING. The participant code
+	// used to travel here, which put a pseudonym for a real person into
+	// the append-only archive permanently — and ADR-0006 makes that
+	// archive the durable record, so "delete my data" would have meant
+	// deleting from a store whose whole guarantee is that nothing is
+	// removed. RFC-0001 promises deletion on request; ADR-0014 keeps the
+	// promise by never writing the identity in the first place.
+	//
+	// Nothing is lost by omitting it. The engine copies subject_id into
+	// the Evaluation record and decides nothing with it, and the study's
+	// join key is `evaluation_id`, which the capture row already carries.
+	// Delete the row and the link is gone — which is what deletion means
+	// when the remaining record can no longer be attributed to anyone.
 	subject := "user_" + req.Username
 	if req.Participant != "" {
-		subject = req.Participant
+		subject = ""
 	}
 	// Built from the wire type the engine decodes, not a hand-rolled
 	// map. The map this replaces still carried the `context` object

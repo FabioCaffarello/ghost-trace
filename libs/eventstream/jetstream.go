@@ -38,21 +38,50 @@ func Connect(url, name string) (*nats.Conn, jetstream.JetStream, error) {
 	return nc, js, nil
 }
 
-// EnsureStream declares the stream idempotently.
+// StreamMaxAge and StreamMaxBytes bound the stream. See ADR-0012.
 //
-// Both the producer and the consumer call it, deliberately: whichever
-// starts first creates it, and neither has to be ordered after the
-// other in a compose file. Retention is limits-based — records are
-// dropped by age or size, never by having been acknowledged, because an
-// archive that has not caught up must still be able to.
-func EnsureStream(ctx context.Context, js jetstream.JetStream) error {
-	_, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
+// AGE alone was the bound until PR-5.3, and age alone is not a bound on
+// anything an operator controls. The archive commits about 4 133
+// records/s against a collector that bends near 16 000, so a sustained
+// overload writes the difference to disk for seven days — and at that
+// surplus the volume fills in hours. When it does, NATS dies, and the
+// collector dies with it, because compose makes it depend on a healthy
+// broker. The system's worst failure was a disk-full, not a data loss.
+//
+// A byte cap converts that into the loss the design already accounts
+// for: DiscardOld drops the oldest unread records, `stream_skipped`
+// counts them, and the alert on oldest-age fires long before either.
+// Bounded, counted, and survivable is strictly better than unbounded
+// and fatal.
+//
+// 4 GiB is DERIVED, not chosen: it is the smallest round cap that holds
+// more than an hour of backlog at the archive's measured drain rate of
+// 4 133 records/s, taking a conservative 256 bytes per record (real
+// ones measured 60 to 161). That works out at about 68 minutes — long
+// enough that an archive restart, a redeploy, or an outage somebody is
+// actively fixing does not cost records.
+//
+// The requirement is the decision; the number follows from it and from
+// two measurements, and a deployment with a different disk or a
+// different drain rate should recompute rather than copy it. The first
+// attempt at this constant was 2 GiB, picked by taste, and the test
+// below rejected it at 34 minutes.
+const (
+	StreamMaxAge   = 7 * 24 * time.Hour
+	StreamMaxBytes = 4 << 30
+)
+
+// streamConfig is the declaration, in one place, so the owner and the
+// binder cannot disagree about what they are describing.
+func streamConfig() jetstream.StreamConfig {
+	return jetstream.StreamConfig{
 		Name:        Stream,
 		Description: "Ghost Trace Category I records in flight to the archive.",
 		Subjects:    []string{AllSubjects()},
 		Retention:   jetstream.LimitsPolicy,
 		Storage:     jetstream.FileStorage,
-		MaxAge:      7 * 24 * time.Hour,
+		MaxAge:      StreamMaxAge,
+		MaxBytes:    StreamMaxBytes,
 		Discard:     jetstream.DiscardOld,
 		// Duplicate suppression by Nats-Msg-Id, which Publish sets to
 		// the record's content hash. A retried publish of the same
@@ -60,10 +89,84 @@ func EnsureStream(ctx context.Context, js jetstream.JetStream) error {
 		// twice — the archive is idempotent anyway, so this is about
 		// not paying for the redelivery.
 		Duplicates: 5 * time.Minute,
-	})
-	if err != nil {
+	}
+}
+
+// ErrStreamLimitsMismatch is returned when the stream a reader binds to
+// is not bounded the way that reader expects.
+var ErrStreamLimitsMismatch = errors.New("eventstream: stream limits differ from this process's")
+
+// EnsureStream declares the stream. THE PRODUCER CALLS THIS.
+//
+// Ownership follows the writer, the same rule the snapshot bucket
+// already follows (EnsureSessions / OpenSessions). Until PR-5.3 all
+// three services called CreateOrUpdateStream, so whichever started LAST
+// silently rewrote the limits — including, once a byte cap exists, how
+// much backlog the archive is allowed to fall behind by. A retention
+// policy that depends on container start order is not a policy.
+//
+// Retention is limits-based: records are dropped by age or size, never
+// by having been acknowledged, because an archive that has not caught
+// up must still be able to.
+func EnsureStream(ctx context.Context, js jetstream.JetStream) error {
+	if _, err := js.CreateOrUpdateStream(ctx, streamConfig()); err != nil {
 		return fmt.Errorf("eventstream: ensure stream %s: %w", Stream, err)
 	}
+	return nil
+}
+
+// OpenStream binds to the existing stream and refuses limits that are
+// not the ones this process expects. READERS CALL THIS.
+//
+// Refusing rather than rewriting is the whole point, and it is the
+// lesson the KV bucket taught first: a consumer that quietly accepted a
+// different MaxBytes would be reasoning about a backlog bound it does
+// not know, and `archive_stream_max_age_seconds` — which the alert
+// rules divide by — would describe a limit nobody chose.
+func OpenStream(ctx context.Context, js jetstream.JetStream) error {
+	s, err := js.Stream(ctx, Stream)
+	if err != nil {
+		return fmt.Errorf("eventstream: open stream %s: %w (the collector creates "+
+			"it; a reader starting first will see this until it has)", Stream, err)
+	}
+	info, err := s.Info(ctx)
+	if err != nil {
+		return fmt.Errorf("eventstream: info %s: %w", Stream, err)
+	}
+	want := streamConfig()
+	if info.Config.MaxAge != want.MaxAge || info.Config.MaxBytes != want.MaxBytes {
+		return fmt.Errorf("%w: stream says max_age=%s max_bytes=%d, this process "+
+			"expects max_age=%s max_bytes=%d — the collector owns these and every "+
+			"reader must be built from the same constants",
+			ErrStreamLimitsMismatch,
+			info.Config.MaxAge, info.Config.MaxBytes, want.MaxAge, want.MaxBytes)
+	}
+	return nil
+}
+
+// WatchArchive polls the archive consumer's progress from a process
+// that is NOT the archive.
+//
+// The producer needs the same number the consumer already publishes,
+// and it cannot get it from its own counters: a collector knows what it
+// published and has no idea whether any of it has been stored. Reading
+// the archive's /metrics would work and is worse — it makes the ingest
+// path depend on another service answering HTTP, which is precisely the
+// coupling the split was for.
+//
+// This binds to the existing durable READ-ONLY. It never creates one: a
+// producer that created the archive's consumer would silently reset its
+// delivery position, which is the most expensive mistake available
+// here.
+func WatchArchive(ctx context.Context, js jetstream.JetStream,
+	every time.Duration, fn StatsFunc) error {
+
+	cons, err := js.Consumer(ctx, Stream, ConsumerName)
+	if err != nil {
+		return fmt.Errorf("eventstream: watch %s/%s: %w (the archive creates it)",
+			Stream, ConsumerName, err)
+	}
+	go pollStats(ctx, js, cons, every, fn)
 	return nil
 }
 
@@ -99,6 +202,33 @@ func (p *Publisher) Publish(ctx context.Context, rec *eventsv1.ArchiveRecord) er
 	}
 	return nil
 }
+
+// How much the consumer pulls at once, and how long it waits for a
+// full batch before taking what it has.
+//
+// 128 is where the measured curve flattens: one record per transaction
+// runs at 17 628/s on the development machine, a batch of 8 at 2.3x, of
+// 128 at 3.2x and of 512 at only 3.5x. Past that the return is small
+// and the redelivery window keeps growing, which is the cost side of
+// the same trade.
+//
+// The wait bounds latency when the stream is nearly idle: a lone record
+// arriving at 3am is committed within 250ms rather than waiting for 127
+// companions that are not coming.
+const (
+	BatchSize = 128
+	BatchWait = 250 * time.Millisecond
+
+	// NakBackoff delays redelivery of a failed batch.
+	//
+	// A bare Nak asks for the message back immediately, and the errors
+	// this consumer naks on are a full disk or a locked database —
+	// conditions that do not clear in microseconds. Retrying at full
+	// speed turns a failing resource into a hot loop against a failing
+	// resource, which is how a recoverable problem becomes an
+	// unrecoverable one.
+	NakBackoff = 2 * time.Second
+)
 
 // ConsumerName is the durable this stream's archive binds to. Durable
 // so that an archive restarting resumes where it stopped rather than
@@ -194,6 +324,24 @@ type Delivery struct {
 // Handler commits one delivered record.
 type Handler func(context.Context, *eventsv1.ArchiveRecord, Delivery) error
 
+// Item is one decoded delivery.
+type Item struct {
+	Record   *eventsv1.ArchiveRecord
+	Delivery Delivery
+}
+
+// BatchHandler commits a whole fetch at once. Returning an error naks
+// every message in it; returning nil acks every message in it.
+//
+// THE UNIT OF ACKNOWLEDGEMENT IS NOW THE BATCH, and that is the whole
+// change. At-least-once still holds — a batch whose commit failed is
+// redelivered in full — and the substrate's content addressing still
+// collapses the duplicates that produces. What grows is the WINDOW: a
+// crash mid-batch redelivers up to BatchSize records instead of one.
+// That is affordable precisely because idempotency was never optional
+// here, and it buys one fsync per batch instead of one per record.
+type BatchHandler func(context.Context, []Item) error
+
 type consumeOptions struct {
 	statsEvery  time.Duration
 	stats       StatsFunc
@@ -225,7 +373,7 @@ func WithUndecodable(fn func(Delivery)) ConsumeOption {
 	return func(o *consumeOptions) { o.undecodable = fn }
 }
 
-func Consume(ctx context.Context, js jetstream.JetStream, fn Handler,
+func Consume(ctx context.Context, js jetstream.JetStream, fn BatchHandler,
 	opts ...ConsumeOption) error {
 
 	var o consumeOptions
@@ -241,60 +389,98 @@ func Consume(ctx context.Context, js jetstream.JetStream, fn Handler,
 		AckWait:       30 * time.Second,
 		MaxDeliver:    -1,
 		FilterSubject: AllSubjects(),
+		// The pull loop below asks for BatchSize at a time; without a
+		// ceiling on outstanding acks the broker would happily hand out
+		// far more than one batch and the window this design bounds
+		// would be unbounded again.
+		MaxAckPending: 4 * BatchSize,
 	})
 	if err != nil {
 		return fmt.Errorf("eventstream: consumer: %w", err)
 	}
 
-	sub, err := cons.Consume(func(msg jetstream.Msg) {
-		// The broker's view of this delivery, read before anything can
-		// fail. A message whose metadata cannot be read is one whose
-		// sequence is unknown, and a zero sequence is refused downstream
-		// rather than silently recorded as the beginning of the stream.
-		var d Delivery
-		if md, err := msg.Metadata(); err == nil {
-			d = Delivery{Sequence: md.Sequence.Stream, Redelivered: md.NumDelivered > 1}
-		}
-
-		var rec eventsv1.ArchiveRecord
-		if err := proto.Unmarshal(msg.Data(), &rec); err != nil {
-			// Undecodable: redelivering forever would wedge the
-			// consumer on one bad message, and this cannot become
-			// decodable later. Terminate drops it from redelivery and
-			// leaves it in the stream for a human.
-			//
-			// Reported first. The sequence is consumed either way, and a
-			// consumed sequence nobody accounts for is indistinguishable
-			// from a record the transport lost.
-			if o.undecodable != nil {
-				o.undecodable(d)
-			}
-			_ = msg.Term()
-			return
-		}
-		if err := fn(ctx, &rec, d); err != nil {
-			// Nak rather than drop: a commit that failed is a record
-			// the archive does not have, and the whole point is that it
-			// ends up having it.
-			_ = msg.Nak()
-			return
-		}
-		_ = msg.Ack()
-	})
-	if err != nil {
-		return fmt.Errorf("eventstream: consume: %w", err)
-	}
-	defer sub.Stop()
-
 	if o.stats != nil && o.statsEvery > 0 {
 		go pollStats(ctx, js, cons, o.statsEvery, o.stats)
 	}
 
-	<-ctx.Done()
-	if errors.Is(ctx.Err(), context.Canceled) {
-		return nil
+	// A PULL LOOP RATHER THAN A PUSH CALLBACK.
+	//
+	// The callback form delivers one message at a time, which is
+	// exactly the shape that forced one transaction — and one fsync —
+	// per record. Fetch hands over a slice, so the whole slice can be
+	// one transaction and one ack decision.
+	for {
+		if err := ctx.Err(); err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
+			return err
+		}
+
+		msgs, err := cons.Fetch(BatchSize, jetstream.FetchMaxWait(BatchWait))
+		if err != nil {
+			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+				return nil
+			}
+			return fmt.Errorf("eventstream: fetch: %w", err)
+		}
+
+		batch := make([]Item, 0, BatchSize)
+		held := make([]jetstream.Msg, 0, BatchSize)
+
+		for msg := range msgs.Messages() {
+			// The broker's view of this delivery, read before anything
+			// can fail. A message whose metadata cannot be read is one
+			// whose sequence is unknown, and a zero sequence is refused
+			// downstream rather than silently recorded as the beginning
+			// of the stream.
+			var d Delivery
+			if md, err := msg.Metadata(); err == nil {
+				d = Delivery{Sequence: md.Sequence.Stream, Redelivered: md.NumDelivered > 1}
+			}
+
+			var rec eventsv1.ArchiveRecord
+			if err := proto.Unmarshal(msg.Data(), &rec); err != nil {
+				// Undecodable: redelivering forever would wedge the
+				// consumer on one bad message, and this cannot become
+				// decodable later. Terminate drops it from redelivery
+				// and leaves it in the stream for a human.
+				//
+				// Reported first, and NOT added to the batch: the
+				// sequence is consumed either way, and a consumed
+				// sequence nobody accounts for is indistinguishable
+				// from a record the transport lost.
+				if o.undecodable != nil {
+					o.undecodable(d)
+				}
+				_ = msg.Term()
+				continue
+			}
+			batch = append(batch, Item{Record: &rec, Delivery: d})
+			held = append(held, msg)
+		}
+		if err := msgs.Error(); err != nil && ctx.Err() == nil {
+			return fmt.Errorf("eventstream: fetch batch: %w", err)
+		}
+		if len(batch) == 0 {
+			continue
+		}
+
+		if err := fn(ctx, batch); err != nil {
+			// The batch did not commit, so none of it is acknowledged.
+			// Delayed rather than immediate: the failures this naks on
+			// — a full disk, a locked database — do not clear in
+			// microseconds, and retrying at full speed is a hot loop
+			// against whatever is already failing.
+			for _, msg := range held {
+				_ = msg.NakWithDelay(NakBackoff)
+			}
+			continue
+		}
+		for _, msg := range held {
+			_ = msg.Ack()
+		}
 	}
-	return ctx.Err()
 }
 
 // pollStats reports the broker's view of this consumer until ctx ends.

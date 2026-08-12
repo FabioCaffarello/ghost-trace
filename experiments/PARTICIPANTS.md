@@ -82,6 +82,9 @@ collected fails it too.
 > **Your participant code is a pseudonym you chose to accept**, and you
 > can discard it. It appears in the link you were sent and in the
 > recorded rows, and it is the only thing linking one visit to another.
+> It is **not** sent to the detection service and never reaches the
+> permanent event store — those hold a session with no code attached to
+> it.
 >
 > **You can stop at any time**, and you do not have to say why.
 
@@ -105,8 +108,21 @@ question is open.
 
 The audit that produced this file recommended an RFC for human-study
 data governance covering exactly these three, and gates reopening
-recruitment on it. **That RFC has not been written.** Until it is, the
-script above should not be handed to anyone.
+recruitment on it. It is now **drafted and not accepted**:
+[RFC-0001](../contract/rfcs/0001-human-study-data-governance.md)
+proposes a twelve-month retention ceiling with a ninety-day window
+after publication, a `make forget` deletion target whose implementation
+is a *precondition* of recruiting, and a custody section written as a
+limitation.
+
+**A proposal is not a policy.** Nothing in the three paragraphs above
+has changed, and none of what the RFC proposes may be told to a
+volunteer as though it were in force. Those paragraphs stay exactly as
+they are until the answers exist rather than are argued for.
+
+**The script above should not be handed to anyone** until RFC-0001 is
+accepted, the deletion mechanism exists, and the rest of its §4
+checklist is ticked.
 
 ---
 

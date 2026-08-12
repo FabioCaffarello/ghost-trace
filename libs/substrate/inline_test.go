@@ -235,3 +235,82 @@ func newTestSubstrateAt(t *testing.T, dir string) *Substrate {
 	t.Cleanup(func() { _ = s.Close() })
 	return s
 }
+
+// TestEveryWritePathInlinesASmallPayload is the guard that PR-6.5 wished
+// had existed.
+//
+// `AppendPair` sat in this package with no caller, a confident doc
+// comment, and an unconditional writeBlob for both payloads — the
+// pre-ADR-0009 path. Anyone who adopted it on the strength of that
+// comment would have restored two fsyncs per commit and given back the
+// 3.0x PR-4.3 measured, with every test still green, because the only
+// test asserting that a small payload writes no file exercised
+// AppendCanonicalAt and nothing else.
+//
+// The method is gone. What replaces it is this: every exported way to
+// write a record is checked, so the next one to arrive is checked the
+// day it arrives.
+func TestEveryWritePathInlinesASmallPayload(t *testing.T) {
+	payload := bodyOf(161) // the size every real record measured at
+	hash := canonical.Hash(payload)
+	hexed := canonical.HashHex(hash)
+	row := EventRow{
+		EventHash:   hash,
+		EventTime:   1,
+		MessageType: "t",
+		PayloadRef:  hexed[:2] + "/" + hexed[2:],
+		CommittedAt: 2,
+	}
+
+	for _, path := range []struct {
+		name  string
+		write func(context.Context, *Substrate) error
+	}{
+		{"Append", func(ctx context.Context, s *Substrate) error {
+			return s.Append(ctx, row, payload)
+		}},
+		{"AppendCanonical", func(ctx context.Context, s *Substrate) error {
+			return s.AppendCanonical(ctx, payload, hash, 1, "t", 2)
+		}},
+		{"AppendCanonicalAt", func(ctx context.Context, s *Substrate) error {
+			return s.AppendCanonicalAt(ctx, payload, hash, 1, "t", 2, 1)
+		}},
+		{"AppendCanonicalBatch", func(ctx context.Context, s *Substrate) error {
+			return s.AppendCanonicalBatch(ctx, []BatchRecord{{
+				Payload: payload, EventHash: hash, EventTime: 1,
+				MessageType: "t", Seq: 1,
+			}}, nil, 2)
+		}},
+	} {
+		t.Run(path.name, func(t *testing.T) {
+			s := newTestSubstrate(t)
+			ctx := context.Background()
+			if err := path.write(ctx, s); err != nil {
+				t.Fatalf("%s: %v", path.name, err)
+			}
+
+			var files int
+			_ = filepath.WalkDir(s.BlobDir(), func(_ string, d os.DirEntry, err error) error {
+				if err == nil && !d.IsDir() {
+					files++
+				}
+				return nil
+			})
+			if files != 0 {
+				t.Errorf("%s wrote %d blob file(s) for a %d-byte payload — "+
+					"the fsync ADR-0009 removed is being paid again",
+					path.name, files, len(payload))
+			}
+
+			// Inlined and still readable, or the saving is a data loss.
+			got, err := s.ReadBlob(ctx, hash)
+			if err != nil {
+				t.Fatalf("%s: read back: %v", path.name, err)
+			}
+			if !bytes.Equal(got, payload) {
+				t.Errorf("%s: the inlined payload did not come back byte for byte",
+					path.name)
+			}
+		})
+	}
+}

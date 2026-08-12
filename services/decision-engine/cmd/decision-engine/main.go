@@ -53,7 +53,12 @@ func run() error {
 		tenantsFile = flag.String("tenants", os.Getenv("GT_TENANTS"),
 			"JSON registry of tenants (id, site_key, secret_key); empty uses the "+
 				"single-tenant flags below")
-		tenantID  = flag.String("tenant", "t_demo", "tenant id, when -tenants is not given")
+		tenantID = flag.String("tenant", "t_demo",
+			"tenant id for the single-tenant fallback, when -tenants is not "+
+				"given. It names WHO THIS PROCESS SERVES BY DEFAULT and nothing "+
+				"else: until PR-5.7a it was also stamped onto every archived "+
+				"record, so a multi-tenant registry attributed every customer's "+
+				"records to this one. The envelope now comes from the payload.")
 		secretKey = flag.String("secret-key", "sk_demo",
 			"secret key for server-to-server calls, when -tenants is not given")
 		siteKey = flag.String("site-key", "pk_demo",
@@ -134,8 +139,13 @@ func run() error {
 	}
 	defer nc.Close()
 
-	if err := eventstream.EnsureStream(ctx, js); err != nil {
-		return fmt.Errorf("ensure event stream: %w", err)
+	// Binds rather than declares. This service publishes evaluations
+	// onto the stream, but the collector OWNS its shape — the same rule
+	// the snapshot bucket already follows, and for the same reason: a
+	// process that declared the limits would be deciding how much
+	// backlog the archive may accumulate, which is not its call.
+	if err := eventstream.OpenStream(ctx, js); err != nil {
+		return fmt.Errorf("open event stream: %w", err)
 	}
 	// Bind to the bucket the collector owns, and refuse a TTL that is
 	// not the one this process was told to expect. Starting before the
@@ -150,7 +160,7 @@ func run() error {
 	// The stream IS the durable store here, so publish failures are
 	// returned rather than counted: an outcome answered 202 but never
 	// stored would silently poison calibration.
-	archive := eventstream.NewArchive(eventstream.NewPublisher(js), *tenantID)
+	archive := eventstream.NewArchive(eventstream.NewPublisher(js))
 
 	// One registry per process: the HTTP series and every domain
 	// counter are exposed together, because two registries behind one

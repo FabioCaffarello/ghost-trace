@@ -12,13 +12,10 @@ import (
 	"context"
 	"crypto/subtle"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	// Pure Go, deliberately: it is what lets CGO_ENABLED=0 produce a
@@ -220,10 +217,11 @@ func ensurePayloadColumn(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-// BlobDir returns the configured blob-store directory. Exposed for
-// operational tooling (e.g. the verify CLI per §0039) and tests that
-// need to inspect on-disk state. Service code SHOULD NOT manipulate
-// the blob-store directly; use ReadBlob / Append / AppendPair.
+// BlobDir returns the configured blob-store directory. Exposed so tests
+// can inspect on-disk state — most usefully to assert that an inlined
+// payload wrote no file at all (ADR-0009). Service code SHOULD NOT
+// manipulate the blob-store directly; use ReadBlob and the Append
+// family.
 func (s *Substrate) BlobDir() string { return s.blobDir }
 
 // Close releases the underlying database connection. Idempotent.
@@ -304,12 +302,17 @@ func (s *Substrate) blobPath(hash [32]byte) (shardDir, finalPath string) {
 }
 
 // writeBlob writes payload to the blob-store under hash. Idempotent on
-// identical content; ErrBlobCollision on byte-inequality with existing
-// blob (
+// identical content; ErrBlobCollision when a blob already exists at that
+// hash with different bytes, which a content-addressed store can only
+// reach through corruption or a hash collision.
 //
-// POSIX-only: uses write-temp-then-rename atomicity. Decision-log §0027
-// Open Questions surfaces the POSIX-only inception-phase constraint;
-// reversal condition R-store-4 captures the Windows-substrate trigger.
+// POSIX-only: it relies on write-temp-then-rename being atomic. Windows
+// is not a target and no issue tracks making it one.
+//
+// This comment carried three references to a decision log that does not
+// exist in this repository, and a sentence that stopped mid-parenthesis.
+// The file predates ghost-trace; PR-6.5 removed what could not be
+// followed rather than leaving a reader to search for it.
 func (s *Substrate) writeBlob(hash [32]byte, payload []byte) error {
 	shardDir, finalPath := s.blobPath(hash)
 
@@ -423,55 +426,6 @@ func (s *Substrate) Count(ctx context.Context) (int64, error) {
 	return n, err
 }
 
-// WalkBlobs iterates over every file in the blob-store that matches the
-// blob-path convention (<2-char-prefix>/<62-char-suffix>, where the
-// concatenated 64 chars decode to a 32-byte hash). For each match, fn
-// is called with the decoded hash + the absolute filesystem path.
-// Files that do not match the convention (temp files, accidentally-
-// placed artifacts) are silently skipped.
-//
-// Written for orphan-blob detection: a blob with no event referencing
-// it. Read-only walk; no writeMu.
-//
-// Order is filesystem-iteration order (operating-system dependent;
-// typically sorted by shard then filename on POSIX). Callers MUST NOT
-// rely on a specific traversal order.
-func (s *Substrate) WalkBlobs(ctx context.Context, fn func(hash [32]byte, path string) error) error {
-	return filepath.WalkDir(s.blobDir, func(path string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		// Honor context cancellation between entries.
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		// Skip leftover tmp files (write-temp-then-rename leaves none
-		// in steady state, but a crashed write may orphan one).
-		if strings.HasPrefix(d.Name(), "tmp-blob-") {
-			return nil
-		}
-		rel, err := filepath.Rel(s.blobDir, path)
-		if err != nil {
-			return fmt.Errorf("substrate.WalkBlobs: rel %s: %w", path, err)
-		}
-		cleaned := filepath.ToSlash(rel)
-		// Expected form: "<2-hex>/<62-hex>".
-		parts := strings.SplitN(cleaned, "/", 2)
-		if len(parts) != 2 || len(parts[0]) != 2 || len(parts[1]) != 62 {
-			return nil // not a blob-store file; skip silently
-		}
-		hexStr := parts[0] + parts[1]
-		var hash [32]byte
-		if _, err := hex.Decode(hash[:], []byte(hexStr)); err != nil {
-			return nil // unparseable hex; skip
-		}
-		return fn(hash, path)
-	})
-}
-
 // WalkEvents iterates over every events-table row in commit order
 // (committed_at ascending). For each row, fn is called with the row's
 // content. If fn returns a non-nil error, iteration stops and the
@@ -503,76 +457,6 @@ func (s *Substrate) WalkEvents(ctx context.Context, fn func(EventRow) error) err
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("substrate.WalkEvents: rows iteration: %w", err)
-	}
-	return nil
-}
-
-// AppendPair commits two events atomically: a primary observation and
-// an enrichment record paired by reference. Used by the ingestion path
-// to commit a primary observation (e.g. DeclaredSession) alongside its
-// paired IngestionEvent.
-//
-// Atomicity discipline:
-//  1. Both hashes are verified against their payloads (hash mismatch
-//     rejects the call without writing anything).
-//  2. Both blobs are written to the blob-store (idempotent on
-//     content-hash; safe outside the SQL transaction — orphan blobs
-//     are harmless per §0027 Proposal item 5 + §0033 §Restoration).
-//  3. Both events-table rows are inserted inside a single SQL
-//     transaction. Either both rows commit or neither (SQLite WAL +
-//     synchronous=FULL provides the durability guarantee).
-//
-// Either both events become visible in subsequent reads or neither.
-// The pairing is by reference (enrichment carries a hash to the
-// primary); recovery from orphan blobs is operator concern per §0033.
-//
-// Serializes via writeMu per concurrency-pattern §Substrate-Writer
-// Serialization (same single-writer semantics as Append).
-func (s *Substrate) AppendPair(ctx context.Context,
-	primaryRow EventRow, primaryPayload []byte,
-	enrichmentRow EventRow, enrichmentPayload []byte,
-) error {
-	if want := canonical.Hash(primaryPayload); subtle.ConstantTimeCompare(primaryRow.EventHash[:], want[:]) != 1 {
-		return fmt.Errorf("substrate.AppendPair: %w (primary row.EventHash != Hash(primaryPayload))", ErrHashMismatch)
-	}
-	if want := canonical.Hash(enrichmentPayload); subtle.ConstantTimeCompare(enrichmentRow.EventHash[:], want[:]) != 1 {
-		return fmt.Errorf("substrate.AppendPair: %w (enrichment row.EventHash != Hash(enrichmentPayload))", ErrHashMismatch)
-	}
-
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
-
-	if err := s.writeBlob(primaryRow.EventHash, primaryPayload); err != nil {
-		return fmt.Errorf("substrate.AppendPair: primary blob write: %w", err)
-	}
-	if err := s.writeBlob(enrichmentRow.EventHash, enrichmentPayload); err != nil {
-		return fmt.Errorf("substrate.AppendPair: enrichment blob write: %w", err)
-	}
-
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("substrate.AppendPair: begin tx: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx,
-		`INSERT OR IGNORE INTO events
-		   (event_hash, event_time, message_type, payload_ref, committed_at)
-		 VALUES (?, ?, ?, ?, ?)`,
-		primaryRow.EventHash[:], primaryRow.EventTime, primaryRow.MessageType, primaryRow.PayloadRef, primaryRow.CommittedAt,
-	); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("substrate.AppendPair: insert primary: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx,
-		`INSERT OR IGNORE INTO events
-		   (event_hash, event_time, message_type, payload_ref, committed_at)
-		 VALUES (?, ?, ?, ?, ?)`,
-		enrichmentRow.EventHash[:], enrichmentRow.EventTime, enrichmentRow.MessageType, enrichmentRow.PayloadRef, enrichmentRow.CommittedAt,
-	); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("substrate.AppendPair: insert enrichment: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("substrate.AppendPair: commit: %w", err)
 	}
 	return nil
 }
@@ -807,6 +691,143 @@ func (s *Substrate) PositionAndCount(ctx context.Context) (Position, int64, bool
 // row is already possible and already harmless: it is content-addressed,
 // so it is either garbage-collected or rewritten identically. A row with
 // no blob would not be.
+// BatchRecord is one record in a batched commit.
+type BatchRecord struct {
+	Payload     []byte
+	EventHash   [32]byte
+	EventTime   int64
+	MessageType string
+	Seq         uint64
+}
+
+// AppendCanonicalBatch commits many records in ONE transaction.
+//
+// synchronous=FULL costs one fsync per transaction, not per row, so a
+// batch of N amortises that fsync across N records. Everything else is
+// unchanged and deliberately so: each payload is still hash-verified
+// before it is written, each oversized payload still gets its own
+// fsynced blob first, and the durable position still advances inside
+// the same transaction as the rows — so "the archive holds record N"
+// and "the archive reached sequence N" still cannot disagree across a
+// crash.
+//
+// REJECTED SEQUENCES TRAVEL WITH THE BATCH, and that is not a
+// convenience. A caller that recorded rejections separately and then
+// failed to commit the rest would have advanced the position for the
+// rejects; redelivery would record them a second time, inflating
+// `rejected` past the sequences actually walked and driving
+// `unaccounted` negative — the ADR-0010 failure, reintroduced by the
+// back door. One transaction covers what was kept and what was
+// refused, so a rollback un-decides both.
+//
+// A batch is ALL OR NOTHING. One bad record fails the whole
+// transaction, and the caller re-drives the batch one record at a time
+// to find it; that keeps the fast path free of per-record error
+// handling and makes the slow path exact.
+func (s *Substrate) AppendCanonicalBatch(ctx context.Context, recs []BatchRecord,
+	rejected []uint64, committedAt int64) error {
+
+	if len(recs) == 0 && len(rejected) == 0 {
+		return nil
+	}
+
+	// Verify before touching anything durable. A hash mismatch found
+	// halfway through would otherwise leave blobs on disk for records
+	// the transaction is about to roll back.
+	for _, r := range recs {
+		if r.Seq == 0 {
+			return ErrNoSequence
+		}
+		if got := canonical.Hash(r.Payload); got != r.EventHash {
+			return fmt.Errorf("%w: payload hashes to %s, record claims %s",
+				ErrHashMismatch, canonical.HashHex(got), canonical.HashHex(r.EventHash))
+		}
+	}
+
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	// Oversized payloads keep their own file, written and fsynced
+	// before the rows that name them. These are NOT amortised — a blob
+	// is a blob — which is the honest limit of this optimisation and
+	// the reason PR-4.3's inlining had to come first.
+	for _, r := range recs {
+		if len(r.Payload) > InlineThreshold {
+			if err := s.writeBlob(r.EventHash, r.Payload); err != nil {
+				return fmt.Errorf("substrate.AppendCanonicalBatch: blob write: %w", err)
+			}
+		}
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("substrate.AppendCanonicalBatch: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Prepared once and reused: N inserts in one transaction is the
+	// point, and re-parsing the statement N times would give some of it
+	// back.
+	stmt, err := tx.PrepareContext(ctx,
+		`INSERT OR IGNORE INTO events
+		   (event_hash, event_time, message_type, payload_ref, committed_at, payload)
+		 VALUES (?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("substrate.AppendCanonicalBatch: prepare: %w", err)
+	}
+	defer func() { _ = stmt.Close() }()
+
+	var committed, duplicates int64
+	first, highest := uint64(0), uint64(0)
+	span := func(seq uint64) {
+		if first == 0 || seq < first {
+			first = seq
+		}
+		if seq > highest {
+			highest = seq
+		}
+	}
+	for _, seq := range rejected {
+		if seq == 0 {
+			return ErrNoSequence
+		}
+		span(seq)
+	}
+
+	for _, r := range recs {
+		hexed := canonical.HashHex(r.EventHash)
+		inline := len(r.Payload) <= InlineThreshold
+		res, err := stmt.ExecContext(ctx,
+			r.EventHash[:], r.EventTime, r.MessageType, hexed[:2]+"/"+hexed[2:],
+			committedAt, inlinedOrNil(r.Payload, inline))
+		if err != nil {
+			return fmt.Errorf("substrate.AppendCanonicalBatch: insert: %w", err)
+		}
+		// Same rule as the single-record path (ADR-0010): a
+		// primary-key conflict is a redelivery, not a commit, and
+		// counting it as one drives unaccounted negative.
+		affected, err := res.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("substrate.AppendCanonicalBatch: rows affected: %w", err)
+		}
+		if affected == 0 {
+			duplicates++
+		} else {
+			committed++
+		}
+		span(r.Seq)
+	}
+
+	if _, err := tx.ExecContext(ctx, positionUpsert,
+		first, highest, committed, int64(len(rejected)), duplicates); err != nil {
+		return fmt.Errorf("substrate.AppendCanonicalBatch: position: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("substrate.AppendCanonicalBatch: commit: %w", err)
+	}
+	return nil
+}
+
 func (s *Substrate) AppendCanonicalAt(ctx context.Context, payload []byte, eventHash [32]byte,
 	eventTime int64, messageType string, committedAt int64, seq uint64) error {
 

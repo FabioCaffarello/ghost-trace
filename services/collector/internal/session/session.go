@@ -119,23 +119,45 @@ func NewStore(ttl time.Duration, now func() time.Time) *Store {
 	}
 }
 
-// Create issues a new session and returns its token.
+// Identity is the part of a session that is fixed at Create and never
+// changes: what the record is about, rather than what it has observed.
+//
+// It exists so Create has something to return that is NOT the state the
+// store holds. Every field here is a value, and nothing in the store
+// writes to any of them after Create, so a copy stays true — which is
+// not something a copy of State could claim, since two of the three
+// accumulators carry maps.
+type Identity struct {
+	ID        string
+	TenantID  string
+	PagePath  string
+	StartedAt time.Time
+}
+
+// Create issues a new session and returns its token and identity.
 //
 // The token and the session id are distinct values. The token is a
 // bearer credential the browser holds; the id is what the archive
 // records. Reusing one as the other would put a live credential into
 // storage that outlives it by 7 days.
-func (s *Store) Create(tenantID, pagePath string, c Client) (token string, st *State, err error) {
+//
+// It returns an Identity and not the *State, because With's contract is
+// that the pointer never leaves the store — "access is serialized
+// rather than handing out the pointer". Create used to hand out exactly
+// that pointer, to the one session most likely to be written next. No
+// caller had raced it yet, only because the token had not reached the
+// browser; the fix is structural rather than a rule to remember.
+func (s *Store) Create(tenantID, pagePath string, c Client) (token string, ident Identity, err error) {
 	token, err = NewID("st_")
 	if err != nil {
-		return "", nil, err
+		return "", Identity{}, err
 	}
 	id, err := NewID("s_")
 	if err != nil {
-		return "", nil, err
+		return "", Identity{}, err
 	}
 
-	st = &State{
+	st := &State{
 		ID:        id,
 		TenantID:  tenantID,
 		PagePath:  pagePath,
@@ -146,7 +168,17 @@ func (s *Store) Create(tenantID, pagePath string, c Client) (token string, st *S
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.byToken[token] = &entry{state: st, expiresAt: s.now().Add(s.ttl)}
-	return token, st, nil
+	return token, st.identity(), nil
+}
+
+// identity copies the fixed fields out of a live State.
+func (st *State) identity() Identity {
+	return Identity{
+		ID:        st.ID,
+		TenantID:  st.TenantID,
+		PagePath:  st.PagePath,
+		StartedAt: st.StartedAt,
+	}
 }
 
 // With runs fn against the session behind token, holding the store lock.

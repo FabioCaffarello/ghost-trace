@@ -63,7 +63,9 @@ import urllib.request
 # here is a body the contract harness has already validated and
 # replayed against a real server.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "experiments"))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import wire  # noqa: E402
+import provenance  # noqa: E402
 
 COLLECTOR = "http://127.0.0.1:8080"
 ARCHIVE = "http://127.0.0.1:8081"
@@ -209,21 +211,50 @@ def drive(n):
     return accepted
 
 
-def drain(f: Failures, what: str):
-    """Wait until the archive has nothing pending and nothing unexplained."""
+def drain(f: Failures, what: str, until_committed=None):
+    """Wait until the archive has nothing pending and nothing unexplained.
+
+    `until_committed` is a floor the durable position must reach, and it
+    exists because "pending == 0" is not the same statement after a
+    RESTART as it is during steady state.
+
+    A restarted archive answers /healthz before it has bound its durable
+    consumer, and until it does, it reports no backlog — because it has
+    not looked yet. This function used to accept the first such reading
+    and declare the archive caught up, so the caller then measured a
+    position that had not moved and reported zero commits for a hundred
+    records that were committed moments later. The final reconciliation
+    still balanced, which is how it stayed hidden: the run said 250
+    commits, 250 rows, unaccounted 0, and failed anyway.
+
+    That is this repository's own rule turned against it — an absence
+    read as a zero. Where a caller knows what the position must reach,
+    it now waits for PROGRESS rather than for a silence.
+    """
     deadline = time.time() + DRAIN_TIMEOUT_S
-    pending = unaccounted = None
+    pending = unaccounted = committed = None
     while time.time() < deadline:
         m = metrics(ARCHIVE)
         pending = one(m, "ghosttrace_archive_stream_pending")
         unaccounted = one(m, "ghosttrace_archive_position_unaccounted")
-        if pending == 0 and unaccounted == 0:
+        committed = one(m, "ghosttrace_archive_position_committed")
+        settled = pending == 0 and unaccounted == 0
+        # None is not a number and must not compare as one: an absent
+        # series means the archive has published nothing yet.
+        arrived = (until_committed is None
+                   or (committed is not None and committed >= until_committed))
+        if settled and arrived:
             f.check(True, f"the archive drained after {what} "
-                          f"(pending=0, unaccounted=0)")
+                          f"(pending=0, unaccounted=0"
+                          + (f", committed={committed:.0f}" if until_committed else "")
+                          + ")")
             return True
         time.sleep(1)
     f.check(False, f"the archive did not drain after {what} within "
-                   f"{DRAIN_TIMEOUT_S}s (pending={pending}, unaccounted={unaccounted})")
+                   f"{DRAIN_TIMEOUT_S}s (pending={pending}, "
+                   f"unaccounted={unaccounted}, committed={committed}"
+                   + (f", needed >= {until_committed:.0f}" if until_committed else "")
+                   + ")")
     return False
 
 
@@ -239,6 +270,17 @@ def scenario_clean(f: Failures, n: int) -> None:
     drain(f, "a clean run")
 
     after = metrics(ARCHIVE)
+    # An empty scrape and a scrape without this series are different
+    # facts, and only one of them is a zero. A freshly created archive
+    # genuinely has committed nothing, so an absent position among other
+    # series IS zero; an empty scrape means the archive answered nothing
+    # and the baseline is unknown. Defaulting both to 0.0 inflated the
+    # delta, and an inflated delta makes `committed >= owed` EASIER to
+    # satisfy — the failure direction that hides a real loss.
+    if not before:
+        f.check(False, "the archive was scrapeable before the run — an empty "
+                       "scrape is not a position of zero")
+        return
     pos_before = one(before, "ghosttrace_archive_position_committed", 0.0)
     pos_after = one(after, "ghosttrace_archive_position_committed")
 
@@ -267,8 +309,17 @@ def scenario_clean(f: Failures, n: int) -> None:
 def scenario_archive_outage(f: Failures, n: int) -> None:
     print("\n== the archive is taken away mid-traffic, then brought back ==")
     before = metrics(ARCHIVE)
-    pos_before = one(before, "ghosttrace_archive_position_committed", 0.0)
-    high_before = one(before, "ghosttrace_archive_position_highest_sequence", 0.0)
+    pos_before = one(before, "ghosttrace_archive_position_committed")
+    high_before = one(before, "ghosttrace_archive_position_highest_sequence")
+    # No default. These used to fall back to 0.0, which would have made a
+    # delta out of a reading nobody took — the same "absence is zero" the
+    # whole project refuses. If the archive has published no position, the
+    # scenario cannot measure one and says so.
+    if pos_before is None or high_before is None:
+        f.check(False, "the archive published a position before the outage "
+                       f"(committed={pos_before}, highest={high_before}) — "
+                       "without a baseline there is nothing to compare against")
+        return
 
     compose("stop", "archive")
     try:
@@ -280,15 +331,22 @@ def scenario_archive_outage(f: Failures, n: int) -> None:
         compose("start", "archive")
 
     f.check(healthy(ARCHIVE), "the archive comes back")
-    if not drain(f, "the archive returned"):
+    # Four records per driven session — session, telemetry, decision,
+    # outcome — and the floor is deliberately ONE, not that: the claim
+    # here is that the queue was drained, not how the archive batches.
+    if not drain(f, "the archive returned", until_committed=pos_before + 1):
         return
 
     after = metrics(ARCHIVE)
-    committed = one(after, "ghosttrace_archive_position_committed") - pos_before
-    f.check(committed > 0,
-            f"the queued records were committed on return ({committed:.0f})")
-    f.check(one(after, "ghosttrace_archive_position_highest_sequence") > high_before,
-            "the durable position advanced past where it was before the outage")
+    pos_after = one(after, "ghosttrace_archive_position_committed")
+    high_after = one(after, "ghosttrace_archive_position_highest_sequence")
+    committed = (pos_after or 0) - pos_before
+    f.check(pos_after is not None and committed > 0,
+            f"the queued records were committed on return "
+            f"({pos_before:.0f} -> {pos_after} = {committed:.0f})")
+    f.check(high_after is not None and high_after > high_before,
+            f"the durable position advanced past where it was before the "
+            f"outage ({high_before:.0f} -> {high_after})")
     f.check(one(after, "ghosttrace_archive_position_unaccounted") == 0,
             "an outage the archive recovered from leaves nothing unaccounted")
     f.check(one(after, "ghosttrace_archive_stream_skipped") == 0,
@@ -359,15 +417,20 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--records", type=int, default=25,
                     help="records to drive per scenario")
+    ap.add_argument("--out", default="",
+                    help="write the reconciliation, and what produced it, "
+                         "as JSON")
     args = ap.parse_args()
 
+    # `healthy` and not a single 3s probe. In CI this runs immediately
+    # after `make kill-test`, which restores the services it stopped in a
+    # `finally` and returns without waiting for them to reconnect to the
+    # broker. A one-shot probe there refuses for a reason that is not a
+    # defect — the refusal must mean "the topology is not coming up", not
+    # "the topology is not up yet".
     for name, base in (("collector", COLLECTOR), ("archive", ARCHIVE),
                        ("decision-engine", ENGINE)):
-        try:
-            with urllib.request.urlopen(base + "/healthz", timeout=3) as r:
-                if r.status != 200:
-                    raise RuntimeError(r.status)
-        except Exception:
+        if not healthy(base):
             print(f"the {name} is not answering at {base}.")
             print("bring the topology up first:  make docker-build && make up")
             print("\nrefusing rather than skipping: a gate that quietly does nothing "
@@ -389,6 +452,20 @@ def main() -> int:
             "the final position accounts for every sequence it walked")
 
     report(f)
+
+    st = provenance.stamp("loss-audit", {"records": args.records})
+    for w in provenance.warnings(st):
+        print(f"\n  NOT CITABLE: {w}")
+    if args.out:
+        a, c = metrics(ARCHIVE), metrics(COLLECTOR)
+        with open(args.out, "w") as fh:
+            json.dump({
+                "provenance": st,
+                "archive": {k: one(a, k) for k in sorted(a)},
+                "collector": {k: total(c, k) for k in sorted(c)},
+                "failures": list(f),
+            }, fh, indent=2)
+        print(f"\n  wrote {args.out}")
 
     if f:
         print(f"\n  {len(f)} claim(s) did not hold:")
