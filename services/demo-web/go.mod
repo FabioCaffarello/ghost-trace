@@ -11,6 +11,7 @@ require (
 	github.com/FabioCaffarello/ghost-trace/libs/middleware v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/policy v0.0.0
 	github.com/FabioCaffarello/ghost-trace/libs/tenant v0.0.0
+	github.com/FabioCaffarello/ghost-trace/libs/wire v0.0.0
 )
 
 require (
@@ -18,7 +19,6 @@ require (
 	github.com/FabioCaffarello/ghost-trace/libs/genproto v0.0.0 // indirect
 	github.com/FabioCaffarello/ghost-trace/libs/id v0.0.0 // indirect
 	github.com/FabioCaffarello/ghost-trace/libs/snapshot v0.0.0 // indirect
-	github.com/FabioCaffarello/ghost-trace/libs/wire v0.0.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect

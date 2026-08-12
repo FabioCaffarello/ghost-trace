@@ -26,6 +26,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/FabioCaffarello/ghost-trace/libs/wire"
 )
 
 //go:embed static/*
@@ -119,12 +121,15 @@ type loginRequest struct {
 	SessionToken string `json:"session_token"`
 	Username     string `json:"username"`
 
-	// Capture-study labels, supplied by the participant's link. They
-	// travel through the contract's existing fields — subject_id and
-	// context — rather than through any new API surface, because a
-	// session's cohort is a property of the experiment, not of the
-	// product. The engine must not know which population it is looking
-	// at.
+	// Capture-study labels, supplied by the participant's link. Only
+	// `participant` crosses the wire, as subject_id — the pseudonymous
+	// identity the host application asserts, which is exactly what
+	// subject_id is for. Arm, condition and visit stay HERE: they are
+	// written into the local capture row and never sent, because the
+	// engine must not know which population it is looking at. (An older
+	// version of this comment claimed they travelled through a request
+	// `context` field; that field was removed from the contract at
+	// R1.14 and this handler kept posting it into the void.)
 	Participant string `json:"participant"`
 	Arm         string `json:"arm"`
 	Condition   string `json:"condition"`
@@ -171,16 +176,16 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	if req.Participant != "" {
 		subject = req.Participant
 	}
-	body, _ := json.Marshal(map[string]any{
-		"session_token": req.SessionToken,
-		"action":        "login",
-		"subject_id":    subject,
-		"context": map[string]any{
-			"attempt_n": 1,
-			"arm":       req.Arm,
-			"condition": req.Condition,
-			"visit":     req.Visit,
-		},
+	// Built from the wire type the engine decodes, not a hand-rolled
+	// map. The map this replaces still carried the `context` object
+	// removed from the contract at R1.14 — accepted, dropped, and
+	// promised by a comment above to be the capture channel it never
+	// was. The server tolerating unknown fields means nothing but a
+	// shared type stops that from happening again.
+	body, _ := json.Marshal(wire.DecisionsRequest{
+		SessionToken: req.SessionToken,
+		Action:       "login",
+		SubjectID:    subject,
 	})
 
 	decision, err := h.decisions.Decide(r.Context(), body)

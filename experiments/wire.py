@@ -60,6 +60,35 @@ def key_event(t, phase, key_class, target):
     return {"type": "key", "t": t, "phase": phase, "class": key_class, "target": target}
 
 
+def scroll_event(t, dy, mode="wheel"):
+    """A scroll event. `mode` separates a real wheel gesture from the
+    page scrolling itself — a programmatic scroll is one of the
+    stronger automation signals on its own."""
+    return {"type": "scroll", "t": t, "dy": dy, "mode": mode}
+
+
+def focus_event(t, state, target):
+    """A focus event — focus or blur, with the hashed field identity.
+    Never the field's value."""
+    return {"type": "focus", "t": t, "state": state, "target": target}
+
+
+def visibility_event(t, state):
+    """A visibility event — visible or hidden, straight from
+    document.visibilityState."""
+    return {"type": "visibility", "t": t, "state": state}
+
+
+def form_event(t, action, target):
+    """A form event. `injected` is the strongest single bot signal — a
+    field value that appeared with no keystroke and no paste behind it
+    — and `paste` exists so a human pasting is NOT mistaken for one.
+    The strongest signal in the system went without a contract fixture
+    until these four families existed; that is the wrong place to be
+    uncovered."""
+    return {"type": "form", "t": t, "action": action, "target": target}
+
+
 def decision_body(session_token, action="login", subject_id="harness"):
     """POST /v1/decisions"""
     return {

@@ -38,6 +38,8 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/FabioCaffarello/ghost-trace/libs/policy"
+
+	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/ingest"
 )
 
 const fixtureDir = "../../../../contract/fixtures/requests"
@@ -60,6 +62,7 @@ var contractFixtures = []struct {
 	{"sessions.json", "SessionsRequest", "/v1/sessions", "", http.StatusOK, false},
 	{"telemetry_pointer.json", "TelemetryBatch", "/v1/telemetry", "session", http.StatusAccepted, true},
 	{"telemetry_pointer_and_keys.json", "TelemetryBatch", "/v1/telemetry", "session", http.StatusAccepted, true},
+	{"telemetry_all_families.json", "TelemetryBatch", "/v1/telemetry", "session", http.StatusAccepted, true},
 	{"decisions.json", "DecisionsRequest", "/v1/decisions", "secret", http.StatusOK, true},
 
 	// Nothing in the harness posts an outcome yet — the labels channel
@@ -147,6 +150,44 @@ func TestClientFixturesAreAcceptedByARealServer(t *testing.T) {
 					tc.path, status, tc.wantStatus, raw, respBody)
 			}
 		})
+	}
+}
+
+// TestEveryEventTypeHasAFixture guards the direction
+// TestEveryFixtureIsCovered cannot: an event FAMILY with no fixture at
+// all. Four of six families — scroll, focus, visibility, and form,
+// whose `injected` action is the policy's strongest signal — spent a
+// year with nothing validating or replaying them; the coverage stopped
+// where the first two fixtures happened to stop, and nothing said so.
+func TestEveryEventTypeHasAFixture(t *testing.T) {
+	present := map[string]bool{}
+	for _, tc := range contractFixtures {
+		if tc.schema != "TelemetryBatch" {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(fixtureDir, tc.fixture))
+		if err != nil {
+			t.Fatalf("read %s (generate with `make contract-fixtures`): %v", tc.fixture, err)
+		}
+		var batch struct {
+			Events []struct {
+				Type string `json:"type"`
+			} `json:"events"`
+		}
+		if err := json.Unmarshal(raw, &batch); err != nil {
+			t.Fatalf("decode %s: %v", tc.fixture, err)
+		}
+		for _, ev := range batch.Events {
+			present[ev.Type] = true
+		}
+	}
+	for _, family := range ingest.EventTypes {
+		if !present[family] {
+			t.Errorf("event family %q has no contract fixture — nothing validates "+
+				"it against the schema or replays it against a real server, and "+
+				"the server tolerating unknown fields means nothing else would "+
+				"notice it drifting", family)
+		}
 	}
 }
 

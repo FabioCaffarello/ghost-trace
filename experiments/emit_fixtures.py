@@ -44,6 +44,19 @@ KEYS = [
     wire.key_event(t=1530, phase="up", key_class="alpha", target="f_1"),
 ]
 
+# One of every family, in one batch — so no event type the SDK can emit
+# is without a fixture that is schema-validated and replayed against a
+# real server. `form`/`injected` is here on purpose: the policy's
+# strongest signal was the one with no contract test.
+ALL_FAMILIES = [
+    POINTER,
+    KEYS[0],
+    wire.scroll_event(t=1600, dy=240),
+    wire.focus_event(t=1700, state="focus", target="f_1"),
+    wire.visibility_event(t=1800, state="hidden"),
+    wire.form_event(t=1900, action="injected", target="f_1"),
+]
+
 
 def python_fixtures():
     return {
@@ -52,6 +65,8 @@ def python_fixtures():
             session_token=TOKEN, seq=0, sent_at_ms=2840, events=[POINTER]),
         "telemetry_pointer_and_keys": wire.telemetry_body(
             session_token=TOKEN, seq=1, sent_at_ms=4200, events=[POINTER, *KEYS]),
+        "telemetry_all_families": wire.telemetry_body(
+            session_token=TOKEN, seq=2, sent_at_ms=5100, events=ALL_FAMILIES),
         "decisions": wire.decision_body(session_token=TOKEN, subject_id="user_8f21"),
         "outcomes": wire.outcome_body(
             evaluation_id="ev_5Kq2mXbT9vHs", outcome="login_success"),
