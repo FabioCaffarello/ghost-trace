@@ -708,6 +708,23 @@ numbers-manifest: ## Publish the last run to docs/results/ (requires a clean tre
 docker-build: ## Build every image defined in compose.yml
 	docker compose --profile core --profile experiments --profile observability build
 
+# The end-to-end gate. Unlike every other topology target it does NOT
+# want a topology up — it brings its own, in a compose project of its
+# own, and drops it afterwards. That is the point: the other gates each
+# pass alone and do not compose, and one of them already reported a
+# clean run as four drops because it inherited a system the previous
+# gate had just taken apart.
+#
+# It needs the Playwright image and about a minute. Nothing about it is
+# skippable: no docker, no build, no health, no browser — all of them
+# exit non-zero.
+#
+#   make e2e
+#   make e2e E2E_ARGS=--keep-up      # leave it up to look at
+.PHONY: e2e
+e2e: ## Drive the whole chain with a real browser and assert every link (brings its own topology)
+	@python3 deploy/e2e.py $(E2E_ARGS)
+
 .PHONY: pin-images
 pin-images: ## Resolve the base-image tags in .env to sha256 digests
 	deploy/docker/pin-base-images.sh
@@ -718,7 +735,7 @@ up: ## Start the core profile
 
 .PHONY: down
 down: ## Stop every profile and drop the volumes
-	docker compose --profile core --profile demo --profile experiments --profile observability down -v
+	docker compose --profile core --profile demo --profile experiments --profile observability --profile e2e down -v
 
 .PHONY: restart
 restart: down up ## Recreate the core profile
