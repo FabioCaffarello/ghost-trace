@@ -105,8 +105,28 @@ page{path, viewport}, events[]}`.
 - Events carry `src` (mouse / trackpad / touch / pen) where the platform
   exposes it, because §0 admits properties that change interpretation.
 
-The canonical schema is `schemas/events/v1/*.proto`; the JSON accepted at
-the HTTP boundary mirrors it field-for-field.
+The canonical schema is `schemas/events/v1/*.proto`. The JSON accepted at
+the HTTP boundary is a **different shape**, and reading one to learn the
+other will mislead you:
+
+- The wire carries one `events` array discriminated by `type`; the proto
+  carries six typed lists (`pointer_events`, `key_events`, and so on).
+- The wire nests `page` and `client`; the proto is flat, and
+  `page.viewport` arrives as one array and is stored as `viewport_w` and
+  `viewport_h`.
+- `class` on the wire is `key_class` in the proto.
+- Three archived fields are never accepted from a browser, because a
+  browser that could set them could lie about them: `tenant_id` is
+  resolved from `site_key` (§1), `session_id` is issued by the server
+  while the browser holds a token, and `received_at` / `started_at` are
+  the server's clock — the client's claim about time is `sent_at_ms` and
+  stays separate.
+
+This paragraph said "mirrors it field-for-field" until PR-6.3, which was
+false on every line above. The correspondence that does hold is written
+down as three tables in
+`services/collector/internal/api/wire_proto_mapping_test.go`, and a field
+added or renamed on either side fails until somebody places it.
 
 ## §3 — The external surface
 
