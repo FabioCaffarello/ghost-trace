@@ -360,8 +360,11 @@ component chooses badly, silently, and usually all at once.
 > stays at zero, and no component fails in a way another component
 > caused.
 
-**Not yet met.** The mechanisms are built and merged; the run that
-measures them is 5.6 and has not been taken.
+**Not yet met, and the reason is narrow.** Every mechanism the gate
+describes is built and merged, and the accounting half is now asserted
+in CI on every pull request. What has not happened is the run that
+measures them under an offered rate the archive cannot sustain — that
+is 5.6b, and it needs a machine that can run the topology.
 
 ### Pull requests
 
@@ -375,11 +378,13 @@ measures them is 5.6 and has not been taken.
 | **5.6a** | The gates become visible to the machinery that is supposed to run them. `.context/config/sensors.json` listed eleven sensors and **not one of the four topology gates** — the file said the project's strongest claim-checking machinery did not exist. `make loss-audit` joins CI's topology job. `scripts/check-sensors.py` makes the `.context` README's rule enforceable instead of aspirational, and `deploy/provenance.py` stamps each gate run with the commit **and the image IDs that actually served the requests**, because a topology gate does not measure the working tree. **Its first CI run failed, usefully: the gates pass alone and do not compose.** Running directly after `kill-test`, which restarts three services and returns without waiting for them to settle, `loss-audit` reported four drops and no commit delta in the scenario it calls *an intact topology* — a scene that was not intact. The gate gets a freshly recreated topology rather than looser assertions; "the collector dropped nothing with everything up" is exactly the claim worth keeping strict. | M |
 | **5.6b** | **Not done — needs a Docker daemon.** Re-run `make load-gate` and the load curves with the corrected driver and republish. Everything in 5.4 and 5.5 changes the numbers 4.4 and 4.6 published, and until this runs the roadmap quotes figures from before the batching. | M |
 | **5.7a** | A record says which customer it belongs to, not which flag. The archive envelope's tenant came from the `-tenant` flag while every payload already carried the tenant the request had proven; with `-tenants <file>` they agree only for the one customer matching the flag, so **every other customer's records were archived and subject-routed as `t_demo`** — wrong durable attribution, not just wrong routing. The tenant is now read from the payload, and a payload without one is refused. (#345) | S |
-| **5.7b** | **Not done.** An ADR for the backpressure and shedding model, and the phase write-up. Deliberately left until 5.6b says how much of the 4× gap the batching actually closed — an ADR arguing for a shed threshold is worth less than one that knows what it is shedding against. | S |
+| **5.7b** | [ADR-0013](decisions/0013-the-system-chooses-which-records-to-lose.md) and [the write-up](../docs/choosing-what-to-lose.md). The ADR states the loss ORDER as a design — deadline, then shed, then the stream's oldest — and states just as plainly what it does not know: **the 0.8 threshold is argued from the shape of the failure, not from measured headroom,** because 5.6b has not run. Writing it before the measurement was a deliberate call and the ADR carries the consequence in its own text rather than in a promise to revise. | S |
 
 **Dependencies.** 5.1 through 5.5 are independent and all merged. 5.6b
-depends on all of them and on a machine that can run the topology.
-5.7b depends on 5.6b.
+depends on all of them and on a machine that can run the topology — it
+is the only piece left, and the phase gate is not met until it runs.
+5.7b was written ahead of it on purpose, stating the model and marking
+the one quantity it cannot yet justify.
 
 ### What Phase 5 is explicitly not
 

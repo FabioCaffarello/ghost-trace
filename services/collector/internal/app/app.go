@@ -145,7 +145,10 @@ func (NoPressure) Level() float64 { return -1 }
 // SHEDDING THE NEW TO SAVE THE OLD is the whole argument. Both paths
 // lose records; only one of them loses records nobody counted, at a
 // moment nobody chose, from the end of the queue that has been waiting
-// longest. ADR-0012 §Alternatives set this up; PR-5.7 records it.
+// longest. ADR-0012 §Alternatives set this up; ADR-0013 records it,
+// including what 0.8 is NOT — it is argued from the shape of the
+// failure, not derived from measured headroom, because the run that
+// would measure the headroom has not been taken.
 const SheddingThreshold = 0.8
 
 // LossMeter counts what the application hands to a store, and what it
