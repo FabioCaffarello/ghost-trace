@@ -639,6 +639,10 @@ gates-check: ## Syntax-check the topology gates and assert their provenance logi
 	@python3 deploy/provenance.py --selftest
 	@echo "== gated-run selftest (asserted)"
 	@python3 scripts/gated-test.py --selftest
+	@echo "== route-inventory selftest (asserted)"
+	@python3 scripts/check-routes.py --selftest
+	@echo "== every route a service serves is named in the contract"
+	@python3 scripts/check-routes.py
 	@echo "== sensor-registry selftest (asserted)"
 	@python3 scripts/check-sensors.py --selftest
 	@echo "== every sensor is a make target, and every gate is a sensor"
