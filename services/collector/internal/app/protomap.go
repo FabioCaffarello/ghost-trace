@@ -14,12 +14,12 @@ import (
 	"github.com/FabioCaffarello/ghost-trace/services/collector/internal/session"
 )
 
-func buildSessionStart(st *session.State, c session.Client) *eventsv1.SessionStart {
+func buildSessionStart(id session.Identity, c session.Client) *eventsv1.SessionStart {
 	return &eventsv1.SessionStart{
-		TenantId:      st.TenantID,
-		SessionId:     st.ID,
-		StartedAt:     st.StartedAt.UnixNano(),
-		PagePath:      st.PagePath,
+		TenantId:      id.TenantID,
+		SessionId:     id.ID,
+		StartedAt:     id.StartedAt.UnixNano(),
+		PagePath:      id.PagePath,
 		PointerType:   c.PointerType,
 		Touch:         c.Touch,
 		ViewportW:     uint32(c.Viewport[0]),
