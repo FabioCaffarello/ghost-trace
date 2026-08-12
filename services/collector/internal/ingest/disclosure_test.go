@@ -224,9 +224,37 @@ func TestTheUnsettledQuestionsAreStillNamed(t *testing.T) {
 				topic)
 		}
 	}
-	if !strings.Contains(doc, "has not been written") {
-		t.Error("the script no longer says the data-governance RFC is unwritten. " +
-			"Recruitment is gated on it, and a script that stops saying so reads " +
-			"as though the gate was passed")
+	// THE GATE, not the sentence.
+	//
+	// This used to assert the literal string "has not been written",
+	// which RFC-0001 made false the moment it was drafted — and a test
+	// that fails because the right thing happened is a test people
+	// route around. What has to survive is the CONSEQUENCE: recruitment
+	// is gated, and the file says so.
+	//
+	// It will fail on the day someone opens recruitment, which is the
+	// day a person should be changing this deliberately: the RFC
+	// accepted, the deletion mechanism built, its §4 checklist ticked.
+	if !strings.Contains(doc, "should not be handed to anyone") {
+		t.Error("the script no longer says it should not be handed to anyone. " +
+			"Recruitment is gated on RFC-0001 being ACCEPTED and its deletion " +
+			"mechanism existing — not on the RFC being written — and a file that " +
+			"stops saying so reads as though the gate was passed")
+	}
+
+	// And the pointer to the gate cannot rot silently.
+	if !strings.Contains(doc, "rfcs/0001-human-study-data-governance.md") {
+		t.Error("experiments/PARTICIPANTS.md no longer cites RFC-0001. The three " +
+			"unsettled questions above are answered nowhere else, and a reader " +
+			"asking 'answered where?' has to be able to follow a link")
+	}
+
+	// A proposal is not a policy, and the file must not start reading
+	// as though the RFC settled anything.
+	if !strings.Contains(doc, "drafted and not accepted") {
+		t.Error("experiments/PARTICIPANTS.md no longer says RFC-0001 is drafted " +
+			"and not accepted. Its proposals — a retention ceiling, a deletion " +
+			"target — are not in force, and a volunteer must never be told them " +
+			"as though they were")
 	}
 }
