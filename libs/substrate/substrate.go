@@ -12,13 +12,10 @@ import (
 	"context"
 	"crypto/subtle"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	// Pure Go, deliberately: it is what lets CGO_ENABLED=0 produce a
@@ -220,10 +217,11 @@ func ensurePayloadColumn(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-// BlobDir returns the configured blob-store directory. Exposed for
-// operational tooling (e.g. the verify CLI per §0039) and tests that
-// need to inspect on-disk state. Service code SHOULD NOT manipulate
-// the blob-store directly; use ReadBlob / Append / AppendPair.
+// BlobDir returns the configured blob-store directory. Exposed so tests
+// can inspect on-disk state — most usefully to assert that an inlined
+// payload wrote no file at all (ADR-0009). Service code SHOULD NOT
+// manipulate the blob-store directly; use ReadBlob and the Append
+// family.
 func (s *Substrate) BlobDir() string { return s.blobDir }
 
 // Close releases the underlying database connection. Idempotent.
@@ -304,12 +302,17 @@ func (s *Substrate) blobPath(hash [32]byte) (shardDir, finalPath string) {
 }
 
 // writeBlob writes payload to the blob-store under hash. Idempotent on
-// identical content; ErrBlobCollision on byte-inequality with existing
-// blob (
+// identical content; ErrBlobCollision when a blob already exists at that
+// hash with different bytes, which a content-addressed store can only
+// reach through corruption or a hash collision.
 //
-// POSIX-only: uses write-temp-then-rename atomicity. Decision-log §0027
-// Open Questions surfaces the POSIX-only inception-phase constraint;
-// reversal condition R-store-4 captures the Windows-substrate trigger.
+// POSIX-only: it relies on write-temp-then-rename being atomic. Windows
+// is not a target and no issue tracks making it one.
+//
+// This comment carried three references to a decision log that does not
+// exist in this repository, and a sentence that stopped mid-parenthesis.
+// The file predates ghost-trace; PR-6.5 removed what could not be
+// followed rather than leaving a reader to search for it.
 func (s *Substrate) writeBlob(hash [32]byte, payload []byte) error {
 	shardDir, finalPath := s.blobPath(hash)
 
@@ -423,55 +426,6 @@ func (s *Substrate) Count(ctx context.Context) (int64, error) {
 	return n, err
 }
 
-// WalkBlobs iterates over every file in the blob-store that matches the
-// blob-path convention (<2-char-prefix>/<62-char-suffix>, where the
-// concatenated 64 chars decode to a 32-byte hash). For each match, fn
-// is called with the decoded hash + the absolute filesystem path.
-// Files that do not match the convention (temp files, accidentally-
-// placed artifacts) are silently skipped.
-//
-// Written for orphan-blob detection: a blob with no event referencing
-// it. Read-only walk; no writeMu.
-//
-// Order is filesystem-iteration order (operating-system dependent;
-// typically sorted by shard then filename on POSIX). Callers MUST NOT
-// rely on a specific traversal order.
-func (s *Substrate) WalkBlobs(ctx context.Context, fn func(hash [32]byte, path string) error) error {
-	return filepath.WalkDir(s.blobDir, func(path string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		// Honor context cancellation between entries.
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		// Skip leftover tmp files (write-temp-then-rename leaves none
-		// in steady state, but a crashed write may orphan one).
-		if strings.HasPrefix(d.Name(), "tmp-blob-") {
-			return nil
-		}
-		rel, err := filepath.Rel(s.blobDir, path)
-		if err != nil {
-			return fmt.Errorf("substrate.WalkBlobs: rel %s: %w", path, err)
-		}
-		cleaned := filepath.ToSlash(rel)
-		// Expected form: "<2-hex>/<62-hex>".
-		parts := strings.SplitN(cleaned, "/", 2)
-		if len(parts) != 2 || len(parts[0]) != 2 || len(parts[1]) != 62 {
-			return nil // not a blob-store file; skip silently
-		}
-		hexStr := parts[0] + parts[1]
-		var hash [32]byte
-		if _, err := hex.Decode(hash[:], []byte(hexStr)); err != nil {
-			return nil // unparseable hex; skip
-		}
-		return fn(hash, path)
-	})
-}
-
 // WalkEvents iterates over every events-table row in commit order
 // (committed_at ascending). For each row, fn is called with the row's
 // content. If fn returns a non-nil error, iteration stops and the
@@ -503,76 +457,6 @@ func (s *Substrate) WalkEvents(ctx context.Context, fn func(EventRow) error) err
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("substrate.WalkEvents: rows iteration: %w", err)
-	}
-	return nil
-}
-
-// AppendPair commits two events atomically: a primary observation and
-// an enrichment record paired by reference. Used by the ingestion path
-// to commit a primary observation (e.g. DeclaredSession) alongside its
-// paired IngestionEvent.
-//
-// Atomicity discipline:
-//  1. Both hashes are verified against their payloads (hash mismatch
-//     rejects the call without writing anything).
-//  2. Both blobs are written to the blob-store (idempotent on
-//     content-hash; safe outside the SQL transaction — orphan blobs
-//     are harmless per §0027 Proposal item 5 + §0033 §Restoration).
-//  3. Both events-table rows are inserted inside a single SQL
-//     transaction. Either both rows commit or neither (SQLite WAL +
-//     synchronous=FULL provides the durability guarantee).
-//
-// Either both events become visible in subsequent reads or neither.
-// The pairing is by reference (enrichment carries a hash to the
-// primary); recovery from orphan blobs is operator concern per §0033.
-//
-// Serializes via writeMu per concurrency-pattern §Substrate-Writer
-// Serialization (same single-writer semantics as Append).
-func (s *Substrate) AppendPair(ctx context.Context,
-	primaryRow EventRow, primaryPayload []byte,
-	enrichmentRow EventRow, enrichmentPayload []byte,
-) error {
-	if want := canonical.Hash(primaryPayload); subtle.ConstantTimeCompare(primaryRow.EventHash[:], want[:]) != 1 {
-		return fmt.Errorf("substrate.AppendPair: %w (primary row.EventHash != Hash(primaryPayload))", ErrHashMismatch)
-	}
-	if want := canonical.Hash(enrichmentPayload); subtle.ConstantTimeCompare(enrichmentRow.EventHash[:], want[:]) != 1 {
-		return fmt.Errorf("substrate.AppendPair: %w (enrichment row.EventHash != Hash(enrichmentPayload))", ErrHashMismatch)
-	}
-
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
-
-	if err := s.writeBlob(primaryRow.EventHash, primaryPayload); err != nil {
-		return fmt.Errorf("substrate.AppendPair: primary blob write: %w", err)
-	}
-	if err := s.writeBlob(enrichmentRow.EventHash, enrichmentPayload); err != nil {
-		return fmt.Errorf("substrate.AppendPair: enrichment blob write: %w", err)
-	}
-
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("substrate.AppendPair: begin tx: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx,
-		`INSERT OR IGNORE INTO events
-		   (event_hash, event_time, message_type, payload_ref, committed_at)
-		 VALUES (?, ?, ?, ?, ?)`,
-		primaryRow.EventHash[:], primaryRow.EventTime, primaryRow.MessageType, primaryRow.PayloadRef, primaryRow.CommittedAt,
-	); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("substrate.AppendPair: insert primary: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx,
-		`INSERT OR IGNORE INTO events
-		   (event_hash, event_time, message_type, payload_ref, committed_at)
-		 VALUES (?, ?, ?, ?, ?)`,
-		enrichmentRow.EventHash[:], enrichmentRow.EventTime, enrichmentRow.MessageType, enrichmentRow.PayloadRef, enrichmentRow.CommittedAt,
-	); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("substrate.AppendPair: insert enrichment: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("substrate.AppendPair: commit: %w", err)
 	}
 	return nil
 }
