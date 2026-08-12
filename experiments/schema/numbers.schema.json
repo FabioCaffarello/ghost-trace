@@ -173,6 +173,17 @@
                   "type": "string"
                 }
               ]
+            },
+            "puppeteer_core": {
+              "description": "Resolved puppeteer-core version. Four of the six numbers depend on it directly \u2014 it drives tiers 1, 2, 5 and 6 \u2014 so a manifest without it cannot say which driver produced its detection table. Optional: manifests published before this field existed stay valid, and their absence is not a claim that the driver was absent.",
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
             }
           }
         },
@@ -230,7 +241,7 @@
               ]
             },
             "archive": {
-              "description": "What the decision path writes evaluations THROUGH — 'substrate' is the local SQLite store with synchronous=FULL, 'stream' is a NATS publish, 'none' is NullArchive. It is recorded because `topology` was silently carrying it: the monolith baselines wrote to a substrate and the composed one published to a stream, so part of the p99 difference the phase gate reads as the cost of the split is the cost of a different store. Null means an external deployment nobody described (set GT_ARCHIVE) — usable as a run, refused as a baseline. Optional: where the key is ABSENT, read it from the topology, which is what every manifest published before this field was — monolith ran locally with -data, composed ran on compose with -nats.",
+              "description": "What the decision path writes evaluations THROUGH \u2014 'substrate' is the local SQLite store with synchronous=FULL, 'stream' is a NATS publish, 'none' is NullArchive. It is recorded because `topology` was silently carrying it: the monolith baselines wrote to a substrate and the composed one published to a stream, so part of the p99 difference the phase gate reads as the cost of the split is the cost of a different store. Null means an external deployment nobody described (set GT_ARCHIVE) \u2014 usable as a run, refused as a baseline. Optional: where the key is ABSENT, read it from the topology, which is what every manifest published before this field was \u2014 monolith ran locally with -data, composed ran on compose with -nats.",
               "oneOf": [
                 {
                   "type": "null"

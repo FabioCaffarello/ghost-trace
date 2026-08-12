@@ -328,9 +328,10 @@ def provenance():
     GT_N_TIER<k> silently changes what was measured, and `git.dirty`,
     because a number produced from uncommitted code cannot be
     reproduced by anyone including its author."""
-    def cmd(args):
+    def cmd(args, cwd=None):
         try:
-            r = subprocess.run(args, capture_output=True, text=True, timeout=10)
+            r = subprocess.run(args, capture_output=True, text=True, timeout=10,
+                               cwd=cwd)
             return r.stdout.strip() if r.returncode == 0 else None
         except (OSError, subprocess.SubprocessError):
             return None
@@ -358,6 +359,18 @@ def provenance():
             # benchmark — go.mod pins one, and the version on PATH may
             # be older.
             "go": (cmd(["go", "-C", str(SVC), "env", "GOVERSION"]) or "").lstrip("go") or None,
+            # The browser driver, which four of the six numbers depend on
+            # directly: puppeteer drives tiers 1, 2, 5 and 6.
+            #
+            # Absent until this entry, so a manifest could not say which
+            # driver produced its detection table — and a bump of it
+            # would have moved the numbers with nothing in the record to
+            # attribute the movement to. Read from the INSTALLED package
+            # rather than from package.json, because the range there is
+            # `^23.10.0` and what ran is a resolved version.
+            "puppeteer_core": cmd(
+                ["node", "-p", "require('puppeteer-core/package.json').version"],
+                cwd=str(HERE)) or None,
         },
         "run": {
             # External mode measures a slice this process did not start,
