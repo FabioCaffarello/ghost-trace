@@ -129,6 +129,21 @@
       "phase": "V"
     },
     {
+      "id": "numbers-freshness",
+      "name": "the published baselines still describe the code",
+      "description": "Reports, per (topology, archive) baseline family, whether commits have touched services/, experiments/, schemas/ or libs/ since that manifest was measured. It answers whether anyone has LOOKED, not whether a number moved — the second question is `make numbers` and costs seven minutes and real browsers, which is why it sits outside `make ci` and why nothing forced it while the published p99 spent eight days 5x off. Grouped per family because republishing one baseline must not vouch for another, and the grouping functions are imported from numbers_check rather than restated. NON-BLOCKING and deliberately not in CI yet: both baselines are stale today, so a CI step would fire on every pull request from the day it landed, and a signal that is always on becomes decoration. It graduates when a run of each family has been published.",
+      "command": "make numbers-freshness",
+      "severity": "warning",
+      "blocking": false,
+      "appliesTo": [
+        "services/**",
+        "libs/**",
+        "schemas/**",
+        "experiments/**"
+      ],
+      "phase": "V"
+    },
+    {
       "id": "e2e",
       "name": "the product runs end to end",
       "description": "Drives the path a visitor actually takes — the host page, sdk.js from the collector, the cross-origin session handshake, telemetry, the stream, the snapshot the engine judges from, the server-to-server decision the host application makes, the label the application files for what its own action turned out to be, and the archive's durable position — with a real browser inside the compose network, asserting all eight links by name. The other topology sensors enter the chain in the MIDDLE with bodies they build themselves; nothing else here loads the page or runs the SDK, and the two failures this catches were both WIRING that left every service healthy and every request answered. It brings its own topology up in a compose project of its own, so unlike the sensors below it needs nothing running first and cannot inherit a system another gate just took apart.",
