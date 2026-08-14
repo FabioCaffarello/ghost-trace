@@ -441,15 +441,28 @@ the way the original did.
   keeps zero-means-zero deliberately.
 - **A read surface on the archive.**
   [ADR-0015](decisions/0015-the-e2e-gate-asserts-connection-not-detection.md)
-  names what `make e2e` cannot see: whether *this* session reached the
+  named what `make e2e` cannot see: whether *this* session reached the
   durable store. The archive serves `/healthz` and `/metrics` and nothing
-  else, so link 7 asserts that the committed position advanced by at
-  least what the run produced and that nothing is unaccounted — a count,
-  not an identity. A run that archived somebody else's records and lost
-  its own would pass it. Closing that means an endpoint that returns
-  archived telemetry by session, which is a different authorization
-  question from one that returns a count, and answering it in passing to
-  strengthen a gate is how a read surface gets designed by accident.
+  else.
+
+  **Not done, and no longer the gate's problem.** Link 8 now asserts an
+  identity rather than a floor — `sessions + batches + evaluations +
+  labels == commits`, every term read from the services' own counters —
+  and the gate brings up a topology in a project of its own that nothing
+  else sends anything to. Passing while losing this session's records
+  would mean the archive committed exactly as many records from a source
+  that does not exist.
+
+  What remains is a **product** question, not a gate one: does an
+  operator need to ask the archive what it holds for a session? Answering
+  it is more than an endpoint. The `events` table is keyed by content
+  hash and carries no `session_id` — session and tenant live inside the
+  protobuf payload — so a lookup by session needs a secondary index on
+  the commit path, in the one part of this system whose throughput two
+  phases were spent measuring. It is a schema change and a performance
+  change before it is an API, and `make measure` would have to be re-run.
+  Answering it in passing to strengthen a gate is how a read surface gets
+  designed by accident.
 - **Authenticating `/metrics`.** The exposure is disclosed, compose binds
   `127.0.0.1`, and `make shadow-http` compares the two tenant registries
   through it. Adding auth is a deployment decision this repository has
