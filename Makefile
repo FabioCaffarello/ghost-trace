@@ -199,9 +199,31 @@ lint: tool-golangci ## golangci-lint over every module (config: .golangci.yml)
 # govulncheck exits 3 when it finds something reachable, so the failure
 # is the `|| exit 1` and not a non-empty report: a run that prints five
 # advisories and returns success is worse than no scan at all.
+#
+# SCANNED AT THE PINNED TOOLCHAIN, not at whatever `go` the machine
+# happens to have. Most of these advisories are in the STANDARD LIBRARY,
+# and which standard library gets analysed is decided by the go command
+# govulncheck shells out to — not by the `toolchain` line in go.mod,
+# which only governs builds. So a developer on go1.26.5 and a runner on
+# go1.26.6 scanning identical source disagree about whether this
+# repository is affected, and the one whose machine is behind reports
+# five reachable CVEs that the artefact never had.
+#
+# That was not theoretical. go1.26.6 shipped fixes for five reachable
+# stdlib advisories; CI went red on every open pull request at once, and
+# bumping the pin did not clear it locally until the scan was taken at
+# the pin.
+#
+# Read FROM a go.mod rather than restated here. A second copy of the
+# security floor is a second thing to forget, and this file's whole
+# premise is that `make ci` locally and CI mean the same thing.
+GO_TOOLCHAIN := $(shell sed -n 's/^toolchain //p' $(SERVICE)/go.mod)
+
 .PHONY: vuln
-vuln: tool-govulncheck ## govulncheck every module against the Go vulnerability database
-	@for m in $(GO_MODULES); do echo "== govulncheck $$m"; (cd $$m && $(GOVULN) ./...) || exit 1; done
+vuln: tool-govulncheck ## govulncheck every module at the pinned toolchain
+	@echo "== scanning at $(or $(GO_TOOLCHAIN),the local toolchain)"
+	@for m in $(GO_MODULES); do echo "== govulncheck $$m"; \
+		(cd $$m && GOTOOLCHAIN=$(or $(GO_TOOLCHAIN),auto) $(GOVULN) ./...) || exit 1; done
 
 # Conventional Commits, so semantic-release can derive a version from
 # the log. PR_TITLE is read from the ENVIRONMENT, never interpolated

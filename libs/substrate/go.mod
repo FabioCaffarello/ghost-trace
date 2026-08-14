@@ -2,7 +2,7 @@ module github.com/FabioCaffarello/ghost-trace/libs/substrate
 
 go 1.26
 
-toolchain go1.26.5
+toolchain go1.26.6
 
 require (
 	github.com/FabioCaffarello/ghost-trace/libs/canonical v0.0.0
