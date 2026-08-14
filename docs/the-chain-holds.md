@@ -82,7 +82,7 @@ outcomes loop, and changes none of that record's three decisions.
 | 5 | a verdict rendered, **and the engine's `/v1/decisions` counter moved while the collector's did not** | fail-open; and the collector answering instead of the engine |
 | 6 | `events > 0` and `confidence > 0` | a cold start, which scores identically and looks healthy |
 | 7 | the engine's `/v1/outcomes` counter moved, **and** the page reports the label the server says it filed | a labels channel with no caller; a page claiming a label that was never stored |
-| 8 | the committed position advanced and `unaccounted == 0` | records accepted and never made durable |
+| 8 | the committed delta **equals** sessions + batches + evaluations + labels, and `unaccounted == 0` | records accepted and never made durable — and records that appeared from nowhere |
 
 Link 5 is the one that carries the design. A verdict on a screen cannot
 tell you which service produced it, and both wrong answers — fail-open
@@ -154,13 +154,50 @@ seven passed, and the archive committed **4** records instead of 5 —
 exactly the one that was refused. It proved the gate and the engine's
 enum rejection in the same run.
 
+## Link 8 is an accounting identity now, not a floor
+
+It began as `committed >= 1 + batches the browser saw`, which was the
+strongest thing available while the expectation came from the browser:
+Chromium aborts keepalive fetches it has already handed to the network,
+so the page's count of accepted batches is a *lower bound* on what the
+collector took. One run made that concrete — the browser saw one batch
+land, the collector had accepted three.
+
+Counting from the servers instead makes the assertion exact:
+
+```
+sessions + telemetry batches + evaluations + labels  ==  commits
+```
+
+Every accepted request produces exactly one durable record — `make
+loss-audit` rests on the same 1:1 — so the sum is not an estimate. An
+equality catches both directions, where the floor caught only loss.
+
+Its red proof was a real outage rather than a mutation: stop the archive
+container six seconds into the run. Everything else passed and link 8
+reported `0 committed against 5 accepted`.
+
+That proof also found **the third vacuous pass in this file**. The first
+metrics read threw, the exception unwound past every check in link 8,
+and the summary printed link 8 as `ok` — because a link with zero checks
+has zero failures. The archive was down and the gate said the archive
+was fine. Two shapes of this had already been fixed here (`[].every()`
+twice), which is what makes it worth naming: an absence scored as a pass
+is not a bug you fix once. A link that asserts nothing is now reported
+as `NOCHECK` and fails the run.
+
 ## What it deliberately does not say
 
-**That this session is in the archive.** The archive has no read
-surface, so link 7 asserts a count and not an identity: a run that
-archived somebody else's records and lost its own would pass it. Named
-in [ADR-0015](../contract/decisions/0015-the-e2e-gate-asserts-connection-not-detection.md),
-roadmapped, and not quietly implied to be more than it is.
+**That this session's records are the ones in there.** The events table
+is keyed by content hash and carries no session column, so link 8 is
+arithmetic, not identity. In this gate the distinction is nearly empty —
+the topology comes up fresh in a project of its own and nothing else
+sends anything to it, so passing while losing this session's records
+would mean the archive committed exactly as many records from a source
+that does not exist. Against a *shared* archive it would be a real gap,
+and that is the one the roadmap keeps. Named in
+[ADR-0015](../contract/decisions/0015-the-e2e-gate-asserts-connection-not-detection.md),
+which describes the floor this replaced.
 
 **Anything about detection.** No threshold, no score range, no rate.
 `events > 0` is a claim that the engine judged evidence, never a claim

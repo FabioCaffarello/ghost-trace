@@ -412,35 +412,81 @@ async function run() {
   // counters: 3.4 established that counters reset on restart, so a
   // reconciliation built on them measures one process's lifetime.
   //
-  // WHAT THIS DOES NOT PROVE, stated rather than implied: that THIS
-  // session is in the archive. The archive has no read surface, so the
-  // strongest available claim is that the number of committed records
-  // advanced by at least what this run generated and that nothing was
-  // left unexplained. A read endpoint is roadmapped; until it exists
-  // this is a count, not an identity.
-  const expected = 1 + seen.telemetry.filter((t) => t.status < 300).length;
+  // AN ACCOUNTING IDENTITY, not a floor. What the two services say they
+  // ACCEPTED must equal what the archive says it made durable:
+  //
+  //   sessions + telemetry batches + evaluations + labels == commits
+  //
+  // Every accepted request produces exactly one record (loss-audit rests
+  // on the same 1:1), so the sum is exact and an equality catches both
+  // directions — a record lost, and a record that appeared from
+  // somewhere this run cannot account for. The floor this replaces
+  // caught only the first.
+  //
+  // COUNTED FROM THE SERVERS, never from the browser's view of its own
+  // requests. Chromium aborts keepalive fetches it has already handed to
+  // the network, so a batch the page never saw a response for may have
+  // been accepted anyway; `seen.telemetry` is therefore a lower bound on
+  // what the collector took, and building the expectation from it made
+  // the floor the only safe assertion available.
+  //
+  // WHAT IT STILL DOES NOT PROVE, stated rather than implied: that THIS
+  // session's records are the ones in there. The archive has no read
+  // surface — the events table is keyed by content hash and carries no
+  // session column — so this is arithmetic, not identity. In THIS gate
+  // the distinction is nearly empty: the topology is brought up fresh in
+  // a project of its own, nothing else sends anything to it, and passing
+  // while losing this session's records would mean the archive committed
+  // exactly as many records from a source that does not exist. Against a
+  // shared archive it would be a real gap, which is the one the roadmap
+  // keeps.
   const deadline = Date.now() + DRAIN_TIMEOUT_MS;
   let pending = null;
   let unaccounted = null;
   let committed = null;
+  let expected = null;
+  let unreachable = "";
   while (Date.now() < deadline) {
-    pending = await counter(ARCHIVE, "archive_stream_pending");
-    unaccounted = await counter(ARCHIVE, "archive_position_unaccounted");
-    committed = await counter(ARCHIVE, "archive_position_committed");
-    if (pending === 0 && unaccounted === 0 && moved(archiveBefore, committed) >= expected) break;
+    // An archive that cannot be SCRAPED is the condition this link
+    // measures, so it must not be an exception. The first version let
+    // the fetch throw, which unwound past every check here — and the
+    // summary then reported link 8 fine, because a link with no checks
+    // scored as one with no failures. The outage became a silent pass in
+    // the assertion written to catch outages.
+    try {
+      // Re-read the sources every pass, not once. A request in flight
+      // when the browser closed can still be accepted, which moves the
+      // expectation as well as the archive; freezing the expectation
+      // first would turn that race into a permanent failure.
+      const [s, t, d, o] = await Promise.all([
+        counter(COLLECTOR, "http_requests_total", { route: "POST /v1/sessions", status: "200" }),
+        counter(COLLECTOR, "http_requests_total", { route: "POST /v1/telemetry", status: "202" }),
+        counter(ENGINE, "http_requests_total", { route: "POST /v1/decisions", status: "200" }),
+        counter(ENGINE, "http_requests_total", { route: "POST /v1/outcomes", status: "202" }),
+      ]);
+      expected = (s ?? 0) + (t ?? 0) + (d ?? 0) + (o ?? 0);
+
+      pending = await counter(ARCHIVE, "archive_stream_pending");
+      unaccounted = await counter(ARCHIVE, "archive_position_unaccounted");
+      committed = await counter(ARCHIVE, "archive_position_committed");
+      unreachable = "";
+    } catch (e) {
+      unreachable = e.message;
+      pending = unaccounted = committed = null;
+    }
+    if (pending === 0 && unaccounted === 0 && moved(archiveBefore, committed) === expected) break;
     await new Promise((r) => setTimeout(r, 1000));
   }
-  check(committed !== null, "the archive publishes a durable position at all");
-  // A FLOOR, deliberately: the evaluation the engine archived and the
-  // label link 7 filed both land here too, so the real number is higher.
-  // Asserting equality would make the gate a spec for how many records a
-  // decision costs, which is not a property this gate has any business
-  // freezing.
   check(
-    moved(archiveBefore, committed) >= expected,
-    `it committed at least what this run produced ` +
-      `(${archiveBefore ?? "absent"} -> ${committed ?? "absent"}, floor of ${expected}: ` +
-      `1 session + ${expected - 1} accepted batch(es), plus the evaluation and the label)`,
+    committed !== null,
+    "the archive publishes a durable position at all" +
+      (unreachable ? ` — it did not answer at all: ${unreachable}` : ""),
+  );
+  check(
+    moved(archiveBefore, committed) === expected,
+    `it made durable exactly what the services accepted ` +
+      `(${moved(archiveBefore, committed)} committed against ${expected} accepted: ` +
+      `sessions + batches + evaluations + labels)`,
   );
   check(pending === 0, `the stream drained (pending=${pending ?? "absent"})`);
   check(unaccounted === 0, `and nothing is unaccounted (unaccounted=${unaccounted ?? "absent"})`);
@@ -462,7 +508,21 @@ const failed = links.flatMap((l) => l.checks.filter((c) => !c.ok).map((c) => `li
 console.log("\n== the chain ==");
 for (const l of links) {
   const bad = l.checks.filter((c) => !c.ok).length;
-  console.log(`  ${bad ? "BROKEN" : "  ok  "}  link ${l.n} — ${l.name}`);
+  // A link that ran NO checks is not a link that held. It reads `ok`
+  // under `bad === 0` alone, and this file has now produced that bug
+  // three times in three different shapes: `[].every()` twice, and a
+  // link whose first metrics read threw before a single check ran, so
+  // the summary reported the archive fine while the archive was down.
+  // Same mistake each time — an absence scored as a pass.
+  const state = l.checks.length === 0 ? "NOCHECK" : bad ? "BROKEN " : "  ok   ";
+  console.log(`  ${state} link ${l.n} — ${l.name}`);
+}
+const silent = links.filter((l) => l.checks.length === 0);
+if (silent.length) {
+  console.log(
+    `\n  ${silent.length} link(s) asserted nothing at all — a link that could not be ` +
+      `observed is a failure, not a pass`,
+  );
 }
 // A link that was never reached is reported as such rather than left
 // off. Seven links minus the ones that ran is the number that matters
@@ -473,6 +533,7 @@ if (crashed) {
   console.log(`\n  the run did not finish: ${crashed.stack || crashed.message}`);
   process.exit(1);
 }
+if (silent.length) process.exit(1);
 if (failed.length) {
   console.log(`\n  ${failed.length} link assertion(s) did not hold:`);
   for (const f of failed) console.log(`    - ${f}`);
