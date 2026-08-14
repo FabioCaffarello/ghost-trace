@@ -14,7 +14,13 @@ scaffoldVersion: "2.0.0"
 They are the project's central claim. A number nobody can reproduce is
 the exact failure this repository exists to avoid.
 
-## Required after any change to `services/`, `experiments/` or `schemas/`
+## Required after any change to `services/`, `experiments/`, `schemas/` or `libs/`
+
+`libs/` was missing from this list until the freshness check went to
+write it down. It is where the measurement actually lives: `libs/policy`
+decides every detection rate and `libs/substrate` decides the latency, so
+a rule that watches the services and ignores the libraries they are
+assembled from watches the wrong thing.
 
 ```bash
 make numbers            # ~7 minutes, needs real browsers; measures AND checks

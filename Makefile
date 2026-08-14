@@ -667,6 +667,8 @@ experiments-check: ## Syntax-check every tier and run the asserted statistics se
 	@python3 $(EXPERIMENTS)/forget.py --selftest
 	@echo "== numbers-check selftest (asserted)"
 	@python3 $(EXPERIMENTS)/numbers_check.py --selftest
+	@echo "== numbers-freshness selftest (asserted)"
+	@python3 scripts/check-numbers-freshness.py --selftest
 	@echo "== release-derivation selftest (asserted)"
 	@python3 scripts/next-release.py --selftest
 	@echo "== workflow-guard selftest (asserted)"
@@ -723,6 +725,25 @@ numbers-check: ## Check the last run against the newest published manifest
 .PHONY: numbers-manifest
 numbers-manifest: ## Publish the last run to docs/results/ (requires a clean tree)
 	cd $(EXPERIMENTS) && python3 publish_manifest.py
+
+# Whether anyone has LOOKED, which is a different question from whether a
+# number moved and is about a thousand times cheaper to ask.
+#
+# `make numbers` is the only thing that can answer the second, needs
+# seven minutes and real browsers, and is outside `make ci` on purpose —
+# so nothing forces it, and on 2026-08-12 the published p99 turned out to
+# be 5x off and eight days old. The check that would have caught it was
+# correct and had never been pointed at the record it defends.
+#
+# NOT IN `make ci`, and not because it is expensive — it reads git log and
+# some JSON. Both published baselines are stale today, so a CI step would
+# fire on every pull request from the day it landed, and a signal that is
+# always on is one people learn to read as decoration. It goes into CI
+# when a run of each family has been published; the composed one is the
+# outstanding prerequisite.
+.PHONY: numbers-freshness
+numbers-freshness: ## Report which published baselines no longer describe the code
+	@python3 scripts/check-numbers-freshness.py
 
 ##@ Containers
 
