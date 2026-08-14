@@ -114,6 +114,34 @@ split cost **+0.94ms**, and the other six milliseconds were a
 synchronous SQLite append on the decision path that ADR-0006 retired one
 pull request earlier.
 
+> **Those monolith figures are historical.** The same monolith now
+> measures **p99 0.796ms** against the 5.525ms on record
+> ([`numbers-2026-08-12-8b5e5c96.json`](results/numbers-2026-08-12-8b5e5c96.json)),
+> so the reading that would have been backwards is gone: there is no
+> four-fold gap left to misattribute to decomposition.
+>
+> The **+0.94ms** stands. It came from stream-archive against
+> stream-archive, which is the comparison this paragraph exists to
+> insist on, and neither side of it was the substrate path that changed.
+>
+> What moved it is *not established here*. The window is Phase 4's
+> storage rewrite — ADR-0009 put small payloads in the row and took one
+> of the commit's two fsyncs off the path — and the timing and the
+> mechanism both fit. It was not bisected, so it is written as the
+> likely cause and not as a finding.
+>
+> **The eight days it sat there are the part worth keeping.** The drop
+> was not hidden: [the Phase 4 run](results/numbers-after-phase-4-2026-08-06.md)
+> printed `p99 0.739ms` on 2026-08-06 and reported that the six numbers
+> reproduced — truthfully, because `numbers_check` did not compare
+> latency at all until PR-5.0a on 2026-08-11. The baseline the new check
+> was built to defend was already stale on the day it was built, and
+> nothing ran the invariant against it afterwards: `make numbers` needs
+> seven minutes and real browsers, sits outside `make ci` by design, and
+> Phases 5 and 6 both changed `services/` without it. It was found while
+> discharging the rule for an unrelated change. All six detection rates
+> reproduced; only the latency had moved, and only downward.
+
 ## Two tensions this phase leaves standing
 
 **The demo is load-bearing for the invariant.** Contract §6 calls the
