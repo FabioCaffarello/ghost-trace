@@ -48,6 +48,13 @@ const ENGINE = process.env.GT_ENGINE_BASE || "http://decision-engine:8082";
 const ARCHIVE = process.env.GT_ARCHIVE_BASE || "http://archive:8081";
 const CHROME = process.env.GT_CHROME || "";
 
+// The mode the topology was brought up in. Both the collector and the
+// engine take it, and `make e2e GT_MODE=enforce` sets it for the copy
+// this gate brings up. It is here so the run can assert the CONTRACT
+// that mode implies (§3) rather than the verdict, which is a detection
+// question and not this gate's business (ADR-0015).
+const MODE = process.env.GT_MODE || "monitor";
+
 // The archive commits asynchronously. This is how long link 8 waits for
 // the stream to drain before calling it a loss — generous, because a
 // timeout here must mean "did not arrive", not "arrived slowly".
@@ -108,7 +115,7 @@ const moved = (before, after) => (after ?? 0) - (before ?? 0);
  * The run
  * ------------------------------------------------------------------ */
 
-const seen = { sdk: null, sessions: null, telemetry: [], failures: [], aborted: [] };
+const seen = { sdk: null, sessions: null, telemetry: [], failures: [], aborted: [], login: null };
 
 async function run() {
   // Read before anything is driven. The archive is empty in this
@@ -169,6 +176,17 @@ async function run() {
     // collector opened a session and issued no token" — a true statement
     // about the wrong request.
     const post = res.request().method() === "POST";
+    // The host application's own response, as the SERVER sent it. Every
+    // other decision assertion here reads the DOM, which is the page's
+    // account of itself; this is the account it was given. They are
+    // different sources and link 5 needs both.
+    if (post && url.endsWith("/demo/login")) {
+      try {
+        seen.login = await res.json();
+      } catch {
+        seen.login = null;
+      }
+    }
     if (url.endsWith("/sdk.js")) seen.sdk = { url, status: res.status() };
     else if (post && url.endsWith("/v1/sessions")) {
       let token = "";
@@ -349,6 +367,40 @@ async function run() {
       `the verdict is not fail-open (${shown.mode || "no mode line rendered"})`,
     );
 
+    // THE MODE CONTRACT (§3), which is a property of the RESPONSE SHAPE
+    // and not of the verdict.
+    //
+    // In monitor mode `decision` is always allow and `shadow_decision`
+    // carries what enforce would have returned. In enforce mode
+    // `shadow_decision` is absent and `decision` is the real answer. The
+    // contract says a client that reads only `decision` measures nothing
+    // while the service is in monitor — so the difference between the
+    // two shapes is the difference between a detector that is watching
+    // and one that is acting, and nothing has ever driven it end to end.
+    //
+    // WHAT IS NOT ASSERTED: which verdict came back. That is detection,
+    // it moves with calibration, and a gate that pins it becomes a
+    // measurement that fails on a Tuesday. `make numbers` owns it.
+    const got = seen.login;
+    check(!!got, "the host application's own response was observed, not just its rendering");
+    if (got) {
+      const shadow = Object.prototype.hasOwnProperty.call(got, "shadow_decision");
+      check(got.mode === MODE, `it answered in the mode the topology was started in (${got.mode} / expected ${MODE})`);
+      if (MODE === "monitor") {
+        check(got.decision === "allow",
+          `monitor returns allow whatever it thinks (${got.decision}) — §3, and why reading only ` +
+            "`decision` in monitor measures nothing");
+        check(shadow && !!got.shadow_decision,
+          `and carries what enforce would have said (${got.shadow_decision ?? "absent"})`);
+      } else {
+        check(!shadow,
+          `enforce carries no shadow_decision (${shadow ? "present: " + got.shadow_decision : "absent"}) — ` +
+            "its `decision` IS the answer");
+        check(["allow", "challenge", "block"].includes(got.decision),
+          `and its decision is a real verdict (${got.decision})`);
+      }
+    }
+
     link(6, "the snapshot — the verdict was derived from this session");
     // The one link that proves collector → stream → KV → engine. A cold
     // start returns a well-formed verdict from no evidence at all: the
@@ -387,19 +439,37 @@ async function run() {
     // is the shape this repository keeps finding — a guard that checks
     // what the claim already said. These are two independent sources and
     // they have to agree.
+    // WHICH label, derived from the verdict rather than assumed. The
+    // first version hardcoded login_success, which is only ever right in
+    // monitor mode — where the verdict is always allow by §3. In enforce
+    // a block files login_failure and a CHALLENGE FILES NOTHING, because
+    // the application has not finished. Asserting the implication covers
+    // all three without holding an opinion about which should happen,
+    // which is the line ADR-0015 draws.
+    const verdict = seen.login?.decision;
+    const wanted = { allow: "login_success", block: "login_failure" }[verdict] ?? "";
+
     const outcomeAfter = await counter(ENGINE, "http_requests_total", {
       route: "POST /v1/outcomes",
       status: "202",
     });
     check(
-      moved(outcomeBefore, outcomeAfter) >= 1,
-      `the engine accepted a label for this evaluation ` +
-        `(${outcomeBefore ?? "absent"} -> ${outcomeAfter ?? "absent"})`,
+      wanted ? moved(outcomeBefore, outcomeAfter) >= 1 : moved(outcomeBefore, outcomeAfter) === 0,
+      wanted
+        ? `the engine accepted a label for this evaluation ` +
+          `(${outcomeBefore ?? "absent"} -> ${outcomeAfter ?? "absent"})`
+        : `the engine was sent no label, which is what a '${verdict}' means ` +
+          `(${outcomeBefore ?? "absent"} -> ${outcomeAfter ?? "absent"})`,
     );
     check(
-      /outcome filed: login_success/.test(shown.outcome || ""),
-      `and the page reports the one the server says it filed ` +
-        `(${shown.outcome || "no outcome line rendered"})`,
+      wanted
+        ? new RegExp(`outcome filed: ${wanted}`).test(shown.outcome || "")
+        : /no outcome filed/.test(shown.outcome || ""),
+      wanted
+        ? `and the page reports ${wanted}, the label a '${verdict}' implies ` +
+          `(${shown.outcome || "no outcome line rendered"})`
+        : `and files nothing for '${verdict}', which has not turned out yet ` +
+          `(${shown.outcome || "no outcome line rendered"})`,
     );
   } finally {
     await context.close();
