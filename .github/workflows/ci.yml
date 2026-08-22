@@ -281,6 +281,24 @@ jobs:
       - name: The topology gates compile, and know when they cannot be cited
         run: make gates-check
 
+      # Reports whether anyone has LOOKED at the six numbers since the
+      # code they measure last changed. Seconds — it reads git log and
+      # some JSON — and it could not be wired in until now, because both
+      # published baselines were stale and it would have fired on every
+      # pull request from the day it landed. Both were re-measured on
+      # 2026-08-22, so it is green by default and a yellow line means
+      # something.
+      #
+      # NON-BLOCKING, and that is a policy choice rather than a
+      # technical one. Blocking would be faithful to the rule the
+      # numbers-invariant skill already states — re-measure after
+      # touching services/, libs/, experiments/ or schemas/ — and it
+      # would put seven minutes of real browsers in front of every code
+      # change. That trade belongs to whoever maintains this, not to the
+      # step that surfaces it.
+      - name: Has anyone looked at the numbers
+        run: make numbers-freshness FRESHNESS_ARGS=--warn
+
   # The composed topology, brought up and interrogated.
   #
   # Nothing gated it before, and it broke twice without anything

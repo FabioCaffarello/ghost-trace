@@ -741,9 +741,13 @@ numbers-manifest: ## Publish the last run to docs/results/ (requires a clean tre
 # always on is one people learn to read as decoration. It goes into CI
 # when a run of each family has been published; the composed one is the
 # outstanding prerequisite.
+# FRESHNESS_ARGS=--warn reports without failing, which is how CI runs it.
+# See the step comment in ci.yml: whether this should BLOCK is a policy
+# choice about putting seven minutes of browsers in front of every code
+# change, and not one this target should make on anybody's behalf.
 .PHONY: numbers-freshness
 numbers-freshness: ## Report which published baselines no longer describe the code
-	@python3 scripts/check-numbers-freshness.py
+	@python3 scripts/check-numbers-freshness.py $(FRESHNESS_ARGS)
 
 ##@ Containers
 
