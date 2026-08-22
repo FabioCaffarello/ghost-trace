@@ -79,9 +79,9 @@ outcomes loop, and changes none of that record's three decisions.
 | 2 | the browser fetched `sdk.js` from the collector and `window.GhostTrace` exists | the origin bug, and a 200 carrying an error page |
 | 3 | `POST /v1/sessions` returned a token across the origin boundary | a CORS refusal, which is invisible to the SDK |
 | 4 | every batch was accepted and carried its bearer token | wire drift, unattributed telemetry |
-| 5 | a verdict rendered, **and the engine's `/v1/decisions` counter moved while the collector's did not** | fail-open; and the collector answering instead of the engine |
+| 5 | a verdict rendered, **and the engine's `/v1/decisions` counter moved while the collector's did not**, and the response obeys §3's mode contract | fail-open; the collector answering instead of the engine; a mode changed in one place |
 | 6 | `events > 0` and `confidence > 0` | a cold start, which scores identically and looks healthy |
-| 7 | the engine's `/v1/outcomes` counter moved, **and** the page reports the label the server says it filed | a labels channel with no caller; a page claiming a label that was never stored |
+| 7 | the label the verdict **implies** was filed — and for a `challenge`, that none was | a labels channel with no caller; a page claiming a label that was never stored |
 | 8 | the committed delta **equals** sessions + batches + evaluations + labels, and `unaccounted == 0` | records accepted and never made durable — and records that appeared from nowhere |
 
 Link 5 is the one that carries the design. A verdict on a screen cannot
@@ -185,6 +185,48 @@ was fine. Two shapes of this had already been fixed here (`[].every()`
 twice), which is what makes it worth naming: an absence scored as a pass
 is not a bug you fix once. A link that asserts nothing is now reported
 as `NOCHECK` and fails the run.
+
+## Both modes, and the line that keeps it a connection gate
+
+The chain ran only in `monitor` until now — where §3 says `decision` is
+*always* `allow` and `shadow_decision` carries what enforce would have
+returned. So the path that actually acts on a verdict had never been
+driven end to end, and link 7 quietly assumed monitor by hardcoding
+`login_success`.
+
+`make e2e GT_MODE=enforce` runs the same eight links against a topology
+started in enforce. What link 5 gained is the **mode contract**, which is
+a property of the response *shape*:
+
+| | monitor | enforce |
+| --- | --- | --- |
+| `decision` | always `allow` | the real answer |
+| `shadow_decision` | what enforce would have said | **absent** |
+
+That difference is the difference between a detector that is watching
+and one that is acting, and nothing had ever checked it.
+
+**What is still not asserted is which verdict came back.** That is
+detection: it moves with calibration, and a gate that pins it becomes a
+measurement that fails on a Tuesday.
+[ADR-0015](../contract/decisions/0015-the-e2e-gate-asserts-connection-not-detection.md)
+draws that line and this stays on the near side of it. Link 7 follows the
+same rule by asserting the *implication* instead of the label — `allow`
+implies `login_success`, `block` implies `login_failure`, and a
+`challenge` implies **no label at all**, because the application has not
+finished. All three are covered without an opinion about which should
+happen.
+
+Its red proof was a mode changed in one place: the topology brought up in
+monitor, the driver told to expect enforce.
+
+```
+  FAIL  it answered in the mode the topology was started in (monitor / expected enforce)
+  FAIL  enforce carries no shadow_decision (present: allow) — its `decision` IS the answer
+```
+
+Every other link passed, and the verdict itself was a perfectly good
+`allow`.
 
 ## What it deliberately does not say
 

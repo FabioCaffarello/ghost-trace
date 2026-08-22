@@ -417,6 +417,12 @@ services:
       GT_BASE: http://collector:8080
       GT_ENGINE_BASE: http://decision-engine:8082
       GT_ARCHIVE_BASE: http://archive:8081
+      # The mode the collector and the engine were started in, so the
+      # driver can assert the RESPONSE SHAPE §3 ties to it — monitor
+      # carries shadow_decision and always returns allow, enforce carries
+      # no shadow and its decision is the answer. Not the verdict: that
+      # moves with calibration and belongs to `make numbers`.
+      GT_MODE: ${GT_MODE:-monitor}
     depends_on:
       collector:
         condition: service_healthy
