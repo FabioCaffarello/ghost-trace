@@ -7,7 +7,7 @@ toolchain go1.26.6
 require (
 	google.golang.org/protobuf v1.36.11 // archive-format pin: canonical bytes are hashed for identity — upgrading is an archive-compatibility event, see libs/canonical
 	lukechampine.com/blake3 v1.4.1 // indirect
-	modernc.org/sqlite v1.56.0 // indirect
+	modernc.org/sqlite v1.57.0 // indirect
 )
 
 require (
