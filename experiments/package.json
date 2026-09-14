@@ -13,8 +13,8 @@
     "tier6": "node tiers/tier6_value_injection.js"
   },
   "dependencies": {
-    "playwright": "^1.49.0",
-    "puppeteer-core": "^25.7.0",
+    "playwright": "^1.63.0",
+    "puppeteer-core": "^25.10.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2"
   }
